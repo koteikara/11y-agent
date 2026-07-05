@@ -20,17 +20,32 @@ Goal 2(`/`)とGoal 3(`/goal3.html`)は、別々のアプリ・別々のCloud Run
 
 ## 前提
 
-- ローカルの作業フォルダは `C:\Codex\a11y-agent\goal2-app`
+- デプロイ元は GitHub リポジトリ `koteikara/11y-agent` の `main` ブランチ(ローカルの手元フォルダではなく、GitHub上にマージ済みの内容をデプロイする)
+- デプロイ作業用フォルダは `C:\Codex\11y-agent-deploy`(手元の開発用チェックアウトとは別に用意し、常にGitHubの最新内容へ揃える)
 - デプロイ先サービス名は `goal2-a11y-review`
 - リージョンは `asia-northeast1`
 - コンテナポートは `8080`
 
 ## 更新デプロイ
 
-PowerShell で次を実行します。
+PowerShell で次を実行します。まず GitHub の `main` ブランチを作業用フォルダへ同期し、そのフォルダから Cloud Build に送ります(ローカルでの未コミットの変更は含まれません)。
 
 ```powershell
-cd "C:\Codex\a11y-agent\goal2-app"
+$REPO_URL = "https://github.com/koteikara/11y-agent.git"
+$WORKDIR = "C:\Codex\11y-agent-deploy"
+
+if (Test-Path $WORKDIR) {
+  cd $WORKDIR
+  git fetch origin main
+  git checkout main
+  git reset --hard origin/main
+} else {
+  git clone --branch main $REPO_URL $WORKDIR
+  cd $WORKDIR
+}
+
+cd "$WORKDIR\goal2-app"
+
 $PROJECT_ID = gcloud config get-value project
 $REGION = "asia-northeast1"
 $SERVICE = "goal2-a11y-review"
@@ -41,6 +56,8 @@ $IMAGE = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${TAG}"
 gcloud builds submit --tag "$IMAGE" .
 gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated
 ```
+
+`main` 以外のブランチ(マージ前のPRなど)を試験的にデプロイしたい場合は、`git clone --branch main` と `git checkout main` の部分をブランチ名に置き換えます。ただし通常の更新デプロイは、PRがマージされて `main` に反映された後に実行します。
 
 ## 反映確認
 
@@ -59,6 +76,14 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 - Cloud Run の最新リビジョンに 100% のトラフィックがあるか
 
 ## よくあるつまずき
+
+### `git` コマンドが見つからない、または認証を求められる
+
+Git for Windows がインストールされていない場合は先にインストールします。プライベートリポジトリの場合、初回の `git clone`/`git fetch` で GitHub の認証(ブラウザでのサインインまたはトークン入力)を求められることがあります。
+
+### `git reset --hard origin/main` で作業内容が消えないか心配
+
+`$WORKDIR`(`C:\Codex\11y-agent-deploy`)はデプロイ専用の作業フォルダであり、開発用チェックアウト(`C:\Codex\a11y-agent` など)とは別に用意します。このフォルダには編集中のファイルを置かないようにすれば、`git reset --hard` で消えて困る内容は発生しません。
 
 ### `IMAGE` が作れない
 
