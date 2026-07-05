@@ -162,7 +162,7 @@ async function main() {
   assert.ok(appJs.includes("enrichLinkTitleCandidates"), "generic link text candidates should try to enrich labels from linked page titles");
   assert.ok(appJs.includes("/api/link-title"), "link title enrichment should use the server-side lookup endpoint");
   assert.ok(serverJs.includes("/api/link-title"), "server should expose a link title lookup endpoint");
-  assert.ok(serverJs.includes("isBlockedFetchHost"), "link title lookup should block local/private fetch targets");
+  assert.ok(serverJs.includes("assertFetchUrlAllowed"), "link title lookup should block local/private fetch targets");
   assert.ok(serverJs.includes("/api/fetch-html"), "server should expose a guarded HTML fetch endpoint for Goal3");
   assert.ok(goal3Html.includes("Goal 3"), "Goal3 should have a separate screen");
   assert.ok(goal3Html.includes("sourcePreviewFrame"), "Goal3 should include a source preview frame for visual extraction confirmation");

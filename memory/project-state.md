@@ -102,6 +102,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `goal2-app/CLOUD_RUN_DEPLOY.md` を作成済み。
   - 添付画像のCloud Run概要画面から、Cloud Shellを開き、ZIPアップロード、API有効化、Artifact Registry作成、Cloud Build、Cloud Runデプロイ、動作確認、再デプロイ、よくあるエラーまでを手順化した。
   - ダミーデータ検証向けの `--allow-unauthenticated` と、認証必須の `--no-allow-unauthenticated` の違いを明記した。
+- `goal2-app/server.js` の `/api/fetch-html`・`/api/link-title` について、SSRF対策を強化した。
+  - ホスト名がIPリテラルでない場合にDNS解決結果の全アドレスを検証するようにし、DNSリバインディングによる内部アドレス到達を防いだ。
+  - IPv4写像IPv6リテラル(`::ffff:127.0.0.1` などドット表記・16進表記の両方)を検出してブロック対象に含めた。
+  - `redirect: "follow"` をやめ、リダイレクトを自前で追跡してホップごとに許可判定を行うようにし、外部URLが内部アドレスへリダイレクトするケースを防いだ。
 - `memory/ai-accessibility-skills-policy.md` を作成済み。
   - Mark Fairchildの記事を参照し、AIモデル単体へ依存せず、短い共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離を組み合わせる方針を整理した。
   - table、iframe、画像alt、フォーム、見出し構造などの部品別Skill化案、生成後レビュー用チェックリスト、自動検証と人間確認の分離表を記載した。
