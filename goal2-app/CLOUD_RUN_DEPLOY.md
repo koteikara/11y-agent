@@ -2,11 +2,21 @@
 
 `goal2-app` を Google Cloud Run に更新デプロイするための短い手順です。
 
-公開URL:
+公開URL(Goal 2):
 
 ```text
 https://goal2-a11y-review-700549743482.asia-northeast1.run.app/
 ```
+
+公開URL(Goal 3):
+
+```text
+https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
+```
+
+## Goal 2とGoal 3は同じサービス・同じデプロイで反映される
+
+Goal 2(`/`)とGoal 3(`/goal3.html`)は、別々のアプリ・別々のCloud Runサービスではなく、`goal2-app` 1つのNode.jsサーバー(`server.js`)から配信されている。`Dockerfile` は `public/` フォルダ全体(`index.html`、`goal3.html`、`goal3.js`、`app.js`、`styles.css` などすべて)をコンテナへコピーするため、下記の「更新デプロイ」を1回実行すれば、Goal 2・Goal 3の両方の変更が同時に反映される。Goal 3だけを個別にビルド・デプロイする手順は存在しない。
 
 ## 前提
 
@@ -34,10 +44,11 @@ gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed 
 
 ## 反映確認
 
-デプロイ後も URL は変わりません。次の公開URLを開いて確認します。
+デプロイ後も URL は変わりません。次の2つの公開URLを両方とも開いて確認します(Goal 2のみ確認してGoal 3の確認を忘れないよう注意する)。
 
 ```text
 https://goal2-a11y-review-700549743482.asia-northeast1.run.app/
+https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 ```
 
 反映されないときは次を確認します。
