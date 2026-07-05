@@ -10,9 +10,11 @@
     <header class="app-header">
       <div>
         <p class="eyebrow">Goal 3</p>
-        <h1>コンテンツ部分の抽出</h1>
+        <h1 id="pageHeading" tabindex="-1">コンテンツ部分の抽出</h1>
       </div>
-      <div class="header-status">旧ページ全体HTML → CMS本文候補</div>
+      <div class="header-status">旧ページ全体HTML<br />→ CMS本文候補</div>
+      <div class="app-header-spacer"></div>
+      <p class="app-header-footer">Goal3 Content<br />Extractor PoC</p>
     </header>
 
     <main class="app-shell goal3-shell">
@@ -29,8 +31,8 @@
           </label>
         </div>
         <div class="input-primary-actions" aria-label="旧ページ取得操作">
-          <button type="button" id="fetchUrlButton" class="primary">URLから取得</button>
-          <button type="button" id="extractButton">候補抽出</button>
+          <button type="button" id="fetchUrlButton" class="secondary">URLから取得</button>
+          <button type="button" id="extractButton" class="primary">候補抽出</button>
           <button type="button" id="resetButton">リセット</button>
         </div>
         <div id="goal3Loading" class="goal3-loading" hidden aria-live="polite" aria-busy="true">

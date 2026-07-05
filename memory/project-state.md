@@ -111,6 +111,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Goal 3のスコアリングで、クリーニング後の最終テキストが同一の候補が複数生成された場合、DOM要素数が最も少ない(最も狭い)候補のみを残すタイブレークを追加した(`dedupeCandidates`/`candidateFootprint`)。同一内容で`body`が`main`/`section`より広く推奨される問題を解消した。
   - Goal 2の「次にやること」フローティングパネル(`page-agent-panel`)に、キーボードで実行可能な閉じるボタンと、矢印キーで移動できるドラッグハンドルボタンを追加した(`goal2-app/public/app.js`、`styles.css`)。
   - Goal 2のパネル内ボタンをキーボードで実行すると、パネルの再描画でフォーカスが`<body>`へ消失していた不具合を修正し、再描画後も同じアクションのボタンへフォーカスを復元するようにした。パネルを閉じた際は、ページ見出し(`#pageHeading`、`tabindex="-1"`を追加)へフォーカスを移すようにした。
+- Goal 2・Goal 3のビジュアルデザインを刷新した(`goal2-app/public/styles.css`・`index.html`・`goal3.html`・`app.js`)。
+  - Material 3のデフォルト配色をやめ、単一ブランドアクセント(ティール)+意味用途限定のsuccess/warning/dangerに整理し、未使用トークン(`--cyan`/`--sun`/`--coral`等)を削除した。見出し深度タグ(`--tag-h1〜h4`)とリンク色(`--link`)を独立させた。
+  - タイプスケール(`--text-micro`〜`--text-display`)を新設し、サイドバーのeyebrowがh1より大きいという階層逆転を解消した。
+  - ボタンを`primary`/`secondary`/既定(tertiary)/`icon-button`の4階層に整理し、決定ボタン(採用/文言調整/却下/要確認)を候補一覧と同じ意味色にした。
+  - サイドバー幅を176pxに拡幅し、余白に製品名フッターを追加した。入れ子カードを`--surface-2`背景にして階層を明確化し、数値表示に`tabular-nums`を適用した。
+  - コントラスト比を計算で確認(全ボタンでWCAG AA基準を満たす)し、`node test/run-tests.js`が全件成功することを確認した。
 - `memory/ai-accessibility-skills-policy.md` を作成済み。
   - Mark Fairchildの記事を参照し、AIモデル単体へ依存せず、短い共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離を組み合わせる方針を整理した。
   - table、iframe、画像alt、フォーム、見出し構造などの部品別Skill化案、生成後レビュー用チェックリスト、自動検証と人間確認の分離表を記載した。

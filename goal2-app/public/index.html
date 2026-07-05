@@ -13,6 +13,8 @@
         <h1 id="pageHeading" tabindex="-1">アクセシビリティ候補レビュー</h1>
       </div>
       <div class="header-status" id="ruleStatus">KB読み込み中</div>
+      <div class="app-header-spacer"></div>
+      <p class="app-header-footer">Goal2 A11y Review<br />PoC</p>
     </header>
 
     <main class="app-shell">
@@ -76,7 +78,7 @@
                 <input id="bulkSelectAll" type="checkbox" />
                 <span>全件チェック</span>
               </label>
-              <button type="button" id="bulkAcceptButton">チェックを一括採用</button>
+              <button type="button" id="bulkAcceptButton" class="secondary">チェックを一括採用</button>
             </div>
             <p id="bulkActionStatus" class="bulk-action-status" aria-live="polite">候補生成後に利用できます。</p>
           </div>
@@ -100,10 +102,10 @@
 
           <div class="decision-panel decision-panel-top" id="decisionPanel" hidden>
             <div class="button-grid">
-              <button type="button" id="acceptButton" class="primary">採用</button>
-              <button type="button" id="editAcceptButton">文言を調整</button>
-              <button type="button" id="rejectButton">却下</button>
-              <button type="button" id="needsReviewButton">要確認</button>
+              <button type="button" id="acceptButton" class="decision-accept">採用</button>
+              <button type="button" id="editAcceptButton" class="decision-edit">文言を調整</button>
+              <button type="button" id="rejectButton" class="decision-reject">却下</button>
+              <button type="button" id="needsReviewButton" class="decision-review">要確認</button>
             </div>
             <div class="quick-edit-panel" id="quickEditPanel" hidden></div>
           </div>
@@ -125,7 +127,7 @@
                   </label>
                   <div class="ai-image-name-actions">
                     <p id="aiImageNameStatus">未投入</p>
-                    <button type="button" id="applyAiImageNameButton">修正後HTMLへ投入</button>
+                    <button type="button" id="applyAiImageNameButton" class="secondary">修正後HTMLへ投入</button>
                   </div>
                 </div>
                 <label>

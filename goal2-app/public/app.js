@@ -4449,7 +4449,7 @@
       </label>
       <p>${escapeHtml(config.help)}</p>
       <div class="quick-edit-actions">
-        <button type="button" class="primary" id="quickEditApplyButton">この内容で採用</button>
+        <button type="button" class="decision-accept" id="quickEditApplyButton">この内容で採用</button>
         <button type="button" id="quickEditCancelButton">閉じる</button>
       </div>
     `;
