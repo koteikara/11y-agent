@@ -20,6 +20,7 @@ Codexは作業を完了したと判断する前に、次を確認する。
 - 公共団体案件の品質確認としてmiCheckerを扱う場合は、`a11y-migration-kb/` との関係、本文範囲へのスコープ、証跡化の扱いが明示されている。
 - 未決定事項や要確認事項がある場合は、未完了として明示されている。
 - 作業後に、関連ファイルを読み返して文字化け、見出し崩れ、重複、明らかな矛盾がないことを確認している。
+- コード・ドキュメントの修正・更新を行った場合は、`CHANGELOG.md` に変更内容が記録されている。
 
 ## Documentation Done Criteria
 
@@ -75,6 +76,7 @@ Codexは、文書作成・更新後に可能な範囲で次を確認する。
 ```powershell
 Test-Path .\AGENTS.md
 Test-Path .\workstream.md
+Test-Path .\CHANGELOG.md
 Test-Path .\memory\project-state.md
 Test-Path .\memory\michecker-research.md
 Test-Path .\memory\a11yc-resources-research.md
