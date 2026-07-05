@@ -886,29 +886,28 @@ label {
 
 .page-agent-kicker {
   width: fit-content;
-  border-radius: 999px;
-  padding: 5px 10px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  font-size: 12px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: var(--text-micro);
   font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   cursor: grab;
-  letter-spacing: 0;
-  box-shadow: none;
 }
 
 .page-agent-topline-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
-.page-agent-drag,
 .page-agent-close {
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  min-height: 0;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
@@ -916,13 +915,30 @@ label {
   cursor: pointer;
 }
 
+.page-agent-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* The drag handle is an affordance, not an action button: it stays quiet at
+   rest and only shows a button-like surface on hover/focus. */
 .page-agent-drag {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
   cursor: grab;
 }
 
 .page-agent-drag:hover,
-.page-agent-close:hover {
-  background: rgba(255, 255, 255, 0.22);
+.page-agent-drag:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .move-drag-icon,
