@@ -700,6 +700,10 @@ label {
   margin-bottom: 12px;
 }
 
+.page-agent-panel[hidden] {
+  display: none;
+}
+
 .page-agent-panel {
   position: fixed;
   right: 24px;
@@ -766,7 +770,14 @@ label {
   box-shadow: none;
 }
 
-.page-agent-drag {
+.page-agent-topline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-agent-drag,
+.page-agent-close {
   display: grid;
   place-items: center;
   width: 34px;
@@ -775,10 +786,20 @@ label {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+  cursor: pointer;
+}
+
+.page-agent-drag {
   cursor: grab;
 }
 
-.move-drag-icon {
+.page-agent-drag:hover,
+.page-agent-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.move-drag-icon,
+.page-agent-close-icon {
   width: 20px;
   height: 20px;
   fill: none;

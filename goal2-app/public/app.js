@@ -220,6 +220,7 @@
     quickEditOpen: false,
     selectedSampleId: inputSamples[0].id,
     pageAgentDrag: null,
+    pageAgentDismissed: false,
   };
 
   const els = {
@@ -303,6 +304,7 @@
     els.nextCandidateButton.addEventListener("click", selectNextUnresolvedCandidate);
     els.pageAgentPanel?.addEventListener("click", handlePageAgentAction);
     els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentDrag);
+    els.pageAgentPanel?.addEventListener("keydown", handlePageAgentDragHandleKeydown);
     window.addEventListener("resize", ensurePageAgentInViewport);
     els.previewFrame.addEventListener("load", scrollPreviewToSelectedCandidate);
     els.copyHtmlButton.addEventListener("click", () => copyText(els.finalHtml.value));
@@ -470,6 +472,7 @@
     state.selectedCandidateId = null;
     clearBulkSelection();
     state.generatedAt = null;
+    state.pageAgentDismissed = false;
     clearInputFields();
     els.outputDrawer.open = false;
     setInputCollapsed(false);
@@ -479,6 +482,7 @@
   async function analyze() {
     setAnalyzeStatus("running");
     els.outputDrawer.open = false;
+    state.pageAgentDismissed = false;
     try {
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
@@ -3709,6 +3713,16 @@
 
     if (!els.pageAgentPanel) return;
 
+    if (state.pageAgentDismissed) {
+      els.pageAgentPanel.hidden = true;
+      els.pageAgentPanel.innerHTML = "";
+      return;
+    }
+    els.pageAgentPanel.hidden = false;
+
+    const hadFocus = els.pageAgentPanel.contains(document.activeElement);
+    const previousFocusedAction = hadFocus ? document.activeElement.dataset.pageAgentAction || null : null;
+
     const nextTask = pageAgentNextTask(workflow, candidate);
     const secondaryActions = pageAgentCompactSecondaryActions(workflow, candidate, nextTask.action);
     els.pageAgentPanel.classList.remove("phase-input", "phase-generate", "phase-review", "phase-output");
@@ -3716,7 +3730,10 @@
     els.pageAgentPanel.innerHTML = `
       <div class="page-agent-topline">
         <div class="page-agent-kicker">次にやること</div>
-        <div class="page-agent-drag" aria-hidden="true" title="ドラッグして移動">${moveDragIconSvg()}</div>
+        <div class="page-agent-topline-controls">
+          <button type="button" class="page-agent-drag" data-page-agent-action="drag-handle" aria-label="矢印キーでパネルを移動" title="矢印キーで移動">${moveDragIconSvg()}</button>
+          <button type="button" class="page-agent-close" data-page-agent-action="close" aria-label="次にやることパネルを閉じる" title="閉じる">${closeIconSvg()}</button>
+        </div>
       </div>
       <h3>${escapeHtml(nextTask.title)}</h3>
       <p>${escapeHtml(nextTask.body)}</p>
@@ -3731,12 +3748,33 @@
       </div>
     `;
     ensurePageAgentInViewport();
+
+    if (hadFocus) {
+      restorePageAgentFocus(previousFocusedAction);
+    }
+  }
+
+  function restorePageAgentFocus(previousAction) {
+    if (!els.pageAgentPanel) return;
+    const buttons = [...els.pageAgentPanel.querySelectorAll("button[data-page-agent-action]")];
+    const target =
+      buttons.find((button) => button.dataset.pageAgentAction === previousAction && !button.disabled) ||
+      buttons.find((button) => !button.disabled);
+    target?.focus();
   }
 
   function moveDragIconSvg() {
     return `
       <svg class="move-drag-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
         <path d="M12 3v18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12h18M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+      </svg>
+    `;
+  }
+
+  function closeIconSvg() {
+    return `
+      <svg class="page-agent-close-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
       </svg>
     `;
   }
@@ -3937,6 +3975,36 @@
       focusDecisionButton(els.editAcceptButton);
     } else if (action === "focus-needs-review") {
       focusDecisionButton(els.needsReviewButton);
+    } else if (action === "close") {
+      state.pageAgentDismissed = true;
+      renderPageAgent();
+      document.getElementById("pageHeading")?.focus();
+    }
+  }
+
+  function handlePageAgentDragHandleKeydown(event) {
+    if (!event.target.closest(".page-agent-drag")) return;
+    const step = event.shiftKey ? 40 : 16;
+    const deltas = {
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+    };
+    const delta = deltas[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const rect = els.pageAgentPanel.getBoundingClientRect();
+    const margin = 12;
+    const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+    const left = clamp(rect.left + delta[0], margin, maxLeft);
+    const top = clamp(rect.top + delta[1], margin, maxTop);
+    setPageAgentPosition(left, top);
+    try {
+      localStorage.setItem("goal2.pageAgentPosition", JSON.stringify({ left: Math.round(left), top: Math.round(top) }));
+    } catch {
+      // Position persistence is optional.
     }
   }
 
