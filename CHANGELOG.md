@@ -1,0 +1,53 @@
+# CHANGELOG.md
+
+## Purpose
+
+この文書は、Claude Code(またはCodex等のAGENT)がこのリポジトリに対して行った修正・更新を、後から追跡できるように記録する。
+
+- 新しいエントリは常に先頭(直近の変更)に追加する。
+- 1エントリ = 1PR(または1まとまりの作業)を基本とする。
+- 「何を」「なぜ」「関連ファイル」「関連PR/コミット」を簡潔に書く。詳細な経緯は `memory/project-state.md` を参照する。
+
+## Entry Format
+
+```
+## YYYY-MM-DD: 変更の要約
+
+- 背景・目的
+- 主な変更内容(箇条書き)
+- 関連ファイル
+- 関連PR/コミット
+```
+
+## Entries
+
+## 2026-07-05: `CHANGELOG.md` の新設と運用ルール追加
+
+- 背景・目的: AGENT(Claude Code等)が行った修正・更新を後から追跡できるようにするため、変更履歴を一箇所にまとめる運用に変更した。
+- 主な変更内容:
+  - `CHANGELOG.md` を新設し、過去2件のPR(Goal 3ドキュメント整備、SSRF対策強化)をバックフィルした。
+  - `AGENTS.md` の `Important Constraints` に、修正・更新後は `CHANGELOG.md` へ記録する方針を追加した。
+  - `done-definition.md` の `General Done Criteria` と `Self-Verification Commands` に `CHANGELOG.md` への記録・存在確認を追加した。
+- 関連ファイル: `CHANGELOG.md`、`AGENTS.md`、`done-definition.md`
+- 関連PR: (このコミットで作成予定)
+
+## 2026-07-05: `/api/fetch-html`・`/api/link-title` のSSRF対策強化
+
+- 背景・目的: プロジェクトの課題洗い出しにより、Goal 3のURL取得機能に、DNSリバインディング・IPv4写像IPv6リテラル・リダイレクト先未検証によるSSRFバイパスの可能性が見つかったため修正した。
+- 主な変更内容:
+  - ホスト名がIPリテラルでない場合にDNS解決結果の全アドレスを検証するようにした。
+  - IPv4写像IPv6リテラル(ドット表記・16進表記の両方)を検出してブロック対象に含めた。
+  - `redirect: "follow"` をやめ、リダイレクトを自前で追跡してホップごとに許可判定を行うようにした。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/test/run-tests.js`、`memory/project-state.md`
+- 関連PR: [#2](https://github.com/koteikara/11y-agent/pull/2)
+
+## 2026-07-05: Goal 3(コンテンツ抽出)のドキュメント整備
+
+- 背景・目的: `goal2-app/public/goal3.html`・`goal3.js` として実装済みだった「旧ページ全体HTMLからのコンテンツ抽出」機能が、`workstream.md` に正式なワークストリームとして文書化されていなかったため整備した。
+- 主な変更内容:
+  - `workstream.md` に「Goal 3: Content Extraction from Full Old Page HTML」を新規追加(実装状況、Target Flow、期待効果、リスク)。
+  - `memory/project-state.md` のファイル構成・進捗・未決定事項・次候補作業をGoal 3に合わせて更新。
+  - `done-definition.md` のSelf-Verification Commands・Workstream Done Criteria・Do Not Mark Done IfにGoal 3向けの基準を追加。
+  - `goal2-app/README.md` にGoal 3画面(`/goal3.html`)の説明を追加。
+- 関連ファイル: `workstream.md`、`memory/project-state.md`、`done-definition.md`、`goal2-app/README.md`
+- 関連PR: [#1](https://github.com/koteikara/11y-agent/pull/1)
