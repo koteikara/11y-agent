@@ -1,0 +1,142 @@
+# Saga Gold Candidate Decision Hints
+
+- Fixture root: `C:\Codex\a11y-agent\.tmp-gemini-a11y-agent\tests\fixtures\html\saga-city`
+- Files: 51
+- Files with hints: 38
+- Candidate decision hints: 384
+
+## Decision Hints
+- `edited`: 159
+- `accepted`: 142
+- `needs_review`: 42
+- `rejected`: 41
+
+## Rule Hints
+- `table.layout-table`: 106
+- `html-structure.heading-order`: 93
+- `image.alt-text`: 90
+- `table.caption`: 64
+- `text.list`: 18
+- `link.link-text`: 13
+
+## Examples
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 総務部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 9 rows, 3 cols, no caption, headers, image; text=総務法制課 0952-40-7010 総務法制課にメールを送る 秘書課 0952-40-7020 秘書課にメールを送る 広報課 0952-40-7021 広報課にメールを送る 人事課 095...
+  - Gold: caption: 総務部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 政策推進部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 6 rows, 3 cols, no caption, headers, image; text=企画政策課 0952-40-7025 企画政策課にメールを送る 行政マネジメント課 0952-40-7029 行政マネジメント課にメールを送る デジタル推進課 0952-40-7058 デジ...
+  - Gold: caption: 政策推進部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 経済部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 4 rows, 3 cols, no caption, headers, image; text=経済政策課 0952-40-7101 経済政策課にメールを送る 企業立地課 0952-40-7107 企業立地課にメールを送る 観光振興課 0952-40-7110 観光振興課にメールを送る...
+  - Gold: caption: 経済部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 農林水産部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 4 rows, 3 cols, no caption, headers, image; text=農業振興課 0952-40-7115 農業振興課にメールを送る 農村環境課 0952-40-7120 農村環境課にメールを送る 森林整備課 0952-58-2183 森林整備課にメールを送る...
+  - Gold: caption: 農林水産部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 都市戦略部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 4 rows, 3 cols, no caption, headers, image; text=都市政策課 0952-40-7163 都市政策課にメールを送る 緑化推進課 0952-40-7162 緑化推進課にメールを送る 建築指導課 0952-40-7170 建築指導課にメールを送る...
+  - Gold: caption: 都市戦略部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 建設部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 7 rows, 3 cols, no caption, headers, image; text=建設監理課 0952-40-7150 建設監理課にメールを送る 用地対策課 0952-40-7155 用地対策課にメールを送る 建築住宅課 0952-40-7169 建築住宅課にメールを送る...
+  - Gold: caption: 建設部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 環境部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 5 rows, 3 cols, no caption, headers, image; text=環境政策課 0952-40-7200 環境政策課にメールを送る 循環型社会推進課 0952-30-2430 循環型社会推進課にメールを送る 環境保全課 0952-30-2436 環境保全課に...
+  - Gold: caption: 環境部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 市民生活部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 6 rows, 3 cols, no caption, headers, image; text=市民生活課 0952-40-7080 市民生活課にメールを送る 生活安全課 0952-40-7012 生活安全課にメールを送る 市民税課 0952-40-7060 市民税課にメールを送る 資...
+  - Gold: caption: 市民生活部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 保健福祉部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 6 rows, 3 cols, no caption, headers, image; text=福祉総務課 0952-40-7250 福祉総務課にメールを送る 生活福祉課 0952-40-7260 生活福祉課にメールを送る 保険年金課 0952-40-7270 保険年金課にメールを送る...
+  - Gold: caption: 保健福祉部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: こども未来部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 4 rows, 3 cols, no caption, headers, image; text=こども政策課 0952-40-7293 こども政策課にメールを送る こども家庭課 0952-40-7292 こども家庭課にメールを送る 保育幼稚園課 0952-40-7290 保育幼稚園課に...
+  - Gold: caption: こども未来部の詳細
+- `sg00761.html` `table.caption` edited/high: Insert a caption draft based on gold: 教育部の詳細
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 5 rows, 3 cols, no caption, headers, image; text=教育総務課 0952-40-7351 教育総務課にメールを送る 学校教育課 0952-40-7355 学校教育課にメールを送る 学事課 0952-40-7358 学事課にメールを送る 社会教...
+  - Gold: caption: 教育部の詳細
+- `sg01171.html` `html-structure.heading-order` accepted/high: Use h3 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h5: チーム概要
+  - Gold: h3: チーム概要
+- `sg01171.html` `html-structure.heading-order` accepted/high: Use h3 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h4: 2025-26シーズンキャプテン 栄 絵里香(さかえ えりか) 選手
+  - Gold: h3: 2025-26シーズンキャプテン 栄 絵里香(さかえ えりか) 選手
+- `sg01171.html` `html-structure.heading-order` accepted/high: Use h3 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h4: チームキャラクター ハルちゃん
+  - Gold: h3: チームキャラクター ハルちゃん
+- `sg01171.html` `html-structure.heading-order` accepted/high: Use h3 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h4: ホームゲーム
+  - Gold: h3: ホームゲーム
+- `sg01171.html` `html-structure.heading-order` accepted/high: Use h3 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h4: アウェーゲーム
+  - Gold: h3: アウェーゲーム
+- `sg01171.html` `image.alt-text` edited/high: Use the gold alt text as the image-name draft: 青と赤の斜線背景に、青色のユニフォームを着た女子バレーボールチームの選手15名とスーツ姿の女性監督が笑顔で並んでいる、SAGA久光スプリングスのキービジュアル画像
+  - Evidence: Gold provides a concrete alt text for the same or same-position image.
+  - Before: 202-26キービジュアル（ユニ①軽量）
+  - Gold: 青と赤の斜線背景に、青色のユニフォームを着た女子バレーボールチームの選手15名とスーツ姿の女性監督が笑顔で並んでいる、SAGA久光スプリングスのキービジュアル画像
+- `sg01171.html` `image.alt-text` edited/high: Use the gold alt text as the image-name draft: 青いリボンをつけた黄緑色の鳥のキャラクターと「SAGA Hisamitsu Springs」のチームロゴとテキストが上下に配置された、SAGA久光スプリングスのロゴマーク
+  - Evidence: Gold provides a concrete alt text for the same or same-position image.
+  - Before: SAGA久光スプリングスロゴ
+  - Gold: 青いリボンをつけた黄緑色の鳥のキャラクターと「SAGA Hisamitsu Springs」のチームロゴとテキストが上下に配置された、SAGA久光スプリングスのロゴマーク
+- `sg01171.html` `image.alt-text` edited/high: Use the gold alt text as the image-name draft: 11番の青いユニフォームを着用した、笑顔の栄 絵里香選手のプロフィール写真
+  - Evidence: Gold provides a concrete alt text for the same or same-position image.
+  - Before: 11_SAKAE_01_25-26
+  - Gold: 11番の青いユニフォームを着用した、笑顔の栄 絵里香選手のプロフィール写真
+- `sg01171.html` `image.alt-text` edited/high: Use the gold alt text as the image-name draft: 青いリボンをつけ、青いユニフォームを着たメジロのキャラクター、ハルちゃんが、右手にバレーボールを持ち、左手を腰に当てて立っている全身のイラスト
+  - Evidence: Gold provides a concrete alt text for the same or same-position image.
+  - Before: ハルちゃん画像
+  - Gold: 青いリボンをつけ、青いユニフォームを着たメジロのキャラクター、ハルちゃんが、右手にバレーボールを持ち、左手を腰に当てて立っている全身のイラスト
+- `sg01171.html` `link.link-text` edited/high: Use the gold link text as the edit draft: チーム（SAGA久光スプリングス）
+  - Evidence: Gold replaces a weak link label with descriptive link text for the same or closest link.
+  - Before: こちら
+  - Gold: チーム（SAGA久光スプリングス）
+- `sg01171.html` `link.link-text` edited/high: Use the gold link text as the edit draft: 【2025-26シーズン】キャプテン就任のお知らせ（SAGA久光スプリングス）
+  - Evidence: Gold replaces a weak link label with descriptive link text for the same or closest link.
+  - Before: こちら
+  - Gold: 【2025-26シーズン】キャプテン就任のお知らせ（SAGA久光スプリングス）
+- `sg01171.html` `table.caption` edited/high: Insert a caption draft based on gold: ホームゲームの一覧
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 23 rows, 7 cols, no caption, headers, merged cells; text=節 日程 開始時間 試合会場 対戦相手 試合結果 勝敗 2 25.10.18（土） 14：05 SAGAアリーナ クインシーズ刈谷 1-3 × 25.10.19（ 日） 14：05 3-1 ...
+  - Gold: caption: ホームゲームの一覧
+- `sg01171.html` `table.caption` edited/high: Insert a caption draft based on gold: アウェーゲームの一覧
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 23 rows, 7 cols, no caption, headers, merged cells; text=節 日程 開始時間 試合会場 対戦相手 試合結果 勝敗 1 25.10.11（ 土 ） 14：05 東急ドレッセとどろきアリーナ NECレッドロケッツ川崎 0-3 × 25.10.12（ 日...
+  - Gold: caption: アウェーゲームの一覧
+- `sg02395.html` `html-structure.heading-order` accepted/high: Use h2 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h3: 休日（日曜日または祝日）在宅当番医について
+  - Gold: h2: 休日（日曜日または祝日）在宅当番医について
+- `sg02395.html` `html-structure.heading-order` accepted/high: Use h2 for this heading when the same text appears in gold.
+  - Evidence: Gold keeps the same heading text but changes the heading level.
+  - Before: h3: 日曜・祝日在宅当番医情報
+  - Gold: h2: 日曜・祝日在宅当番医情報
+- `sg02395.html` `table.caption` edited/high: Insert a caption draft based on gold: 診療日および診療時間の詳細（休日夜間こども診療所）
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 4 rows, 2 cols, no caption, no headers; text=診療日 診療時間 平日（月曜日～金曜日） 20時00分～22時00分（受付は21時45分まで） 土曜日 17時00分～22時00分（受付は21時45分まで） 日曜日、祝日、12月31日～1月...
+  - Gold: caption: 診療日および診療時間の詳細（休日夜間こども診療所）
+- `sg02395.html` `table.caption` edited/high: Insert a caption draft based on gold: 診療日および診療時間の詳細（休日歯科診療所）
+  - Evidence: Gold keeps a matching table and adds a caption.
+  - Before: 2 rows, 2 cols, no caption, no headers; text=診療日 診療時間 日曜日、祝日、12月31日～1月3日 9時30分～16時00分（受付は15時30分まで）
+  - Gold: caption: 診療日および診療時間の詳細（休日歯科診療所）
+- `sg02395.html` `table.layout-table` rejected/high: Do not select the layout-table decomposition candidate; gold keeps this as a data table.
+  - Evidence: Gold retains a matching table and improves header/scope structure instead of decomposing it.
+  - Before: 4 rows, 2 cols, no caption, no headers; text=診療日 診療時間 平日（月曜日～金曜日） 20時00分～22時00分（受付は21時45分まで） 土曜日 17時00分～22時00分（受付は21時45分まで） 日曜日、祝日、12月31日～1月...
+  - Gold: 4 rows, 2 cols, caption, headers; text=診療日および診療時間の詳細（休日夜間こども診療所） 診療日 診療時間 平日（月曜日～金曜日） 20時00分～22時00分（受付は21時45分まで） 土曜日 17時00分～22時00分（受付は...
+- `sg02395.html` `table.layout-table` rejected/high: Do not select the layout-table decomposition candidate; gold keeps this as a data table.
+  - Evidence: Gold retains a matching table and improves header/scope structure instead of decomposing it.
+  - Before: 2 rows, 2 cols, no caption, no headers; text=診療日 診療時間 日曜日、祝日、12月31日～1月3日 9時30分～16時00分（受付は15時30分まで）
+  - Gold: 2 rows, 2 cols, caption, headers; text=診療日および診療時間の詳細（休日歯科診療所） 診療日 診療時間 日曜日 祝日 12月31日～1月3日 9時30分～16時00分（受付は15時30分まで）

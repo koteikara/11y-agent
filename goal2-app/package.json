@@ -1,0 +1,22 @@
+{
+  "name": "goal2-a11y-review-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Goal 2 accessibility migration review screen PoC for Cloud Run",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/run-tests.js",
+    "test:saga-gold": "node tools/evaluate-saga-gold.js",
+    "learn:saga-gold": "node tools/learn-saga-gold-hints.js",
+    "agents:dataset": "node tools/build-agents-cli-dataset.js --pretty",
+    "agents:local-eval": "node tools/run-agents-cli-local-eval.js",
+    "agents:analyze": "node tools/analyze-agents-cli-results.js",
+    "agents:analyze:tables": "node tools/analyze-table-rule-focus.js",
+    "agents:analyze:headings": "node tools/analyze-heading-rule-focus.js",
+    "agents:bootstrap": "npm run agents:dataset && npm run agents:local-eval && npm run agents:analyze && npm run agents:analyze:tables && npm run agents:analyze:headings"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

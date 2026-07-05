@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goal3 Content Extractor</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Goal 3</p>
+        <h1>コンテンツ部分の抽出</h1>
+      </div>
+      <div class="header-status">旧ページ全体HTML → CMS本文候補</div>
+    </header>
+
+    <main class="app-shell goal3-shell">
+      <section class="input-body input-form-card" aria-labelledby="goal3InputTitle">
+        <h2 id="goal3InputTitle">旧ページ入力</h2>
+        <div class="meta-grid" aria-label="取得元情報">
+          <label>
+            旧ページURL
+            <input id="sourceUrlInput" type="url" placeholder="https://www.example.jp/page.html" />
+          </label>
+          <label>
+            ページ名
+            <input id="pageTitleInput" type="text" placeholder="取得後に自動入力、または手入力" />
+          </label>
+        </div>
+        <div class="input-primary-actions" aria-label="旧ページ取得操作">
+          <button type="button" id="fetchUrlButton" class="primary">URLから取得</button>
+          <button type="button" id="extractButton">候補抽出</button>
+          <button type="button" id="resetButton">リセット</button>
+        </div>
+        <div id="goal3Loading" class="goal3-loading" hidden aria-live="polite" aria-busy="true">
+          <div class="goal3-loading-spinner" aria-hidden="true"></div>
+          <p id="goal3LoadingText">処理中です…</p>
+        </div>
+        <label class="html-input-label" for="fullHtmlInput">旧ページ全体HTML</label>
+        <textarea id="fullHtmlInput" spellcheck="false" placeholder="URL取得できない場合は、旧ページのHTML全体を貼り付けます。"></textarea>
+      </section>
+
+      <section class="workspace-grid goal3-workspace" aria-label="コンテンツ抽出候補">
+        <aside class="candidate-pane" aria-labelledby="extractCandidateTitle">
+          <div class="pane-heading">
+            <div>
+              <h2 id="extractCandidateTitle">本文候補</h2>
+              <p id="candidateSummary">旧ページHTMLを取得または貼り付けて、候補抽出を実行してください。</p>
+            </div>
+            <div class="completion-pill" id="candidateCount">未抽出</div>
+          </div>
+          <div id="candidateList" class="candidate-list"></div>
+        </aside>
+
+        <section class="detail-pane" aria-labelledby="extractDetailTitle">
+          <div class="pane-heading">
+            <div>
+              <h2 id="extractDetailTitle">抽出結果</h2>
+              <p id="detailSummary">本文候補を選択すると、抽出根拠とプレビューを確認できます。</p>
+            </div>
+            <div class="button-row">
+              <button type="button" id="sendGoal2Button" class="primary" disabled>GOAL2へ渡す</button>
+              <button type="button" id="copyHtmlButton" disabled>HTMLコピー</button>
+            </div>
+          </div>
+          <div id="candidateDetail" class="detail-empty">候補はまだありません。</div>
+          <section class="visual-compare-card">
+            <div class="visual-compare-heading">
+              <h3>抽出位置の確認</h3>
+              <p id="sourcePreviewStatus">元ページの中で抽出対象になった範囲を強調表示します。</p>
+            </div>
+            <div class="goal3-source-preview-wrap">
+              <iframe id="sourcePreviewFrame" class="goal3-source-preview" title="抽出位置の確認プレビュー" sandbox="allow-same-origin"></iframe>
+            </div>
+          </section>
+          <section class="visual-compare-card">
+            <div class="visual-compare-heading">
+              <h3>本文プレビュー</h3>
+              <p>ヘッダー、ナビ、フッターなどを除いたCMS登録対象候補です。</p>
+            </div>
+            <div id="contentPreview" class="goal3-preview">抽出候補を選択してください。</div>
+          </section>
+          <details class="decision-fold">
+            <summary>HTMLを見る</summary>
+            <div class="decision-fold-body">
+              <textarea id="extractedHtmlOutput" readonly spellcheck="false"></textarea>
+            </div>
+          </details>
+        </section>
+      </section>
+    </main>
+
+    <script src="/goal3.js"></script>
+  </body>
+</html>

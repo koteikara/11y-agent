@@ -1,0 +1,70 @@
+{
+  "source_grade": "C:\\Codex\\a11y-agent\\goal2-app\\agents-cli\\results\\saga-a11y-local-grade.json",
+  "generated_at": "2026-07-02T02:13:40.191Z",
+  "totals": {
+    "table_failure_cases": 0,
+    "table_failure_instances": 0,
+    "regressed_instances": 0,
+    "shortage_instances": 0,
+    "excess_instances": 0
+  },
+  "metric_summary": {
+    "table": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    },
+    "caption": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    },
+    "thead": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    },
+    "th": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    },
+    "scopeCol": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    },
+    "scopeRow": {
+      "total": 0,
+      "shortage": 0,
+      "excess": 0,
+      "regressed": 0,
+      "improved": 0,
+      "unchanged": 0,
+      "cases": []
+    }
+  },
+  "trigger_counts": {},
+  "rule_focus": [],
+  "priority_cases": []
+}

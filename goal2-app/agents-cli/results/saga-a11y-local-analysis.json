@@ -1,0 +1,1937 @@
+{
+  "source_grade": "C:\\Codex\\a11y-agent\\goal2-app\\agents-cli\\results\\saga-a11y-local-grade.json",
+  "generated_at": "2026-07-01T06:33:17.976Z",
+  "totals": {
+    "cases": 51,
+    "failing_cases": 20,
+    "failure_instances": 62,
+    "average_score": 91.3374,
+    "average_current_similarity": 0.918
+  },
+  "categories": [
+    {
+      "id": "heading_structure",
+      "label": "見出し構造",
+      "action": "h2/h3/h4の段階補正ルールを確認し、本文先頭見出しとページ内見出しのgold差分を分類する。",
+      "total": 7,
+      "metrics": {
+        "h3": 3,
+        "h2": 3,
+        "h4": 1
+      },
+      "statuses": {
+        "regressed": 2,
+        "improved": 4,
+        "unchanged": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "regressed",
+          "baseline": 2,
+          "current": 11,
+          "gold": 0,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "regressed",
+          "baseline": 5,
+          "current": 17,
+          "gold": 8,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "unchanged",
+          "baseline": 6,
+          "current": 6,
+          "gold": 22,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 1,
+          "current": 2,
+          "gold": 8,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 11,
+          "current": 10,
+          "gold": 9,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h4",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 5,
+          "current": 6,
+          "gold": 8,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg03997.html",
+          "score": 77.0243,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 0,
+          "current": 4,
+          "gold": 5,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "table_semantics",
+      "label": "表構造",
+      "action": "データ表、レイアウト表、セル結合、caption/scope付与のどれがgoldと違うかを切り分ける。",
+      "total": 44,
+      "metrics": {
+        "thead": 6,
+        "caption": 6,
+        "th": 10,
+        "scopeCol": 8,
+        "scopeRow": 8,
+        "table": 6
+      },
+      "statuses": {
+        "improved": 34,
+        "unchanged": 6,
+        "regressed": 4
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 24,
+          "gold": 8,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 20,
+          "gold": 6,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 3,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 0,
+          "current": 4,
+          "gold": 2,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 16,
+          "current": 16,
+          "gold": 7,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 11,
+          "current": 11,
+          "gold": 13,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 7,
+          "current": 7,
+          "gold": 8,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04782.html",
+          "score": 96.4702,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 42,
+          "current": 42,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "image_media",
+      "label": "画像・埋め込み",
+      "action": "画像alt、複雑画像、iframeのCMS注意/修正候補の分類を確認する。",
+      "total": 2,
+      "metrics": {
+        "img": 1,
+        "iframe": 1
+      },
+      "statuses": {
+        "unchanged": 2
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "img",
+          "category": "image_media",
+          "status": "unchanged",
+          "baseline": 87,
+          "current": 87,
+          "gold": 0,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "iframe",
+          "category": "image_media",
+          "status": "unchanged",
+          "baseline": 0,
+          "current": 0,
+          "gold": 13,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "link_text",
+      "label": "リンク文言",
+      "action": "弱いリンク文言が残るページを確認し、リンク先ページ名推定または人間確認候補へ回す。",
+      "total": 9,
+      "metrics": {
+        "weakLink": 9
+      },
+      "statuses": {
+        "unchanged": 9
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg01171.html",
+          "score": 84.7977,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02558.html",
+          "score": 88.3829,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg03727.html",
+          "score": 89.3369,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02571.html",
+          "score": 89.5073,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02565.html",
+          "score": 90.3231,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02539.html",
+          "score": 90.506,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02555.html",
+          "score": 91.5003,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02536.html",
+          "score": 94.2848,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "thead",
+      "label": "thead",
+      "category": "table_semantics",
+      "total": 6,
+      "statuses": {
+        "improved": 5,
+        "regressed": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 2,
+          "gold": 7,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 19,
+          "gold": 26,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 11,
+          "gold": 13,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 7,
+          "gold": 8,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02560.html",
+          "score": 82.3192,
+          "metric": "thead",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 1,
+          "gold": 2,
+          "differs_from_gold": 4,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "caption",
+      "label": "caption",
+      "category": "table_semantics",
+      "total": 6,
+      "statuses": {
+        "improved": 5,
+        "regressed": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 2,
+          "gold": 7,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 19,
+          "gold": 26,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 11,
+          "gold": 13,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 7,
+          "gold": 8,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02560.html",
+          "score": 82.3192,
+          "metric": "caption",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 1,
+          "gold": 2,
+          "differs_from_gold": 4,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "th",
+      "label": "th",
+      "category": "table_semantics",
+      "total": 10,
+      "statuses": {
+        "improved": 9,
+        "regressed": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 24,
+          "gold": 8,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 8,
+          "gold": 53,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 87,
+          "current": 144,
+          "gold": 165,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 87,
+          "gold": 117,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 59,
+          "gold": 69,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02560.html",
+          "score": 82.3192,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 5,
+          "gold": 7,
+          "differs_from_gold": 4,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg01171.html",
+          "score": 84.7977,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 14,
+          "current": 63,
+          "gold": 61,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04008.html",
+          "score": 84.9787,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 3,
+          "current": 32,
+          "gold": 33,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04014.html",
+          "score": 85.1415,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 10,
+          "gold": 12,
+          "differs_from_gold": 2,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04005.html",
+          "score": 85.9584,
+          "metric": "th",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 3,
+          "current": 18,
+          "gold": 17,
+          "differs_from_gold": 2,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "scopeCol",
+      "label": "scopeCol",
+      "category": "table_semantics",
+      "total": 8,
+      "statuses": {
+        "improved": 7,
+        "unchanged": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 0,
+          "current": 4,
+          "gold": 2,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 4,
+          "gold": 17,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 57,
+          "gold": 77,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 24,
+          "gold": 55,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 7,
+          "gold": 12,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02560.html",
+          "score": 82.3192,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 3,
+          "gold": 5,
+          "differs_from_gold": 4,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg01171.html",
+          "score": 84.7977,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 14,
+          "current": 12,
+          "gold": 10,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04008.html",
+          "score": 84.9787,
+          "metric": "scopeCol",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 3,
+          "current": 5,
+          "gold": 9,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "scopeRow",
+      "label": "scopeRow",
+      "category": "table_semantics",
+      "total": 8,
+      "statuses": {
+        "improved": 7,
+        "regressed": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "regressed",
+          "baseline": 0,
+          "current": 20,
+          "gold": 6,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 4,
+          "gold": 36,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 83,
+          "current": 87,
+          "gold": 88,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 63,
+          "gold": 62,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 52,
+          "gold": 57,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04008.html",
+          "score": 84.9787,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 27,
+          "gold": 24,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04014.html",
+          "score": 85.1415,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 8,
+          "gold": 10,
+          "differs_from_gold": 2,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04005.html",
+          "score": 85.9584,
+          "metric": "scopeRow",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 0,
+          "current": 16,
+          "gold": 15,
+          "differs_from_gold": 2,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "img",
+      "label": "img",
+      "category": "image_media",
+      "total": 1,
+      "statuses": {
+        "unchanged": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg00761.html",
+          "score": 75.7483,
+          "metric": "img",
+          "category": "image_media",
+          "status": "unchanged",
+          "baseline": 87,
+          "current": 87,
+          "gold": 0,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "weakLink",
+      "label": "weakLink",
+      "category": "link_text",
+      "total": 9,
+      "statuses": {
+        "unchanged": 9
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg01171.html",
+          "score": 84.7977,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 3,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02558.html",
+          "score": 88.3829,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg03727.html",
+          "score": 89.3369,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02571.html",
+          "score": 89.5073,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02565.html",
+          "score": 90.3231,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02539.html",
+          "score": 90.506,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02555.html",
+          "score": 91.5003,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02536.html",
+          "score": 94.2848,
+          "metric": "weakLink",
+          "category": "link_text",
+          "status": "unchanged",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "h3",
+      "label": "h3",
+      "category": "heading_structure",
+      "total": 3,
+      "statuses": {
+        "regressed": 2,
+        "unchanged": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "regressed",
+          "baseline": 2,
+          "current": 11,
+          "gold": 0,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "regressed",
+          "baseline": 5,
+          "current": 17,
+          "gold": 8,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h3",
+          "category": "heading_structure",
+          "status": "unchanged",
+          "baseline": 6,
+          "current": 6,
+          "gold": 22,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "table",
+      "label": "table",
+      "category": "table_semantics",
+      "total": 6,
+      "statuses": {
+        "unchanged": 5,
+        "improved": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 3,
+          "current": 3,
+          "gold": 1,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 16,
+          "current": 16,
+          "gold": 7,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg02562.html",
+          "score": 79.7571,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 11,
+          "current": 11,
+          "gold": 13,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg02546.html",
+          "score": 79.8101,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 7,
+          "current": 7,
+          "gold": 8,
+          "differs_from_gold": 6,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg04782.html",
+          "score": 96.4702,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "unchanged",
+          "baseline": 42,
+          "current": 42,
+          "gold": 0,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "table",
+          "category": "table_semantics",
+          "status": "improved",
+          "baseline": 13,
+          "current": 2,
+          "gold": 0,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "h2",
+      "label": "h2",
+      "category": "heading_structure",
+      "total": 3,
+      "statuses": {
+        "improved": 3
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 1,
+          "current": 2,
+          "gold": 8,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 11,
+          "current": 10,
+          "gold": 9,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg03997.html",
+          "score": 77.0243,
+          "metric": "h2",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 0,
+          "current": 4,
+          "gold": 5,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "h4",
+      "label": "h4",
+      "category": "heading_structure",
+      "total": 1,
+      "statuses": {
+        "improved": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h4",
+          "category": "heading_structure",
+          "status": "improved",
+          "baseline": 5,
+          "current": 6,
+          "gold": 8,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    {
+      "id": "iframe",
+      "label": "iframe",
+      "category": "image_media",
+      "total": 1,
+      "statuses": {
+        "unchanged": 1
+      },
+      "cases": [
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "iframe",
+          "category": "image_media",
+          "status": "unchanged",
+          "baseline": 0,
+          "current": 0,
+          "gold": 13,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    }
+  ],
+  "priority_cases": [
+    {
+      "id": "saga-city/sg04007.html",
+      "score": 55.8765,
+      "current_similarity": 0.7261,
+      "similarity_delta": 0.0115,
+      "differs_from_gold": 9,
+      "regressed_metrics": 5,
+      "categories": [
+        "heading_structure",
+        "table_semantics",
+        "link_text"
+      ],
+      "failures": [
+        {
+          "metric": "h2",
+          "status": "improved",
+          "category": "heading_structure",
+          "baseline": 1,
+          "current": 2,
+          "gold": 8
+        },
+        {
+          "metric": "h3",
+          "status": "regressed",
+          "category": "heading_structure",
+          "baseline": 2,
+          "current": 11,
+          "gold": 0
+        },
+        {
+          "metric": "table",
+          "status": "unchanged",
+          "category": "table_semantics",
+          "baseline": 3,
+          "current": 3,
+          "gold": 1
+        },
+        {
+          "metric": "thead",
+          "status": "regressed",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1
+        },
+        {
+          "metric": "caption",
+          "status": "regressed",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 3,
+          "gold": 1
+        },
+        {
+          "metric": "th",
+          "status": "regressed",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 24,
+          "gold": 8
+        },
+        {
+          "metric": "scopeCol",
+          "status": "unchanged",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 4,
+          "gold": 2
+        },
+        {
+          "metric": "scopeRow",
+          "status": "regressed",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 20,
+          "gold": 6
+        },
+        {
+          "metric": "weakLink",
+          "status": "unchanged",
+          "category": "link_text",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg02395.html",
+      "score": 59.0689,
+      "current_similarity": 0.6768,
+      "similarity_delta": -0.0165,
+      "differs_from_gold": 7,
+      "regressed_metrics": 1,
+      "categories": [
+        "heading_structure",
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "h3",
+          "status": "regressed",
+          "category": "heading_structure",
+          "baseline": 5,
+          "current": 17,
+          "gold": 8
+        },
+        {
+          "metric": "table",
+          "status": "unchanged",
+          "category": "table_semantics",
+          "baseline": 16,
+          "current": 16,
+          "gold": 7
+        },
+        {
+          "metric": "thead",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 2,
+          "gold": 7
+        },
+        {
+          "metric": "caption",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 2,
+          "gold": 7
+        },
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 8,
+          "gold": 53
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 4,
+          "gold": 17
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 4,
+          "gold": 36
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg00761.html",
+      "score": 75.7483,
+      "current_similarity": 0.9035,
+      "similarity_delta": -0.0097,
+      "differs_from_gold": 6,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics",
+        "image_media"
+      ],
+      "failures": [
+        {
+          "metric": "thead",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 19,
+          "gold": 26
+        },
+        {
+          "metric": "caption",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 19,
+          "gold": 26
+        },
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 87,
+          "current": 144,
+          "gold": 165
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 57,
+          "gold": 77
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 83,
+          "current": 87,
+          "gold": 88
+        },
+        {
+          "metric": "img",
+          "status": "unchanged",
+          "category": "image_media",
+          "baseline": 87,
+          "current": 87,
+          "gold": 0
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg02562.html",
+      "score": 79.7571,
+      "current_similarity": 0.9703,
+      "similarity_delta": 0,
+      "differs_from_gold": 6,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "table",
+          "status": "unchanged",
+          "category": "table_semantics",
+          "baseline": 11,
+          "current": 11,
+          "gold": 13
+        },
+        {
+          "metric": "thead",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 11,
+          "gold": 13
+        },
+        {
+          "metric": "caption",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 11,
+          "gold": 13
+        },
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 87,
+          "gold": 117
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 24,
+          "gold": 55
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 63,
+          "gold": 62
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg02546.html",
+      "score": 79.8101,
+      "current_similarity": 0.9712,
+      "similarity_delta": -0.003,
+      "differs_from_gold": 6,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "table",
+          "status": "unchanged",
+          "category": "table_semantics",
+          "baseline": 7,
+          "current": 7,
+          "gold": 8
+        },
+        {
+          "metric": "thead",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 7,
+          "gold": 8
+        },
+        {
+          "metric": "caption",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 7,
+          "gold": 8
+        },
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 59,
+          "gold": 69
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 7,
+          "gold": 12
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 52,
+          "gold": 57
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg06323.html",
+      "score": 75.8165,
+      "current_similarity": 0.8534,
+      "similarity_delta": -0.0016,
+      "differs_from_gold": 5,
+      "regressed_metrics": 0,
+      "categories": [
+        "heading_structure",
+        "table_semantics",
+        "image_media"
+      ],
+      "failures": [
+        {
+          "metric": "h2",
+          "status": "improved",
+          "category": "heading_structure",
+          "baseline": 11,
+          "current": 10,
+          "gold": 9
+        },
+        {
+          "metric": "h3",
+          "status": "unchanged",
+          "category": "heading_structure",
+          "baseline": 6,
+          "current": 6,
+          "gold": 22
+        },
+        {
+          "metric": "h4",
+          "status": "improved",
+          "category": "heading_structure",
+          "baseline": 5,
+          "current": 6,
+          "gold": 8
+        },
+        {
+          "metric": "table",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 13,
+          "current": 2,
+          "gold": 0
+        },
+        {
+          "metric": "iframe",
+          "status": "unchanged",
+          "category": "image_media",
+          "baseline": 0,
+          "current": 0,
+          "gold": 13
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg02560.html",
+      "score": 82.3192,
+      "current_similarity": 0.9104,
+      "similarity_delta": 0.0027,
+      "differs_from_gold": 4,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "thead",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 1,
+          "gold": 2
+        },
+        {
+          "metric": "caption",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 1,
+          "gold": 2
+        },
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 5,
+          "gold": 7
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 3,
+          "gold": 5
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg01171.html",
+      "score": 84.7977,
+      "current_similarity": 0.9005,
+      "similarity_delta": -0.0017,
+      "differs_from_gold": 3,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics",
+        "link_text"
+      ],
+      "failures": [
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 14,
+          "current": 63,
+          "gold": 61
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 14,
+          "current": 12,
+          "gold": 10
+        },
+        {
+          "metric": "weakLink",
+          "status": "unchanged",
+          "category": "link_text",
+          "baseline": 1,
+          "current": 1,
+          "gold": 0
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg04008.html",
+      "score": 84.9787,
+      "current_similarity": 0.9035,
+      "similarity_delta": -0.0033,
+      "differs_from_gold": 3,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 3,
+          "current": 32,
+          "gold": 33
+        },
+        {
+          "metric": "scopeCol",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 3,
+          "current": 5,
+          "gold": 9
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 27,
+          "gold": 24
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    },
+    {
+      "id": "saga-city/sg04014.html",
+      "score": 85.1415,
+      "current_similarity": 0.8549,
+      "similarity_delta": 0.0008,
+      "differs_from_gold": 2,
+      "regressed_metrics": 0,
+      "categories": [
+        "table_semantics"
+      ],
+      "failures": [
+        {
+          "metric": "th",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 10,
+          "gold": 12
+        },
+        {
+          "metric": "scopeRow",
+          "status": "improved",
+          "category": "table_semantics",
+          "baseline": 0,
+          "current": 8,
+          "gold": 10
+        }
+      ],
+      "recommended_next_step": "表構造のgold差分を優先確認し、表解体/データ表維持/caption/scopeのどれを修正するか決める。"
+    }
+  ],
+  "recommended_actions": [
+    {
+      "priority": 1,
+      "category": "table_semantics",
+      "label": "表構造",
+      "failure_instances": 44,
+      "top_metrics": [
+        {
+          "metric": "th",
+          "count": 10
+        },
+        {
+          "metric": "scopeCol",
+          "count": 8
+        },
+        {
+          "metric": "scopeRow",
+          "count": 8
+        },
+        {
+          "metric": "thead",
+          "count": 6
+        }
+      ],
+      "action": "データ表、レイアウト表、セル結合、caption/scope付与のどれがgoldと違うかを切り分ける。"
+    },
+    {
+      "priority": 2,
+      "category": "link_text",
+      "label": "リンク文言",
+      "failure_instances": 9,
+      "top_metrics": [
+        {
+          "metric": "weakLink",
+          "count": 9
+        }
+      ],
+      "action": "弱いリンク文言が残るページを確認し、リンク先ページ名推定または人間確認候補へ回す。"
+    },
+    {
+      "priority": 3,
+      "category": "heading_structure",
+      "label": "見出し構造",
+      "failure_instances": 7,
+      "top_metrics": [
+        {
+          "metric": "h3",
+          "count": 3
+        },
+        {
+          "metric": "h2",
+          "count": 3
+        },
+        {
+          "metric": "h4",
+          "count": 1
+        }
+      ],
+      "action": "h2/h3/h4の段階補正ルールを確認し、本文先頭見出しとページ内見出しのgold差分を分類する。"
+    },
+    {
+      "priority": 4,
+      "category": "image_media",
+      "label": "画像・埋め込み",
+      "failure_instances": 2,
+      "top_metrics": [
+        {
+          "metric": "img",
+          "count": 1
+        },
+        {
+          "metric": "iframe",
+          "count": 1
+        }
+      ],
+      "action": "画像alt、複雑画像、iframeのCMS注意/修正候補の分類を確認する。"
+    }
+  ]
+}

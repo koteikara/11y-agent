@@ -1,0 +1,37 @@
+name: goal2-saga-a11y-content-migration
+description: >
+  Local-first evaluation plan for Goal2 CMS content migration and accessibility
+  repair. This file documents the intended agents-cli evaluation contract.
+
+dataset:
+  path: agents-cli/datasets/saga-a11y-eval.jsonl
+  format: jsonl
+  input_field: input.old_html
+  reference_field: expected.gold_html
+
+local_baseline:
+  generate_command: npm run agents:local-eval
+  trace_output: agents-cli/results/saga-a11y-local-traces.jsonl
+  grade_output: agents-cli/results/saga-a11y-local-grade.json
+
+grading:
+  deterministic_metrics:
+    - text_similarity_to_gold
+    - heading_structure
+    - table_semantics
+    - image_alt_presence
+    - weak_link_text
+    - date_weekday_unit_notation
+  human_review_required_when:
+    - administrative_meaning_may_change
+    - destination_page_name_is_uncertain
+    - image_content_requires_visual_judgment
+    - table_decomposition_changes_relationships
+
+agents_cli_next_steps:
+  install: uvx google-agents-cli setup
+  generate: agents-cli eval generate
+  grade: agents-cli eval grade
+  compare: agents-cli eval compare
+  analyze: agents-cli eval analyze
+  optimize: agents-cli eval optimize

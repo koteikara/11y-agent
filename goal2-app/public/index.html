@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goal2 A11y Review PoC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Goal 2</p>
+        <h1>アクセシビリティ候補レビュー</h1>
+      </div>
+      <div class="header-status" id="ruleStatus">KB読み込み中</div>
+    </header>
+
+    <main class="app-shell">
+      <section class="input-body input-form-card" id="inputBody" aria-labelledby="inputTitle">
+          <h2 id="inputTitle">入力HTML</h2>
+          <div class="meta-grid" aria-label="ページ情報">
+            <label>
+              ページ名
+              <input id="pageTitleInput" type="text" value="サンプル移行ページ" />
+            </label>
+            <label>
+              旧URL
+              <input id="oldUrlInput" type="url" value="https://example.jp/old/page.html" />
+            </label>
+            <label>
+              CMS登録先
+              <input id="cmsTargetInput" type="text" value="本体サイト > 手続き" />
+            </label>
+            <label>
+              作業者
+              <input id="workerInput" type="text" value="worker-001" />
+            </label>
+          </div>
+
+          <label class="html-input-label" for="htmlInput">本文HTML</label>
+          <textarea id="htmlInput" spellcheck="false"></textarea>
+          <div class="input-primary-actions" aria-label="入力HTMLの操作">
+            <button type="button" id="analyzeButton" class="primary">候補生成</button>
+            <button type="button" id="resetButton">リセット</button>
+          </div>
+      </section>
+
+      <section class="input-band" aria-label="入力補助">
+        <div class="section-heading">
+          <div class="button-row">
+            <label class="sample-picker" for="sampleSelect">
+              <span class="visually-hidden">入力サンプル</span>
+              <select id="sampleSelect"></select>
+            </label>
+            <button type="button" id="toggleInputButton" aria-expanded="true" aria-controls="inputBody">入力を閉じる</button>
+            <button type="button" id="loadSampleButton">サンプル投入</button>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="page-agent-panel" id="pageAgentPanel" aria-live="polite"></section>
+
+      <section class="workspace-grid" aria-label="修正候補レビュー">
+        <aside class="candidate-pane" aria-labelledby="candidateTitle">
+          <div class="pane-heading">
+            <div>
+              <h2 id="candidateTitle">修正候補</h2>
+              <p id="candidateSummary">候補生成を実行してください。</p>
+            </div>
+            <div class="completion-pill" id="completionPill">未生成</div>
+          </div>
+          <div class="bulk-actions" aria-label="修正候補の一括操作">
+            <div class="bulk-actions-row">
+              <label class="bulk-select-all" for="bulkSelectAll">
+                <input id="bulkSelectAll" type="checkbox" />
+                <span>全件チェック</span>
+              </label>
+              <button type="button" id="bulkAcceptButton">チェックを一括採用</button>
+            </div>
+            <p id="bulkActionStatus" class="bulk-action-status" aria-live="polite">候補生成後に利用できます。</p>
+          </div>
+          <div class="candidate-list" id="candidateList"></div>
+        </aside>
+
+        <section class="detail-pane" aria-labelledby="detailTitle">
+          <div class="pane-heading">
+            <div>
+              <h2 id="detailTitle">修正</h2>
+              <p id="detailSubtitle">候補を選択してください。</p>
+            </div>
+            <div class="review-controls">
+              <div class="review-position" id="reviewPosition">0/0</div>
+              <div class="button-row">
+                <button type="button" id="prevCandidateButton">前</button>
+                <button type="button" id="nextCandidateButton">次の未処理</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="decision-panel decision-panel-top" id="decisionPanel" hidden>
+            <div class="button-grid">
+              <button type="button" id="acceptButton" class="primary">採用</button>
+              <button type="button" id="editAcceptButton">文言を調整</button>
+              <button type="button" id="rejectButton">却下</button>
+              <button type="button" id="needsReviewButton">要確認</button>
+            </div>
+            <div class="quick-edit-panel" id="quickEditPanel" hidden></div>
+          </div>
+
+          <div class="detail-scroll">
+            <div id="candidateDetail" class="detail-empty">修正候補を選ぶと、修正理由とHTML差分が表示されます。</div>
+
+            <details class="decision-fold" id="decisionFold">
+              <summary>詳細を見る</summary>
+              <div class="decision-fold-body">
+                <label>
+                  修正前HTML
+                  <textarea id="beforeHtml" readonly spellcheck="false"></textarea>
+                </label>
+                <div class="ai-image-name-panel" id="aiImageNamePanel" hidden>
+                  <label>
+                    AI画像名候補（alt用）
+                    <input id="aiImageNameInput" type="text" />
+                  </label>
+                  <div class="ai-image-name-actions">
+                    <p id="aiImageNameStatus">未投入</p>
+                    <button type="button" id="applyAiImageNameButton">修正後HTMLへ投入</button>
+                  </div>
+                </div>
+                <label>
+                  修正後HTML
+                  <textarea id="afterHtml" spellcheck="false"></textarea>
+                </label>
+                <label>
+                  判断理由
+                  <input id="decisionReason" type="text" placeholder="例: KBルールに沿って採用" />
+                </label>
+                <div class="detail-info-grid">
+                  <div class="detail-info-card">
+                    <h3>各種情報</h3>
+                    <div id="candidateMeta"></div>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="preview-pane" aria-labelledby="previewTitle">
+          <div class="pane-heading">
+            <div>
+              <h2 id="previewTitle">レンダリング</h2>
+              <p>選択中の候補箇所をハイライトします。</p>
+            </div>
+          </div>
+          <iframe id="previewFrame" title="レンダリングされた本文HTML" sandbox="allow-same-origin"></iframe>
+        </section>
+      </section>
+
+      <details class="output-drawer">
+        <summary>
+          <span>出力</span>
+          <span>最終HTML・証跡・注意</span>
+        </summary>
+        <section class="output-grid" aria-label="出力">
+          <div class="output-pane">
+            <div class="section-heading">
+              <div>
+                <h2>最終HTML</h2>
+                <p>CMS貼り付け用のHTML断片です。</p>
+              </div>
+              <button type="button" id="copyHtmlButton">コピー</button>
+            </div>
+            <textarea id="finalHtml" readonly spellcheck="false"></textarea>
+          </div>
+          <div class="output-pane">
+            <div class="section-heading">
+              <div>
+                <h2>注意</h2>
+                <p>CMS登録時に確認する注意事項です。コピー用の出力ではありません。</p>
+              </div>
+            </div>
+            <div id="noticeOutput" class="notice-output is-empty" role="list"></div>
+          </div>
+          <div class="output-pane">
+            <div class="section-heading">
+              <div>
+                <h2>証跡</h2>
+                <p>候補ごとの判断記録です。</p>
+              </div>
+              <div class="button-row">
+                <button type="button" id="copyEvidenceButton">JSONコピー</button>
+                <button type="button" id="downloadCsvButton">CSV</button>
+              </div>
+            </div>
+            <textarea id="evidenceOutput" readonly spellcheck="false"></textarea>
+          </div>
+        </section>
+      </details>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

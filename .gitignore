@@ -1,0 +1,17 @@
+.tmp-gemini-a11y-agent/
+*.zip
+
+.env
+.env.*
+credentials.json
+token.json
+service-account*.json
+client_secret*.json
+*.key
+*.pem
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/

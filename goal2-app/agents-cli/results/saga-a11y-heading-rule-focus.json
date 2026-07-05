@@ -1,0 +1,1034 @@
+{
+  "source_grade": "C:\\Codex\\a11y-agent\\goal2-app\\agents-cli\\results\\saga-a11y-local-grade.json",
+  "generated_at": "2026-07-01T02:05:26.749Z",
+  "totals": {
+    "heading_failure_cases": 4,
+    "heading_failure_instances": 7,
+    "regressed_instances": 2,
+    "improved_instances": 4,
+    "unchanged_instances": 1,
+    "shortage_instances": 4,
+    "excess_instances": 3
+  },
+  "metric_summary": {
+    "h2": {
+      "total": 3,
+      "shortage": 2,
+      "excess": 1,
+      "mismatch": 0,
+      "regressed": 0,
+      "improved": 3,
+      "unchanged": 0,
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h2",
+          "status": "improved",
+          "direction": "shortage",
+          "key": "h2_shortage",
+          "baseline": 1,
+          "current": 2,
+          "gold": 8,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h2",
+          "status": "improved",
+          "direction": "excess",
+          "key": "h2_excess",
+          "baseline": 11,
+          "current": 10,
+          "gold": 9,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        },
+        {
+          "id": "saga-city/sg03997.html",
+          "score": 77.0243,
+          "metric": "h2",
+          "status": "improved",
+          "direction": "shortage",
+          "key": "h2_shortage",
+          "baseline": 0,
+          "current": 4,
+          "gold": 5,
+          "differs_from_gold": 1,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    "h3": {
+      "total": 3,
+      "shortage": 1,
+      "excess": 2,
+      "mismatch": 0,
+      "regressed": 2,
+      "improved": 0,
+      "unchanged": 1,
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "metric": "h3",
+          "status": "regressed",
+          "direction": "excess",
+          "key": "h3_excess",
+          "baseline": 2,
+          "current": 11,
+          "gold": 0,
+          "differs_from_gold": 9,
+          "regressed_metrics": 5
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "metric": "h3",
+          "status": "regressed",
+          "direction": "excess",
+          "key": "h3_excess",
+          "baseline": 5,
+          "current": 17,
+          "gold": 8,
+          "differs_from_gold": 7,
+          "regressed_metrics": 1
+        },
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h3",
+          "status": "unchanged",
+          "direction": "shortage",
+          "key": "h3_shortage",
+          "baseline": 6,
+          "current": 6,
+          "gold": 22,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    },
+    "h4": {
+      "total": 1,
+      "shortage": 1,
+      "excess": 0,
+      "mismatch": 0,
+      "regressed": 0,
+      "improved": 1,
+      "unchanged": 0,
+      "cases": [
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "metric": "h4",
+          "status": "improved",
+          "direction": "shortage",
+          "key": "h4_shortage",
+          "baseline": 5,
+          "current": 6,
+          "gold": 8,
+          "differs_from_gold": 5,
+          "regressed_metrics": 0
+        }
+      ]
+    }
+  },
+  "trigger_counts": {
+    "h2_shortage": 2,
+    "h3_excess": 2,
+    "h2_excess": 1,
+    "h3_shortage": 1,
+    "h4_shortage": 1
+  },
+  "pattern_summary": [
+    {
+      "id": "cms_componentization_required",
+      "label": "CMS componentization likely required first",
+      "count": 1,
+      "cases": [
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "failure_keys": [
+            "h2_excess",
+            "h3_shortage",
+            "h4_shortage"
+          ],
+          "current": {
+            "h2": 10,
+            "h3": 6,
+            "h4": 6
+          },
+          "gold": {
+            "h2": 9,
+            "h3": 22,
+            "h4": 8
+          }
+        }
+      ]
+    },
+    {
+      "id": "date_snapshot_mismatch",
+      "label": "Date-range content snapshot differs",
+      "count": 1,
+      "cases": [
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "failure_keys": [
+            "h3_excess"
+          ],
+          "current": {
+            "h2": 3,
+            "h3": 17,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 3,
+            "h3": 8,
+            "h4": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "gold_only_content_update",
+      "label": "Gold-only content update likely",
+      "count": 1,
+      "cases": [
+        {
+          "id": "saga-city/sg03997.html",
+          "score": 77.0243,
+          "failure_keys": [
+            "h2_shortage"
+          ],
+          "current": {
+            "h2": 4,
+            "h3": 0,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 5,
+            "h3": 0,
+            "h4": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "stale_section_scope_mismatch",
+      "label": "Stale or out-of-scope section likely remains",
+      "count": 1,
+      "cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "failure_keys": [
+            "h2_shortage",
+            "h3_excess"
+          ],
+          "current": {
+            "h2": 2,
+            "h3": 11,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 8,
+            "h3": 0,
+            "h4": 0
+          }
+        }
+      ]
+    }
+  ],
+  "rule_focus": [
+    {
+      "id": "heading-content-snapshot-review",
+      "label": "Separate gold-only or time-sensitive content updates",
+      "triggers": [
+        "h2_shortage",
+        "h3_excess"
+      ],
+      "patterns": [
+        "gold_only_content_update",
+        "date_snapshot_mismatch",
+        "stale_section_scope_mismatch"
+      ],
+      "implementation": "Do not invent headings or delete dated sections only to match gold. Re-fetch the old page, compare publication dates, or send the case to human confirmation.",
+      "human_check": "Confirm whether gold contains newer content, a different date range, or an intentionally removed section before changing administrative content.",
+      "evidence_count": 3,
+      "trigger_evidence": 4,
+      "pattern_evidence": 3,
+      "case_count": 3,
+      "example_cases": [
+        {
+          "id": "saga-city/sg04007.html",
+          "score": 55.8765,
+          "diagnosis": "Current keeps a section that gold likely removed or moved. Do not delete it automatically; confirm page scope or content freshness first.",
+          "failure_keys": [
+            "h2_shortage",
+            "h3_excess"
+          ],
+          "current": {
+            "h2": 2,
+            "h3": 11,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 8,
+            "h3": 0,
+            "h4": 0
+          }
+        },
+        {
+          "id": "saga-city/sg02395.html",
+          "score": 59.0689,
+          "diagnosis": "Current and gold contain different dated schedule ranges; re-fetch or confirm the target period instead of trimming date headings automatically.",
+          "failure_keys": [
+            "h3_excess"
+          ],
+          "current": {
+            "h2": 3,
+            "h3": 17,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 3,
+            "h3": 8,
+            "h4": 0
+          }
+        },
+        {
+          "id": "saga-city/sg03997.html",
+          "score": 77.0243,
+          "diagnosis": "Gold has more body text/headings than old/current; do not create administrative content from nothing. Re-fetch the source or escalate as content update.",
+          "failure_keys": [
+            "h2_shortage"
+          ],
+          "current": {
+            "h2": 4,
+            "h3": 0,
+            "h4": 0
+          },
+          "gold": {
+            "h2": 5,
+            "h3": 0,
+            "h4": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "heading-cms-componentization-review",
+      "label": "Separate CMS componentization from heading-tag fixes",
+      "triggers": [
+        "h2_excess",
+        "h3_shortage",
+        "h4_shortage"
+      ],
+      "patterns": [
+        "cms_componentization_required"
+      ],
+      "implementation": "Treat card/link/video blocks as CMS components first; heading levels should be derived after component boundaries are known.",
+      "human_check": "Check the CMS parts expected for promotional cards, videos, and related-link blocks before adjusting heading levels.",
+      "evidence_count": 1,
+      "trigger_evidence": 3,
+      "pattern_evidence": 1,
+      "case_count": 1,
+      "example_cases": [
+        {
+          "id": "saga-city/sg06323.html",
+          "score": 75.8165,
+          "diagnosis": "Gold appears to split cards, video/link blocks, or promotional modules into components; decide component boundaries before heading-level fixes.",
+          "failure_keys": [
+            "h2_excess",
+            "h3_shortage",
+            "h4_shortage"
+          ],
+          "current": {
+            "h2": 10,
+            "h3": 6,
+            "h4": 6
+          },
+          "gold": {
+            "h2": 9,
+            "h3": 22,
+            "h4": 8
+          }
+        }
+      ]
+    }
+  ],
+  "priority_cases": [
+    {
+      "id": "saga-city/sg04007.html",
+      "score": 55.8765,
+      "differs_from_gold": 9,
+      "regressed_metrics": 5,
+      "old": {
+        "h2": 1,
+        "h3": 2,
+        "h4": 11
+      },
+      "current": {
+        "h2": 2,
+        "h3": 11,
+        "h4": 0
+      },
+      "gold": {
+        "h2": 8,
+        "h3": 0,
+        "h4": 0
+      },
+      "all_metrics": {
+        "old": {
+          "h2": 1,
+          "h3": 2,
+          "h4": 11,
+          "table": 3,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 1,
+          "textLength": 2405
+        },
+        "current": {
+          "h2": 2,
+          "h3": 11,
+          "h4": 0,
+          "table": 3,
+          "thead": 3,
+          "caption": 3,
+          "th": 24,
+          "scopeCol": 4,
+          "scopeRow": 20,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 1,
+          "textLength": 2324
+        },
+        "gold": {
+          "h2": 8,
+          "h3": 0,
+          "h4": 0,
+          "table": 1,
+          "thead": 1,
+          "caption": 1,
+          "th": 8,
+          "scopeCol": 2,
+          "scopeRow": 6,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 1802
+        },
+        "details": {
+          "h2": {
+            "baseline": 1,
+            "current": 2,
+            "gold": 8,
+            "status": "improved"
+          },
+          "h3": {
+            "baseline": 2,
+            "current": 11,
+            "gold": 0,
+            "status": "regressed"
+          },
+          "h4": {
+            "baseline": 11,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "table": {
+            "baseline": 3,
+            "current": 3,
+            "gold": 1,
+            "status": "unchanged"
+          },
+          "thead": {
+            "baseline": 0,
+            "current": 3,
+            "gold": 1,
+            "status": "regressed"
+          },
+          "caption": {
+            "baseline": 0,
+            "current": 3,
+            "gold": 1,
+            "status": "regressed"
+          },
+          "th": {
+            "baseline": 0,
+            "current": 24,
+            "gold": 8,
+            "status": "regressed"
+          },
+          "scopeCol": {
+            "baseline": 0,
+            "current": 4,
+            "gold": 2,
+            "status": "unchanged"
+          },
+          "scopeRow": {
+            "baseline": 0,
+            "current": 20,
+            "gold": 6,
+            "status": "regressed"
+          },
+          "img": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "emptyAlt": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "iframe": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "weakLink": {
+            "baseline": 1,
+            "current": 1,
+            "gold": 0,
+            "status": "unchanged"
+          }
+        }
+      },
+      "output_html": "<div><p><span>税制改正により、令和元年10月から軽自動車税に「環境性能割」が創設され、これまでの軽自動車税は「種別割」と名称が変更になりました。この改正に伴い、軽自動車税は「環境性能割」と「種別割」で構成されることとなります。それぞれの税率等は以下のとおりです。</span></p><h2>環境性能割</h2><p>令和元年10月1日以降の軽自動車の取得に対して適用され、新車・中古車を問わず取得された車両（取得価額が50万円を超えるもの）に対して課税されます。当分の間、県が賦課徴収等を行います。</p><h3>環境性能割のかかる人（納税義務者）</h3><p>三輪以上の軽自動車（新車・中古車）を取得した人です。</p><h3>課税標準</h3><p>当該軽自動車の取得価額（免税点50万円）</p><h3>税率</h3><table><caption>税率一覧</caption><thead><tr><th scope=\"row\"><strong>対 象 車</strong></th><th scope=\"col\"><strong>税率</strong></th></tr></thead><tbody><tr><th scope=\"row\">自家用</th><td>営業用</td></tr><tr><th scope=\"row\">電気自動車（燃料電池自動車含む）</th><td>非課税</td><td>非課税</td></tr><tr><th scope=\"row\">天然ガス自動車 （平成21年排出ガス規制Nox10％低減又は平成30年排出ガス規制適合）</th></tr></tbody></table><table><caption>税率一覧</caption><thead><tr><th scope=\"row\"><strong>対 象 車</strong></th><th scope=\"col\"><strong>税率</strong></th></tr></thead><tbody><tr><th scope=\"row\">種別</th><td>区分</td><td>排出ガス基準</td><td>燃費基準</td><td>自家用</td><td>営業用</td></tr><tr><th scope=\"row\">乗用車</th><td>ガソリン車 &nbsp; ハイブリッド車</td><td>平成17年排出ガス規制<br> 75％低減 &nbsp; 又は &nbsp; 平成30年排出ガス規制<br> 50％低減</td><td>令和2年度燃費基準達成かつ<br> 令和12年度燃費基準80％達成</td><td>非課税</td><td>非課税</td></tr><tr><th scope=\"row\">令和2年度燃費基準達成かつ<br> 令和12年度燃費基準75％達成</th><td>1%</td><td>0.5%</td></tr><tr><th scope=\"row\">令和2年度燃費基準達成かつ 令和12年度燃費基準70％達成</th><td>2%</td><td>1%</td></tr><tr><th scope=\"row\">上記に該当しないもの</th><td>2%</td><td>2%</td></tr><tr><th scope=\"row\">貨物車 （2.5ｔ以下 トラック） &nbsp;</th><td><br> ガソリン車 <br> ハイブリッド車</td><td>平成17年排出ガス規制<br> 75％低減 &nbsp; 又は &nbsp; 平成30年排出ガス規制<br> 50％低減</td><td>令和4年度燃費基準105％達成</td><td>非課税</td><td>非課税</td></tr><tr><th scope=\"row\">令和4年度燃費基準達成</th><td>1％</td><td>0.5％</td></tr><tr><th scope=\"row\">令和４年度燃費基準95％達成</th><td>2％</td><td>1％</td></tr><tr><th scope=\"row\">上記に該当しないもの</th><td>2％</td><td>2％</td></tr></tbody></table><p><a href=\"https://www.city.saga.lg.jp/site_files/file/2017/201703/p1bccge5i54vl1rvnkp711mtsgf4.pdf\" title=\"\">環境性能割の減免に関する告示について【 PDFファイル：72 KB 】</a></p><p>&nbsp;</p><h2>種別割</h2><p>原動機付自転車、軽自動車、小型特殊自動車および二輪の小型自動車（これらを軽自動車等と言います）を所有している人にかかる税です。</p><h3>種別割のかかる人（納税義務者）</h3><p>毎年、4月1日現在、佐賀市内に主たる定置場（駐輪場等）がある軽自動車等を持っている人です。</p><h3>税額について</h3><p>軽自動車税(種別割)については、車種や排気量などさまざまな条件で異なります。</p><p><a href=\"https://www.city.saga.lg.jp/main/1838.html\">軽自動車税(種別割)の税額について</a>をご覧ください。</p><h3>申告（手続き）場所</h3><p>軽自動車等を所有しているかどうかは、所有している人の申告に基づいて判断します。軽自動車等を所有したり、所有者が転居した場合は15日以内に、また軽自動車等を廃車や譲渡したり売却などした場合には30日以内に、下表の場所へ申告してください。</p><table><caption>申告（手続き）場所一覧</caption><thead><tr><th scope=\"row\"><strong>車種</strong></th><th scope=\"col\"><strong>総排気量</strong><strong>または定格出力</strong></th><th scope=\"col\"><strong> 申告（手続き）場所・問い合わせ先</strong></th></tr></thead><tbody><tr><th scope=\"row\">原動機付自転車</th><td>125cc以下 または1.0kw以下</td><td>佐賀市役所 市民税課 軽自動車税担当 電話:（0952）40-7064 <a href=\"https://www.city.saga.lg.jp/main/1839.html\">手続きの種類と必要なもの</a> ※市外転出の場合は転出先の市区町村</td></tr><tr><th scope=\"row\">小型特殊自動車</th><td>&nbsp;</td></tr><tr><th scope=\"row\">軽四輪 軽三輪 被牽引車</th><td>&nbsp;</td><td>軽自動車検査協会 佐賀事務所 所在地:佐賀市若楠2丁目10番8号 電話:050-3816-1754 ※県外転出の場合は転出先の軽自動車検査協会 ※手続きに必要なものなどは事前に電話 確認されることをお勧めします。</td></tr><tr><th scope=\"row\">二輪の軽自動車（軽二輪）</th><td>125ccを超え 250cc以下</td><td>佐賀運輸支局 所在地:佐賀市若楠2丁目7番8号 電話:050-5540-2082 ※県外転出の場合は転出先の運輸支局 ※手続きに必要なものなどは事前に電話 確認されることをお勧めします。</td></tr><tr><th scope=\"row\">二輪の小型自動車（自動二輪）</th><td>250ccを 超えるもの</td></tr></tbody></table><h3>納税の方法</h3><p>軽自動車税（種別割）は、佐賀市役所から5月上旬に送付する納税通知書により5月末日（5月末日が土・日の場合はその翌月曜日）までに納めてください。</p><p>なお、軽自動車税（種別割）には月割課税制度はありません。したがって、4月2日以降に廃車や名義変更の手続きをした場合でも、その年度分の税金は全額納めていただくことになります。</p><p>また、4月2日以降に取得し、登録したものについては、その年度分の税金はかかりません。</p><h3>納税通知書の送付先変更について</h3><p>納税通知書の送付先を変更したい場合は届出が必要です。</p><p>納税義務者本人が申立書を提出してください。（本人確認書類の添付が必要です。）</p><p>※車両を佐賀市内で使用する場合に限ります。市外で使用する場合は上記申告場所にて住所変更の手続きをしてください。</p><p><a href=\"https://www.city.saga.lg.jp/site_files/file/2025/202508/p1j213rj764qbhha33pi901knb4.doc\" title=\"\">【様式】軽自動車税各種通知書送付先変更申立書【 WORD文書：36.5 キロバイト 】</a></p><p><a href=\"https://www.city.saga.lg.jp/site_files/file/2025/202508/p1j213s5761e02102fdmo149b1se34.pdf\" title=\"\">【記入例】軽自動車税各種通知書送付先変更申立書【 PDFファイル：43.6 キロバイト 】</a></p><h3>車検用の納税証明書について</h3><p>二輪の小型自動車と軽四輪・軽三輪には車検があります。</p><p>軽四輪・軽三輪については令和5年1月から、二輪の小型自動車については令和7年4月から、車検時の納税証明書の提示が原則不要になりました。</p><p>詳細は<a href=\"https://www.city.saga.lg.jp/main/84398.html\">こちら</a>をご覧ください。</p><h3>軽自動車税（種別割）の減免について</h3><p><a href=\"https://www.city.saga.lg.jp/main/1840.html\">身体障がい者等の減免について</a></p><p><a href=\"https://www.city.saga.lg.jp/main/88810.html\">車両の構造による減免について（車いす移動者等）</a></p><p><a href=\"https://www.city.saga.lg.jp/main/1844.html\">公益のために直接専用する軽自動車等の減免について</a></p><h3>商品軽自動車等の課税免除について</h3><p>古物商許可業者又は質屋営業許可業者が、販売を目的に商品であって使用しない軽自動車等（商品車両）を所有する場合は、軽自動車税の課税免除を受けられることがあります。詳細は<a href=\"https://www.city.saga.lg.jp/main/22186.html\">商品軽自動車等の課税免除について</a>をご覧ください。</p><p>&nbsp;</p></div><div></div>",
+      "text_lengths": {
+        "old": 2405,
+        "current": 2324,
+        "gold": 1802
+      },
+      "failure_keys": [
+        "h2_shortage",
+        "h3_excess"
+      ],
+      "pattern": {
+        "id": "stale_section_scope_mismatch",
+        "label": "Stale or out-of-scope section likely remains",
+        "diagnosis": "Current keeps a section that gold likely removed or moved. Do not delete it automatically; confirm page scope or content freshness first."
+      },
+      "diagnosis": "Current keeps a section that gold likely removed or moved. Do not delete it automatically; confirm page scope or content freshness first."
+    },
+    {
+      "id": "saga-city/sg02395.html",
+      "score": 59.0689,
+      "differs_from_gold": 7,
+      "regressed_metrics": 1,
+      "old": {
+        "h2": 1,
+        "h3": 5,
+        "h4": 14
+      },
+      "current": {
+        "h2": 3,
+        "h3": 17,
+        "h4": 0
+      },
+      "gold": {
+        "h2": 3,
+        "h3": 8,
+        "h4": 0
+      },
+      "all_metrics": {
+        "old": {
+          "h2": 1,
+          "h3": 5,
+          "h4": 14,
+          "table": 16,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 1,
+          "textLength": 3658
+        },
+        "current": {
+          "h2": 3,
+          "h3": 17,
+          "h4": 0,
+          "table": 16,
+          "thead": 2,
+          "caption": 2,
+          "th": 8,
+          "scopeCol": 4,
+          "scopeRow": 4,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 4081
+        },
+        "gold": {
+          "h2": 3,
+          "h3": 8,
+          "h4": 0,
+          "table": 7,
+          "thead": 7,
+          "caption": 7,
+          "th": 53,
+          "scopeCol": 17,
+          "scopeRow": 36,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 2496
+        },
+        "details": {
+          "h2": {
+            "baseline": 1,
+            "current": 3,
+            "gold": 3,
+            "status": "matches_gold"
+          },
+          "h3": {
+            "baseline": 5,
+            "current": 17,
+            "gold": 8,
+            "status": "regressed"
+          },
+          "h4": {
+            "baseline": 14,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "table": {
+            "baseline": 16,
+            "current": 16,
+            "gold": 7,
+            "status": "unchanged"
+          },
+          "thead": {
+            "baseline": 0,
+            "current": 2,
+            "gold": 7,
+            "status": "improved"
+          },
+          "caption": {
+            "baseline": 0,
+            "current": 2,
+            "gold": 7,
+            "status": "improved"
+          },
+          "th": {
+            "baseline": 0,
+            "current": 8,
+            "gold": 53,
+            "status": "improved"
+          },
+          "scopeCol": {
+            "baseline": 0,
+            "current": 4,
+            "gold": 17,
+            "status": "improved"
+          },
+          "scopeRow": {
+            "baseline": 0,
+            "current": 4,
+            "gold": 36,
+            "status": "improved"
+          },
+          "img": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "emptyAlt": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "iframe": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "weakLink": {
+            "baseline": 1,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          }
+        }
+      },
+      "output_html": "<div><p>休日・夜間の検査目的での受診、微熱や咳などの軽いかぜ症状での受診は控え、かかりつけ医の診療時間内で受診しましょう。</p><h2>休日（日曜日または祝日）在宅当番医について</h2><p>診療科は原則として、内科および外科で対応しています。</p><ul><li><em>（注意）小児受診につきましては、対応できない医療機関がありますので、事前に各医療機関へお問い合わせください。</em></li><li><em>（注意）小児受診ができない場合は、<a href=\"https://www.city.saga.lg.jp/main/895.html\">佐賀市休日夜間こども診療所</a>をご利用ください。</em></li><li><em>（注意）歯科受診の場合は、<a href=\"https://www.city.saga.lg.jp/main/894.html\">佐賀市休日歯科診療所</a>をご利用ください。</em></li></ul><p>診療時間は、9時00分～17時00分（耳鼻科は9時から12時）</p><p>※受付時間をご確認ください。</p><p>受診の際には、健康保険証を忘れずにお持ちください。<br> また、息苦しさ、強いだるさ、高熱等の症状があり、新型コロナウイルスの感染が疑われる方は、<br><em>直接受診する前に医療機関に電話でご相談さい。</em></p><p>在宅当番医表中、特定健診「有」は特定健診実施医療機関（午前中のみ実施）</p><ul><li><em>（注意）特定健診をご希望の方は、事前に医療機関へお問い合わせください。</em></li></ul><h2>日曜・祝日在宅当番医情報</h2><h3>令和7年12月14日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>上村病院</td><td>33-0099</td><td>兵庫町大字渕</td><td>有</td></tr><tr><td>内科</td><td>かじはら内科クリニック</td><td>36-8536</td><td>八戸溝2丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>むとう内科・脳神経内科クリニック</td><td>23-2485</td><td>南佐賀2丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>森永整形外科医院</td><td>31-5155</td><td>開成6丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>金武外科肛門科</td><td>24-3232</td><td>城内2丁目</td><td>&nbsp;</td></tr></tbody></table><h3>令和7年12月21日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>コールメディカルクリニック佐賀</td><td>33-2626</td><td>鍋島4丁目</td><td>有</td></tr><tr><td>内科</td><td>神野診療所</td><td>31-1060</td><td>神野東4丁目</td><td>有</td></tr><tr><td>内科</td><td>さとうクリニック</td><td>45-8000</td><td>川副町大字南里</td><td>有</td></tr><tr><td>外科</td><td>中尾整形外科</td><td>22-0702</td><td>兵庫町大字渕</td><td>&nbsp;</td></tr><tr><td>外科</td><td>福田脳神経外科病院</td><td>29-2223</td><td>本庄町</td><td>&nbsp;</td></tr></tbody></table><h3>令和7年12月28日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>佐賀市立富士大和温泉病院</td><td>63-0111</td><td>富士町大字梅野</td><td>有</td></tr><tr><td>内科</td><td>おそえがわ脳神経内科</td><td>31-8181</td><td>神園3丁目</td><td>有</td></tr><tr><td>内科</td><td>夢咲クリニック</td><td>20-1515</td><td>兵庫北1丁目</td><td>有</td></tr><tr><td>外科</td><td>橋野医院</td><td>31-0007</td><td>高木瀬東5丁目</td><td>有</td></tr><tr><td>外科</td><td>兵庫整形外科</td><td>41-7001</td><td>巨勢町大字修理田</td><td>&nbsp;</td></tr></tbody></table><h3>令和7年12月29日（月曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>さくらもみじクリニック</td><td>37-8493</td><td>大和町大字尼寺</td><td>&nbsp;</td></tr><tr><td>内科</td><td>田中病院</td><td>23-2640</td><td>嘉瀬町大字扇町</td><td>&nbsp;</td></tr><tr><td>内科</td><td>なゆたの森病院</td><td>20-6000</td><td>本庄町大字本庄</td><td>&nbsp;</td></tr><tr><td>外科</td><td>田中病院</td><td>23-2640</td><td>嘉瀬町大字扇町</td><td>&nbsp;</td></tr><tr><td>外科</td><td>のだ整形外科クリニック</td><td>37-0680</td><td>久保田町</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>美川眼科医院</td><td>23-2789</td><td>松原4丁目</td><td>&nbsp;</td></tr></tbody></table><h3>令和7年12月30日（火曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>清和医院</td><td>64-8280</td><td>大和町大字久池井</td><td>&nbsp;</td></tr><tr><td>内科</td><td>福岡病院</td><td>31-4611</td><td>開成6丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>高柳内科</td><td>23-6563</td><td>嘉瀬町</td><td>&nbsp;</td></tr><tr><td>外科</td><td>藤川病院</td><td>29-0311</td><td>松原1丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>ごとうクリニック</td><td>23-7100</td><td>木原2丁目</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>ふくなが眼科</td><td>36-8811</td><td>開成6丁目</td><td>&nbsp;</td></tr></tbody></table><h3>令和7年12月31日（水曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>日浦呼吸器科・内科・小児科医院</td><td>34-1400</td><td>鍋島2丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>しらきクリニック</td><td>24-7021</td><td>本庄町大字本庄</td><td>&nbsp;</td></tr><tr><td>内科</td><td>佐賀リハビリテーション病院</td><td>25-0231</td><td>南佐賀1丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>小池病院</td><td>23-2171</td><td>嘉瀬町大字中原</td><td>&nbsp;</td></tr><tr><td>外科</td><td>外科・内科・馬島医院</td><td>47-3399</td><td>諸富町大字為重</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>古賀眼科</td><td>20-0607</td><td>鍋島町森田</td><td>&nbsp;</td></tr><tr><td>耳鼻科</td><td>山口耳鼻咽喉科医院</td><td>24-2004</td><td>堀川町</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月1日（木曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>佐賀記念病院</td><td>31-7771</td><td>高木瀬町大字長瀬</td><td>&nbsp;</td></tr><tr><td>内科</td><td>えとう内科・循環器内科</td><td>33-8177</td><td>神野東4丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>統合医療やまのうち小児科・内科</td><td>33-8500</td><td>兵庫北5丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>佐藤整形外科</td><td>22-3103</td><td>大財3丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>百武整形外科・スポーツクリニック</td><td>26-2006</td><td>水ヶ江4丁目</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>山口眼科医院</td><td>37-3217</td><td>松原2丁目</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月2日（金曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>内藤医院北山診療所</td><td>57-2226</td><td>富士町大字大野</td><td>&nbsp;</td></tr><tr><td>内科</td><td>諸隈病院</td><td>22-5500</td><td>水ヶ江2丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>黒沢内科医院</td><td>26-1723</td><td>北川副町大字光法</td><td>&nbsp;</td></tr><tr><td>外科</td><td>島内整形外科医院</td><td>62-2300</td><td>大和町大字尼寺</td><td>&nbsp;</td></tr><tr><td>外科</td><td>境野病院</td><td>26-2468</td><td>松原4丁目</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>しまだ眼科</td><td>28-7575</td><td>嘉瀬町大字扇町</td><td>&nbsp;</td></tr><tr><td>耳鼻科</td><td>小林耳鼻咽喉科クリニック</td><td>26-3151</td><td>中の小路</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月3日（土曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>山口内科胃腸科クリニック</td><td>62-9885</td><td>大和町大字久池井</td><td>&nbsp;</td></tr><tr><td>内科</td><td>小田クリニック</td><td>23-7038</td><td>西田代2丁目</td><td>&nbsp;</td></tr><tr><td>内科</td><td>もろどみ中央病院</td><td>47-3255</td><td>諸富町大字諸富津</td><td>&nbsp;</td></tr><tr><td>外科</td><td>杉原医院</td><td>31-5005</td><td>鍋島町大字八戸溝</td><td>&nbsp;</td></tr><tr><td>外科</td><td>もろどみ中央病院</td><td>47-3255</td><td>諸富町大字諸富津</td><td>&nbsp;</td></tr><tr><td>眼科</td><td>沖田眼科医院</td><td>31-8467</td><td>高木瀬町大字長瀬</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月4日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>木村医院</td><td>98-1234</td><td>久保泉町大字下和泉</td><td>有</td></tr><tr><td>内科</td><td>千葉内科循環器科</td><td>22-7531</td><td>天神2丁目</td><td>有</td></tr><tr><td>内科</td><td>神田胃腸科内科医院</td><td>97-0019</td><td>蓮池町大字蓮池</td><td>&nbsp;</td></tr><tr><td>外科</td><td>おおいし脳・神経リハクリニック</td><td>37-8126</td><td>鍋島町大字森田</td><td>有</td></tr><tr><td>外科</td><td>草場整形外科</td><td>22-9383</td><td>赤松町</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月11日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>ひさとみ内科クリニック</td><td>62-5565</td><td>大和町大字尼寺</td><td>有</td></tr><tr><td>内科</td><td>寺田内科</td><td>24-5288</td><td>大財1丁目</td><td>有</td></tr><tr><td>内科</td><td>きしかわ内科クリニック</td><td>34-7310</td><td>東与賀町大字下古賀</td><td>&nbsp;</td></tr><tr><td>外科</td><td>ほり内科外科クリニック</td><td>20-1730</td><td>神野西1丁目</td><td>有</td></tr><tr><td>外科</td><td>福田脳神経外科病院</td><td>29-2223</td><td>本庄町</td><td>&nbsp;</td></tr></tbody></table><h3>令和8年1月12日（月曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>池田内科・消化器科</td><td>31-1222</td><td>若宮3丁目</td><td>有</td></tr><tr><td>内科</td><td>ながえ内科クリニック</td><td>30-2211</td><td>開成1丁目</td><td>有</td></tr><tr><td>内科</td><td>横須賀病院</td><td>24-3371</td><td>巨勢町大字高尾</td><td>有</td></tr><tr><td>外科</td><td>本多整形外科</td><td>32-3535</td><td>高木瀬東2丁目</td><td>&nbsp;</td></tr><tr><td>外科</td><td>横須賀病院</td><td>24-3371</td><td>巨勢町大字高尾</td><td>有</td></tr></tbody></table><h3>令和8年1月18日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>しげた総合診療クリニック</td><td>64-9800</td><td>大和町大字川上</td><td>有</td></tr><tr><td>内科</td><td>中原胃腸科内科</td><td>29-8008</td><td>城内1丁目</td><td>有</td></tr><tr><td>内科</td><td>坂井医院</td><td>45-0040</td><td>川副町大字犬井道</td><td>有</td></tr><tr><td>外科</td><td>信愛整形外科医院</td><td>22-1001</td><td>川原町</td><td>有</td></tr><tr><td>外科</td><td>萩原脳神経外科クリニック</td><td>27-8800</td><td>木原1丁目</td><td>有</td></tr></tbody></table><h3>令和8年1月25日（日曜日）</h3><table><tbody><tr><td>診療科</td><td>医療機関名</td><td>電話</td><td>所在地</td><td>特定健診</td></tr><tr><td>内科</td><td>ふじおか病院</td><td>62-2200</td><td>大和町大字尼寺</td><td>有</td></tr><tr><td>内科</td><td>森医院</td><td>28-7383</td><td>八戸2丁目</td><td>有</td></tr><tr><td>内科</td><td>かとうクリニック内科・呼吸器内科</td><td>41-8011</td><td>本庄町大字末次</td><td>&nbsp;</td></tr><tr><td>外科</td><td>中央クリニック</td><td>26-6258</td><td>八幡小路</td><td>&nbsp;</td></tr><tr><td>外科</td><td>矢ヶ部医院</td><td>29-6121</td><td>木原3丁目</td><td>有</td></tr></tbody></table><h2>休日・夜間の急患について</h2><h3>平日夜間・休日の診療について （19時00分以降 一般診療機関の診療時間外の診療）</h3><p>受診できる医療機関を電話で確認することができます。</p><p><a href=\"https://www.chubu.saga.saga.jp/shobo/kyukyu.html\">佐賀広域消防局</a>&nbsp;電話番号：0952-31-8899</p><h3><a href=\"https://www.city.saga.lg.jp/main/895.html\">佐賀市休日夜間こども診療所</a></h3><p>診療科目 小児科</p><p>診療日および診療時間</p><table><caption>佐賀市休日夜間こども診療所一覧</caption><thead><tr><th scope=\"col\">診療日</th><th scope=\"col\">診療時間</th></tr></thead><tbody><tr><th scope=\"row\">平日（月曜日～金曜日）</th><td>20時00分～22時00分（受付は21時45分まで）</td></tr><tr><th scope=\"row\">土曜日</th><td>17時00分～22時00分（受付は21時45分まで）</td></tr><tr><th scope=\"row\">日曜日、祝日、12月31日～1月3日</th><td><div> 9時00分～13時00分（受付は12時45分まで） </div><div> 14時00分～22時00分（受付は21時45分まで） </div><div> ※ただし、急患の場合は、13時00分～14時00分の間でも診療します。 </div></td></tr></tbody></table><p>電話番号 0952-24-1400</p><p>場所 水ヶ江一丁目12番11号 佐賀市医師会立看護専門学校ビル内&nbsp;<a href=\"http://www.google.co.jp/maps/place/%E4%BD%90%E8%B3%80%E5%B8%82%E5%8C%BB%E5%B8%AB%E4%BC%9A%E7%AB%8B%E7%9C%8B%E8%AD%B7%E5%B0%82%E9%96%80%E5%AD%A6%E6%A0%A1/@33.2480278,130.3030891,17z/data=！4m14！1m8！3m7！1s0x0:0x0！2zMzPCsDE0JzUyLjkiTiAxMzDCsDE4JzE5LjAiRQ！3b1！7e2！8平方メートル！3d33.2480233！4d130.3052849！3m4！1s0x3541ca054b6dc267:0xaa1d07a0af37df0d！8平方メートル！3d33.2477035！4d130.3055725？hl=ja\">data=！4m14！1m8！3m7！1s0x0:0x0！2zMzPCsDE0JzUyLjkiTiAxMzDCsDE4JzE5LjAiRQ！3b1！7e2！8平方メートル！3d33.2480233！4d130.3052849！3m4！1s0x3541ca054b6dc267:0xaa1d07a0af37df0d！8平方メートル！3d33.2477035！4d130.3055725？hl=ja</a></p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p><h3><a href=\"https://www.city.saga.lg.jp/main/894.html\">佐賀市休日歯科診療所</a></h3><p>診療科目 歯科</p><p>診療日および診療時間</p><table><caption>佐賀市休日歯科診療所一覧</caption><thead><tr><th scope=\"col\">診療日</th><th scope=\"col\">診療時間</th></tr></thead><tbody><tr><th scope=\"row\">日曜日、祝日、12月31日～1月3日</th><td>9時30分～16時00分（受付は15時30分まで）</td></tr></tbody></table><p>電話番号 0952-24-1426</p><p>場所 水ヶ江一丁目12番11号 佐賀市医師会立看護専門学校ビル内&nbsp;<a href=\"https://www.google.co.jp/maps/place/%E4%BD%90%E8%B3%80%E5%B8%82%E5%8C%BB%E5%B8%AB%E4%BC%9A%E7%AB%8B%E7%9C%8B%E8%AD%B7%E5%B0%82%E9%96%80%E5%AD%A6%E6%A0%A1/@33.2480278,130.3030891,17z/data=！4m14！1m8！3m7！1s0x0:0x0！2zMzPCsDE0JzUyLjkiTiAxMzDCsDE4JzE5LjAiRQ！3b1！7e2！8平方メートル！3d33.2480233！4d130.3052849！3m4！1s0x3541ca054b6dc267:0xaa1d07a0af37df0d！8平方メートル！3d33.2477035！4d130.3055725？hl=ja\">data=！4m14！1m8！3m7！1s0x0:0x0！2zMzPCsDE0JzUyLjkiTiAxMzDCsDE4JzE5LjAiRQ！3b1！7e2！8平方メートル！3d33.2480233！4d130.3052849！3m4！1s0x3541ca054b6dc267:0xaa1d07a0af37df0d！8平方メートル！3d33.2477035！4d130.3055725？hl=ja</a></p></div><div></div>",
+      "text_lengths": {
+        "old": 3658,
+        "current": 4081,
+        "gold": 2496
+      },
+      "failure_keys": [
+        "h3_excess"
+      ],
+      "pattern": {
+        "id": "date_snapshot_mismatch",
+        "label": "Date-range content snapshot differs",
+        "diagnosis": "Current and gold contain different dated schedule ranges; re-fetch or confirm the target period instead of trimming date headings automatically."
+      },
+      "diagnosis": "Current and gold contain different dated schedule ranges; re-fetch or confirm the target period instead of trimming date headings automatically."
+    },
+    {
+      "id": "saga-city/sg06323.html",
+      "score": 75.8165,
+      "differs_from_gold": 5,
+      "regressed_metrics": 0,
+      "old": {
+        "h2": 11,
+        "h3": 6,
+        "h4": 5
+      },
+      "current": {
+        "h2": 10,
+        "h3": 6,
+        "h4": 6
+      },
+      "gold": {
+        "h2": 9,
+        "h3": 22,
+        "h4": 8
+      },
+      "all_metrics": {
+        "old": {
+          "h2": 11,
+          "h3": 6,
+          "h4": 5,
+          "table": 13,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 38,
+          "emptyAlt": 37,
+          "iframe": 0,
+          "weakLink": 1,
+          "textLength": 3593
+        },
+        "current": {
+          "h2": 10,
+          "h3": 6,
+          "h4": 6,
+          "table": 2,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 38,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 1,
+          "textLength": 3630
+        },
+        "gold": {
+          "h2": 9,
+          "h3": 22,
+          "h4": 8,
+          "table": 0,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 38,
+          "emptyAlt": 0,
+          "iframe": 13,
+          "weakLink": 1,
+          "textLength": 3440
+        },
+        "details": {
+          "h2": {
+            "baseline": 11,
+            "current": 10,
+            "gold": 9,
+            "status": "improved"
+          },
+          "h3": {
+            "baseline": 6,
+            "current": 6,
+            "gold": 22,
+            "status": "unchanged"
+          },
+          "h4": {
+            "baseline": 5,
+            "current": 6,
+            "gold": 8,
+            "status": "improved"
+          },
+          "table": {
+            "baseline": 13,
+            "current": 2,
+            "gold": 0,
+            "status": "improved"
+          },
+          "thead": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "caption": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "th": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "scopeCol": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "scopeRow": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "img": {
+            "baseline": 38,
+            "current": 38,
+            "gold": 38,
+            "status": "matches_gold"
+          },
+          "emptyAlt": {
+            "baseline": 37,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "iframe": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 13,
+            "status": "unchanged"
+          },
+          "weakLink": {
+            "baseline": 1,
+            "current": 1,
+            "gold": 1,
+            "status": "matches_gold"
+          }
+        }
+      },
+      "output_html": "<div><p><span>坂井英隆&nbsp;佐賀市長から移住をお考えの皆さまへメッセージです。</span></p><h2>【暮らしYASUKAさがし】公開中！</h2><p><a href=\"https://www.city.saga.lg.jp/promotion/main/1758.html\"><img alt=\"暮らしYASUKAさがし\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/banner/topbanner/%E6%9A%AE%E3%82%89%E3%81%97YASUKA%E3%81%95%E3%81%8C%E3%81%97%E3%83%90%E3%83%8A%E3%83%BC.jpg\"></a></p><p>佐賀市に移住した方々に、佐賀市の暮らしやすさをインタビューしました。</p><p>こちらからご覧になれます。</p><p>&nbsp; <a href=\"https://www.city.saga.lg.jp/promotion/main/1758.html\">&nbsp;詳&nbsp;細&nbsp;は&nbsp;こちら ➡</a></p><h2>佐賀市なんもな課 〜移住の心配なんもなか〜 PR動画はこちら</h2><h4>令和4年全国広報コンクール 映像部門で入選！</h4><img alt=\"IMG 0152の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/IMG_0152.jpg\"> 移住PR動画「佐賀市なんもな課」が令和4年&nbsp;全国広報コンクール映像部門にて入選しました。 <h4>全国広報コンクール</h4><p>公益社団法人&nbsp;日本広報協会が主催する、地方自治体の広報活動の向上に寄与することを目的に、各種広報作品について審査を行い、優秀団体を表彰する広報コンクール。</p><p>詳細については<a href=\"https://www.koho.or.jp/contest/zenkoku/2022_result.html\">公式サイト</a>をご覧ください。</p><p><a href=\"https://www.city.saga.lg.jp/promotion/site_files/file/sumunara_chirashi.pdf\"><img alt=\"ijuu flyerの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/ijuu_flyer.png\"></a><br><strong>住むなら佐賀市チラシ（PDFが</strong><span>開きます）</span></p><p><span>住むなら佐賀市ポスターは <span><a href=\"https://www.city.saga.lg.jp/promotion/site_files/file/sumunara_poster.pdf\">sumunara poster（PDFファイル）</a></span></span></p><p><br><span>佐賀市なんもな課【30秒CM】</span></p><p><span>佐賀市なんもな課リーフレットは <span><a href=\"https://www.city.saga.lg.jp/promotion/site_files/file/%E4%BD%90%E8%B3%80%E5%B8%82%E3%81%AA%E3%82%93%E3%82%82%E3%81%AA%E8%AA%B2.pdf\">佐賀市なんもな課（PDFファイル）</a></span></span></p><div><p><span><a href=\"https://www.city.saga.lg.jp/promotion/main/1498.html\">詳&nbsp;細&nbsp;は&nbsp;こちら ➡</a></span></p></div><h4>佐賀市紹介PR動画はこちら</h4><table><tbody><tr><td></td><td></td></tr><tr><td><strong><span>【Surf&nbsp;Slow&nbsp;Saga】</span>&nbsp;</strong><br><span>豊かな自然に抱かれ、<br> 今なお日本の原風景の佇まいをみせるSaga。<br> 心地よい風に吹かれて、自然の音をBGMに寛ぐ贅沢な時間。</span></td><td><span><strong>【Feel&nbsp;&amp;&nbsp;Impression&nbsp;SAGA】</strong>&nbsp;</span><br><span>いつもの休日に物足りなさを感じてきたら、</span><br><span><span>ふらっと、佐賀市に遊びに来ませんか？</span>&nbsp;</span></td></tr></tbody></table><h2>実はすごい！“<strong>佐賀市</strong>”</h2><div><div><span>佐賀市は「<strong>都市の暮らしやすさ</strong>」<span><strong>１位</strong></span>！「<strong>子育てしながら働ける環境がある</strong>」<span><strong>３位</strong></span>！</span></div><p><a href=\"http://www.city.saga.lg.jp/main/40663.html\">株式会社野村総合研究所「成長可能性都市ランキング2017」</a></p></div><div><div><span>「<strong>イクメン白書</strong>&nbsp;2020」で<strong>佐賀県</strong>が<span><span>１位</span></span>に！</span></div><p><a href=\"http://www.google.co.jp/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=&amp;ved=2ahUKEwi2orbu1bTyAhUKzIsBHQHkAuAQFnoECCMQAQ&amp;url=https%3A%2F%2Fwww.sekisuihouse.co.jp%2Flibrary%2Fcompany%2F20200917.pdf&amp;usg=AOvVaw1lqEW3OpurqeacvCQgJQAS\">積水ハウス株式会社「イクメン白書&nbsp;2020」</a><strong><span>※佐賀市の子育てについては <a href=\"https://www.city.saga.lg.jp/promotion/main/987.html#子育て\">こちら</a></span></strong></p><a href=\"https://www.city.saga.lg.jp/main/64398.html\"><img alt=\"家族はチームだロゴ みんなでやろう家事・育児の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/%E5%AE%B6%E6%97%8F%E3%81%AF%E3%83%81%E3%83%BC%E3%83%A0%E3%81%A0%E3%83%AD%E3%82%B4_%E3%81%BF%E3%82%93%E3%81%AA%E3%81%A7%E3%82%84%E3%82%8D%E3%81%86%E5%AE%B6%E4%BA%8B%E3%83%BB%E8%82%B2%E5%85%90.png\"></a> 家事や育児に積極的に取り組んでいるお父さんたちをご紹介しています。【<a href=\"https://www.city.saga.lg.jp/main/64398.html\">男性の家事・育児参画啓発キャンペーン</a>&nbsp;（佐賀市公式ホームページ）】 </div><div><div><span><strong>テレワーク</strong>に適した環境が整う自治体ランキング<span><strong>１位（九州・沖縄地区）</strong></span>！</span></div><a href=\"https://www.city.saga.lg.jp/promotion/main/1296.html\">佐賀市が&nbsp;九州・沖縄地区&nbsp;第１位（29市中）を獲得</a></div><div><div><span>佐賀市の<strong>介護予防DX <span>総務大臣賞受賞</span></strong></span></div><p><a href=\"https://www.city.saga.lg.jp/promotion/main/1352.html\">佐賀市が保有する医療等ビッグデータを活用した取り組み</a></p></div><h2>移住・定住に関する相談やお問い合わせはこちら</h2><a href=\"http://www.city.saga.lg.jp/main/48748.html\"><img alt=\"banner teijuの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/profile/banner_teiju.png\"></a><a href=\"https://www.city.saga.lg.jp/promotion/site_files/file/ゆたかささがし.pdf\"><img alt=\"yutakaの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/yutaka.jpg\"></a><a href=\"http://www.city.saga.lg.jp/main.php/56163.html\"><img alt=\"東京圏4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/%E6%9D%B1%E4%BA%AC%E5%9C%8F4.png\"></a><a href=\"https://www.city.saga.lg.jp/main/84420.html\"><img alt=\"県外4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/%E7%9C%8C%E5%A4%964.png\"></a><h2>住みやすい！佐賀市のいいとこをご紹介！</h2><h4>プロモーション大使インタビュー</h4><a href=\"https://www.city.saga.lg.jp/promotion/main/949.html\"><img alt=\"5の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/5.jpg\"></a><a href=\"https://www.city.saga.lg.jp/promotion/main/985.html\"><img alt=\"6の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/6.jpg\"></a><h4>佐賀市の紹介記事</h4><a href=\"https://www.glocaltimes.jp/9079\"><img alt=\"globalの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/global.jpg\"></a><a href=\"https://turns.jp/46735\"><img alt=\"CPHPバナー 移住(1)の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/CPHP%E3%83%90%E3%83%8A%E3%83%BC_%E7%A7%BB%E4%BD%8F(1).png\"></a><a href=\"https://manekai.ameba.jp/saving/migration/saga/\"><img alt=\"manekの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/manek.jpg\"></a><a href=\"https://www.tfm.co.jp/sky/iju/index.php?catid=3498&amp;itemid=175803\"><img alt=\"sukaroの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/sukaro.JPG\"></a><h2>“佐賀市”を知りたい！情報発信中！</h2><table><tbody><tr><td><div><a href=\"https://ja-jp.facebook.com/sagagurashi/\"><img alt=\"FBの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/FB.jpg\"></a></div></td><td><div><p><span>Facebook</span>「<a href=\"https://ja-jp.facebook.com/sagagurashi/\">さがぐらしはじめませんか</a>」</p></div></td><td><div><a href=\"https://twitter.com/sagacitykoho\"><img alt=\"TWの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/TW.jpeg\"></a></div></td><td><p><span>Twitter</span>「<a href=\"https://twitter.com/sagacitykoho\">佐賀市公式ツイッター</a>」</p></td></tr><tr><td><div><a href=\"https://www.facebook.com/sagacitypromotion/\"><img alt=\"FBの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/FB.jpg\"></a></div></td><td><div><p><span>Facebook</span>「<a href=\"https://www.facebook.com/sagacitypromotion/\">佐賀市シティプロモーション室</a>」 </p></div></td><td>&nbsp;</td><td><p>&nbsp;</p></td></tr></tbody></table><h2><a></a>１．日常【佐賀市にはここにしかない、美しい日常がある！】</h2><p><span>&nbsp;</span></p><p>暮らしYASUKAさがし&nbsp;【四季編<span>】</span></p><p><a href=\"http://www.fuji-spa.com/\"><img alt=\"1 1の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-1.jpg\"></a><a href=\"http://www.city.saga.lg.jp/main.php/14733.html\"><img alt=\"1 4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-4.jpg\"></a><a href=\"http://www.city.saga.lg.jp/main/199.html\"><img alt=\"1 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-3.jpg\"></a></p><ul><li><a href=\"https://www.city.saga.lg.jp/main/54612.html\">移住・空き家</a></li><li><a href=\"http://www.city.saga.lg.jp/main/199.html\">世界遺産 三重津海軍所跡</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/3.html\"><span>佐賀市観光情報</span></a></li><li><a href=\"https://www.sibf.jp/\"><span>佐賀インターナショナルバルーンフェスタ【外部リンク】</span></a></li><li><a href=\"https://www.fuji-spa.com/\">古湯・熊の川温泉郷 ふるくま【外部リンク】</a></li></ul><a href=\"https://www.sibf.jp/\"><img alt=\"1 4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-4.jpg\"></a><span><strong>佐賀インターナショナルバルーンフェスタ</strong></span><p><span><strong>嘉瀬川河川敷で、毎年10月下旬から11月上旬の5日間、世界各国から100機を超えるバルーンが参加する、アジア最大規模の国際熱気球大会『佐賀インターナショナルバルーンフェスタ』を開催しています。</strong></span></p><p><span><strong>&lt;もっと詳しく知りたい方はこちら&gt;<br><a href=\"https://www.city.saga.lg.jp/promotion/main/2373.html\">バルーンに会えるまち佐賀市！(シティプロモーション室)</a><br><a href=\"https://www.city.saga.lg.jp/main.php/14733.html\">佐賀市観光振興課</a><br><a href=\"https://www.sibf.jp/\">佐賀インターナショナルバルーンフェスタ公式ホームページ</a></strong></span></p><a href=\"https://www.fuji-spa.com/\"><img alt=\"1 1の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-1.jpg\"></a><span><strong>古湯・熊の川温泉郷ふるくま</strong></span><p><span><strong>佐賀市にはぬるい温泉があります！「ぬる湯」なので、長い時間浸かることができ、体の芯からぽかぽかに温まります。</strong></span></p><p><span><strong>ぬるい温泉にまつわるぬる～い話を佐賀市シティプロモーション室HPで公開中！「総務大臣賞」を受賞した「本当にあったぬるい話」を是非ご覧ください。</strong></span></p><p><span><strong>ぬる湯へのご入浴は<a href=\"https://www.fuji-spa.com/\">www.fuji spa</a></strong></span></p><img alt=\"1 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/1-3.jpg\"><span><strong>世界遺産&nbsp;三重津海軍所跡</strong></span><p><span><strong>佐賀市には「三重津海軍所跡」という世界遺産があるのを知っていましたか。</strong></span></p><p><span><strong>実はこの世界遺産、<span>見えない</span>んです！</strong></span></p><p><span><strong><a href=\"https://www.city.saga.lg.jp/promotion/main/70.html\">覗いてみたい方はこちら(佐賀市シティプロモーション室)</a><br><a href=\"https://sano-mietsu-historymuseum.city.saga.lg.jp/\">佐野常民と三重津海軍所跡の歴史館&nbsp;公式ホームページ</a></strong></span></p><h3>佐賀市観光情報</h3><p>次のお休みに、行くところは決まっていますか？<br> まだの方は、「観光・宿泊・食事・買い物・遊び」が全部できちゃう佐賀市にきんしゃい！</p><p>詳細<br><a href=\"https://www.city.saga.lg.jp/main.php/3.html\">佐賀市観光振興課</a><br><a href=\"https://www.sagabai.com/\">佐賀市観光協会</a></p><h2>２．グルメ【佐賀市には美味しいものがたくさんある！】</h2><p></p><p>暮らしYASUKAさがし&nbsp;【食編<span>】</span></p><p><a href=\"http://www.jf-sariake.or.jp/page/feature.html\"><img alt=\"4 4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-4.jpg\"></a><a href=\"https://www.sagabai.com/main/26.html\"><img alt=\"4 2の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-2.jpg\"></a><img alt=\"4 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-3.jpg\"></p><ul><li><a href=\"https://www.city.saga.lg.jp/main/302.html\"><span>佐賀市ふるさと納税</span></a></li><li><span><a href=\"https://www.sagabai.com/main/?cont=kanko&amp;cat=5\">佐賀市観光協会グルメ情報【外部リンク】</a></span></li></ul><img alt=\"4 4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-4.jpg\"><span><strong>佐賀の海苔は日本一</strong></span><p><span><strong>豊かな有明海で育った佐賀海苔は、干満の差によって、うま味がギュッと凝縮され、高い香りと上品な甘さが特徴です。</strong></span></p><p><span><strong>詳しくは<a href=\"https://www.jf-sariake.or.jp/\">こちら(佐賀県有明海漁業協同組合)</a></strong></span></p><img alt=\"4 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-3.jpg\"><span><strong>ブランド牛といえばやっぱり佐賀牛</strong></span><p><span><strong>佐賀の豊かな自然で育った佐賀の豊かな自然で育った佐賀牛は、鮮やかな赤身が柔らかく、シルクのような光沢のサシが入っています。</strong></span></p><p><span><strong>口の中でとろける佐賀牛はこちらのお店で食べられます。</strong></span></p><p><span><strong>サシのちからであなたの脳を幸せにしよう！<br> 詳しくは<a href=\"http://www.saga-city.jp/sashi-power/\">こちら(見るだけで脳が幸せになる！？佐賀牛のサシパワー)</a></strong></span></p><img alt=\"4 2の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/4-2.jpg\"><p><span><strong>佐賀の大人気ご当地グルメ&nbsp;シシリアンライス</strong></span></p><p><span><strong>2023年には文化庁の「100年フード&nbsp;未来部門」の認定を受けたシシリアンライス！昭和50年頃に佐賀市内の喫茶店でまかない料理として誕生しました。</strong></span></p><p><span><b>シシリアン王国の国王でもある坂井市長おすすめの味を是非ご堪能ください。</b></span></p><h3>うまか王国佐賀市</h3><p>佐賀市は、海の幸、山の幸を一年中楽しむことができます(旬カレンダー)。安くておいしい新鮮な佐賀市の特産品はこちらのお店からお買い求めできます！</p><h3>佐賀市ふるさと納税</h3><p>佐賀市では、ふるさと納税の返礼品として佐賀市のおいしい特産品を扱っています。<br><a href=\"https://www.city.saga.lg.jp/promotion/main/1427.html\">坂井市長がふるさと納税のおすすめ返礼品を紹介</a>しているので、是非ご覧ください！</p><p>ふるさと納税について詳しくは<a href=\"https://www.city.saga.lg.jp/main/302.html\">こちら</a></p><h3>佐賀のおいしいが味わえるお店</h3><p>佐賀市でしか味わえない絶品な料理を提供しているお店は<a href=\"https://www.sagabai.com/main/?cont=kanko&amp;cat=5\">こちら(佐賀市観光協会)</a>から確認できます。食べ過ぎ注意です！</p><h2>３．子育て【佐賀市には子どもがのびのび育つ環境がある！】</h2><p></p><p>暮らしYASUKAさがし&nbsp;【子育て編】 暮らしYASUKAさがし&nbsp;【ゆとり編】</p><p></p><p> 暮らしYASUKAさがし【ゆとりある子育て編】 暮らしYASUKAさがし【子育て環境編】</p><p><a href=\"http://www.city.saga.lg.jp/main/3656.html\"><img alt=\"manazashiの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/manazashi.png\"></a><a href=\"http://www.city.saga.lg.jp/hug/book/html5.html#page=1\"><img alt=\"5 2の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/5-2.jpg\"></a><a href=\"http://www.city.saga.lg.jp/main/29741.html\"><img alt=\"5 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/5-3.jpg\"></a></p><ul><li><a href=\"https://www.city.saga.lg.jp/main/64398.html\">男性の家事・育児参画啓発キャンペーン</a></li><li><a href=\"https://www.city.saga.lg.jp/main/3656.html\">市民総参加子ども育成運動「子どもへのまなざし運動」推進中！！</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/18.html\">子育てガイドブックHUG</a></li><li><a href=\"https://www.city.saga.lg.jp/main/13594.html\">「子どもの医療費助成制度」について&nbsp;</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/33585.html\">子育て支援センター</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/29741.html\">子育てアプリ「にこさが」</a></li><li><a href=\"https://www.sagabai.com/main/?cont=kanko&amp;fid=94\">干潟よか公園【外部リンク】</a></li><li><a href=\"http://haut.jp/kouno/\">神野公園こども遊園地【外部リンク】</a></li></ul><a href=\"https://www.city.saga.lg.jp/main.php/12814.html\"><img alt=\"5 2の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/5-2.jpg\"></a><span><strong>子育てに関するお悩みをこの一冊で解決<br><a href=\"https://www.city.saga.lg.jp/hug/book/html5.html#page=1\">『佐賀市の子育てガイドブックHug(ハグ)』</a></strong></span><p><span><strong>妊娠から、切れ目のない支援や必要な手続きなど、パパとママに必要な情報がそろっています。</strong></span></p><a href=\"https://www.city.saga.lg.jp/main.php/29741.html\"><img alt=\"5 3の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/5-3.jpg\"></a><span><strong>佐賀市&nbsp;妊娠・出産・子育て安心アプリ『にこさが』</strong></span><p><span><strong>子育てに関する「知りたかった」「知らなかった」をいつでも手軽にチェックできます。</strong></span></p><p><span><strong><a href=\"http://nicosaga.com/main/\">こちら</a>からダウンロードして、是非子育てライフにお役立てください。</strong></span></p><a href=\"https://www.city.saga.lg.jp/main/3656.html\"><img alt=\"manazashiの画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/manazashi.png\"></a><span><strong>子どもへのまなざし運動</strong></span><p><span><strong>佐賀市では地域が一体となって子どもを見守る「子どもへのまなざし」に取り組んでいます。</strong></span></p><p><span><strong>詳しくはこちら<br><a href=\"https://www.city.saga.lg.jp/main/3656.html\">社会教育課</a><br><a href=\"https://www.city.saga.lg.jp/promotion/main/2453.html\">シティプロモーション室</a></strong></span></p><h3>子育て・教育に関するお知らせ</h3><p><a href=\"https://www.city.saga.lg.jp/main/12814.html\">佐賀市子育て・教育ポータルサイト&nbsp;Hug</a></p><h3>近くの公園情報</h3><p><a href=\"https://www.sagabai.com/main/?cont=kanko&amp;cat=2\">佐賀市観光協会公式ホームページ</a></p><h2>４．仕事【佐賀市には充実した仕事とサポートがある！】</h2><p></p><p>暮らしYASUKAさがし&nbsp;【仕事編】 暮らしYASUKAさがし&nbsp;【就農編】</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;</p><p> 暮らしYASUKAさがし 【テレワーク編】</p><p><a href=\"https://www.city.saga.lg.jp/main/39486.html\"><img alt=\"3 4の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/3-4.jpg\"></a><a href=\"https://maic-saga.com/\"><img alt=\"3 2の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/3-2.jpg\"></a><a href=\"https://www.city.saga.lg.jp/main/13620.html\"><img alt=\"3 6の画像\" src=\"https://www.city.saga.lg.jp/promotion/site_files/image/promotion/14_ijyuu/3-6.jpg\"></a></p><ul><li><a href=\"https://www.city.saga.lg.jp/main.php/575.html\">求人情報全般</a></li><li><a href=\"https://www.city.saga.lg.jp/main/13620.html\">企業誘致情報</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/252.html\">起業支援</a></li><li><a href=\"https://www.city.saga.lg.jp/main.php/51817.html\">佐賀市空き家等情報登録制度について</a></li><li><a href=\"https://www.city.saga.lg.jp/main/39486.html\">佐賀市トレーニングファームによる新規就農支援</a></li><li><a href=\"https://www.city.saga.lg.jp/main/19854.html\">佐賀市にオフィスを立地してみませんか？</a></li></ul><h4>そのほか関連リンク</h4><ul><li><a href=\"https://www.sagasmile.com/main/\">サガスマイル（佐賀県移住ポータルサイトサイト）【外部リンク】</a></li></ul></div><div> &nbsp; </div><div></div><div><a href=\"https://www.city.saga.lg.jp/promotion/main/987.html#pagetop\">PageTop</a></div><div><div><p><a href=\"https://www.city.saga.lg.jp/promotion/main/3.html\"><span>プロモーション紹介</span></a></p><ul><li><a href=\"https://www.city.saga.lg.jp/promotion/main/1758.html\"><span>暮らしYASUKAさがし</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/987.html\"><span>移住の心配なんもなか。住むなら佐賀市へ</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/1498.html\"><span>佐賀市なんもな課 〜移住の心配なんもなか〜</span></a></li><li><a href=\"http://www.saga-city.jp/nuruyu/\"><span>本当にあったぬるい話</span></a></li><li><a href=\"http://www.saga-city.jp/sashi-power/\"><span>見るだけで脳が幸せになる！？佐賀牛のサシパワー</span></a></li><li><a href=\"http://www.saga-city.jp/saga-it/\"><span>IT&nbsp;is&nbsp;SAGA</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/12.html\"><span>佐賀弁ラジオ体操&nbsp;第一・第二</span></a></li><li><a href=\"http://www.saga-city.jp/etsu/\"><span>佐賀人がひた隠す幻の魚&nbsp;えつ</span></a></li><li><a href=\"http://www.saga-city.jp/nori/\"><span>佐賀海苔&nbsp;名刺のりプロジェクト</span></a></li><li><a href=\"http://www.saga-city.jp/mietsu/\"><span>みえない世界遺産、みえつ。</span></a></li><li><a href=\"http://www.saga-city.jp/gatabattle/\"><span>「ガタバトル」～愛の戦士ムツゴロウ&nbsp;vs&nbsp;甲殻の騎士シオマネキ～</span></a></li><li><a href=\"http://www.saga-city.jp/wrsb/\"><span>W･R･S･B</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/13.html\"><span>シティプロモーションムービーまとめ</span></a></li></ul><ul><li><a href=\"https://www.city.saga.lg.jp/promotion/main/\"><span>HOME</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/2.html\"><span>佐賀市のプロフィール</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/3.html\"><span>プロモーション紹介</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/23.html\"><span>プロモーション大使</span></a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/24.html\"><span>お知らせ</span></a></li></ul><div><ul><li><a href=\"https://translate.google.com/translate?sl=auto&amp;tl=en&amp;u=https://www.city.saga.lg.jp/promotion/main/\">EN</a></li><li><a href=\"https://translate.google.com/translate?sl=auto&amp;tl=zh-TW&amp;u=https://www.city.saga.lg.jp/promotion/main/\">CN</a></li><li><a href=\"https://translate.google.com/translate?sl=auto&amp;tl=ko&amp;u=https://www.city.saga.lg.jp/promotion/main/\">KR</a></li><li><a href=\"https://translate.google.com/translate?sl=auto&amp;tl=fr&amp;u=https://www.city.saga.lg.jp/promotion/main/\">FR</a></li></ul></div></div><a>閉じる</a></div><div><ul><li><a href=\"https://www.city.saga.lg.jp/promotion/main/987.html#pagetop\">PageTop</a></li><li><a href=\"https://www.city.saga.lg.jp/promotion/main/\">トップページ</a></li><li><a>メニュー</a></li></ul></div><div></div>",
+      "text_lengths": {
+        "old": 3593,
+        "current": 3630,
+        "gold": 3440
+      },
+      "failure_keys": [
+        "h2_excess",
+        "h3_shortage",
+        "h4_shortage"
+      ],
+      "pattern": {
+        "id": "cms_componentization_required",
+        "label": "CMS componentization likely required first",
+        "diagnosis": "Gold appears to split cards, video/link blocks, or promotional modules into components; decide component boundaries before heading-level fixes."
+      },
+      "diagnosis": "Gold appears to split cards, video/link blocks, or promotional modules into components; decide component boundaries before heading-level fixes."
+    },
+    {
+      "id": "saga-city/sg03997.html",
+      "score": 77.0243,
+      "differs_from_gold": 1,
+      "regressed_metrics": 0,
+      "old": {
+        "h2": 0,
+        "h3": 0,
+        "h4": 0
+      },
+      "current": {
+        "h2": 4,
+        "h3": 0,
+        "h4": 0
+      },
+      "gold": {
+        "h2": 5,
+        "h3": 0,
+        "h4": 0
+      },
+      "all_metrics": {
+        "old": {
+          "h2": 0,
+          "h3": 0,
+          "h4": 0,
+          "table": 1,
+          "thead": 0,
+          "caption": 0,
+          "th": 0,
+          "scopeCol": 0,
+          "scopeRow": 0,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 718
+        },
+        "current": {
+          "h2": 4,
+          "h3": 0,
+          "h4": 0,
+          "table": 1,
+          "thead": 1,
+          "caption": 1,
+          "th": 7,
+          "scopeCol": 1,
+          "scopeRow": 6,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 734
+        },
+        "gold": {
+          "h2": 5,
+          "h3": 0,
+          "h4": 0,
+          "table": 1,
+          "thead": 1,
+          "caption": 1,
+          "th": 7,
+          "scopeCol": 1,
+          "scopeRow": 6,
+          "img": 0,
+          "emptyAlt": 0,
+          "iframe": 0,
+          "weakLink": 0,
+          "textLength": 902
+        },
+        "details": {
+          "h2": {
+            "baseline": 0,
+            "current": 4,
+            "gold": 5,
+            "status": "improved"
+          },
+          "h3": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "h4": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "table": {
+            "baseline": 1,
+            "current": 1,
+            "gold": 1,
+            "status": "matches_gold"
+          },
+          "thead": {
+            "baseline": 0,
+            "current": 1,
+            "gold": 1,
+            "status": "matches_gold"
+          },
+          "caption": {
+            "baseline": 0,
+            "current": 1,
+            "gold": 1,
+            "status": "matches_gold"
+          },
+          "th": {
+            "baseline": 0,
+            "current": 7,
+            "gold": 7,
+            "status": "matches_gold"
+          },
+          "scopeCol": {
+            "baseline": 0,
+            "current": 1,
+            "gold": 1,
+            "status": "matches_gold"
+          },
+          "scopeRow": {
+            "baseline": 0,
+            "current": 6,
+            "gold": 6,
+            "status": "matches_gold"
+          },
+          "img": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "emptyAlt": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "iframe": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          },
+          "weakLink": {
+            "baseline": 0,
+            "current": 0,
+            "gold": 0,
+            "status": "matches_gold"
+          }
+        }
+      },
+      "output_html": "<div><p><span>市たばこ税は、製造たばこの製造者、特定販売業者または卸売販売業者が、市内の小売販売業者に売り渡した製造たばこに対してかかる税です。<br> そのため、佐賀市内で購入されたたばこにかかる市たばこ税は佐賀市の収入となり、市民のみなさんのために使われます。</span></p><h2>1．市たばこ税を納める人（納税義務者）</h2><p>市たばこ税の納税義務者は製造たばこの製造者、特定販売業者または卸売販売業者です。しかし、たばこの小売価格のうちには、既に市たばこ税 が含まれていますので、実際に税金を負担しているのはたばこを買う人です。</p><h2>2．税額の計算方法及び税率</h2><p>市たばこ税額=売渡し等をした製造たばこの本数かける税率</p><p>※市たばこ税の税率（令和6年4月現在）は、下表のとおりです。</p><table><caption>2．税額の計算方法及び税率一覧</caption><thead><tr><th scope=\"row\">区分</th><th scope=\"col\">税率（千本あたり）</th></tr></thead><tbody><tr><th scope=\"row\">市たばこ税</th><td>6，552円</td></tr><tr><th scope=\"row\">県たばこ税</th><td>1，070円</td></tr><tr><th scope=\"row\">国たばこ税</th><td>6，802円</td></tr><tr><th scope=\"row\">たばこ特別税</th><td>820円</td></tr><tr><th scope=\"row\">合計</th><td>15，244円</td></tr></tbody></table><h6>手持品課税</h6><p>たばこ税の税率改正に伴い、たばこ税率の引上げの日午前0時現在において販売用の製造たばこを合計20,000本以上（紙巻たばこ三級品は5,000本以上）所持するたばこ販売業者の方に対しまして、たばこ税の「手持品課税」が行われます。</p><p>&nbsp;</p><h2>3．加熱式たばこに係る課税方式の見直しについて</h2><p>平成30年度の税制改正によって、「加熱式たばこ」の区分が新たに設けられるとともに、紙巻たばこへの本数への換算方法が見直され、重量及び小売定価を基に換算することとなりました。平成30年10月から5年かけて段階的に移行します。詳しくは、<a href=\"https://www.nta.go.jp/information/other/data/h29/tabacco/03.htm\">国税庁ホームページ</a>を御覧ください。</p><h2>4．納税の方法</h2><p>製造たばこの製造業者等が、毎月算出した税額を翌月末日までに申告し、納めます。</p></div><div></div>",
+      "text_lengths": {
+        "old": 718,
+        "current": 734,
+        "gold": 902
+      },
+      "failure_keys": [
+        "h2_shortage"
+      ],
+      "pattern": {
+        "id": "gold_only_content_update",
+        "label": "Gold-only content update likely",
+        "diagnosis": "Gold has more body text/headings than old/current; do not create administrative content from nothing. Re-fetch the source or escalate as content update."
+      },
+      "diagnosis": "Gold has more body text/headings than old/current; do not create administrative content from nothing. Re-fetch the source or escalate as content update."
+    }
+  ]
+}
