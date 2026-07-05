@@ -82,6 +82,8 @@ Test-Path .\memory\goal2-development-requirements.md
 Test-Path .\done-definition.md
 Test-Path .\goal2-app\server.js
 Test-Path .\goal2-app\public\app.js
+Test-Path .\goal2-app\public\goal3.html
+Test-Path .\goal2-app\public\goal3.js
 Test-Path .\goal2-app\data\rules.jsonl
 Test-Path .\goal2-app\Dockerfile
 Test-Path .\goal2-app\CLOUD_RUN_DEPLOY.md
