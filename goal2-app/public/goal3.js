@@ -149,6 +149,7 @@
       label: candidateLabel(element, index),
       score,
       textLength: text.length,
+      text,
       linkDensity,
       parts,
       excluded,
@@ -474,13 +475,19 @@
   }
 
   function dedupeCandidates(candidates) {
-    const seen = new Set();
-    return candidates.filter((candidate) => {
-      const key = hashText(candidate.html);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+    const bestByContent = new Map();
+    candidates.forEach((candidate) => {
+      const key = hashText(candidate.text || candidate.html);
+      const existing = bestByContent.get(key);
+      if (!existing || candidateFootprint(candidate) < candidateFootprint(existing)) {
+        bestByContent.set(key, candidate);
+      }
     });
+    return [...bestByContent.values()].sort((a, b) => b.score - a.score);
+  }
+
+  function candidateFootprint(candidate) {
+    return candidate.element.querySelectorAll("*").length;
   }
 
   function render() {
@@ -630,11 +637,12 @@
       els.sourcePreviewFrame.srcdoc = "";
       return;
     }
-    els.sourcePreviewStatus.textContent = `元ページ全体の見取り図の中で、抽出対象のおおよその位置を強調表示しています。`;
-    els.sourcePreviewFrame.srcdoc = buildSourcePreviewHtmlForCandidate(candidate.element);
+    els.sourcePreviewStatus.textContent = `元ページ全体の見取り図の中で、抽出対象のおおよその位置を強調表示しています。ハイライト内側は実際の抽出後HTMLと同じ内容です。`;
+    els.sourcePreviewFrame.srcdoc = buildSourcePreviewHtmlForCandidate(candidate);
   }
 
-  function buildSourcePreviewHtmlForCandidate(element) {
+  function buildSourcePreviewHtmlForCandidate(candidate) {
+    const element = candidate.element;
     const previewDoc = document.implementation.createHTMLDocument("goal3-source-preview");
     const wrapper = previewDoc.createElement("div");
     wrapper.className = "goal3-source-overview";
@@ -642,7 +650,7 @@
     stage.className = "goal3-source-stage";
     const viewport = previewDoc.createElement("div");
     viewport.className = "goal3-source-viewport";
-    const page = buildSourceOverviewNode(element, previewDoc);
+    const page = buildSourceOverviewNode(candidate, previewDoc);
     viewport.appendChild(page);
     stage.appendChild(viewport);
     wrapper.appendChild(stage);
@@ -654,14 +662,18 @@
       container.className = `goal3-source-block ${item.kind}`;
       const label = previewDoc.createElement("div");
       label.className = "goal3-source-label";
-      label.textContent = item.kind === "target" ? "抽出対象" : item.kind === "before" ? "直前の文脈" : "直後の文脈";
+      label.textContent = item.kind === "target" ? "抽出対象(抽出後HTMLと同一)" : item.kind === "before" ? "直前の文脈(参考・抽出対象外)" : "直後の文脈(参考・抽出対象外)";
       container.appendChild(label);
       const content = previewDoc.createElement("div");
       content.className = "goal3-source-content";
-      const clone = item.node.cloneNode(true);
-      sanitizePreview(clone);
-      normalizeSourcePreviewNode(clone, previewDoc);
-      content.appendChild(clone);
+      if (item.kind === "target") {
+        applyExtractedContent(content, candidate.html);
+      } else {
+        const clone = item.node.cloneNode(true);
+        sanitizePreview(clone);
+        normalizeSourcePreviewNode(clone, previewDoc);
+        content.appendChild(clone);
+      }
       container.appendChild(content);
       context.appendChild(container);
     });
@@ -705,16 +717,24 @@
 </html>`;
   }
 
-  function buildSourceOverviewNode(element, previewDoc) {
+  function buildSourceOverviewNode(candidate, previewDoc) {
+    const element = candidate.element;
     const scope = nearestPreviewScope(element);
     const clone = scope.cloneNode(true);
     sanitizePreview(clone);
     normalizeSourcePreviewNode(clone, previewDoc);
-    markPreviewTarget(clone, element);
+    markPreviewTarget(clone, element, candidate.html);
     const page = previewDoc.createElement("div");
     page.className = "goal3-source-page";
     page.appendChild(clone);
     return page;
+  }
+
+  function applyExtractedContent(targetElement, html) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    targetElement.textContent = "";
+    targetElement.appendChild(template.content);
   }
 
   function nearestPreviewScope(element) {
@@ -734,10 +754,12 @@
     return best;
   }
 
-  function markPreviewTarget(scopeClone, originalElement) {
+  function markPreviewTarget(scopeClone, originalElement, extractedHtml) {
     const path = pathFromAncestor(originalElement, nearestPreviewScope(originalElement));
     const target = resolveRelativePath(scopeClone, path);
-    if (target) target.classList.add("goal3-source-scope");
+    if (!target) return;
+    target.classList.add("goal3-source-scope");
+    applyExtractedContent(target, extractedHtml);
   }
 
   function pathFromAncestor(element, ancestor) {
