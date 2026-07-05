@@ -46,6 +46,8 @@ Codexは作業を完了したと判断する前に、次を確認する。
 - Goal 2の候補操作を扱う場合は、採用、編集して採用、却下、要確認の状態定義と完了条件が分かる。
 - Goal 2のホスト環境を扱う場合は、ホスト先、認証、データ送信、ログ、検査エンジン、証跡保存、CMS連携の未決定事項が分かる。
 - Goal 2の開発要件を扱う場合は、画面、API、HTML処理、候補データ、証跡データ、テスト、Cloud Run制約が分かる。
+- Goal 3のコンテンツ抽出を扱う場合は、抽出対象範囲、除外したテンプレート領域、抽出根拠(本文量・見出し/表/画像/ファイルリンク数・除外件数)がどこまで提示されるかが分かる。
+- Goal 3からGoal 2への引き継ぎを扱う場合は、引き継ぐデータ(HTML、ページ名、旧URL)と引き継ぎ方式が分かる。
 - 効果だけでなく、誤変換、見落とし、作業ばらつきなどのリスクも記載されている。
 
 ## Accessibility Proposal Done Criteria
@@ -82,6 +84,8 @@ Test-Path .\memory\goal2-development-requirements.md
 Test-Path .\done-definition.md
 Test-Path .\goal2-app\server.js
 Test-Path .\goal2-app\public\app.js
+Test-Path .\goal2-app\public\goal3.html
+Test-Path .\goal2-app\public\goal3.js
 Test-Path .\goal2-app\data\rules.jsonl
 Test-Path .\goal2-app\Dockerfile
 Test-Path .\goal2-app\CLOUD_RUN_DEPLOY.md
@@ -120,6 +124,7 @@ node .\test\run-tests.js
 - Goal 2の候補操作で、採用、編集して採用、却下、要確認のいずれにも分類されていない候補が残っている。
 - レンダリング表示では採用済みに見えるのに、最終HTML出力へ反映されているか確認できない。
 - ページ全体の検査結果を、本文領域の修正候補として無条件に扱っている。
+- Goal 3で抽出したコンテンツ候補を、抽出根拠・除外領域を示さずにそのままCMS登録対象として確定している。
 - miCheckerで本文起因の明らかな問題が残っているのに、修正、例外理由、エスカレーションのいずれも記録していない。
 - miCheckerの指摘を、本文起因かテンプレート起因か分類せずに完了扱いしている。
 - 未決定事項を決定済みのように書いている。

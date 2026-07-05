@@ -11,7 +11,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `AGENTS.md`
   - プロジェクトの前提、現状の手作業フロー、制約、エージェントの作業方針を記載する。
 - `workstream.md`
-  - 効率化のゴールと、想定する2つのワークストリームを記載する。
+  - 効率化のゴールと、想定する3つのワークストリーム(Goal 1: 一括最適化、Goal 2: 1ページ単位支援、Goal 3: コンテンツ抽出)を記載する。
 - `memory/project-state.md`
   - 現在の進捗、決定事項、未完了事項、次に検討することを記載する。
 - `done-definition.md`
@@ -36,6 +36,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Goal 2実行画面の初期PoC実装を格納する。
   - Node.jsの標準HTTPサーバーで静的UIとKBルールAPIを提供する。
   - Cloud Run互換の `PORT` 環境変数、Dockerfile、テストを含む。
+  - `public/goal3.html` / `public/goal3.js` として、Goal 3(旧ページ全体HTMLからのコンテンツ抽出)のPoC画面を同居させている。
+  - `server.js` の `/api/fetch-html` が、Goal 3のURL取得(簡易SSRF対策付き)を提供する。
 - `goal2-app/CLOUD_RUN_DEPLOY.md`
   - Cloud Run初心者向けに、Google Cloud ConsoleのCloud Run概要画面から始めるステップバイステップのデプロイ手順を記載する。
 - `a11y-migration-kb/`
@@ -51,7 +53,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `workstream.md` を作成済み。
   - Goal 1: CMS登録前にAGENTでHTMLを一括アクセシビリティ最適化する方式を記載した。
   - Goal 2: CMS登録時に作業者が1ページずつAGENT支援を受けながら進める方式を記載した。
-  - 両方式の期待効果、リスク、共通成功条件、比較観点を記載した。
+  - Goal 3: 旧ページ全体HTMLからCMS登録対象のコンテンツ部分を抽出し、Goal 2へ引き継ぐ方式を記載した(実装 `goal2-app/public/goal3.html`/`goal3.js` に対して、後追いでドキュメントを整備した)。
+  - 各方式の期待効果、リスク、共通成功条件、比較観点を記載した。
 - `memory/project-state.md` を作成済み。
   - 現在の進捗と未完了事項を追跡する場所として定義した。
 - `done-definition.md` を作成済み。
@@ -148,6 +151,11 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 
 ## Not Completed Yet
 
+- Goal 3のコンテンツ抽出ヒューリスティック(スコアリング・除外ルール)を、`a11y-migration-kb/` のコンテンツ範囲抽出条件として正式に文書化する作業は未完了。
+- Goal 3の抽出候補とGoal 1のバッチ処理(ページ一覧・テンプレート分類)の接続方法は未定義。
+- Goal 3の誤抽出・見落としを検証するためのテストセット、精度指標は未定義。
+- Goal 3の `/api/fetch-html` を実案件の旧サイトへ使ってよいかのデータ送信ポリシー、認証が必要な旧サイトへの対応方針は未定義。
+
 - Cloud Run上のGoal 2実行画面について、Google Cloudプロジェクト、リージョン、ネットワーク制限、認証方式は未決定。
 - Cloud Run PoCの具体的なGoogle Cloud構成、DB、証跡保存先は未決定。
 - Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約、実案件データポリシー、認証、永続保存は未実装。
@@ -215,6 +223,9 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - レンダリングHTML上の候補ハイライトと、採用/編集/却下操作の状態遷移を設計する。
 - 候補ごとの状態、編集内容、却下理由、要確認理由を証跡列へ落とし込む。
 - 表、画像、リンク、見出しの4領域について、外部参照資料を使ったAGENT候補分類を試作する。
+
+- Goal 3の抽出ロジックを、実際の旧サイトHTMLサンプル(駒瑠市など)で検証し、誤抽出・見落としを記録する。
+- Goal 3の抽出根拠表示を、`a11y-migration-kb/` のコンテンツ範囲抽出条件・除外領域の記録要件と対応づける。
 
 ## Update Policy
 
