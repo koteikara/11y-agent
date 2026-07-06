@@ -4286,12 +4286,14 @@
         }
         renderBulkControls();
       });
+      const siblingCount = candidatesForSameTarget(candidate).length;
       button.type = "button";
       button.className = `candidate-item ${status}`;
       button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
       button.setAttribute(
         "aria-label",
-        `${candidate.rule.title}、${statusLabels[status] || status}、${candidate.candidate_id}`
+        `${candidate.rule.title}、${statusLabels[status] || status}、${candidate.candidate_id}` +
+          (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
       );
       button.addEventListener("click", () => {
         state.selectedCandidateId = candidate.candidate_id;
@@ -4302,6 +4304,7 @@
 
       button.innerHTML = `
         <div class="candidate-title">${escapeHtml(candidate.rule.title)}</div>
+        ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
       `;
       row.append(checkbox, button);
       els.candidateList.appendChild(row);
@@ -4384,6 +4387,11 @@
       </section>
       <section class="detail-summary-card">
         <h3>修正方法</h3>
+        ${
+          fixMethodCandidates.length > 1
+            ? `<p class="fix-method-note">同じ箇所への修正方法が${fixMethodCandidates.length}件あります。いずれか1つを選んで採用してください。</p>`
+            : `<p class="fix-method-note">この箇所の修正方法は1件です。</p>`
+        }
         <div class="fix-method-grid" role="radiogroup" aria-label="修正方法を選ぶ">
           ${fixMethodCandidates
             .map(

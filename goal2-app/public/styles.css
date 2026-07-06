@@ -730,6 +730,24 @@ label {
   font-size: 12px;
 }
 
+.candidate-alt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--link);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.candidate-alt-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--link);
+}
+
 .status-badge,
 .completion-pill {
   display: inline-flex;
@@ -1075,6 +1093,12 @@ label {
 
 .change-summary li + li {
   margin-top: 4px;
+}
+
+.fix-method-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .fix-method-grid {
