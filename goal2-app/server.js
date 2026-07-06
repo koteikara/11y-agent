@@ -3,14 +3,20 @@ const fs = require("fs");
 const path = require("path");
 const net = require("net");
 const dns = require("dns");
+const os = require("os");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const { loadRules } = require("./lib/rules");
 const { defaultSagaFixtureRoot } = require("./lib/sagaAutoFix");
 const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
 
+const execFileAsync = promisify(execFile);
+
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
 const port = Number(process.env.PORT || 8080);
+const htmlCheckerExePath = process.env.MICHECKER_HTMLCHECKER_EXE || "";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -239,6 +245,127 @@ async function fetchLinkTitle(targetUrl) {
   }
 }
 
+function readJsonBody(request, maxBytes = 4 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(Object.assign(new Error("Request body too large"), { statusCode: 413 }));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+      } catch {
+        reject(Object.assign(new Error("Invalid JSON body"), { statusCode: 400 }));
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+async function listResultCsvFiles(resultDir) {
+  try {
+    const entries = await fs.promises.readdir(resultDir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".csv"))
+      .map((entry) => path.join(resultDir, entry.name));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function findNewResultCsvFiles(resultDir, filesBefore) {
+  const filesAfter = await listResultCsvFiles(resultDir);
+  const newFiles = filesAfter.filter((file) => !filesBefore.has(file));
+  const listCsv = newFiles.filter((file) => /_list\.csv$/i.test(path.basename(file)));
+  const perPageCandidates = newFiles.filter((file) => !/_list\.csv$/i.test(path.basename(file)));
+  const withStats = await Promise.all(
+    perPageCandidates.map(async (file) => ({ file, mtimeMs: (await fs.promises.stat(file)).mtimeMs }))
+  );
+  withStats.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  return { listCsv, perPage: withStats.map((entry) => entry.file), allNewFiles: newFiles };
+}
+
+// 注意: htmlchecker.exe(ACTF HTML Checker)の実行・result出力フォーマットは
+// 「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」の記述に基づいて実装しているが、
+// 実機での動作確認は未実施(Windows専用ツールのためこの開発環境では実行できない)。
+// 「移行元→移行後の順でhtmllist.txtに列挙すれば、result内の検査結果CSVも同じ順で作成される」
+// という前提で、作成日時が早い方を移行元、遅い方を移行後として扱っている。
+// 実際にWindows環境で動かして、この前提が正しいか必ず確認すること。
+async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
+  if (process.platform !== "win32") {
+    const error = new Error("この機能はWindows上で動作しているgoal2-appでのみ利用できます(現在の実行環境はWindowsではありません)。");
+    error.statusCode = 400;
+    error.code = "windows_required";
+    throw error;
+  }
+  if (!htmlCheckerExePath) {
+    const error = new Error("環境変数 MICHECKER_HTMLCHECKER_EXE に htmlchecker.exe のフルパスを設定してください。");
+    error.statusCode = 400;
+    error.code = "htmlchecker_not_configured";
+    throw error;
+  }
+  if (!fs.existsSync(htmlCheckerExePath)) {
+    const error = new Error(`指定されたパスに htmlchecker.exe が見つかりません: ${htmlCheckerExePath}`);
+    error.statusCode = 400;
+    error.code = "htmlchecker_not_found";
+    throw error;
+  }
+
+  const exeDir = path.dirname(htmlCheckerExePath);
+  const resultDir = path.join(exeDir, "result");
+  const filesBefore = new Set(await listResultCsvFiles(resultDir));
+
+  const workDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "michecker-compare-"));
+  const beforeHtmlPath = path.join(workDir, "before.html");
+  const afterHtmlPath = path.join(workDir, "after.html");
+  const listPath = path.join(workDir, "htmllist.txt");
+  await fs.promises.writeFile(beforeHtmlPath, beforeHtml, "utf8");
+  await fs.promises.writeFile(afterHtmlPath, afterHtml, "utf8");
+  await fs.promises.writeFile(listPath, `${beforeHtmlPath}\r\n${afterHtmlPath}\r\n`, "utf8");
+
+  try {
+    await execFileAsync(htmlCheckerExePath, ["-f", listPath], { cwd: exeDir, timeout: 120000 });
+  } catch (error) {
+    const wrapped = new Error(`htmlchecker.exe の実行に失敗しました: ${error.message}`);
+    wrapped.statusCode = 500;
+    wrapped.code = "htmlchecker_execution_failed";
+    throw wrapped;
+  }
+
+  const { perPage, allNewFiles } = await findNewResultCsvFiles(resultDir, filesBefore);
+  if (perPage.length !== 2) {
+    const error = new Error(
+      `result フォルダ(${resultDir})から2件の検査結果CSVを特定できませんでした(新規に見つかったCSV: ${allNewFiles.length}件)。resultフォルダの内容を確認してください。`
+    );
+    error.statusCode = 500;
+    error.code = "htmlchecker_result_not_found";
+    error.details = { resultDir, allNewFiles };
+    throw error;
+  }
+
+  const [beforeCsvFile, afterCsvFile] = perPage;
+  const decoder = new TextDecoder("shift_jis");
+  const [beforeCsvBuffer, afterCsvBuffer] = await Promise.all([
+    fs.promises.readFile(beforeCsvFile),
+    fs.promises.readFile(afterCsvFile),
+  ]);
+  return {
+    beforeCsvText: decoder.decode(beforeCsvBuffer),
+    afterCsvText: decoder.decode(afterCsvBuffer),
+    resultDir,
+    beforeCsvFile,
+    afterCsvFile,
+  };
+}
+
 const server = http.createServer(async (request, response) => {
   let url;
   try {
@@ -246,6 +373,26 @@ const server = http.createServer(async (request, response) => {
   } catch {
     response.writeHead(400);
     response.end("Bad request");
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/michecker-local-compare") {
+    try {
+      const body = await readJsonBody(request);
+      const { beforeHtml, afterHtml } = body || {};
+      if (typeof beforeHtml !== "string" || typeof afterHtml !== "string" || !beforeHtml.trim() || !afterHtml.trim()) {
+        sendJson(response, 400, { ok: false, error: "missing_html", message: "移行元・移行後のHTMLを両方指定してください。" });
+        return;
+      }
+      const result = await runHtmlCheckerLocalCompare(beforeHtml, afterHtml);
+      sendJson(response, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, {
+        ok: false,
+        error: error.code || "htmlchecker_local_compare_failed",
+        message: error.message,
+      });
+    }
     return;
   }
 

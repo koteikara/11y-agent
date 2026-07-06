@@ -143,6 +143,18 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `memory/ai-accessibility-skills-policy.md` を作成済み。
   - Mark Fairchildの記事を参照し、AIモデル単体へ依存せず、短い共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離を組み合わせる方針を整理した。
   - table、iframe、画像alt、フォーム、見出し構造などの部品別Skill化案、生成後レビュー用チェックリスト、自動検証と人間確認の分離表を記載した。
+- miCheckerを判断基準の一つに加える件について、`memory/michecker-research.md`を更新の上、Goal 2にmiChecker CSV結果の前後比較機能を追加した。
+  - miChecker開発環境準備手順書を確認し、miCheckerがWindows専用のEclipse RCP GUIアプリでCLI/APIを持たないことを確定させた(goal2-appのプログラムへの直接組み込みは不可能)。
+  - 一方、GUIで手動実行した結果はCSVでエクスポート可能であることをユーザーから実際のCSVサンプル(安城市 入札契約結果ページの検査結果、Shift-JIS/CP932、引用符付きマルチラインフィールド、11列、`種別`は問題あり/問題の可能性大/要判断箇所/手動確認の4種)で確認し、この取り込みは実現可能と判断した。
+  - `goal2-app/public/michecker-compare.html`・`michecker-compare.js`を新規追加。移行元/移行後の2つのCSVをブラウザで読み込み(`TextDecoder("shift_jis")`、独自CSVパーサー、サーバー側変更なし)、`(種別, JIS, 達成方法)`をシグネチャとして件数を突き合わせ「新規/未解消/解消」を一覧表示する比較ビューを実装した。
+  - 実CSV(85件)を移行元、`問題あり`3件と`問題の可能性大`1件を除去した加工版を移行後としてPlaywrightで検証し、「解消2件・未解消57件・新規0件」を確認。最小CSVペアで「新規」判定の動作も確認した。`node --check`・`node test/run-tests.js`はいずれも成功。
+- 上記の比較ビューについて、ユーザーから「ページ全体ではなく本文だけをチェックしたい」との指摘を受け、本文/テンプレート分類機能を追加した。
+  - 実CSVで外部CSSファイル参照(共通スタイル起因、13/85件、全件行番号が空欄)を確認し、内容欄に`.css`または「セレクタ=」を含む行は`old-site-template`に自動仮分類する仕組みを追加(`TEMPLATE_STYLE_REFERENCE_PATTERN`)。それ以外は`unknown`のまま、常に人が上書きできるドロップダウンと「本文(content)のみ表示」フィルタを実装。ページHTML再取得+行番号突き合わせによる自動判定(信頼性が低くユーザーも懸念)は今回見送った。
+  - 実CSVで自動タグ2件・フィルタ動作・自動バッジの手動上書きによる消去をPlaywrightで確認し、実際にローカルサーバーを起動してスクリーンショットでも見た目を確認した。
+- ユーザーから共有された「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」により、miChecker本体(GUI)とは別にCLIツール「HTML Checker」(`htmlchecker.exe`)が公式提供されており、`-f htmllist.txt`でバッチ検査・CSV自動出力ができることが判明した。「miCheckerにはCLI/APIが一切ない」という従来の結論を訂正し、`memory/michecker-research.md`に詳細を追記した。
+  - 専用Windows環境の用意は難しいというユーザーの意向を受け、「Cloud Runホスト版」と「ユーザー自身のWindows PCでのローカル版」の両方をサポートする方針とした。ローカル版でのみ有効な`POST /api/michecker-local-compare`を`goal2-app/server.js`に追加し、`beforeHtml`/`afterHtml`を一時HTMLファイルに書き出して`child_process.execFile`で`htmlchecker.exe -f htmllist.txt`を実行、`result`フォルダの新規CSV2件をShift-JISでデコードして返す。`process.platform !== "win32"`または実行ファイル未設定時は明確なエラーを返すガードを実装。
+  - `michecker-compare.html`/`.js`に「(ローカルWindows限定)htmlchecker.exeで自動比較」セクションを追加し、返却されたCSVを既存の比較ロジック(`parseMicheckerCsv`/`diffMicheckerRecords`/`renderResults`)にそのまま渡すことで手動アップロード版とコードを共通化した。
+  - **未検証事項**: `htmlchecker.exe`はWindows専用のためこの開発環境では実行できず、resultフォルダの出力タイミング・`htmllist.txt`列挙順=結果CSV生成順という前提は未検証。実機で要確認。Linux環境でのWindows判定ガードの動作、既存の手動CSV機能への回帰なしはPlaywright・`node test/run-tests.js`で確認済み。
 
 ## Decisions
 

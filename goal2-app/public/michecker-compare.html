@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>miChecker結果比較 PoC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Goal 2</p>
+        <h1 id="pageHeading" tabindex="-1">miChecker結果比較</h1>
+      </div>
+      <div class="header-status" id="statusText" aria-live="polite">CSV未読み込み</div>
+      <div class="app-header-spacer"></div>
+      <p class="app-header-footer">miChecker比較<br />PoC</p>
+    </header>
+
+    <main class="app-shell michecker-shell">
+      <section class="input-form-card" aria-labelledby="localCompareTitle">
+        <h2 id="localCompareTitle">(ローカルWindows限定) htmlchecker.exeで自動比較</h2>
+        <p>
+          この機能は、goal2-appをご自身のWindows PC上でローカル起動しており、かつ
+          <code>htmlchecker.exe</code>(miChecker本体とは別のCLIツール「HTML Checker」)を
+          ビルド済みの場合のみ動作します。Cloud Run上のホスト版では利用できません。
+          サーバー起動時に環境変数 <code>MICHECKER_HTMLCHECKER_EXE</code> に
+          <code>htmlchecker.exe</code>のフルパスを設定しておいてください。
+        </p>
+        <div class="michecker-upload-grid">
+          <label>
+            移行元(旧ページ)の全体HTML
+            <textarea id="beforeHtmlInput" rows="6" placeholder="移行元ページのHTMLソースを貼り付け"></textarea>
+          </label>
+          <label>
+            移行後(新ページ)の全体HTML
+            <textarea id="afterHtmlInput" rows="6" placeholder="移行後ページのHTMLソースを貼り付け"></textarea>
+          </label>
+        </div>
+        <div class="button-row">
+          <button type="button" id="localCompareButton" class="secondary">htmlchecker.exeで自動比較する</button>
+        </div>
+        <p class="michecker-error" id="localErrorMessage" role="alert" hidden></p>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="uploadTitle">
+        <h2 id="uploadTitle">CSVを読み込む</h2>
+        <p>
+          miCheckerで「移行元(旧ページ)」と「移行後(新ページ・CMS登録後プレビュー)」をそれぞれ検査し、
+          エクスポートしたCSVを選択してください。miCheckerのCSVはShift-JIS固定のため、常にShift-JISとして読み込みます。
+        </p>
+        <div class="michecker-upload-grid">
+          <label>
+            移行元(旧ページ)CSV
+            <input type="file" id="beforeCsvInput" accept=".csv" />
+          </label>
+          <label>
+            移行後(新ページ・CMSプレビュー)CSV
+            <input type="file" id="afterCsvInput" accept=".csv" />
+          </label>
+        </div>
+        <div class="button-row">
+          <button type="button" id="compareButton" class="primary">比較する</button>
+        </div>
+        <p class="michecker-error" id="errorMessage" role="alert" hidden></p>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="resultTitle" id="resultSection" hidden>
+        <h2 id="resultTitle">比較結果</h2>
+        <p class="michecker-note">
+          「行番号」は移行元・移行後で別のHTMLソースのものなので単純比較できません。同じ指摘かどうかは
+          「種別・JIS・達成方法」の組み合わせ(シグネチャ)で判定しています。内容欄に外部CSSファイルへの参照がある行は
+          サイト共通スタイル起因の可能性が高いため「旧サイトテンプレート」に自動で仮分類していますが、あくまで推定です。
+          それ以外はCSVだけでは本文起因かテンプレート起因か判別できないため、一覧を見て人が分類してください。
+        </p>
+        <div class="michecker-summary" id="summaryGrid"></div>
+        <label class="michecker-filter">
+          <input type="checkbox" id="contentOnlyFilter" />
+          本文(content)に分類した行だけ表示する
+        </label>
+        <div class="michecker-table-wrap">
+          <table class="michecker-table" id="resultTable">
+            <thead>
+              <tr>
+                <th scope="col">状態</th>
+                <th scope="col">分類</th>
+                <th scope="col">種別</th>
+                <th scope="col">JIS</th>
+                <th scope="col">達成方法</th>
+                <th scope="col">内容(代表例)</th>
+                <th scope="col">移行元件数</th>
+                <th scope="col">移行後件数</th>
+                <th scope="col">移行後の行番号</th>
+              </tr>
+            </thead>
+            <tbody id="resultTableBody"></tbody>
+          </table>
+        </div>
+        <p class="michecker-empty-note" id="emptyFilterNote" hidden>
+          「本文(content)」に分類された行がありません。各行の「分類」を確認・変更してください。
+        </p>
+      </section>
+    </main>
+
+    <script src="/michecker-compare.js"></script>
+  </body>
+</html>
