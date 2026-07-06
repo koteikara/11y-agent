@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-06: 案内リンク付き結合セルを表外抽出ではなくcolspan解除+同一リンク繰り返しに変更
+
+- 背景・目的: 直前のエントリ(「colspanを使わず表外へ抽出する案A」)について、ユーザーから「案Aでヘッダーだけが残ることに違和感がある」「表で無くなることも避けたい」との指摘があり、行を表の外へ抽出する案A自体を撤回。代わりに「表の行としてそのまま残し、`colspan`は解除して実セル(`<td>`)へ分解し、各セルに同じ案内リンク(同一href・同一リンクテキスト)を繰り返す」形へ変更した。捏造した列ごとの説明文は入れない(ユーザーの明示的な要望)。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `buildCaptionSeparatedTableHtml`が結合セルにリンクを含む場合に呼んでいた`buildRowExtractedToListHtml`(行を削除し`<h3>+<p>+<ul>`を表外に出力)を削除し、新設の`buildMergedLinkRepeatedAcrossCellsHtml`へ差し替えた。
+  - `buildMergedLinkRepeatedAcrossCellsHtml`は、表をクローンして該当行・該当セルの位置をそのまま特定し、`colspan`の値だけ`<td>`(または`<th>`)を新規生成、各セルに同一href・同一テキスト(`extractedRowLinkLabel()` + 「の案件詳細ページ」)の`<a>`を設置して元のセルを置き換える。行自体は削除せず、`colspan`属性も残らない。
+  - 不要になった`buildRowExtractedToListHtml`・`spannedColumnHeaderTexts`・`deriveExtractedRowHeading`を削除。`extractedRowLinkLabel`は引き続き利用。
+  - `isLinkedGuidanceMergedCell`にヒットした場合の分類理由(`reason`)テキストを、表外分離ではなく「colspanを解除して各列に同じ案内リンクを繰り返し配置」という説明に更新。
+- 検証: colspan=6(他セルなし)・colspan=5(整理番号セルあり)の2パターンをPlaywrightで実行し、候補採用後の最終HTMLが行を保持したまま`colspan`なしの実セルへ分解され、各セルに同一リンク(href・テキストとも同一)が入ることを確認。整理番号がある場合はそれがリンクテキストに反映されることも確認した。`node --check`・`node test/run-tests.js`はいずれも成功。既存サンプルへの回帰確認も実施。
+- 関連ファイル: `goal2-app/public/app.js`、`CHANGELOG.md`、`memory/project-state.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-06: レイアウト表分解(decomposeLayoutTable)で見出し+対応内容の構造を維持
 
 - 背景・目的: 「セル結合①レイアウト用途」(table.cell-merge-layout、table.cell-merge-fileでも共用)の分解結果が、3セル以上の行(例: 「開催日」「令和8年7月20日」「10時から15時」「雨天中止」)で各セルが独立した段落に単純分解されるだけで、先頭セルが見出し(ラベル)であり残りがそれに対応する内容であるという関係が失われていた。
