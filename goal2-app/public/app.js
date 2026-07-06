@@ -2616,6 +2616,19 @@
         return;
       }
 
+      if (drafts.length >= 2 && isLayoutTableSectionHeadingDraft(drafts[0]) && drafts.slice(1).every((draft) => draft.simple)) {
+        const heading = document.createElement(layoutTableChildHeadingTag(parentHeadingTag));
+        heading.textContent = drafts[0].text;
+        template.content.appendChild(heading);
+        const paragraph = document.createElement("p");
+        drafts.slice(1).forEach((draft, index) => {
+          if (index > 0) paragraph.append("、");
+          appendInlineHtml(paragraph, draft.html);
+        });
+        template.content.appendChild(paragraph);
+        return;
+      }
+
       drafts.forEach((draft) => appendLayoutDraft(template.content, draft));
     });
 
