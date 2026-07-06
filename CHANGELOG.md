@@ -21,6 +21,40 @@
 
 ## Entries
 
+## 2026-07-06: (ローカルWindows限定・未検証)htmlchecker.exeによるmiChecker自動比較を追加
+
+- 背景・目的: ユーザーから共有された「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」により、miChecker本体(GUI)とは別に、同じACTF評価エンジンを使うCLIツール「HTML Checker」(`htmlchecker.exe`)が公式に存在し、`-f htmllist.txt`でHTMLファイル一覧をバッチ検査してCSVを自動出力できることが判明した。専用のWindows環境を用意するのは難しいというユーザーの意向を受け、「Cloud Run上のホスト版」と「ユーザー自身のWindows PCでローカル起動する版」の両方をサポートする方針とし、ローカル版でのみ`htmlchecker.exe`をサーバーサイドから自動起動する機能を追加した。
+- 主な変更内容:
+  - `goal2-app/server.js`: `POST /api/michecker-local-compare`エンドポイントを新設。リクエストの`beforeHtml`/`afterHtml`を一時フォルダにHTMLファイルとして書き出し、`htmllist.txt`を生成した上で環境変数`MICHECKER_HTMLCHECKER_EXE`で指定された`htmlchecker.exe`を`child_process.execFile`(`-f`オプション)で実行し、`result`フォルダに新規生成されたCSV2件をShift-JISでデコードして返す。`process.platform !== "win32"`の場合や環境変数未設定・実行ファイル不在の場合は明確なエラーメッセージを返す。既存のGETオンリーだったメソッドチェックを、このエンドポイントに限りPOSTも許可するよう変更した。
+  - `goal2-app/public/michecker-compare.html`・`michecker-compare.js`: 「(ローカルWindows限定)htmlchecker.exeで自動比較」セクションを追加。移行元/移行後の全体HTMLを貼り付けて実行すると、上記APIを呼び出し、返却されたCSVを既存の`parseMicheckerCsv`/`diffMicheckerRecords`/`renderResults`(手動アップロード版と共通)にそのまま渡して同じ比較結果を表示する。
+  - `goal2-app/public/styles.css`: 貼り付け用テキストエリアのスタイルを追加。
+- **重要な未検証事項**: `htmlchecker.exe`はWindows専用のためこの開発環境では実際に実行できず、(1)`result`フォルダの出力ファイル名・タイミング、(2)`htmllist.txt`に列挙した順序で結果CSVが生成される、という前提が本当に正しいかは未検証。実機で動かして問題があれば修正が必要。
+- 検証: Linux開発環境で`process.platform !== "win32"`の分岐が正しく機能し、明確なエラーメッセージが返ることをPlaywrightで確認した。既存の手動CSVアップロード機能(分類・フィルタ含む)に回帰がないことも確認した。`node --check`・`node test/run-tests.js`はいずれも成功。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
+## 2026-07-06: miChecker比較ビューに本文/テンプレート分類とcontentのみ表示フィルタを追加
+
+- 背景・目的: miChecker CSV比較ビューが「ページ全体」の指摘をそのまま突き合わせるだけで、テンプレート(共通ヘッダー・フッター・ナビ)由来の指摘と、CMSへ移行する本文コンテンツ由来の指摘を区別していなかった。実際のCSVには外部CSSファイル参照(共通スタイル起因、実データ85件中13件、全件で行番号が空欄)が多く含まれており、これらは本文編集では対応不可能な指摘のため、区別できるようにした。
+- 主な変更内容:
+  - `goal2-app/public/michecker-compare.js`: 各比較結果行に`classification`(`unknown`/`content`/`old-site-template`/`new-cms-template`)を持たせ、内容欄に外部CSSファイル参照(`.css`または「セレクタ=」)がある場合は自動で`old-site-template`と仮分類する(`TEMPLATE_STYLE_REFERENCE_PATTERN`、実データで検証済み)。各行にドロップダウンで分類を上書き可能にし、自動タグには「自動推定」バッジを表示、手動変更で消える。「本文(content)に分類した行だけ表示する」フィルタチェックボックスを追加。
+  - `goal2-app/public/michecker-compare.html`・`styles.css`: 上記UI要素(分類列、フィルタ、空状態メッセージ)を追加。
+- 検証: 実CSV(85件)で自動タグが2件正しく付与されること、フィルタON時に未分類分は非表示、手動でcontentに変更した行のみ表示されること、自動バッジが手動変更で消えることをPlaywrightで確認。実際にローカルサーバーを起動しスクリーンショットでも見た目を確認した。`node --check`・`node test/run-tests.js`・既存サンプルへの回帰確認もいずれも成功。
+- 関連ファイル: `goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`
+- 関連PR: (作成予定)
+
+## 2026-07-06: miChecker CSV結果の移行前後比較ビューを追加
+
+- 背景・目的: miCheckerを判断基準の一つに加えたいというユーザー要望を受け、miChecker自体はCLI/APIを持たないWindows専用GUIツールであることを開発環境準備手順書で確認した上で、GUIで手動実行した結果のCSVエクスポート(Shift-JIS/CP932、引用符付きマルチラインフィールド)を取り込み、移行元(旧ページ)と移行後(新ページ)の指摘を比較する機能をgoal2-appに追加した。
+- 主な変更内容:
+  - `goal2-app/public/michecker-compare.html`・`goal2-app/public/michecker-compare.js` を新規追加。移行元/移行後の2つのCSVファイルをアップロードすると、`(種別, JIS, 達成方法)`の組み合わせをシグネチャとして件数を突き合わせ、「新規」「未解消」「解消」に分類して一覧表示する。サーバー側の変更は無く、クライアントの`TextDecoder("shift_jis")`とvanilla JSのCSVパーサーのみで完結させ、既存のゼロ依存構成を維持した。
+  - `goal2-app/public/styles.css` に `.michecker-*` クラス群(アップロードフォーム、統計タイル、結果テーブル、状態バッジ)を追加。
+  - `goal2-app/test/run-tests.js` のファイル存在チェックに新規2ファイルを追加。
+  - `memory/michecker-research.md` に、実際にユーザーから共有された安城市 入札契約結果ページのmiChecker検査結果CSVを解析した結果(列構成、`種別`4分類の件数傾向、エンコーディングの注意点、前後比較のシグネチャ設計案)を追記した。
+- 検証: 実際のCSV(85件)を「移行元」、`問題あり`3件と`問題の可能性大`1件を除去した加工版を「移行後」としてPlaywrightでアップロード・比較し、期待通り「解消」2件・「未解消」57件・「新規」0件になることを確認した。また最小限のCSVペアで「新規」判定(移行後のみに出現する指摘)も正しく動作することを確認した。`node --check`・`node test/run-tests.js`はいずれも成功。
+- 関連ファイル: `goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`、`goal2-app/test/run-tests.js`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-06: 表キャプション自動生成の文字化け(mojibake)とヘッダー途中切れを修正
 
 - 背景・目的: ユーザーが独自の入札案件表(工事名称〜その他の9列見出し)を貼り付けて修正候補を確認したところ、「表のキャプション」候補の修正後プレビューが「工事名称 工事場所 工種 公告文 入札条件 提出書類 設計書 Q＆A そ????????????」のように途中から文字化けする不具合が報告された。

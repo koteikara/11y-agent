@@ -59,6 +59,8 @@ async function main() {
     "public/app.js",
     "public/goal3.html",
     "public/goal3.js",
+    "public/michecker-compare.html",
+    "public/michecker-compare.js",
     "public/styles.css",
     "public/images/sample-park-generated.png",
     "public/images/sample-map-generated.png",
