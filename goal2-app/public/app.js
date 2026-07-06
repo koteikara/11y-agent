@@ -1526,6 +1526,7 @@
     }
 
     const headerPlan = dataTableHeaderPlan(profile);
+    const headerTexts = headerPlan.headerCells.map((cell) => normalizeText(cell.textContent || ""));
     if (headerPlan.headerCells.length > 0) {
       const thead = document.createElement("thead");
       const row = document.createElement("tr");
@@ -1536,16 +1537,29 @@
       output.appendChild(thead);
     }
 
+    const columnCount = headerTexts.length || profile.maxCells;
+    const noteEntries = [];
     const tbody = document.createElement("tbody");
     profile.rows.slice(headerPlan.bodyStartIndex).forEach((cells) => {
       const row = document.createElement("tr");
       cells.forEach((cell, index) => {
-        row.appendChild(cloneTableCellAs(cell, index === 0 || cell.tagName === "TH" ? "th" : "td", index === 0 || cell.tagName === "TH" ? "row" : ""));
+        const isRowHeaderCell = index === 0 || cell.tagName === "TH";
+        const clone = cloneTableCellAs(cell, isRowHeaderCell ? "th" : "td", isRowHeaderCell ? "row" : "");
+        if (isRowHeaderCell) {
+          const note = extractEmbeddedTableCellNote(clone);
+          if (note) noteEntries.push({ label: normalizeText(clone.textContent || ""), note });
+        } else {
+          normalizeGenericFileLinkText(clone, headerTexts[index]);
+        }
+        row.appendChild(clone);
       });
+      for (let index = cells.length; index < columnCount; index += 1) {
+        row.appendChild(document.createElement("td"));
+      }
       tbody.appendChild(row);
     });
     output.appendChild(tbody);
-    return cleanHtml(output.outerHTML);
+    return cleanHtml(output.outerHTML) + buildTableNoteSectionHtml(noteEntries);
   }
 
   function dataTableHeaderPlan(profile) {
@@ -1681,6 +1695,55 @@
     }
     clone.innerHTML = cell.innerHTML;
     return clone;
+  }
+
+  const GENERIC_FILE_LINK_TEXT_PATTERN = /^(pdf|excel|word|powerpoint|パワーポイント|ワード|エクセル|xlsx?|docx?|pptx?)$/i;
+
+  function normalizeGenericFileLinkText(cell, columnHeaderText) {
+    if (!columnHeaderText) return;
+    const links = [...cell.querySelectorAll("a")];
+    if (links.length !== 1) return;
+    const link = links[0];
+    const text = normalizeText(link.textContent || "");
+    if (text && GENERIC_FILE_LINK_TEXT_PATTERN.test(text)) {
+      link.textContent = columnHeaderText;
+    }
+  }
+
+  function extractEmbeddedTableCellNote(cell) {
+    let note = null;
+    [...cell.querySelectorAll("strong")].forEach((strong) => {
+      const text = normalizeText(strong.textContent || "");
+      if (/^※/.test(text)) {
+        note = note ? `${note} ${text}` : text;
+        strong.remove();
+      }
+    });
+    if (note) trimTrailingCellNoise(cell);
+    return note;
+  }
+
+  function trimTrailingCellNoise(cell) {
+    while (cell.lastChild) {
+      const last = cell.lastChild;
+      if (last.nodeType === Node.TEXT_NODE && !normalizeText(last.textContent)) {
+        cell.removeChild(last);
+        continue;
+      }
+      if (last.nodeType === Node.ELEMENT_NODE && last.tagName === "BR") {
+        cell.removeChild(last);
+        continue;
+      }
+      break;
+    }
+  }
+
+  function buildTableNoteSectionHtml(noteEntries) {
+    if (!noteEntries.length) return "";
+    const items = noteEntries
+      .map((entry) => `<li>${escapeHtml(entry.label)}: ${escapeHtml(entry.note)}</li>`)
+      .join("");
+    return `<h3>注意事項</h3><ul>${items}</ul>`;
   }
 
   function dataTableCaptionText(table, profile) {
