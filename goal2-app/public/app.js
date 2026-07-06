@@ -2734,7 +2734,7 @@
 
   function buildCaptionSeparatedTableHtml(table, info) {
     if (info.cell.querySelector("a")) {
-      return buildRowExtractedToListHtml(table, info);
+      return buildMergedLinkRepeatedAcrossCellsHtml(table, info);
     }
     const clone = tableWithRowRemoved(table, info.rowIndex);
     if (!clone.querySelector(":scope > caption")) {
@@ -2745,51 +2745,40 @@
     return cleanHtml(clone.outerHTML);
   }
 
-  function buildRowExtractedToListHtml(table, info) {
-    const clone = tableWithRowRemoved(table, info.rowIndex);
-    const headerRow = table.querySelector(":scope > thead > tr:first-child") || table.querySelector(":scope tr:first-child");
-    const headerTexts =
-      headerRow && headerRow !== info.row
-        ? [...headerRow.children].map((cell) => normalizeText(cell.textContent || ""))
-        : [];
-    const spannedHeaders = spannedColumnHeaderTexts(info.row, info.cell, headerTexts);
-    const headingText = deriveExtractedRowHeading(info.text);
-    const rowLabel = extractedRowLinkLabel(info.row, info.cell);
+  function buildMergedLinkRepeatedAcrossCellsHtml(table, info) {
+    const clone = table.cloneNode(true);
+    stripInternalAttributes(clone);
+    stripFormatting(clone);
+    const clonedRow = [...clone.querySelectorAll("tr")][info.rowIndex];
+    const cellIndex = [...info.row.children].indexOf(info.cell);
+    const clonedCell = clonedRow?.children[cellIndex];
+    if (!clonedRow || !clonedCell) {
+      return cleanHtml(clone.outerHTML);
+    }
+
     const link = info.cell.querySelector("a");
     const href = link ? link.getAttribute("href") || "" : "";
+    const linkText = `${extractedRowLinkLabel(info.row, info.cell)}の案件詳細ページ`;
+    const span = Number(clonedCell.getAttribute("colspan")) || 1;
+    const rowspan = clonedCell.getAttribute("rowspan");
+    const tagName = clonedCell.tagName;
 
-    const heading = document.createElement(suggestSeparatedHeadingTag(table));
-    heading.textContent = headingText;
-    const paragraph = document.createElement("p");
-    paragraph.textContent = spannedHeaders.length
-      ? `次の案件は${headingText}です。${spannedHeaders.join("・")}等の詳細は、案件ごとの詳細ページにまとめて掲載しています。`
-      : info.text;
-    const list = document.createElement("ul");
-    const li = document.createElement("li");
-    if (href) {
-      const anchor = document.createElement("a");
-      anchor.setAttribute("href", href);
-      anchor.textContent = `${rowLabel}の案件詳細ページ`;
-      li.appendChild(anchor);
-    } else {
-      li.textContent = rowLabel;
-    }
-    list.appendChild(li);
+    const replacementCells = Array.from({ length: span }, () => {
+      const cell = document.createElement(tagName);
+      if (rowspan) cell.setAttribute("rowspan", rowspan);
+      if (href) {
+        const anchor = document.createElement("a");
+        anchor.setAttribute("href", href);
+        anchor.textContent = linkText;
+        cell.appendChild(anchor);
+      } else {
+        cell.textContent = linkText;
+      }
+      return cell;
+    });
+    clonedCell.replaceWith(...replacementCells);
 
-    return cleanHtml(`${clone.outerHTML}${heading.outerHTML}${paragraph.outerHTML}${list.outerHTML}`);
-  }
-
-  function spannedColumnHeaderTexts(row, mergedCell, headerTexts) {
-    if (!row || !headerTexts.length) return [];
-    const cellsBefore = [...row.children].slice(0, [...row.children].indexOf(mergedCell));
-    const startIndex = cellsBefore.reduce((sum, cell) => sum + (Number(cell.getAttribute("colspan")) || 1), 0);
-    const span = Number(mergedCell.getAttribute("colspan")) || 1;
-    return headerTexts.slice(startIndex, startIndex + span).filter(Boolean);
-  }
-
-  function deriveExtractedRowHeading(text) {
-    const firstSentence = normalizeText(text).split(/。/)[0] || normalizeText(text);
-    return firstSentence.replace(/です$/, "").trim() || "個別ページで案内している案件";
+    return cleanHtml(clone.outerHTML);
   }
 
   function extractedRowLinkLabel(row, mergedCell) {
@@ -5815,7 +5804,7 @@
       return {
         ruleId: "table.cell-merge-summary",
         message: "他ページへの案内文とリンクが結合セルにまとまっています。",
-        reason: "総合評価方式の案件など、複数列の情報が1つのページにまとめられている行は、表外の見出し・本文・リンク一覧として分離できるか確認します。",
+        reason: "総合評価方式の案件など、複数列の情報が1つのページにまとめられている行は、colspanを解除して各列に同じ案内リンクを繰り返し配置できるか確認します。",
         confidence: "medium",
       };
     }
