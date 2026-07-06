@@ -1746,23 +1746,6 @@
     return `<h3>注意事項</h3><ul>${items}</ul>`;
   }
 
-  function dataTableCaptionText(table, profile) {
-    const existing = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
-    if (existing) return existing;
-    if (isLeadingTitleRowDataTableProfile(profile)) {
-      return leadingTitleRowCaptionText(profile) || "陦ｨ縺ｮ蜀・ｮｹ";
-    }
-    if (isSingleRecordContactDataTableProfile(profile)) {
-      const label = normalizeText(profile.rows[0]?.[0]?.textContent || "");
-      if (label) return /荳隕ｧ|隧ｳ邏ｰ|陦ｨ/.test(label) ? label : `${label}縺ｮ隧ｳ邏ｰ`;
-    }
-    const heading = nearestPreviousHeadingText(table);
-    if (heading) return /一覧|詳細|表/.test(heading) ? heading : `${heading}一覧`;
-    const firstRowText = normalizeText(profile.firstRow.map((cell) => cell.textContent || "").join(" "));
-    if (!firstRowText) return "表の内容";
-    return `${firstRowText.length > 36 ? firstRowText.slice(0, 36) : firstRowText}の詳細`;
-  }
-
   function nearestPreviousHeadingText(element) {
     let node = element;
     while (node) {
@@ -1810,8 +1793,20 @@
     if (derivedCaption) return derivedCaption;
     if (heading) return /一覧|詳細|表/.test(heading) ? heading : `${heading}一覧`;
     const firstRowText = normalizeText(profile.firstRow.map((cell) => cell.textContent || "").join(" "));
-    if (!firstRowText) return "????????????????";
-    return `${firstRowText.length > 36 ? firstRowText.slice(0, 36) : firstRowText}????????????`;
+    if (!firstRowText) return genericTableCaption;
+    return `${truncateAtWordBoundary(firstRowText, 36)}${tableDetailSuffix}`;
+  }
+
+  function truncateAtWordBoundary(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    const words = text.split(" ");
+    let result = "";
+    for (const word of words) {
+      const next = result ? `${result} ${word}` : word;
+      if (next.length > maxLength) break;
+      result = next;
+    }
+    return result || text.slice(0, maxLength);
   }
 
   function deriveTableCaptionFromHeadings(headings) {
