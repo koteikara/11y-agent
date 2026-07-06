@@ -2720,6 +2720,9 @@
   }
 
   function buildCaptionSeparatedTableHtml(table, info) {
+    if (info.cell.querySelector("a")) {
+      return buildRowExtractedToListHtml(table, info);
+    }
     const clone = tableWithRowRemoved(table, info.rowIndex);
     if (!clone.querySelector(":scope > caption")) {
       const caption = document.createElement("caption");
@@ -2727,6 +2730,61 @@
       clone.insertBefore(caption, clone.firstChild);
     }
     return cleanHtml(clone.outerHTML);
+  }
+
+  function buildRowExtractedToListHtml(table, info) {
+    const clone = tableWithRowRemoved(table, info.rowIndex);
+    const headerRow = table.querySelector(":scope > thead > tr:first-child") || table.querySelector(":scope tr:first-child");
+    const headerTexts =
+      headerRow && headerRow !== info.row
+        ? [...headerRow.children].map((cell) => normalizeText(cell.textContent || ""))
+        : [];
+    const spannedHeaders = spannedColumnHeaderTexts(info.row, info.cell, headerTexts);
+    const headingText = deriveExtractedRowHeading(info.text);
+    const rowLabel = extractedRowLinkLabel(info.row, info.cell);
+    const link = info.cell.querySelector("a");
+    const href = link ? link.getAttribute("href") || "" : "";
+
+    const heading = document.createElement(suggestSeparatedHeadingTag(table));
+    heading.textContent = headingText;
+    const paragraph = document.createElement("p");
+    paragraph.textContent = spannedHeaders.length
+      ? `次の案件は${headingText}です。${spannedHeaders.join("・")}等の詳細は、案件ごとの詳細ページにまとめて掲載しています。`
+      : info.text;
+    const list = document.createElement("ul");
+    const li = document.createElement("li");
+    if (href) {
+      const anchor = document.createElement("a");
+      anchor.setAttribute("href", href);
+      anchor.textContent = `${rowLabel}の案件詳細ページ`;
+      li.appendChild(anchor);
+    } else {
+      li.textContent = rowLabel;
+    }
+    list.appendChild(li);
+
+    return cleanHtml(`${clone.outerHTML}${heading.outerHTML}${paragraph.outerHTML}${list.outerHTML}`);
+  }
+
+  function spannedColumnHeaderTexts(row, mergedCell, headerTexts) {
+    if (!row || !headerTexts.length) return [];
+    const cellsBefore = [...row.children].slice(0, [...row.children].indexOf(mergedCell));
+    const startIndex = cellsBefore.reduce((sum, cell) => sum + (Number(cell.getAttribute("colspan")) || 1), 0);
+    const span = Number(mergedCell.getAttribute("colspan")) || 1;
+    return headerTexts.slice(startIndex, startIndex + span).filter(Boolean);
+  }
+
+  function deriveExtractedRowHeading(text) {
+    const firstSentence = normalizeText(text).split(/。/)[0] || normalizeText(text);
+    return firstSentence.replace(/です$/, "").trim() || "個別ページで案内している案件";
+  }
+
+  function extractedRowLinkLabel(row, mergedCell) {
+    const otherCells = [...row.children].filter((cell) => cell !== mergedCell);
+    const texts = otherCells.map((cell) => normalizeText(cell.textContent || "")).filter(Boolean);
+    if (!texts.length) return "この案件";
+    const [first, ...rest] = texts;
+    return rest.length ? `${first}（${rest.join("・")}）` : first;
   }
 
   function buildNoteSeparatedTableHtml(table, info) {
@@ -5740,12 +5798,26 @@
       };
     }
 
+    if (isLinkedGuidanceMergedCell(firstMergedCell, firstMergedText)) {
+      return {
+        ruleId: "table.cell-merge-summary",
+        message: "他ページへの案内文とリンクが結合セルにまとまっています。",
+        reason: "総合評価方式の案件など、複数列の情報が1つのページにまとめられている行は、表外の見出し・本文・リンク一覧として分離できるか確認します。",
+        confidence: "medium",
+      };
+    }
+
     return {
       ruleId: "table.cell-merge-layout",
       message: "セル結合が含まれています。",
       reason: "セル結合は読み上げ順や表構造を複雑にするため、用途に応じて分解または説明追加を検討します。",
       confidence: "low",
     };
+  }
+
+  function isLinkedGuidanceMergedCell(cell, text) {
+    if (!cell || cell.querySelectorAll("a").length !== 1) return false;
+    return /(ご覧|ご確認)ください/.test(text);
   }
 
   function classifyHref(href) {
