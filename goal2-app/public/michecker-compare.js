@@ -44,6 +44,7 @@
   ];
 
   let currentResults = [];
+  let lookupIndexes = null;
 
   els.compareButton.addEventListener("click", handleCompareClick);
   els.contentOnlyFilter.addEventListener("change", applyContentOnlyFilter);
@@ -52,6 +53,110 @@
   els.saveSettingsButton.addEventListener("click", handleSaveSettingsClick);
 
   loadLocalSettings();
+  loadReverseLookupData();
+
+  async function loadReverseLookupData() {
+    try {
+      const [rulesResponse, checkitemsResponse] = await Promise.all([
+        fetch("/api/rules"),
+        fetch("/api/michecker-checkitems"),
+      ]);
+      const rulesBody = await rulesResponse.json();
+      const checkitemsBody = await checkitemsResponse.json();
+      if (!rulesResponse.ok || !checkitemsResponse.ok) return;
+      lookupIndexes = buildLookupIndexes(rulesBody.rules, checkitemsBody.checkitems);
+    } catch {
+      // 逆引きデータの取得に失敗しても、比較機能自体は動くのでここでは何もしない。
+    }
+  }
+
+  function pathToRuleId(rulePath) {
+    return rulePath.replace(/^\/rules\//, "").replace(/\.md$/, "").replace(/\//g, ".");
+  }
+
+  function escapeForRegex(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function buildLookupIndexes(rules, checkitems) {
+    const ruleByCheckId = new Map();
+    rules.forEach((rule) => {
+      (rule.michecker_check_ids || []).forEach((checkId) => {
+        if (!ruleByCheckId.has(checkId)) ruleByCheckId.set(checkId, []);
+        ruleByCheckId.get(checkId).push(rule);
+      });
+    });
+
+    const manualIncludesIndex = new Map();
+    rules.forEach((rule) => {
+      (rule.includes || []).forEach((includedPath) => {
+        const includedId = pathToRuleId(includedPath);
+        if (!manualIncludesIndex.has(includedId)) manualIncludesIndex.set(includedId, []);
+        manualIncludesIndex.get(includedId).push(rule);
+      });
+    });
+
+    const checkitemById = new Map(checkitems.map((item) => [item.id, item]));
+    const staticTextIndex = new Map();
+    const templateMatchers = [];
+    checkitems.forEach((item) => {
+      if (!item.desc_ja_normalized) return;
+      if (item.is_static) {
+        if (!staticTextIndex.has(item.desc_ja_normalized)) staticTextIndex.set(item.desc_ja_normalized, []);
+        staticTextIndex.get(item.desc_ja_normalized).push(item.id);
+      } else {
+        const pattern = escapeForRegex(item.desc_ja_normalized).replace(/\\\{0\\\}/g, "[\\s\\S]*?");
+        templateMatchers.push({ id: item.id, regex: new RegExp(`^${pattern}$`) });
+      }
+    });
+
+    return { ruleByCheckId, manualIncludesIndex, checkitemById, staticTextIndex, templateMatchers };
+  }
+
+  function matchCheckitemIds(message, indexes) {
+    const normalized = normalizeWhitespace(message || "");
+    if (!normalized) return [];
+    const staticMatch = indexes.staticTextIndex.get(normalized);
+    if (staticMatch) return staticMatch;
+    const matched = [];
+    indexes.templateMatchers.forEach((matcher) => {
+      if (matcher.regex.test(normalized)) matched.push(matcher.id);
+    });
+    return matched;
+  }
+
+  function enrichWithLookup(results, indexes) {
+    results.forEach((result) => {
+      const checkitemIds = matchCheckitemIds(result.message, indexes);
+      const kbRuleMap = new Map();
+      checkitemIds.forEach((checkId) => {
+        (indexes.ruleByCheckId.get(checkId) || []).forEach((rule) => {
+          kbRuleMap.set(rule.id, rule);
+        });
+      });
+      const kbMatches = [...kbRuleMap.values()];
+      const manualNotes = [];
+      kbMatches.forEach((rule) => {
+        (indexes.manualIncludesIndex.get(rule.id) || []).forEach((manualRule) => {
+          if (!manualNotes.some((note) => note.id === manualRule.id)) {
+            manualNotes.push({ id: manualRule.id, title: manualRule.title });
+          }
+        });
+      });
+      const wcagGap = [];
+      if (!kbMatches.length) {
+        checkitemIds.forEach((checkId) => {
+          const item = indexes.checkitemById.get(checkId);
+          if (item) item.wcag20.forEach((entry) => wcagGap.push(entry.criterion));
+        });
+      }
+      result.checkitemIds = checkitemIds;
+      result.kbMatches = kbMatches;
+      result.manualNotes = manualNotes;
+      result.wcagGap = [...new Set(wcagGap)];
+    });
+    return results;
+  }
 
   async function loadLocalSettings() {
     try {
@@ -303,6 +408,7 @@
   }
 
   function renderResults(results) {
+    if (lookupIndexes) enrichWithLookup(results, lookupIndexes);
     currentResults = results;
     els.resultSection.hidden = false;
     els.contentOnlyFilter.checked = false;
@@ -333,7 +439,7 @@
     els.resultTableBody.innerHTML = "";
     if (!results.length) {
       const row = document.createElement("tr");
-      row.innerHTML = `<td colspan="9">比較対象の指摘がありませんでした。</td>`;
+      row.innerHTML = `<td colspan="10">比較対象の指摘がありませんでした。</td>`;
       els.resultTableBody.appendChild(row);
       return;
     }
@@ -351,9 +457,35 @@
         <td class="michecker-count">${result.beforeCount}</td>
         <td class="michecker-count">${result.afterCount}</td>
         <td>${escapeHtml(result.afterLines.join(" / "))}</td>
+        <td>${renderRuleMatch(result)}</td>
       `;
       els.resultTableBody.appendChild(row);
     });
+  }
+
+  function renderRuleMatch(result) {
+    if (!lookupIndexes) return "";
+    if (result.kbMatches && result.kbMatches.length) {
+      const badges = result.kbMatches
+        .map((rule) => {
+          const isManual = rule.origin === "manual";
+          const badgeClass = isManual ? "michecker-origin-manual" : "michecker-origin-michecker";
+          const badgeLabel = isManual ? "マニュアル版" : "miChecker版";
+          return `<span class="michecker-rule-match"><span class="michecker-origin-badge ${badgeClass}">${badgeLabel}</span> ${escapeHtml(rule.title)}</span>`;
+        })
+        .join("");
+      const notes =
+        result.manualNotes && result.manualNotes.length
+          ? `<span class="michecker-rule-note">(${result.manualNotes.map((note) => escapeHtml(note.title)).join("、")}に内包)</span>`
+          : "";
+      return `${badges}${notes}`;
+    }
+    if (result.checkitemIds && result.checkitemIds.length) {
+      const wcagText = result.wcagGap && result.wcagGap.length ? result.wcagGap.join(", ") : "";
+      const wcagLabel = wcagText ? ` <span class="michecker-wcag-gap">(WCAG ${escapeHtml(wcagText)})</span>` : "";
+      return `<span class="michecker-origin-badge michecker-origin-gap">KB未対応</span>${wcagLabel}`;
+    }
+    return `<span class="michecker-rule-unmatched">照合不可</span>`;
   }
 
   function renderClassificationSelect(result, index) {

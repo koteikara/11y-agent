@@ -176,6 +176,9 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `build/rules.jsonl`を再生成(53→61ルール)し同期。`node test/run-tests.js`・既存サンプル6件のPlaywright回帰確認で異常なしを確認。
   - **未実装**: `origin`/`michecker_check_ids`は現時点ではKBデータ上の区別のみで、goal2-appのUIで「マニュアル版」「miChecker版」を視覚的に区別・選択させる画面機能は未実装。
 - 「KB」という呼称がリポジトリ全体(a11y-migration-kb)と紛らわしいとの指摘を受け、`origin`の値を`kb`→`manual`にリネームした。あわせて、マニュアル版とmiChecker版が対になっている2ペア(`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`)について、「別々に確認する選択肢」ではなく「マニュアル版の基準を満たせばmiChecker版の指摘も内包的に解消する」関係であることを明示する`includes`フィールドを新設した。`rules.jsonl`再生成(origin内訳: manual 53 / michecker 8)、テスト・回帰確認とも成功。
+- 当初からの要望だった「miCheckerで指摘される内容の逆引き」を実装した。`a11y-migration-kb/vendor/eclipse-actf/`に公式チェック項目定義(`checkitem.xml`・`description_ja.properties`、EPL-1.0)を配置し、`tools/actf2json.py`(新規)で`build/michecker-checkitems.json`(268件)を生成。`goal2-app`の`michecker-compare.js`で、比較結果行の`内容`テキストをチェック項目テンプレートと照合(静的テキスト190件は完全一致、`{0}`含みテンプレート78件は正規表現化)し、`michecker_check_ids`経由で対応する`a11y-migration-kb`ルール(マニュアル版/miChecker版)を「対応ルール」列に自動表示する機能を追加した。KBルールが無い項目は「KB未対応」+該当WCAG基準として可視化する。
+  - 実際のhtmlchecker.exe由来CSV(220行/212行、59シグネチャ)で検証: テンプレート照合59/59件成功(照合不可0件)、8件がKBルールに一致(うち2件はマニュアル版への内包表示も正しく表示)、51件が「KB未対応」として正しく可視化された。既存サンプル6件のPlaywright回帰確認でも異常なし。
+  - この実装完了後、次はWindows実機での`build-windows-app.bat`(.exeビルド)検証に進む予定。
 
 ## Decisions
 
@@ -243,7 +246,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 抽出済みHTML断片をmiCheckerで確認するための検査用HTMLラッパー設計は未定義。
 - CMS登録後プレビューURLをmiCheckerで安定して検査する運用は未定義。
 - miChecker結果をスプレッドシート証跡へ取り込む形式は未定義。
-- miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義(2026-07-07、accessibility.jpカタログおよび公式ソース`eclipse-actf/org.eclipse.actf`とのWCAGベース突き合わせでKB側の欠落項目を特定しルールを拡張し、`origin`(`manual`/`michecker`)・`michecker_check_ids`・`includes`によるマニュアル版・miChecker版の区別と内包関係も導入したが、比較結果画面上でカタログ・KBルールへ逆引き表示したり、マニュアル版/miChecker版の修正案を選択させたりするUI機能自体は未実装)。
+- ~~miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義~~ → 2026-07-07実装: `a11y-migration-kb/tools/actf2json.py`で公式チェック項目カタログ(268件)をJSON化し、`goal2-app`の`michecker-compare.js`で比較結果行の内容テキストをテンプレート照合してKBルール(マニュアル版/miChecker版)へ逆引き表示する機能を実装・実データで検証済み。マニュアル版/miChecker版を明示的に「選ばせる」専用UI(トグル等)は作らず、両方に一致する場合はバッジを並記する形で対応した。
 - A11yc libraryを実際にローカルまたは検証環境で動かすかは未決定。
 - A11ycの `issues` 形式を、本プロジェクトの候補形式・証跡列へどう対応づけるかは未定義。
 - 駒瑠市のどの `criteria` / `preset` をPoC用テストセットに採用するかは未定義。
@@ -285,7 +288,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - ページ全体検査の結果を、本文領域修正候補とテンプレート課題に切り分ける分類仕様を作る。
 - `memory/non-github-a11y-resources-research.md` をもとに、`a11y-migration-kb/` と外部参照資料の対応表を作る。
 - miCheckerの確認結果を記録する証跡列を設計する。
-- miCheckerで出やすい指摘を `a11y-migration-kb/` のルールへ対応づける(2026-07-07、WCAGベースのカバレッジ分析とルール拡張は実施済み。比較結果画面でカタログエントリ経由でKBルールへ逆引き表示する機能は未着手のまま残っている)。
+- ~~miCheckerで出やすい指摘を `a11y-migration-kb/` のルールへ対応づける~~ → 2026-07-07完了(WCAGベースのカバレッジ分析・ルール拡張、および比較結果画面での逆引き表示機能を実装)。
 - CMS登録前ラッパーHTMLとCMS登録後プレビューURLの両方でmiChecker確認する小さなPoCを設計する。
 - A11yc libraryの `Analyzer::analyzeHtml()` と `is_partial` を使った本文HTML断片検査のPoCを設計する。
 - 駒瑠市のOK/NGページを使い、画像、表、リンク、見出し、フォームのテストセットを作る。

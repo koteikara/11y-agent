@@ -7,6 +7,7 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 const { loadRules } = require("./lib/rules");
+const { loadCheckitems } = require("./lib/michecker-checkitems");
 const { defaultSagaFixtureRoot } = require("./lib/sagaAutoFix");
 const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
@@ -561,6 +562,23 @@ const server = http.createServer(async (request, response) => {
     } catch (error) {
       sendJson(response, 500, {
         error: "rules_not_available",
+        message: error.message,
+      });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/michecker-checkitems") {
+    try {
+      const result = loadCheckitems({ rootDir });
+      sendJson(response, 200, {
+        checkitems: result.checkitems,
+        summary: result.summary,
+        source: path.relative(rootDir, result.sourcePath),
+      });
+    } catch (error) {
+      sendJson(response, 500, {
+        error: "michecker_checkitems_not_available",
         message: error.message,
       });
     }
