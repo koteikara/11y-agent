@@ -120,6 +120,8 @@ def main():
             "municipality_specific": fm.get("municipality_specific", False),
             "cms_auto": fm.get("cms_auto", False),
             "known_failure": fm.get("known_failure", None),
+            "origin": fm.get("origin", "kb"),
+            "michecker_check_ids": fm.get("michecker_check_ids", []),
             "rule": first_heading_rule(body),
             "examples": extract_examples(body),
             "source": fm.get("resource", ""),

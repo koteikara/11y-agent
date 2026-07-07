@@ -5,11 +5,13 @@ description: font・marquee・blink・applet・center等の廃止された要素
 resource: https://accessibility.jp/resources/tools/michecker-techniques/
 tags: [html, mechanical]
 timestamp: 2026-07-07T00:00:00Z
-wcag: ["4.1.1", "2.2.2"]
+wcag: ["4.1.1", "2.2.2", "2.3.1"]
 jis: ["なし"]
 processing_class: hybrid
 municipality_specific: false
 cms_auto: false
+origin: kb
+michecker_check_ids: ["C_600.10"]
 related: [/rules/text/font-size.md, /rules/text/decoration-lines.md, /wcag/ch2-site.md]
 ---
 

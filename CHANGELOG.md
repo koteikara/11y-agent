@@ -21,6 +21,21 @@
 
 ## Entries
 
+## 2026-07-07: miChecker公式ソースとの突合による第2弾ルール拡張とorigin区別の導入
+
+- 背景・目的: ユーザーが提示した https://github.com/eclipse-actf/org.eclipse.actf が、miChecker/HTML Checkerの評価エンジン本体のソースコードであることが判明した。`checkitem.xml`(268チェック項目、50種のWCAG 2.0基準)と`description_ja.properties`(日本語メッセージ本文)を解析し、前回のaccessibility.jpカタログ(92件・24種)より遥かに完全な一次情報源としてカバレッジ再分析を行った。ユーザーの指示(「拡張します。ただしCMSの本文コンテンツに関係ないものは省きます。さらにKB由来のものとmiChecker由来のものを分別して修正をKB版とmiChecker版で選べるようにします」)に基づき対応した。
+- 主な変更内容:
+  - `a11y-migration-kb`のフロントマターに`origin`(`kb`/`michecker`)・`michecker_check_ids`フィールドを新設し、`tools/okf2jsonl.py`・`README.md`を対応更新。
+  - 28種のWCAG基準の未カバー項目のうち、メディア制作・サイト全体テンプレート・スクリプト/ARIA実装レベルのもの(音声字幕、フォーカス順序、サイトナビゲーション、フォームのクライアント検証等)はCMS本文コンテンツの編集範囲外として除外。
+  - 本文コンテンツで対応可能な項目について、新規ルール8件(`text/sensory-characteristics.md`、`image/avoid-text-as-image.md`、`text/abbreviation.md`、`html-structure/iframe-frame-title.md`、`form/required-field-indication.md`、`form/input-format-hint.md`、`link/link-purpose-standalone.md`、`html-structure/heading-content-quality.md`)を`origin: michecker`として追加。
+  - 既存3件(`html-structure/embedded-script-behavior.md`、`deprecated-elements.md`、`image/alt-text.md`)にWCAGタグと`michecker_check_ids`を追加(`origin`は`kb`のまま)。
+  - 同一の関心事に対しKB独自の観点とmiChecker由来の観点を別ファイルとして保持し`related`で相互リンクする設計を、`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`の2ペアで導入。
+  - `build/rules.jsonl`を再生成(53→61ルール)し`goal2-app/data/rules.jsonl`に同期。`memory/michecker-research.md`に詳細を追記。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功。`GET /api/rules`で`summary.total=61`を確認。既存サンプル6件でのPlaywright回帰確認で、変更前と同一の候補件数・ページエラーなしを確認。
+- **未実装**: `origin`/`michecker_check_ids`は現時点ではKBデータ上の区別に留まり、goal2-appのUIで「KB版」「miChecker版」を視覚的に区別・選択させる画面機能は未実装。
+- 関連ファイル: `a11y-migration-kb/tools/okf2jsonl.py`、`a11y-migration-kb/README.md`、`a11y-migration-kb/rules/text/{sensory-characteristics.md,abbreviation.md,index.md}`、`a11y-migration-kb/rules/image/{avoid-text-as-image.md,alt-text.md,index.md}`、`a11y-migration-kb/rules/html-structure/{iframe-frame-title.md,heading-content-quality.md,heading-order.md,embedded-script-behavior.md,deprecated-elements.md,index.md}`、`a11y-migration-kb/rules/form/{required-field-indication.md,input-format-hint.md,index.md}`、`a11y-migration-kb/rules/link/{link-purpose-standalone.md,link-text.md,index.md}`、`a11y-migration-kb/build/rules.jsonl`、`goal2-app/data/rules.jsonl`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: miChecker指摘内容カタログとの突合によるa11y-migration-kbルール拡張
 
 - 背景・目的: ユーザーが発見した第三者サイト「miChecker対策テクニック集」(miCheckerの指摘メッセージ・WCAG基準・達成方法を92件一覧化)を、`a11y-migration-kb`の既存ルールと突き合わせたところ、miCheckerでは指摘されるがKB側では未カバーの項目が実在すること(40/92件、17/24種のWCAG基準)が判明した。ユーザーの指示「ルールを拡張していきましょう。KBに拘る必要はないので」に基づき、KBを正本の枠内に留めず拡張する方針で対応した。

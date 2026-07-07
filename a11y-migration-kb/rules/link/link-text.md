@@ -11,7 +11,8 @@ processing_class: ai
 municipality_specific: false
 cms_auto: false
 known_failure: v1.0-blindspot
-related: [/wcag/ch4-links.md]
+origin: kb
+related: [/wcag/ch4-links.md, /rules/link/link-purpose-standalone.md]
 ---
 
 # 必須ルール

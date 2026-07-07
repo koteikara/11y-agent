@@ -10,7 +10,8 @@ jis: ["2.4.1"]
 processing_class: ai
 municipality_specific: false
 cms_auto: true
-related: [/rules/html-structure/heading-required.md, /wcag/ch5-text.md]
+origin: kb
+related: [/rules/html-structure/heading-required.md, /wcag/ch5-text.md, /rules/html-structure/heading-content-quality.md]
 ---
 
 # 必須ルール

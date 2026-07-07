@@ -5,11 +5,13 @@ description: 本文に埋め込まれたスクリプトやmeta要素による自
 resource: https://accessibility.jp/resources/tools/michecker-techniques/
 tags: [html, escalation]
 timestamp: 2026-07-07T00:00:00Z
-wcag: ["1.4.2", "2.1.1", "2.2.1", "2.2.4", "3.2.5"]
+wcag: ["1.4.2", "2.1.1", "2.1.3", "2.2.1", "2.2.4", "3.2.5"]
 jis: ["なし"]
 processing_class: escalation
 municipality_specific: false
 cms_auto: false
+origin: kb
+michecker_check_ids: ["C_30.0", "C_38.0"]
 related: [/wcag/ch7-script.md]
 ---
 
