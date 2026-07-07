@@ -180,6 +180,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 実際のhtmlchecker.exe由来CSV(220行/212行、59シグネチャ)で検証: テンプレート照合59/59件成功(照合不可0件)、8件がKBルールに一致(うち2件はマニュアル版への内包表示も正しく表示)、51件が「KB未対応」として正しく可視化された。既存サンプル6件のPlaywright回帰確認でも異常なし。
   - この実装完了後、次はWindows実機での`build-windows-app.bat`(.exeビルド)検証に進む予定。
 - ユーザーから「Windows実機でのビルド検証にあたり、miChecker等の既存インストール済みツールをアンインストールする必要はあるか」との質問があった。`goal2-app.exe`(SEA)のビルド・実行はmiChecker(GUI)・`htmlchecker.exe`(CLI)と完全に独立したプロセスであり、アンインストール不要と回答(`htmlchecker.exe`はむしろローカル自動比較機能に必要なため残す必要がある)。あわせて、Node.js未インストールの担当者向けに`goal2-app/LOCAL_WINDOWS_APP.md`へ「Node.jsのインストール(未インストールの場合)」節(nodejs.orgからのLTS版導入手順)を追加した。
+- ユーザーが実際にWindows実機で`goal2-app.exe`をビルド・起動したところ、「ダブルクリックしても何も起きない、一瞬何かを開こうとしてそこで終わる」という不具合が発生した。原因はNode.js SEAの既知の制約(埋め込みエントリスクリプトの`__dirname`が`.exe`の実際の設置場所を指さない)で、`server.js`が`rootDir = __dirname`を起点に`public/`・`data/`を読み込む設計だったため、SEAビルドでは起動直後にファイル読み込みエラーでクラッシュしていたと診断した。
+  - `server.js`を、SEAビルド時は`rootDir = path.dirname(process.execPath)`(`.exe`自身の場所)を使うよう修正(通常の`node server.js`実行時は従来通り`__dirname`)。
+  - `LOCAL_WINDOWS_APP.md`に、`goal2-app.exe`単体ではなく`public`/`data`を含む`goal2-app`フォルダごと配布・移動する必要がある旨と、ダブルクリックで無反応な場合はコマンドプロンプトから実行してエラー内容を確認する手順を追加。
+  - **未検証**: この修正が実際にWindows実機での不具合を解消するかは、ユーザーによる再ビルド・再起動確認待ち(この開発環境(Linux)ではSEAビルドの起動自体を検証できないため)。
 
 ## Decisions
 

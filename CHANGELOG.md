@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-07: SEA(.exe)ビルドが起動直後に落ちる不具合を修正(rootDir解決)
+
+- 背景・目的: ユーザーが実際にWindows実機で`goal2-app.exe`をビルド・起動したところ、「ダブルクリックしても何も起きない、一瞬何かを開こうとしてそこで終わる」という現象が発生した。原因は、Node.js SEA(単一実行ファイル化)でパッケージ化した場合、埋め込まれたエントリスクリプトの`__dirname`が`.exe`の実際の設置場所を指さない(Node内部の仮想パスになる)という、Node SEA機能の既知の制約だった。`server.js`は`rootDir = __dirname`を起点に`public/`(静的ファイル)・`data/`(ルールデータ)を読み込む設計だったため、SEAビルドでは起動直後にファイル読み込みエラーで即座にクラッシュし、ダブルクリック起動時はコンソール画面が一瞬表示されてすぐ閉じる(エラー内容が読めない)という症状になっていた。
+- 主な変更内容:
+  - `goal2-app/server.js`: `isSeaBuild`判定を`rootDir`計算より前に移動し、SEAビルド時は`rootDir = path.dirname(process.execPath)`(`.exe`自身の場所)を使うよう修正。通常の`node server.js`実行時は従来通り`__dirname`を使うため、Cloud Run等の既存動作への影響はない。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: `goal2-app.exe`単体ではなく`public`/`data`フォルダを含む`goal2-app`フォルダごと配布・移動する必要があることを明記。トラブルシューティングに、ダブルクリックで何も起きない場合にコマンドプロンプトから実行してエラー内容を確認する手順を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功。この開発環境(Linux)では`isSeaBuild`が常に`false`のため、修正後も既存の`__dirname`ベースの経路が変わらず動くことを確認した。SEAビルド時の実際の起動確認は、ユーザーによるWindows実機での再ビルド・再検証待ち。
+- **重要な未検証事項**: この修正が実際にWindows実機での起動不具合を解消するかは、まだ確認できていない(この環境ではSEAビルドを実行できないため)。ユーザーに最新の変更を取り込んで`build-windows-app.bat`を再実行し、`goal2-app.exe`が正常に起動するか確認してもらう必要がある。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: LOCAL_WINDOWS_APP.mdにNode.jsインストール手順を追記
 
 - 背景・目的: Windows実機でのSEA(.exe)ビルド検証を進めるにあたり、ユーザーから「miCheckerなど既存ツールのアンインストールは不要か」との確認があった。ビルド自体にはNode.jsのみが必要で、miChecker/htmlchecker.exeとは無関係な独立プロセスであることを回答した上で、Node.js未インストールの担当者向けに導入手順が無いことに気づき、ドキュメントを整備した。
