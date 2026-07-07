@@ -179,6 +179,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 当初からの要望だった「miCheckerで指摘される内容の逆引き」を実装した。`a11y-migration-kb/vendor/eclipse-actf/`に公式チェック項目定義(`checkitem.xml`・`description_ja.properties`、EPL-1.0)を配置し、`tools/actf2json.py`(新規)で`build/michecker-checkitems.json`(268件)を生成。`goal2-app`の`michecker-compare.js`で、比較結果行の`内容`テキストをチェック項目テンプレートと照合(静的テキスト190件は完全一致、`{0}`含みテンプレート78件は正規表現化)し、`michecker_check_ids`経由で対応する`a11y-migration-kb`ルール(マニュアル版/miChecker版)を「対応ルール」列に自動表示する機能を追加した。KBルールが無い項目は「KB未対応」+該当WCAG基準として可視化する。
   - 実際のhtmlchecker.exe由来CSV(220行/212行、59シグネチャ)で検証: テンプレート照合59/59件成功(照合不可0件)、8件がKBルールに一致(うち2件はマニュアル版への内包表示も正しく表示)、51件が「KB未対応」として正しく可視化された。既存サンプル6件のPlaywright回帰確認でも異常なし。
   - この実装完了後、次はWindows実機での`build-windows-app.bat`(.exeビルド)検証に進む予定。
+- ユーザーから「Windows実機でのビルド検証にあたり、miChecker等の既存インストール済みツールをアンインストールする必要はあるか」との質問があった。`goal2-app.exe`(SEA)のビルド・実行はmiChecker(GUI)・`htmlchecker.exe`(CLI)と完全に独立したプロセスであり、アンインストール不要と回答(`htmlchecker.exe`はむしろローカル自動比較機能に必要なため残す必要がある)。あわせて、Node.js未インストールの担当者向けに`goal2-app/LOCAL_WINDOWS_APP.md`へ「Node.jsのインストール(未インストールの場合)」節(nodejs.orgからのLTS版導入手順)を追加した。
 
 ## Decisions
 
