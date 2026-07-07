@@ -12,3 +12,4 @@ timestamp: 2025-12-15T00:00:00Z
 - [image/](/rules/image/index.md) — 代替テキスト・キャプション・並び
 - [file/](/rules/file/index.md) — 添付ファイル・外部PDF
 - [table/](/rules/table/index.md) — キャプション・テーブルレイアウト・セル結合
+- [form/](/rules/form/index.md) — フォームの送信ボタン・label配置
