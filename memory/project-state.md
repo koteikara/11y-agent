@@ -155,6 +155,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 専用Windows環境の用意は難しいというユーザーの意向を受け、「Cloud Runホスト版」と「ユーザー自身のWindows PCでのローカル版」の両方をサポートする方針とした。ローカル版でのみ有効な`POST /api/michecker-local-compare`を`goal2-app/server.js`に追加し、`beforeHtml`/`afterHtml`を一時HTMLファイルに書き出して`child_process.execFile`で`htmlchecker.exe -f htmllist.txt`を実行、`result`フォルダの新規CSV2件をShift-JISでデコードして返す。`process.platform !== "win32"`または実行ファイル未設定時は明確なエラーを返すガードを実装。
   - `michecker-compare.html`/`.js`に「(ローカルWindows限定)htmlchecker.exeで自動比較」セクションを追加し、返却されたCSVを既存の比較ロジック(`parseMicheckerCsv`/`diffMicheckerRecords`/`renderResults`)にそのまま渡すことで手動アップロード版とコードを共通化した。
   - **未検証事項**: `htmlchecker.exe`はWindows専用のためこの開発環境では実行できず、resultフォルダの出力タイミング・`htmllist.txt`列挙順=結果CSV生成順という前提は未検証。実機で要確認。Linux環境でのWindows判定ガードの動作、既存の手動CSV機能への回帰なしはPlaywright・`node test/run-tests.js`で確認済み。
+- ユーザーが実際にWindows環境で`htmlchecker.exe`をビルド・実行し、実データでの検査結果を共有してくれたため、上記の未検証事項を検証・修正した。
+  - セットアップ時、`.psf`によるTeam Project Setインポートが`git://git.eclipse.org/gitroot/actf/org.eclipse.actf.examples.git`という旧式`git://`プロトコルの接続タイムアウトで失敗することが判明。GitHub本家(`https://github.com/eclipse-actf/org.eclipse.actf.git`)からのGit Clone URIインポートに切り替えて解決した。
+  - `htmllist.txt`は絶対パスを1行1つ、コメント無しの単純な形式であることを実機で確認。
+  - 実際に出力された`[日付]_[時刻]_list.csv`のヘッダーが`Target HTML file,Result CSV file`(英語)で、検査対象パス→結果CSVパスの明確な対応表になっていることを確認。これにより、`goal2-app/server.js`の`findNewResultCsvFiles`(mtime順ソートによる未検証の対応付け)を削除し、`parseHtmlCheckerListCsv`でこの`list.csv`を解析して確実に対応付ける方式に修正した。
+  - htmlchecker.exe(CLI版)の結果CSVは、GUI版でエクスポートしたものと列構成が異なり、`堅ろう（牢）`と`JIS`の間に`WCAG 2.0`列が追加された12列構成であることを実データで確認。`michecker-compare.js`のパーサーは列名ベースのため、コード変更なしで正しく動作することも確認した。
+  - 実際の検査結果CSV(移行元62件・移行後57件)を`michecker-compare.html`に読み込ませ、49シグネチャに集約されて「新規2・未解消42・解消5」という妥当な結果になることを確認した。`memory/michecker-research.md`に実機検証結果として詳細を追記済み。
 
 ## Decisions
 
