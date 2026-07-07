@@ -21,6 +21,20 @@
 
 ## Entries
 
+## 2026-07-07: miChecker比較結果からa11y-migration-kbルールへの逆引き機能を実装
+
+- 背景・目的: このセッションの発端だった「miCheckerで指摘される内容を逆引きできれば」という要望を実装した。`goal2-app`のmiChecker比較結果画面(`michecker-compare.html`/`.js`)で、各指摘行の`内容`テキストを公式チェック項目定義(`eclipse-actf/org.eclipse.actf`)と照合し、対応する`a11y-migration-kb`ルール(マニュアル版/miChecker版)を自動表示する「対応ルール」列を追加した。KBルールが無い項目は「KB未対応」+該当WCAG基準として可視化する。
+- 主な変更内容:
+  - `a11y-migration-kb/vendor/eclipse-actf/`に公式チェック項目定義(`checkitem.xml`・`description_ja.properties`、EPL-1.0)を配置(出典・ライセンスは同ディレクトリの`NOTICE.md`に記録)。
+  - `a11y-migration-kb/tools/actf2json.py`(新規)で上記2ファイルを解析し、`build/michecker-checkitems.json`(268チェック項目、`{0}`を含むテンプレート78件・完全静的190件)を生成。`goal2-app/data/michecker-checkitems.json`に同期。
+  - `goal2-app/lib/michecker-checkitems.js`(新規、`lib/rules.js`と同じ候補パスパターン)と`GET /api/michecker-checkitems`ルートを追加。
+  - `goal2-app/public/michecker-compare.js`: ページ読み込み時に`/api/rules`・`/api/michecker-checkitems`を取得し、チェック項目テンプレート(静的テキストは完全一致、`{0}`含みは正規表現化)による逆引きインデックスを構築。各比較結果行を照合し、一致したチェック項目IDから対応ルール(`michecker_check_ids`経由)、及びそのルールがマニュアル版ルールの`includes`に含まれる場合は内包関係も表示する。
+  - `michecker-compare.html`に「対応ルール」列を追加し、説明文を更新。`styles.css`に出自バッジ(マニュアル版/miChecker版/KB未対応)用のCSSクラスを追加。
+  - `test/run-tests.js`に`loadCheckitems()`の存在・件数チェックを追加。
+- 検証: `node --check`(server.js・lib/michecker-checkitems.js・public/michecker-compare.js)・`node test/run-tests.js`成功。実際のhtmlchecker.exe由来CSV(220行/212行、59シグネチャ)をPlaywrightで比較UIに読み込ませ、テンプレート照合が59件中59件で成功(照合不可0件)、8件がKBルールに一致(うち2件はマニュアル版ルールへの内包表示も正しく表示)、51件が正しく「KB未対応」として可視化されることを確認。既存サンプル6件での回帰確認でも候補件数・ページエラーに変化がないことを確認。
+- 関連ファイル: `a11y-migration-kb/vendor/eclipse-actf/{checkitem.xml,description_ja.properties,NOTICE.md}`、`a11y-migration-kb/tools/actf2json.py`、`a11y-migration-kb/build/michecker-checkitems.json`、`a11y-migration-kb/README.md`、`goal2-app/data/michecker-checkitems.json`、`goal2-app/lib/michecker-checkitems.js`、`goal2-app/server.js`、`goal2-app/public/michecker-compare.{html,js}`、`goal2-app/public/styles.css`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: origin値のリネーム(kb→manual)とマニュアル版/miChecker版の内包関係の明示
 
 - 背景・目的: 直前のエントリで導入した`origin: kb`は、リポジトリ全体の呼称である「KB(a11y-migration-kb)」と紛らわしいとの指摘を受け、`a11y-migration-kb`の実態(「データ移行総合マニュアルV2.01」のOKF化)により即した`manual`に改称した。あわせて、マニュアル版とmiChecker版が対になっている2ペアについて、「別々に確認すべき選択肢」ではなく「マニュアル版の基準を満たせばmiChecker版の指摘も内包的に解消する」という関係であることを明示した。

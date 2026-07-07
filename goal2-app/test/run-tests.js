@@ -4,6 +4,7 @@ const http = require("http");
 const path = require("path");
 const { spawn } = require("child_process");
 const { loadRules } = require("../lib/rules");
+const { loadCheckitems } = require("../lib/michecker-checkitems");
 const { autoFixHtml, compareHtml } = require("../lib/sagaAutoFix");
 const { learnGoldHintsForPair } = require("../lib/sagaGoldHints");
 
@@ -54,6 +55,17 @@ async function main() {
   assert.ok(result.summary.byProcessingClass.mechanical >= 1, "mechanical rules should be summarized");
   assert.ok(result.summary.byCategory.image >= 1, "image category should be summarized");
 
+  const checkitemsResult = loadCheckitems({ rootDir });
+  assert.ok(checkitemsResult.checkitems.length >= 260, "michecker-checkitems.json should contain the full official catalog");
+  assert.ok(
+    checkitemsResult.checkitems.some((item) => item.id === "C_51.0"),
+    "C_51.0 (iframe title) checkitem should exist"
+  );
+  assert.ok(
+    checkitemsResult.checkitems.every((item) => item.desc_ja_normalized.includes("{0}") === !item.is_static),
+    "is_static flag should be consistent with the presence of {0} in desc_ja_normalized"
+  );
+
   for (const file of [
     "public/index.html",
     "public/app.js",
@@ -62,6 +74,8 @@ async function main() {
     "public/michecker-compare.html",
     "public/michecker-compare.js",
     "public/styles.css",
+    "data/michecker-checkitems.json",
+    "lib/michecker-checkitems.js",
     "public/images/sample-park-generated.png",
     "public/images/sample-map-generated.png",
     "public/images/sample-flower-generated.png",
