@@ -14,16 +14,20 @@ const { listSagaSamples } = require("./lib/sagaSamples");
 
 const execFileAsync = promisify(execFile);
 
-const rootDir = __dirname;
-const publicDir = path.join(rootDir, "public");
-const port = Number(process.env.PORT || 8080);
-
 let isSeaBuild = false;
 try {
   isSeaBuild = require("node:sea").isSea();
 } catch {
   isSeaBuild = false;
 }
+
+// SEA(単一実行ファイル)でパッケージ化した場合、埋め込まれたエントリスクリプトの
+// __dirnameは.exeの実際の設置場所を指さない(Node内部の仮想パスになる)。
+// public/・data/等の同梱ファイルは.exeの隣に置く前提のため、SEA実行時は
+// process.execPath(=.exe自身のパス)の親ディレクトリを起点にする。
+const rootDir = isSeaBuild ? path.dirname(process.execPath) : __dirname;
+const publicDir = path.join(rootDir, "public");
+const port = Number(process.env.PORT || 8080);
 
 // パッケージ化した.exe版(SEA)では、htmlchecker.exeのパスを環境変数ではなく
 // この設定ファイルに保存し、画面から入力・変更できるようにする(コマンドライン操作をなくすため)。
