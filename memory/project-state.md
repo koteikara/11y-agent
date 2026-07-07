@@ -170,6 +170,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 新規ルール8件(`html-structure/deprecated-elements.md`・`page-title.md`・`lang-attribute.md`・`duplicate-id-accesskey.md`・`embedded-script-behavior.md`、`text/spaced-characters.md`、新設`form/`カテゴリの`submit-button.md`・`label-position.md`)を追加し、既存2件(`heading-order.md`・`color.md`)の`wcag`タグを拡充した(番号不一致が「タグ漏れ」か「ルール自体の欠如」かを本文まで読んで区別した上で対応)。
   - `build/rules.jsonl`を再生成(43→53ルール)し`goal2-app/data/rules.jsonl`に同期。`GET /api/rules`で`summary.total=53`・カテゴリ別内訳(`form:2`が新設)を確認、既存サンプル6件のPlaywright回帰確認でも異常なし。
   - `memory/michecker-research.md`にカタログ概要・カバレッジ分析手法・拡張内容を追記。カタログ経由での逆引きUI自体(各比較結果行→カタログエントリ→KBルールへの対応表示)は今回は未着手。
+- ユーザーが提示した https://github.com/eclipse-actf/org.eclipse.actf が、miChecker/HTML Checkerの評価エンジン本体のソースコード(`checkitem.xml`268項目・50種のWCAG基準、`description_ja.properties`)であることが判明し、前回のaccessibility.jpカタログより完全な一次情報源としてKBカバレッジを再分析した。ユーザーの指示(「拡張します。ただしCMSの本文コンテンツに関係ないものは省きます。さらにKB由来のものとmiChecker由来のものを分別して修正をKB版とmiChecker版で選べるようにします」)に基づき対応した。
+  - `origin`(`kb`/`michecker`)・`michecker_check_ids`フロントマターフィールドを新設(`tools/okf2jsonl.py`・`README.md`対応済み)。28種の未カバーWCAG基準のうち、メディア制作・サイト全体テンプレート・ARIA実装レベルのものは対象外とし、本文コンテンツ編集で対応可能な項目のみ新規ルール8件(`origin: michecker`)を追加、既存3件にタグを追加した(`origin`は`kb`のまま)。
+  - 同一の関心事についてKB独自ルールとmiChecker由来ルールを別ファイルで保持し`related`で相互リンクする設計を、`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`の2ペアで導入した。
+  - `build/rules.jsonl`を再生成(53→61ルール)し同期。`node test/run-tests.js`・既存サンプル6件のPlaywright回帰確認で異常なしを確認。
+  - **未実装**: `origin`/`michecker_check_ids`は現時点ではKBデータ上の区別のみで、goal2-appのUIで「マニュアル版」「miChecker版」を視覚的に区別・選択させる画面機能は未実装。
+- 「KB」という呼称がリポジトリ全体(a11y-migration-kb)と紛らわしいとの指摘を受け、`origin`の値を`kb`→`manual`にリネームした。あわせて、マニュアル版とmiChecker版が対になっている2ペア(`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`)について、「別々に確認する選択肢」ではなく「マニュアル版の基準を満たせばmiChecker版の指摘も内包的に解消する」関係であることを明示する`includes`フィールドを新設した。`rules.jsonl`再生成(origin内訳: manual 53 / michecker 8)、テスト・回帰確認とも成功。
 
 ## Decisions
 
@@ -237,7 +243,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 抽出済みHTML断片をmiCheckerで確認するための検査用HTMLラッパー設計は未定義。
 - CMS登録後プレビューURLをmiCheckerで安定して検査する運用は未定義。
 - miChecker結果をスプレッドシート証跡へ取り込む形式は未定義。
-- miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義(2026-07-07、miChecker指摘内容カタログとのWCAGベース突き合わせでKB側の欠落項目を特定しルールを拡張したが、比較結果画面上でカタログ・KBルールへ逆引き表示する機能自体は未実装)。
+- miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義(2026-07-07、accessibility.jpカタログおよび公式ソース`eclipse-actf/org.eclipse.actf`とのWCAGベース突き合わせでKB側の欠落項目を特定しルールを拡張し、`origin`(`manual`/`michecker`)・`michecker_check_ids`・`includes`によるマニュアル版・miChecker版の区別と内包関係も導入したが、比較結果画面上でカタログ・KBルールへ逆引き表示したり、マニュアル版/miChecker版の修正案を選択させたりするUI機能自体は未実装)。
 - A11yc libraryを実際にローカルまたは検証環境で動かすかは未決定。
 - A11ycの `issues` 形式を、本プロジェクトの候補形式・証跡列へどう対応づけるかは未定義。
 - 駒瑠市のどの `criteria` / `preset` をPoC用テストセットに採用するかは未定義。

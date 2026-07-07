@@ -13,3 +13,4 @@ timestamp: 2025-12-15T00:00:00Z
 - [display-width.md](/rules/image/display-width.md) — 画像の表示幅（サブ画像 大/小）
 - [multiple-images.md](/rules/image/multiple-images.md) — 複数画像の並び
 - [image-text-layout.md](/rules/image/image-text-layout.md) — 画像とテキストの横並び
+- [avoid-text-as-image.md](/rules/image/avoid-text-as-image.md) — 文字を画像化しない
