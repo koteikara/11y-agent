@@ -10,7 +10,7 @@ jis: ["1.1.1"]
 processing_class: hybrid
 municipality_specific: false
 cms_auto: false
-origin: kb
+origin: manual
 michecker_check_ids: ["C_71.0"]
 related: [/rules/image/caption.md, /rules/image/complex-image-report.md, /wcag/ch3-images.md]
 ---

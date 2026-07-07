@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-07: origin値のリネーム(kb→manual)とマニュアル版/miChecker版の内包関係の明示
+
+- 背景・目的: 直前のエントリで導入した`origin: kb`は、リポジトリ全体の呼称である「KB(a11y-migration-kb)」と紛らわしいとの指摘を受け、`a11y-migration-kb`の実態(「データ移行総合マニュアルV2.01」のOKF化)により即した`manual`に改称した。あわせて、マニュアル版とmiChecker版が対になっている2ペアについて、「別々に確認すべき選択肢」ではなく「マニュアル版の基準を満たせばmiChecker版の指摘も内包的に解消する」という関係であることを明示した。
+- 主な変更内容:
+  - `origin: kb`を使用していた5ファイル(`link/link-text.md`、`html-structure/heading-order.md`、`html-structure/embedded-script-behavior.md`、`html-structure/deprecated-elements.md`、`image/alt-text.md`)を`origin: manual`にリネーム。`tools/okf2jsonl.py`のデフォルト値も`"kb"`→`"manual"`に変更。
+  - 新しいフロントマターフィールド`includes`を追加(マニュアル版ルールが内包する対応miChecker版ルールへのパス配列)。`link-text.md`→`link-purpose-standalone.md`、`heading-order.md`→`heading-content-quality.md`の2件に設定。
+  - 該当4ファイルの「ポイント」注記を、「両方確認する」という並列的な記述から、「マニュアル版の基準を満たせばmiChecker版の指摘も通常あわせて解消する」という内包関係の記述に修正。
+  - `README.md`のフロントマター規約表を更新し、`origin`の値を`manual`/`michecker`表記に、`includes`フィールドの説明を追加。
+  - `build/rules.jsonl`を再生成(originカウント: manual 53 / michecker 8)し`goal2-app/data/rules.jsonl`に同期。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功。既存サンプル6件でのPlaywright回帰確認で候補件数・ページエラーに変化がないことを確認。
+- 関連ファイル: `a11y-migration-kb/tools/okf2jsonl.py`、`a11y-migration-kb/README.md`、`a11y-migration-kb/rules/link/{link-text.md,link-purpose-standalone.md}`、`a11y-migration-kb/rules/html-structure/{heading-order.md,heading-content-quality.md,embedded-script-behavior.md,deprecated-elements.md}`、`a11y-migration-kb/rules/image/alt-text.md`、`a11y-migration-kb/build/rules.jsonl`、`goal2-app/data/rules.jsonl`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: miChecker公式ソースとの突合による第2弾ルール拡張とorigin区別の導入
 
 - 背景・目的: ユーザーが提示した https://github.com/eclipse-actf/org.eclipse.actf が、miChecker/HTML Checkerの評価エンジン本体のソースコードであることが判明した。`checkitem.xml`(268チェック項目、50種のWCAG 2.0基準)と`description_ja.properties`(日本語メッセージ本文)を解析し、前回のaccessibility.jpカタログ(92件・24種)より遥かに完全な一次情報源としてカバレッジ再分析を行った。ユーザーの指示(「拡張します。ただしCMSの本文コンテンツに関係ないものは省きます。さらにKB由来のものとmiChecker由来のものを分別して修正をKB版とmiChecker版で選べるようにします」)に基づき対応した。

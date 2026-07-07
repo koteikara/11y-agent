@@ -10,7 +10,7 @@ jis: ["なし"]
 processing_class: hybrid
 municipality_specific: false
 cms_auto: false
-origin: kb
+origin: manual
 michecker_check_ids: ["C_600.10"]
 related: [/rules/text/font-size.md, /rules/text/decoration-lines.md, /wcag/ch2-site.md]
 ---

@@ -10,7 +10,7 @@ jis: ["なし"]
 processing_class: escalation
 municipality_specific: false
 cms_auto: false
-origin: kb
+origin: manual
 michecker_check_ids: ["C_30.0", "C_38.0"]
 related: [/wcag/ch7-script.md]
 ---

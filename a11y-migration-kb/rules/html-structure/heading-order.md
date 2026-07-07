@@ -10,7 +10,8 @@ jis: ["2.4.1"]
 processing_class: ai
 municipality_specific: false
 cms_auto: true
-origin: kb
+origin: manual
+includes: [/rules/html-structure/heading-content-quality.md]
 related: [/rules/html-structure/heading-required.md, /wcag/ch5-text.md, /rules/html-structure/heading-content-quality.md]
 ---
 
@@ -31,4 +32,4 @@ related: [/rules/html-structure/heading-required.md, /wcag/ch5-text.md, /rules/h
 ↓
 見出し3
 ```
-ポイント: 低→高（見出し6→見出し3）や同レベル連続はOK。
+ポイント: 低→高（見出し6→見出し3）や同レベル連続はOK。見出しを正しい階層・意味で使っていれば、miChecker版の`heading-content-quality.md`が指摘する「太字目的だけの見出し利用」も通常あわせて解消する。
