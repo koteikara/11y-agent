@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-07: LOCAL_WINDOWS_APP.mdにNode.jsインストール手順を追記
+
+- 背景・目的: Windows実機でのSEA(.exe)ビルド検証を進めるにあたり、ユーザーから「miCheckerなど既存ツールのアンインストールは不要か」との確認があった。ビルド自体にはNode.jsのみが必要で、miChecker/htmlchecker.exeとは無関係な独立プロセスであることを回答した上で、Node.js未インストールの担当者向けに導入手順が無いことに気づき、ドキュメントを整備した。
+- 主な変更内容:
+  - `goal2-app/LOCAL_WINDOWS_APP.md`に「Node.jsのインストール(未インストールの場合)」節を追加。nodejs.orgからのLTS版ダウンロード→インストーラー実行→コマンドプロンプトでの`node -v`確認、という非技術者向けの手順を記載。
+  - トラブルシューティング節の`node: command not found`の説明を、新設した節への参照に統一。
+- 検証: `node test/run-tests.js`成功(ドキュメントのみの変更のため既存挙動への影響なし)。
+- 関連ファイル: `goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: miChecker比較結果からa11y-migration-kbルールへの逆引き機能を実装
 
 - 背景・目的: このセッションの発端だった「miCheckerで指摘される内容を逆引きできれば」という要望を実装した。`goal2-app`のmiChecker比較結果画面(`michecker-compare.html`/`.js`)で、各指摘行の`内容`テキストを公式チェック項目定義(`eclipse-actf/org.eclipse.actf`)と照合し、対応する`a11y-migration-kb`ルール(マニュアル版/miChecker版)を自動表示する「対応ルール」列を追加した。KBルールが無い項目は「KB未対応」+該当WCAG基準として可視化する。
