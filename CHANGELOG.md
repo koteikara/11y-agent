@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-07: htmlchecker.exe実機検証を受けてlist.csvベースの確実な対応付けに修正
+
+- 背景・目的: ユーザーが実際にWindows環境で`htmlchecker.exe`をビルド・実行し、実データ(安城市 入札結果ページを想定した`before.html`/`after.html`)での検査結果を共有してくれた。これにより、前回「ファイル作成順(mtime)で移行元/移行後を対応付ける」としていた未検証の仮定を、実際に出力される`[日付]_[時刻]_list.csv`(ヘッダー`Target HTML file,Result CSV file`、検査対象パス→結果CSVパスの明確な対応表)を解析する確実な方式に修正できた。
+- 主な変更内容:
+  - `goal2-app/server.js`: `findNewResultCsvFiles`(mtime順ソート)を削除し、`parseCsvRows`(汎用CSVパーサー)・`parseHtmlCheckerListCsv`(`list.csv`を解析し検査対象パス→結果CSVパスのMapを返す)を追加。`runHtmlCheckerLocalCompare`は、新規生成された`*_list.csv`を1件特定→解析→`beforeHtmlPath`/`afterHtmlPath`をキーに結果CSVパスを確実に取得する方式に変更。
+  - `memory/michecker-research.md`に、実機セットアップで発生した問題(`.psf`インポートが`git://`プロトコルのタイムアウトで失敗した件、GitHubからの直接クローンでの回避方法、`htmllist.txt`/`list.csv`の実際の書式、htmlchecker.exe(CLI版)の結果CSVがGUI版と異なり`WCAG 2.0`列を含む12列構成である点)を「実機検証結果」として追記した。
+- 検証: ユーザー提供の実際の`list.csv`をパースし、`before.html`→`0707_1120_1.csv`、`after.html`→`0707_1120_2.csv`という対応が正しく取得できることを確認。また実際の2件の結果CSV(62件/57件、12列構成)を`michecker-compare.html`の手動アップロード機能に読み込ませ、49シグネチャに集約されて「新規2・未解消42・解消5」という妥当な結果になることを確認した(列名ベースのパーサーのため列追加の影響を受けないことも確認)。`node --check`・`node test/run-tests.js`はいずれも成功。
+- 関連ファイル: `goal2-app/server.js`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-06: (ローカルWindows限定・未検証)htmlchecker.exeによるmiChecker自動比較を追加
 
 - 背景・目的: ユーザーから共有された「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」により、miChecker本体(GUI)とは別に、同じACTF評価エンジンを使うCLIツール「HTML Checker」(`htmlchecker.exe`)が公式に存在し、`-f htmllist.txt`でHTMLファイル一覧をバッチ検査してCSVを自動出力できることが判明した。専用のWindows環境を用意するのは難しいというユーザーの意向を受け、「Cloud Run上のホスト版」と「ユーザー自身のWindows PCでローカル起動する版」の両方をサポートする方針とし、ローカル版でのみ`htmlchecker.exe`をサーバーサイドから自動起動する機能を追加した。

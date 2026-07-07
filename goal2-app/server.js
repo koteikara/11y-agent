@@ -281,24 +281,85 @@ async function listResultCsvFiles(resultDir) {
   }
 }
 
-async function findNewResultCsvFiles(resultDir, filesBefore) {
+async function findNewFiles(resultDir, filesBefore, pattern) {
   const filesAfter = await listResultCsvFiles(resultDir);
-  const newFiles = filesAfter.filter((file) => !filesBefore.has(file));
-  const listCsv = newFiles.filter((file) => /_list\.csv$/i.test(path.basename(file)));
-  const perPageCandidates = newFiles.filter((file) => !/_list\.csv$/i.test(path.basename(file)));
-  const withStats = await Promise.all(
-    perPageCandidates.map(async (file) => ({ file, mtimeMs: (await fs.promises.stat(file)).mtimeMs }))
-  );
-  withStats.sort((a, b) => a.mtimeMs - b.mtimeMs);
-  return { listCsv, perPage: withStats.map((entry) => entry.file), allNewFiles: newFiles };
+  return filesAfter.filter((file) => !filesBefore.has(file) && pattern.test(path.basename(file)));
 }
 
-// 注意: htmlchecker.exe(ACTF HTML Checker)の実行・result出力フォーマットは
-// 「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」の記述に基づいて実装しているが、
-// 実機での動作確認は未実施(Windows専用ツールのためこの開発環境では実行できない)。
-// 「移行元→移行後の順でhtmllist.txtに列挙すれば、result内の検査結果CSVも同じ順で作成される」
-// という前提で、作成日時が早い方を移行元、遅い方を移行後として扱っている。
-// 実際にWindows環境で動かして、この前提が正しいか必ず確認すること。
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+  let i = 0;
+  const len = text.length;
+  while (i < len) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      field += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+    if (ch === ",") {
+      row.push(field);
+      field = "";
+      i += 1;
+      continue;
+    }
+    if (ch === "\r" || ch === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+      i += 1;
+      continue;
+    }
+    field += ch;
+    i += 1;
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((cells) => !(cells.length === 1 && cells[0] === ""));
+}
+
+// htmlchecker.exe実行後の"[日付]_[時刻]_list.csv"を解析し、検査対象HTMLファイルのパスから
+// 対応する結果CSVファイルのパスへのマップを返す。実機での動作確認済み(2026-07-07、ユーザー提供の
+// 実行結果で確認): ヘッダーは"Target HTML file,Result CSV file"で、値は検査に渡した絶対パスと
+// 対応する結果CSVの絶対パスがそのまま入っている。
+function parseHtmlCheckerListCsv(text) {
+  const rows = parseCsvRows(text);
+  const map = new Map();
+  if (!rows.length) return map;
+  const header = rows[0].map((cell) => cell.trim());
+  const targetIndex = header.indexOf("Target HTML file");
+  const resultIndex = header.indexOf("Result CSV file");
+  if (targetIndex === -1 || resultIndex === -1) return map;
+  rows.slice(1).forEach((cols) => {
+    const target = (cols[targetIndex] || "").trim();
+    const result = (cols[resultIndex] || "").trim();
+    if (target && result) map.set(target, result);
+  });
+  return map;
+}
+
 async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
   if (process.platform !== "win32") {
     const error = new Error("この機能はWindows上で動作しているgoal2-appでのみ利用できます(現在の実行環境はWindowsではありません)。");
@@ -340,19 +401,32 @@ async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
     throw wrapped;
   }
 
-  const { perPage, allNewFiles } = await findNewResultCsvFiles(resultDir, filesBefore);
-  if (perPage.length !== 2) {
+  const newListCsvFiles = await findNewFiles(resultDir, filesBefore, /_list\.csv$/i);
+  if (newListCsvFiles.length !== 1) {
     const error = new Error(
-      `result フォルダ(${resultDir})から2件の検査結果CSVを特定できませんでした(新規に見つかったCSV: ${allNewFiles.length}件)。resultフォルダの内容を確認してください。`
+      `result フォルダ(${resultDir})から検査結果一覧(*_list.csv)を1件だけ特定できませんでした(見つかった件数: ${newListCsvFiles.length})。result フォルダの内容を確認してください。`
     );
     error.statusCode = 500;
-    error.code = "htmlchecker_result_not_found";
-    error.details = { resultDir, allNewFiles };
+    error.code = "htmlchecker_result_list_not_found";
+    error.details = { resultDir, newListCsvFiles };
     throw error;
   }
 
-  const [beforeCsvFile, afterCsvFile] = perPage;
   const decoder = new TextDecoder("shift_jis");
+  const listCsvBuffer = await fs.promises.readFile(newListCsvFiles[0]);
+  const listCsvMap = parseHtmlCheckerListCsv(decoder.decode(listCsvBuffer));
+  const beforeCsvFile = listCsvMap.get(beforeHtmlPath);
+  const afterCsvFile = listCsvMap.get(afterHtmlPath);
+  if (!beforeCsvFile || !afterCsvFile) {
+    const error = new Error(
+      `検査結果一覧(${newListCsvFiles[0]})に移行元・移行後のHTMLファイルへの対応が見つかりませんでした。`
+    );
+    error.statusCode = 500;
+    error.code = "htmlchecker_result_mapping_not_found";
+    error.details = { listCsvFile: newListCsvFiles[0], entries: [...listCsvMap.entries()] };
+    throw error;
+  }
+
   const [beforeCsvBuffer, afterCsvBuffer] = await Promise.all([
     fs.promises.readFile(beforeCsvFile),
     fs.promises.readFile(afterCsvFile),
