@@ -20,3 +20,4 @@ timestamp: 2025-12-15T00:00:00Z
 - [decoration-lines.md](/rules/text/decoration-lines.md) — 下線・打消し線・斜体
 - [foreign-language.md](/rules/text/foreign-language.md) — 外国語の言語属性
 - [list.md](/rules/text/list.md) — 箇条書き（リスト）
+- [spaced-characters.md](/rules/text/spaced-characters.md) — 文字間の不要な空白

@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-07: miChecker指摘内容カタログとの突合によるa11y-migration-kbルール拡張
+
+- 背景・目的: ユーザーが発見した第三者サイト「miChecker対策テクニック集」(miCheckerの指摘メッセージ・WCAG基準・達成方法を92件一覧化)を、`a11y-migration-kb`の既存ルールと突き合わせたところ、miCheckerでは指摘されるがKB側では未カバーの項目が実在すること(40/92件、17/24種のWCAG基準)が判明した。ユーザーの指示「ルールを拡張していきましょう。KBに拘る必要はないので」に基づき、KBを正本の枠内に留めず拡張する方針で対応した。
+- 主な変更内容:
+  - 新規ルール8件を追加: `rules/html-structure/deprecated-elements.md`(廃止要素の除去)、`page-title.md`(ページタイトル)、`lang-attribute.md`(lang属性)、`duplicate-id-accesskey.md`(id・accesskey重複)、`embedded-script-behavior.md`(埋め込みスクリプトの自動的な動作)、`rules/text/spaced-characters.md`(文字間の不要な空白)、新設`form/`カテゴリの`submit-button.md`(送信ボタン)・`label-position.md`(label配置)。すべて`resource`にaccessibility.jpの当該ページを出典として明記。
+  - 既存ルールの`wcag`フロントマターを拡充: `rules/html-structure/heading-order.md`に`"2.4.10"`(見出しの入れ子関係、本文は既にカバー済みだったためタグ追加のみ)、`rules/text/color.md`に`"1.4.6"`(AAAコントラスト比、CMS標準パレット確認の一文も追加)。
+  - `rules/html-structure/index.md`・`rules/text/index.md`・`rules/index.md`(新設`form/`セクション)を更新。
+  - `a11y-migration-kb/tools/okf2jsonl.py`で`build/rules.jsonl`を再生成(43→53ルール)し、`goal2-app/data/rules.jsonl`に同期。
+  - `memory/michecker-research.md`にカタログの概要・カバレッジ分析手法・拡張内容・未実装の逆引きUIについて追記。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功。`GET /api/rules`で`summary.total=53`、`byCategory`が`{file:2, form:2, html-structure:7, image:8, link:9, table:9, text:16}`となることを確認。既存サンプル6件でのPlaywright回帰確認でも候補生成件数に異常なし・ページエラーなしを確認。
+- 関連ファイル: `a11y-migration-kb/rules/html-structure/deprecated-elements.md`、`page-title.md`、`lang-attribute.md`、`duplicate-id-accesskey.md`、`embedded-script-behavior.md`、`heading-order.md`、`index.md`、`a11y-migration-kb/rules/text/spaced-characters.md`、`color.md`、`index.md`、`a11y-migration-kb/rules/form/`(新設)、`a11y-migration-kb/rules/index.md`、`a11y-migration-kb/build/rules.jsonl`、`goal2-app/data/rules.jsonl`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: ローカルWindows版をNode.js単一実行ファイル(.exe)化する仕組みを追加
 
 - 背景・目的: ローカルWindows版のhtmlchecker.exe自動比較機能を、コマンドラインに不慣れな一般担当者にも配布したいという要望を受けた。専用のWindows環境を用意する代わりに、Node.js標準の単一実行ファイル化(SEA)機能でgoal2-appを1つの`.exe`に固め、ダブルクリックで起動・ブラウザ自動起動・画面からの設定入力ができるようにした(コマンド操作を一切不要にする狙い)。Electronアプリ化も比較検討したが、依存関係が増える(Chromium同梱で数百MB)ことと、今のゼロ依存構成を維持したい方針から、まずはNode.js標準機能のみで完結するSEA方式を選んだ。

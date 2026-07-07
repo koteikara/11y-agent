@@ -166,6 +166,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `michecker-compare.html`/`.js`に、`htmlchecker.exe`のパスを画面から入力・保存できる設定パネルを追加し、環境変数の手動設定の説明を削除した。
   - `goal2-app/sea-config.json`(SEA設定)・`build-windows-app.bat`(Windows上でのビルド手順を自動化するバッチファイル)・`LOCAL_WINDOWS_APP.md`(ビルド手順・利用者向けドキュメント)を新規追加した。
   - **未検証事項**: `.exe`のビルド自体はこの開発環境(Linux)では試せておらず、Node.js公式SEAドキュメントに基づく実装。実際にWindows環境でビルド・起動して確認する必要がある。設定の保存・読み込みはPlaywrightで動作確認済み、既存機能への回帰もなし。
+- ユーザーが発見した第三者サイト「miChecker対策テクニック集」(miCheckerの指摘メッセージ・WCAG基準・達成方法を92件一覧化)を`a11y-migration-kb/`と突き合わせ、miCheckerでは指摘されるがKB側では未カバーの項目(40/92件、17/24種のWCAG基準)を特定した。ユーザーの指示「ルールを拡張していきましょう。KBに拘る必要はないので」を受け、KBを拡張する対応を行った。
+  - 新規ルール8件(`html-structure/deprecated-elements.md`・`page-title.md`・`lang-attribute.md`・`duplicate-id-accesskey.md`・`embedded-script-behavior.md`、`text/spaced-characters.md`、新設`form/`カテゴリの`submit-button.md`・`label-position.md`)を追加し、既存2件(`heading-order.md`・`color.md`)の`wcag`タグを拡充した(番号不一致が「タグ漏れ」か「ルール自体の欠如」かを本文まで読んで区別した上で対応)。
+  - `build/rules.jsonl`を再生成(43→53ルール)し`goal2-app/data/rules.jsonl`に同期。`GET /api/rules`で`summary.total=53`・カテゴリ別内訳(`form:2`が新設)を確認、既存サンプル6件のPlaywright回帰確認でも異常なし。
+  - `memory/michecker-research.md`にカタログ概要・カバレッジ分析手法・拡張内容を追記。カタログ経由での逆引きUI自体(各比較結果行→カタログエントリ→KBルールへの対応表示)は今回は未着手。
 
 ## Decisions
 
@@ -233,7 +237,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 抽出済みHTML断片をmiCheckerで確認するための検査用HTMLラッパー設計は未定義。
 - CMS登録後プレビューURLをmiCheckerで安定して検査する運用は未定義。
 - miChecker結果をスプレッドシート証跡へ取り込む形式は未定義。
-- miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義。
+- miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義(2026-07-07、miChecker指摘内容カタログとのWCAGベース突き合わせでKB側の欠落項目を特定しルールを拡張したが、比較結果画面上でカタログ・KBルールへ逆引き表示する機能自体は未実装)。
 - A11yc libraryを実際にローカルまたは検証環境で動かすかは未決定。
 - A11ycの `issues` 形式を、本プロジェクトの候補形式・証跡列へどう対応づけるかは未定義。
 - 駒瑠市のどの `criteria` / `preset` をPoC用テストセットに採用するかは未定義。
@@ -275,7 +279,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - ページ全体検査の結果を、本文領域修正候補とテンプレート課題に切り分ける分類仕様を作る。
 - `memory/non-github-a11y-resources-research.md` をもとに、`a11y-migration-kb/` と外部参照資料の対応表を作る。
 - miCheckerの確認結果を記録する証跡列を設計する。
-- miCheckerで出やすい指摘を `a11y-migration-kb/` のルールへ対応づける。
+- miCheckerで出やすい指摘を `a11y-migration-kb/` のルールへ対応づける(2026-07-07、WCAGベースのカバレッジ分析とルール拡張は実施済み。比較結果画面でカタログエントリ経由でKBルールへ逆引き表示する機能は未着手のまま残っている)。
 - CMS登録前ラッパーHTMLとCMS登録後プレビューURLの両方でmiChecker確認する小さなPoCを設計する。
 - A11yc libraryの `Analyzer::analyzeHtml()` と `is_partial` を使った本文HTML断片検査のPoCを設計する。
 - 駒瑠市のOK/NGページを使い、画像、表、リンク、見出し、フォームのテストセットを作る。
