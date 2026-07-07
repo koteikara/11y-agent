@@ -15,3 +15,8 @@ __pycache__/
 .venv/
 venv/
 node_modules/
+
+goal2-app/.goal2-app-local/
+goal2-app/dist/
+goal2-app/*.exe
+goal2-app/sea-prep.blob

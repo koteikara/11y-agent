@@ -24,9 +24,17 @@
           この機能は、goal2-appをご自身のWindows PC上でローカル起動しており、かつ
           <code>htmlchecker.exe</code>(miChecker本体とは別のCLIツール「HTML Checker」)を
           ビルド済みの場合のみ動作します。Cloud Run上のホスト版では利用できません。
-          サーバー起動時に環境変数 <code>MICHECKER_HTMLCHECKER_EXE</code> に
-          <code>htmlchecker.exe</code>のフルパスを設定しておいてください。
         </p>
+        <div class="michecker-settings" id="localSettingsPanel">
+          <label>
+            htmlchecker.exe の場所(フルパス)
+            <input type="text" id="htmlCheckerPathInput" placeholder="例: C:\htmlchecker\htmlchecker.exe" />
+          </label>
+          <div class="button-row">
+            <button type="button" id="saveSettingsButton" class="secondary">保存</button>
+          </div>
+          <p class="michecker-settings-status" id="settingsStatus" aria-live="polite"></p>
+        </div>
         <div class="michecker-upload-grid">
           <label>
             移行元(旧ページ)の全体HTML

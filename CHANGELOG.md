@@ -21,6 +21,21 @@
 
 ## Entries
 
+## 2026-07-07: ローカルWindows版をNode.js単一実行ファイル(.exe)化する仕組みを追加
+
+- 背景・目的: ローカルWindows版のhtmlchecker.exe自動比較機能を、コマンドラインに不慣れな一般担当者にも配布したいという要望を受けた。専用のWindows環境を用意する代わりに、Node.js標準の単一実行ファイル化(SEA)機能でgoal2-appを1つの`.exe`に固め、ダブルクリックで起動・ブラウザ自動起動・画面からの設定入力ができるようにした(コマンド操作を一切不要にする狙い)。Electronアプリ化も比較検討したが、依存関係が増える(Chromium同梱で数百MB)ことと、今のゼロ依存構成を維持したい方針から、まずはNode.js標準機能のみで完結するSEA方式を選んだ。
+- 主な変更内容:
+  - `goal2-app/server.js`: `node:sea`モジュールで`.exe`として実行されているかを検知し(`isSeaBuild`)、該当する場合のみ起動時に既定のブラウザを自動で開く(`openBrowser`)。`htmlchecker.exe`のパスを環境変数だけでなく、`%APPDATA%\goal2-app\config.json`(Windows以外ではリポジトリ内の`.goal2-app-local/`)に保存する設定ファイル方式に対応させ、`GET`/`POST /api/local-settings`エンドポイントを新設。環境変数が設定されている場合はそちらを優先する。
+  - `goal2-app/public/michecker-compare.html`・`michecker-compare.js`: 「(ローカルWindows限定)」セクションに、`htmlchecker.exe`のパスをテキスト入力・保存できる設定パネルを追加。環境変数での上書き手順の説明は削除した。
+  - `goal2-app/sea-config.json`: Node.js SEAの設定ファイルを新規追加。
+  - `goal2-app/build-windows-app.bat`: Windows上で`.exe`をビルドするための一連の手順(SEAブロブ生成→node.exeコピー→署名削除→postjectでの埋め込み)を自動化するバッチファイルを新規追加。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: ビルド手順・利用者側の使い方・設定の保存場所・トラブルシューティングをまとめたドキュメントを新規追加。
+  - `.gitignore`にビルド成果物(`.exe`、`sea-prep.blob`、ローカル設定フォルダ)を追加。
+- **重要な未検証事項**: `.exe`のビルド自体(`build-windows-app.bat`の実行)は、この開発環境がLinuxのため実際には試せていない。Node.js公式のSEAドキュメントに基づいて作成したが、実際にWindows環境でビルド・起動して問題が無いか確認が必要。
+- 検証: Linux環境で、設定の保存・読み込み(`/api/local-settings`)がPlaywrightで正しく動作すること(保存→再読み込みで値が保持される)を確認。既存のCSV手動アップロード・分類機能・ローカル自動比較機能(Windows以外での無効化ガード含む)への回帰が無いことも確認した。`node --check`・`node test/run-tests.js`・既存サンプルへの回帰確認はいずれも成功。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`、`goal2-app/sea-config.json`、`goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/test/run-tests.js`、`.gitignore`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: htmlchecker.exe実機検証を受けてlist.csvベースの確実な対応付けに修正
 
 - 背景・目的: ユーザーが実際にWindows環境で`htmlchecker.exe`をビルド・実行し、実データ(安城市 入札結果ページを想定した`before.html`/`after.html`)での検査結果を共有してくれた。これにより、前回「ファイル作成順(mtime)で移行元/移行後を対応付ける」としていた未検証の仮定を、実際に出力される`[日付]_[時刻]_list.csv`(ヘッダー`Target HTML file,Result CSV file`、検査対象パス→結果CSVパスの明確な対応表)を解析する確実な方式に修正できた。

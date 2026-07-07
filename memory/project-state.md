@@ -161,6 +161,11 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 実際に出力された`[日付]_[時刻]_list.csv`のヘッダーが`Target HTML file,Result CSV file`(英語)で、検査対象パス→結果CSVパスの明確な対応表になっていることを確認。これにより、`goal2-app/server.js`の`findNewResultCsvFiles`(mtime順ソートによる未検証の対応付け)を削除し、`parseHtmlCheckerListCsv`でこの`list.csv`を解析して確実に対応付ける方式に修正した。
   - htmlchecker.exe(CLI版)の結果CSVは、GUI版でエクスポートしたものと列構成が異なり、`堅ろう（牢）`と`JIS`の間に`WCAG 2.0`列が追加された12列構成であることを実データで確認。`michecker-compare.js`のパーサーは列名ベースのため、コード変更なしで正しく動作することも確認した。
   - 実際の検査結果CSV(移行元62件・移行後57件)を`michecker-compare.html`に読み込ませ、49シグネチャに集約されて「新規2・未解消42・解消5」という妥当な結果になることを確認した。`memory/michecker-research.md`に実機検証結果として詳細を追記済み。
+- 「コマンドラインに不慣れな一般担当者にも配布したい」という要望を受けて、ローカルWindows版をNode.js単一実行ファイル(SEA)化する仕組みを追加した。ElectronアプリはChromium同梱で数百MBになりゼロ依存方針から外れるため見送り、Node.js標準機能のみで完結するSEA方式を選んだ。
+  - `goal2-app/server.js`に`node:sea`での実行検知(`isSeaBuild`)・起動時のブラウザ自動起動(`openBrowser`、SEA実行時のみ)・`htmlchecker.exe`パスの設定ファイル保存(`%APPDATA%\goal2-app\config.json`、環境変数が優先)・`GET`/`POST /api/local-settings`エンドポイントを追加した。
+  - `michecker-compare.html`/`.js`に、`htmlchecker.exe`のパスを画面から入力・保存できる設定パネルを追加し、環境変数の手動設定の説明を削除した。
+  - `goal2-app/sea-config.json`(SEA設定)・`build-windows-app.bat`(Windows上でのビルド手順を自動化するバッチファイル)・`LOCAL_WINDOWS_APP.md`(ビルド手順・利用者向けドキュメント)を新規追加した。
+  - **未検証事項**: `.exe`のビルド自体はこの開発環境(Linux)では試せておらず、Node.js公式SEAドキュメントに基づく実装。実際にWindows環境でビルド・起動して確認する必要がある。設定の保存・読み込みはPlaywrightで動作確認済み、既存機能への回帰もなし。
 
 ## Decisions
 

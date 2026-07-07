@@ -16,6 +16,9 @@
     afterHtmlInput: document.getElementById("afterHtmlInput"),
     localCompareButton: document.getElementById("localCompareButton"),
     localErrorMessage: document.getElementById("localErrorMessage"),
+    htmlCheckerPathInput: document.getElementById("htmlCheckerPathInput"),
+    saveSettingsButton: document.getElementById("saveSettingsButton"),
+    settingsStatus: document.getElementById("settingsStatus"),
   };
 
   const TYPE_SEVERITY = {
@@ -46,6 +49,44 @@
   els.contentOnlyFilter.addEventListener("change", applyContentOnlyFilter);
   els.resultTableBody.addEventListener("change", handleClassificationChange);
   els.localCompareButton.addEventListener("click", handleLocalCompareClick);
+  els.saveSettingsButton.addEventListener("click", handleSaveSettingsClick);
+
+  loadLocalSettings();
+
+  async function loadLocalSettings() {
+    try {
+      const response = await fetch("/api/local-settings");
+      const body = await response.json();
+      if (!response.ok || !body.ok) return;
+      els.htmlCheckerPathInput.value = body.htmlCheckerExePath || "";
+      if (body.envOverride) {
+        els.settingsStatus.textContent = "環境変数 MICHECKER_HTMLCHECKER_EXE が優先されています。";
+      } else if (!body.isWindows) {
+        els.settingsStatus.textContent = "現在Windows以外の環境で動作しています。この設定はWindows上でのみ使用されます。";
+      }
+    } catch {
+      // 設定の取得に失敗しても、比較機能自体は動くのでここでは何もしない。
+    }
+  }
+
+  async function handleSaveSettingsClick() {
+    const htmlCheckerExePath = els.htmlCheckerPathInput.value.trim();
+    els.settingsStatus.textContent = "保存中…";
+    try {
+      const response = await fetch("/api/local-settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ htmlCheckerExePath }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.message || "保存に失敗しました");
+      }
+      els.settingsStatus.textContent = "保存しました。";
+    } catch (error) {
+      els.settingsStatus.textContent = `保存に失敗しました: ${error.message}`;
+    }
+  }
 
   async function handleLocalCompareClick() {
     hideLocalError();

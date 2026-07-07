@@ -16,7 +16,48 @@ const execFileAsync = promisify(execFile);
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
 const port = Number(process.env.PORT || 8080);
-const htmlCheckerExePath = process.env.MICHECKER_HTMLCHECKER_EXE || "";
+
+let isSeaBuild = false;
+try {
+  isSeaBuild = require("node:sea").isSea();
+} catch {
+  isSeaBuild = false;
+}
+
+// パッケージ化した.exe版(SEA)では、htmlchecker.exeのパスを環境変数ではなく
+// この設定ファイルに保存し、画面から入力・変更できるようにする(コマンドライン操作をなくすため)。
+function getLocalConfigPath() {
+  const configDir = process.env.APPDATA ? path.join(process.env.APPDATA, "goal2-app") : path.join(rootDir, ".goal2-app-local");
+  return path.join(configDir, "config.json");
+}
+
+function readLocalConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(getLocalConfigPath(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalConfig(config) {
+  const configPath = getLocalConfigPath();
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+}
+
+// 環境変数(パワーユーザー向けの上書き)を優先し、無ければ設定ファイルの値を使う。
+function getHtmlCheckerExePath() {
+  if (process.env.MICHECKER_HTMLCHECKER_EXE) return process.env.MICHECKER_HTMLCHECKER_EXE;
+  return readLocalConfig().htmlCheckerExePath || "";
+}
+
+function openBrowser(url) {
+  const platform = process.platform;
+  const command = platform === "win32" ? "cmd" : platform === "darwin" ? "open" : "xdg-open";
+  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
+  const child = execFile(command, args, () => {});
+  child.on("error", () => {});
+}
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -367,8 +408,9 @@ async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
     error.code = "windows_required";
     throw error;
   }
+  const htmlCheckerExePath = getHtmlCheckerExePath();
   if (!htmlCheckerExePath) {
-    const error = new Error("環境変数 MICHECKER_HTMLCHECKER_EXE に htmlchecker.exe のフルパスを設定してください。");
+    const error = new Error("htmlchecker.exe のパスが設定されていません。設定画面から指定してください。");
     error.statusCode = 400;
     error.code = "htmlchecker_not_configured";
     throw error;
@@ -470,6 +512,33 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (url.pathname === "/api/local-settings" && request.method === "GET") {
+    sendJson(response, 200, {
+      ok: true,
+      htmlCheckerExePath: getHtmlCheckerExePath(),
+      isWindows: process.platform === "win32",
+      envOverride: Boolean(process.env.MICHECKER_HTMLCHECKER_EXE),
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/local-settings" && request.method === "POST") {
+    try {
+      const body = await readJsonBody(request);
+      const htmlCheckerExePath = typeof body?.htmlCheckerExePath === "string" ? body.htmlCheckerExePath.trim() : "";
+      writeLocalConfig({ ...readLocalConfig(), htmlCheckerExePath });
+      sendJson(response, 200, {
+        ok: true,
+        htmlCheckerExePath: getHtmlCheckerExePath(),
+        isWindows: process.platform === "win32",
+        envOverride: Boolean(process.env.MICHECKER_HTMLCHECKER_EXE),
+      });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, { ok: false, error: "local_settings_save_failed", message: error.message });
+    }
+    return;
+  }
+
   if (request.method !== "GET") {
     response.writeHead(405, { allow: "GET" });
     response.end("Method not allowed");
@@ -567,4 +636,9 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`Goal2 review PoC listening on port ${port}`);
+  // パッケージ化した.exe版(SEA)で起動した場合のみ、ブラウザを自動で開く。
+  // 通常のnode server.js実行(開発・Cloud Runデプロイ)では自動起動しない。
+  if (isSeaBuild) {
+    openBrowser(`http://localhost:${port}`);
+  }
 });
