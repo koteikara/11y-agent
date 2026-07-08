@@ -21,6 +21,15 @@
 
 ## Entries
 
+## 2026-07-08: build-windows-app.batが[1/5]で無言終了する不具合を修正(callの付け忘れ)
+
+- 背景・目的: 前回esbuildバンドルのステップを追加したところ、ユーザーがWindows実機で`build-windows-app.bat`を実行すると、`[1/5]`(esbuildバンドル)が正常終了した直後にスクリプト全体が(エラーメッセージも無いまま)終了し、`[2/5]`以降が一切実行されない不具合が発生した。原因は、Windowsのバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`というバッチファイル)を`call`を付けずに別のバッチファイルから呼び出すと、その時点で制御が呼び出し元に戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかったが、今回`npx esbuild`を先頭ステップとして追加したことで、後続のステップが実行されなくなっていた。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `npx esbuild ...`・`npx postject ...`の呼び出しに`call`を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。バッチファイルの実行自体はこの開発環境(Linux)では検証できないため、Windowsのバッチスクリプトにおける「`call`無しで.bat/.cmdを呼ぶと制御が戻らない」という広く知られた挙動に基づく修正であり、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: SEA(.exe)ビルドがrequire()解決に失敗する不具合を修正(esbuildバンドル追加)
 
 - 背景・目的: 前回のrootDir修正をユーザーがWindows実機で再検証したところ、`goal2-app.exe`が依然としてクラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査したところ、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`というエラーで`server.js`の冒頭(`require("./lib/rules")`)から即座にクラッシュすることを確認した。Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という、rootDirの問題とは別の既知の制約が原因だった。

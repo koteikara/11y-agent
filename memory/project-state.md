@@ -189,6 +189,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Linux環境でesbuildバンドル→SEA化→postject注入→起動という同じ手順を再現し、`/api/health`・`/api/rules`(61件)・`/api/michecker-checkitems`(268件)・両HTMLページがいずれも正しく動作することを確認した(バンドル前は同じ手順で確実に同じエラーが再現することも確認済み)。
   - `LOCAL_WINDOWS_APP.md`に、バンドルが必要な理由・`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合の対処(古い.exeビルド成果物の削除・再ビルド)・署名なしバイナリがアンチウイルスにブロックされる可能性についての注記を追加。
   - **未検証**: バンドル・SEA化はLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。ユーザーの再検証待ち。
+- ユーザーがesbuildバンドル版の`build-windows-app.bat`をWindows実機(PowerShell経由)で実行したところ、`[1/5]`(esbuildバンドル)は正常終了するが、`[2/5]`以降が一切実行されずスクリプトが無言で終了する不具合が発生した。原因はWindowsバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`)を`call`無しで別のバッチファイルから呼び出すと、そこで制御が戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかった。
+  - `build-windows-app.bat`の`npx esbuild`・`npx postject`呼び出しに`call`を追加して修正。
 
 ## Decisions
 
