@@ -184,6 +184,11 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `server.js`を、SEAビルド時は`rootDir = path.dirname(process.execPath)`(`.exe`自身の場所)を使うよう修正(通常の`node server.js`実行時は従来通り`__dirname`)。
   - `LOCAL_WINDOWS_APP.md`に、`goal2-app.exe`単体ではなく`public`/`data`を含む`goal2-app`フォルダごと配布・移動する必要がある旨と、ダブルクリックで無反応な場合はコマンドプロンプトから実行してエラー内容を確認する手順を追加。
   - **未検証**: この修正が実際にWindows実機での不具合を解消するかは、ユーザーによる再ビルド・再起動確認待ち(この開発環境(Linux)ではSEAビルドの起動自体を検証できないため)。
+- ユーザーがrootDir修正版を再ビルドしても依然クラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査した結果、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`で`server.js`冒頭の`require`から即座にクラッシュすることを確認した。rootDirの問題とは別に、Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という既知の制約が根本原因だった。
+  - `build-windows-app.bat`に、SEA化の前段で`npx esbuild`により`server.js`と`lib/`以下をひとつの自己完結したファイルにバンドルするステップを追加。`sea-config.json`の`main`をバンドル後のファイルに変更。
+  - Linux環境でesbuildバンドル→SEA化→postject注入→起動という同じ手順を再現し、`/api/health`・`/api/rules`(61件)・`/api/michecker-checkitems`(268件)・両HTMLページがいずれも正しく動作することを確認した(バンドル前は同じ手順で確実に同じエラーが再現することも確認済み)。
+  - `LOCAL_WINDOWS_APP.md`に、バンドルが必要な理由・`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合の対処(古い.exeビルド成果物の削除・再ビルド)・署名なしバイナリがアンチウイルスにブロックされる可能性についての注記を追加。
+  - **未検証**: バンドル・SEA化はLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。ユーザーの再検証待ち。
 
 ## Decisions
 

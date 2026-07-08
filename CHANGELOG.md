@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-08: SEA(.exe)ビルドがrequire()解決に失敗する不具合を修正(esbuildバンドル追加)
+
+- 背景・目的: 前回のrootDir修正をユーザーがWindows実機で再検証したところ、`goal2-app.exe`が依然としてクラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査したところ、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`というエラーで`server.js`の冒頭(`require("./lib/rules")`)から即座にクラッシュすることを確認した。Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という、rootDirの問題とは別の既知の制約が原因だった。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: SEA化の前段に、`npx esbuild server.js --bundle --platform=node --outfile=server.bundled.js`で`server.js`と`lib/`以下の依存ファイルを1つの自己完結したファイルにまとめるステップを追加(全5ステップに変更)。
+  - `goal2-app/sea-config.json`: `main`を`server.js`から`server.bundled.js`に変更。
+  - `.gitignore`に生成物`goal2-app/server.bundled.js`を追加。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: バンドルが必要な理由の説明、`esbuild`失敗時のトラブルシューティング、`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合(古い手順でビルドされた.exeが残っている場合)の対処、署名なしバイナリがアンチウイルス/Windows Defenderにブロックされる可能性についての注記を追加。
+- 検証: この開発環境(Linux)で、esbuildバンドル→SEA化→postject注入という同じ手順を再現し、生成したバイナリを実際に起動して`/api/health`・`/api/rules`(61ルール)・`/api/michecker-checkitems`(268件)・`index.html`・`michecker-compare.html`のいずれも正しく応答することを確認した(バンドル前の状態では同じ手順で確実に`ERR_UNKNOWN_BUILTIN_MODULE`が再現することも確認済み)。`node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。
+- **重要な未検証事項**: バンドル・SEA化・実行の一連の流れはLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。署名なしバイナリに対するWindows Defender/アンチウイルスの挙動も未確認。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/sea-config.json`、`goal2-app/LOCAL_WINDOWS_APP.md`、`.gitignore`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: SEA(.exe)ビルドが起動直後に落ちる不具合を修正(rootDir解決)
 
 - 背景・目的: ユーザーが実際にWindows実機で`goal2-app.exe`をビルド・起動したところ、「ダブルクリックしても何も起きない、一瞬何かを開こうとしてそこで終わる」という現象が発生した。原因は、Node.js SEA(単一実行ファイル化)でパッケージ化した場合、埋め込まれたエントリスクリプトの`__dirname`が`.exe`の実際の設置場所を指さない(Node内部の仮想パスになる)という、Node SEA機能の既知の制約だった。`server.js`は`rootDir = __dirname`を起点に`public/`(静的ファイル)・`data/`(ルールデータ)を読み込む設計だったため、SEAビルドでは起動直後にファイル読み込みエラーで即座にクラッシュし、ダブルクリック起動時はコンソール画面が一瞬表示されてすぐ閉じる(エラー内容が読めない)という症状になっていた。
