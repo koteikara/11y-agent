@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-08: signtoolによる署名除去を必須化(goal2-app.exeがNode REPLで起動する不具合を修正)
+
+- 背景・目的: `call`修正後にビルドは`[1/5]`〜`[5/5]`まで完走し`goal2-app.exe`も生成されたが、実行するとアプリではなくNode.jsの対話モード(REPL)が開いてしまう不具合が報告された。`postject`の実行ログに`warning: The signature seems corrupted!`という警告が出ており、これが原因と判明した。`node.exe`は署名済みバイナリであり、Node.js公式のSEA機能ドキュメントでも「署名済みバイナリを改変する場合は事前に署名を除去する必要がある」と明記されている。従来の`build-windows-app.bat`は`signtool`が無い場合は署名除去を静かにスキップする作りだったため、`signtool`が入っていない環境では、ビルド自体は完走するものの中身が壊れた(SEAのフューズが正しく設定されない)`.exe`が生成され、実行時にNode.jsの通常のCLI引数解析にフォールバックしてREPLが起動していた。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `signtool`が見つからない場合はビルドをエラー終了させ、インストール方法を案内するメッセージを表示するよう変更(従来の「スキップして続行」から「必須化」に変更)。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: 前提条件に`signtool`を追加し、「signtoolのインストール(未インストールの場合)」節(Windows SDKインストーラーで「Windows SDK Signing Tools for Desktop Apps」のみを選択導入する手順)を新設。トラブルシューティングに、REPLが開いてしまう症状とその原因・対処法を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。`signtool`によるバイナリ署名除去・PE形式でのSEA注入という部分はこの開発環境(Linux)では検証できないため、Node.js公式ドキュメントの記載とpostjectの警告メッセージに基づく修正であり、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: build-windows-app.batが[1/5]で無言終了する不具合を修正(callの付け忘れ)
 
 - 背景・目的: 前回esbuildバンドルのステップを追加したところ、ユーザーがWindows実機で`build-windows-app.bat`を実行すると、`[1/5]`(esbuildバンドル)が正常終了した直後にスクリプト全体が(エラーメッセージも無いまま)終了し、`[2/5]`以降が一切実行されない不具合が発生した。原因は、Windowsのバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`というバッチファイル)を`call`を付けずに別のバッチファイルから呼び出すと、その時点で制御が呼び出し元に戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかったが、今回`npx esbuild`を先頭ステップとして追加したことで、後続のステップが実行されなくなっていた。
