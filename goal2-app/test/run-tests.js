@@ -65,6 +65,25 @@ async function main() {
     checkitemsResult.checkitems.every((item) => item.desc_ja_normalized.includes("{0}") === !item.is_static),
     "is_static flag should be consistent with the presence of {0} in desc_ja_normalized"
   );
+  const c384 = checkitemsResult.checkitems.find((item) => item.id === "C_384.0");
+  assert.ok(c384 && c384.content_scope_note, "C_384.0 (client-side validation) should be marked out of content scope");
+  const c331 = checkitemsResult.checkitems.find((item) => item.id === "C_331.0");
+  assert.ok(c331 && !c331.content_scope_note, "C_331.0 (th scope) should stay in content scope");
+  assert.ok(result.rules.some((rule) => rule.id === "table.th-scope"), "table.th-scope rule should exist");
+  {
+    const taggedIds = new Set();
+    for (const rule of result.rules) {
+      for (const checkId of rule.michecker_check_ids || []) taggedIds.add(checkId);
+    }
+    const conflicted = checkitemsResult.checkitems.filter(
+      (item) => item.content_scope_note && taggedIds.has(item.id)
+    );
+    assert.strictEqual(
+      conflicted.length,
+      0,
+      `checkitems must not be both rule-tagged and out-of-scope: ${conflicted.map((item) => item.id).join(", ")}`
+    );
+  }
 
   for (const file of [
     "public/index.html",

@@ -10,6 +10,8 @@ jis: ["なし"]
 processing_class: hybrid
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_380.0", "C_382.0", "C_600.16"]
 related: [/rules/form/label-position.md]
 ---
 

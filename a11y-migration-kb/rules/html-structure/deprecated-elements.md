@@ -11,7 +11,7 @@ processing_class: hybrid
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_600.10"]
+michecker_check_ids: ["C_48.0", "C_48.1", "C_48.2", "C_48.3", "C_48.4", "C_48.5", "C_48.6", "C_48.7", "C_48.8", "C_600.9", "C_600.10"]
 related: [/rules/text/font-size.md, /rules/text/decoration-lines.md, /wcag/ch2-site.md]
 ---
 

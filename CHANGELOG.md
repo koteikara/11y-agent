@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-08: 逆引きの精度向上(偽ギャップ解消・本文スコープ外分類・トリアージ運用の確立)
+
+- 背景・目的: ワークフロー明文化に続く「逆引きの完成度向上」(ユーザー指定の優先順位2番目)。実データで「KB未対応」となっていた51件(59シグネチャ中)を1件ずつ精査したところ、大半は「既存ルールが実質カバーしているのに`michecker_check_ids`が未設定」という偽のギャップ、または本文編集のスコープ外(テンプレート・実装・サイト全体設計等)の項目だった。
+- 主な変更内容:
+  - 既存ルール17件に`michecker_check_ids`を追記(公式カタログのキーワード検索で同族IDファミリーも含めて登録)。タグ付きルール12件→29件、カバーする公式チェック項目77件に拡大。`embedded-script-behavior`にはキーボードトラップ等の3項目とWCAG 2.1.2/2.2.2を、`sensory-characteristics`には1.4.1を追加。
+  - 実データで「問題あり」レベルで検出されていたth要素のscope属性欠如に対応する新規ルール`rules/table/th-scope.md`(origin: michecker)を作成(62ルール目)。
+  - 本文編集で対応できない54チェック項目を`reference/michecker-out-of-content-scope.json`に理由付きで分類し、`tools/actf2json.py`が`content_scope_note`としてマージ。`michecker-compare.js`は該当項目をグレーの「本文スコープ外」バッジ+理由で表示(「KB未対応」と区別)。
+  - トリアージ運用((1)既存ルールへタグ追記 (2)新規ルール作成 (3)スコープ外分類)を`reference/michecker-triage.md`として文書化。バックログ2件(C_54.0 fieldset・C_79.5 label内容)を記録。タグ付けとスコープ外の二重登録は`test/run-tests.js`が自動検出。
+- 検証: 同じ実データ(59シグネチャ)で、KBルール一致8件→32件、KB未対応51件→2件(意図したバックログのみ)、本文スコープ外25件、照合不可0件を確認。既存サンプル6件のPlaywright回帰確認・`node test/run-tests.js`成功。
+- 関連ファイル: `a11y-migration-kb/rules/`(17ファイルのタグ追記+`table/th-scope.md`新規+`table/index.md`)、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md,index.md}`、`a11y-migration-kb/tools/actf2json.py`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL、`goal2-app/public/{michecker-compare.js,michecker-compare.html,styles.css}`、`goal2-app/test/run-tests.js`、`a11y-migration-kb/README.md`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: goal2-appとmiChecker/htmlchecker.exeの実務ワークフローをAGENTS.md/workstream.mdに明文化
 
 - 背景・目的: ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。これまでの`AGENTS.md`/`workstream.md`のmiChecker関連記述は「CMS登録後のプレビューURLでmiChecker確認を行い分類する」といった抽象的な記述に留まり、このセッションで実装済みの`michecker-compare.html`(移行前後比較・分類・KBルールへの逆引き)を具体的に反映していなかったため、実際に使えるツールに基づいた具体的な手順として書き直した。

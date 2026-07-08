@@ -12,6 +12,7 @@ municipality_specific: false
 cms_auto: false
 known_failure: v1.0-blindspot
 origin: manual
+michecker_check_ids: ["C_600.14"]
 includes: [/rules/link/link-purpose-standalone.md]
 related: [/wcag/ch4-links.md, /rules/link/link-purpose-standalone.md]
 ---

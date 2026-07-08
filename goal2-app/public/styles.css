@@ -2084,6 +2084,11 @@ label {
   color: var(--error);
 }
 
+.michecker-origin-scope-out {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
 .michecker-rule-note {
   display: block;
   margin-top: 2px;

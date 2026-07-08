@@ -10,6 +10,8 @@ jis: ["なし"]
 processing_class: hybrid
 municipality_specific: true
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_76.1"]
 related: [/rules/file/file-display-text.md, /wcag/ch6-table.md]
 ---
 

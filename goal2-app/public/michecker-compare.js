@@ -144,16 +144,28 @@
         });
       });
       const wcagGap = [];
+      const scopeNotes = [];
       if (!kbMatches.length) {
         checkitemIds.forEach((checkId) => {
           const item = indexes.checkitemById.get(checkId);
-          if (item) item.wcag20.forEach((entry) => wcagGap.push(entry.criterion));
+          if (!item) return;
+          item.wcag20.forEach((entry) => wcagGap.push(entry.criterion));
+          if (item.content_scope_note && !scopeNotes.includes(item.content_scope_note)) {
+            scopeNotes.push(item.content_scope_note);
+          }
         });
       }
       result.checkitemIds = checkitemIds;
       result.kbMatches = kbMatches;
       result.manualNotes = manualNotes;
       result.wcagGap = [...new Set(wcagGap)];
+      // 一致したチェック項目のすべてに本文スコープ外の分類が付いている場合のみ、
+      // 「KB未対応」ではなく「本文スコープ外」として扱う(一部でも本文対応可能性が
+      // 残る場合はKB未対応側に倒す)。
+      result.outOfContentScope =
+        checkitemIds.length > 0 &&
+        checkitemIds.every((checkId) => indexes.checkitemById.get(checkId)?.content_scope_note);
+      result.scopeNotes = scopeNotes;
     });
     return results;
   }
@@ -481,6 +493,11 @@
       return `${badges}${notes}`;
     }
     if (result.checkitemIds && result.checkitemIds.length) {
+      if (result.outOfContentScope) {
+        const note = result.scopeNotes && result.scopeNotes.length ? result.scopeNotes[0] : "";
+        const noteLabel = note ? `<span class="michecker-rule-note">${escapeHtml(note)}</span>` : "";
+        return `<span class="michecker-origin-badge michecker-origin-scope-out">本文スコープ外</span>${noteLabel}`;
+      }
       const wcagText = result.wcagGap && result.wcagGap.length ? result.wcagGap.join(", ") : "";
       const wcagLabel = wcagText ? ` <span class="michecker-wcag-gap">(WCAG ${escapeHtml(wcagText)})</span>` : "";
       return `<span class="michecker-origin-badge michecker-origin-gap">KB未対応</span>${wcagLabel}`;

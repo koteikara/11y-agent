@@ -10,6 +10,8 @@ jis: ["2.4.1"]
 processing_class: hybrid
 municipality_specific: true
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_76.1"]
 related: [/rules/html-structure/heading-required.md, /wcag/ch6-table.md]
 ---
 
