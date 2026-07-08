@@ -10,27 +10,50 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/4] Generating the SEA blob from sea-config.json...
+echo [1/5] Bundling server.js and its local dependencies into a single file...
+echo (Node's single-executable feature does not resolve require() calls to local
+echo  files such as ./lib/rules at runtime, so everything must be bundled first.)
+call npx esbuild server.js --bundle --platform=node --outfile=server.bundled.js
+if errorlevel 1 exit /b 1
+
+echo [2/5] Generating the SEA blob from sea-config.json...
 node --experimental-sea-config sea-config.json
 if errorlevel 1 exit /b 1
 
-echo [2/4] Copying node.exe as goal2-app.exe...
+echo [3/5] Copying node.exe as goal2-app.exe...
 node -e "require('fs').copyFileSync(process.execPath, 'goal2-app.exe')"
 if errorlevel 1 exit /b 1
 
-echo [3/4] Removing the existing signature if present (skipped if signtool is not installed)...
+echo [4/5] Removing the existing signature from the copied node.exe...
+set "SIGNTOOL="
 where signtool >nul 2>nul
 if not errorlevel 1 (
-  signtool remove /s goal2-app.exe
+  set "SIGNTOOL=signtool"
+) else (
+  rem signtool is commonly installed under the Windows SDK folder without
+  rem being added to PATH. Search the usual install location as a fallback.
+  for /f "delims=" %%F in ('dir /s /b "C:\Program Files (x86)\Windows Kits\10\bin\signtool.exe" 2^>nul') do set "SIGNTOOL=%%F"
 )
+if not defined SIGNTOOL (
+  echo Error: signtool was not found. node.exe is a digitally signed binary, and
+  echo the signature MUST be removed before injecting the SEA blob into it, or
+  echo the resulting goal2-app.exe will be corrupted and will not run correctly
+  echo ^(it will just start a plain Node.js REPL instead of the app^).
+  echo If you just installed "Windows SDK Signing Tools for Desktop Apps",
+  echo close this window and open a new one so the updated PATH takes effect.
+  echo See LOCAL_WINDOWS_APP.md for installation steps.
+  exit /b 1
+)
+"%SIGNTOOL%" remove /s goal2-app.exe
+if errorlevel 1 exit /b 1
 
-echo [4/4] Injecting the blob into goal2-app.exe with postject...
-npx postject goal2-app.exe NODE_SEA_BLOB sea-prep.blob ^
+echo [5/5] Injecting the blob into goal2-app.exe with postject...
+call npx postject goal2-app.exe NODE_SEA_BLOB sea-prep.blob ^
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 ^
   --overwrite
 if errorlevel 1 exit /b 1
 
 echo.
-echo Done. Double-click goal2-app.exe to start the app.
-echo A browser tab will open automatically.
+echo Done. Double-click goal2-app.exe (together with the public and data folders
+echo next to it) to start the app. A browser tab will open automatically.
 endlocal

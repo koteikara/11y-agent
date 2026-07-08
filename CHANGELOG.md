@@ -21,6 +21,61 @@
 
 ## Entries
 
+## 2026-07-08: Windows実機でのSEA(.exe)ビルド成功を受けドキュメントを整理
+
+- 背景・目的: `call`の付け忘れ・`signtool`必須化・`signtool`検出のフォールバック追加、という3件の修正を経て、ユーザーのWindows実機で`goal2-app.exe`のビルド→起動→画面表示(KBルール61件の読み込み含む)までの一連の流れが初めて成功した。この過程で判明した「PowerShellでは`.\`が必要」「`[5/5]`でpostjectがファイル書き込みに失敗することがある(プロセスロック/アンチウイルス)」等の知見を反映し、`LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理した。
+- 主な変更内容:
+  - `goal2-app/LOCAL_WINDOWS_APP.md`:
+    - 「ビルド手順」に、PowerShellでは`.\build-windows-app.bat`と入力する必要がある旨を明記。
+    - 「注意」の記載を、Windows実機での動作確認が完了した旨(2026-07-08)に更新。
+    - トラブルシューティングを「ビルド中のエラー」「`goal2-app.exe`実行時のエラー」「アンチウイルスによるブロック」の3グループに再構成し、`postject`の`Error: Couldn't write executable`(プロセスロック・アンチウイルスが原因になりうる)の対処法を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。ドキュメントの内容は、このセッション中に実際にユーザーのWindows実機で発生した一連の事象とその解決に基づく。
+- 関連ファイル: `goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
+## 2026-07-08: signtool検出をPATH以外の標準インストール先にも対応
+
+- 背景・目的: signtoolを必須化した直後、ユーザーが「signtoolはインストール済みなのに`signtool was not found`と表示される」と報告した。Windows SDKのインストーラーは`signtool.exe`をPATHに自動追加しないことが多く、また既に開いているコマンドプロンプト/PowerShellのウィンドウにはインストール後のPATH更新が反映されない(新しいウィンドウを開き直す必要がある)ため、`where signtool`だけに頼る検出方法では見つけられないケースがあることが分かった。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `where signtool`で見つからない場合、`C:\Program Files (x86)\Windows Kits\10\bin\`以下を再帰的に検索して`signtool.exe`を探すフォールバックを追加。見つかった場合はそのフルパスを使用する。
+  - エラーメッセージに、インストール済みの場合は新しいウィンドウを開き直すよう案内する一文を追加。
+  - `LOCAL_WINDOWS_APP.md`のトラブルシューティングを対応更新。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。バッチファイルの実際の検索動作はこの開発環境(Linux)では検証できないため、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
+## 2026-07-08: signtoolによる署名除去を必須化(goal2-app.exeがNode REPLで起動する不具合を修正)
+
+- 背景・目的: `call`修正後にビルドは`[1/5]`〜`[5/5]`まで完走し`goal2-app.exe`も生成されたが、実行するとアプリではなくNode.jsの対話モード(REPL)が開いてしまう不具合が報告された。`postject`の実行ログに`warning: The signature seems corrupted!`という警告が出ており、これが原因と判明した。`node.exe`は署名済みバイナリであり、Node.js公式のSEA機能ドキュメントでも「署名済みバイナリを改変する場合は事前に署名を除去する必要がある」と明記されている。従来の`build-windows-app.bat`は`signtool`が無い場合は署名除去を静かにスキップする作りだったため、`signtool`が入っていない環境では、ビルド自体は完走するものの中身が壊れた(SEAのフューズが正しく設定されない)`.exe`が生成され、実行時にNode.jsの通常のCLI引数解析にフォールバックしてREPLが起動していた。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `signtool`が見つからない場合はビルドをエラー終了させ、インストール方法を案内するメッセージを表示するよう変更(従来の「スキップして続行」から「必須化」に変更)。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: 前提条件に`signtool`を追加し、「signtoolのインストール(未インストールの場合)」節(Windows SDKインストーラーで「Windows SDK Signing Tools for Desktop Apps」のみを選択導入する手順)を新設。トラブルシューティングに、REPLが開いてしまう症状とその原因・対処法を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。`signtool`によるバイナリ署名除去・PE形式でのSEA注入という部分はこの開発環境(Linux)では検証できないため、Node.js公式ドキュメントの記載とpostjectの警告メッセージに基づく修正であり、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
+## 2026-07-08: build-windows-app.batが[1/5]で無言終了する不具合を修正(callの付け忘れ)
+
+- 背景・目的: 前回esbuildバンドルのステップを追加したところ、ユーザーがWindows実機で`build-windows-app.bat`を実行すると、`[1/5]`(esbuildバンドル)が正常終了した直後にスクリプト全体が(エラーメッセージも無いまま)終了し、`[2/5]`以降が一切実行されない不具合が発生した。原因は、Windowsのバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`というバッチファイル)を`call`を付けずに別のバッチファイルから呼び出すと、その時点で制御が呼び出し元に戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかったが、今回`npx esbuild`を先頭ステップとして追加したことで、後続のステップが実行されなくなっていた。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `npx esbuild ...`・`npx postject ...`の呼び出しに`call`を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。バッチファイルの実行自体はこの開発環境(Linux)では検証できないため、Windowsのバッチスクリプトにおける「`call`無しで.bat/.cmdを呼ぶと制御が戻らない」という広く知られた挙動に基づく修正であり、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`
+- 関連PR: (作成予定)
+
+## 2026-07-08: SEA(.exe)ビルドがrequire()解決に失敗する不具合を修正(esbuildバンドル追加)
+
+- 背景・目的: 前回のrootDir修正をユーザーがWindows実機で再検証したところ、`goal2-app.exe`が依然としてクラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査したところ、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`というエラーで`server.js`の冒頭(`require("./lib/rules")`)から即座にクラッシュすることを確認した。Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という、rootDirの問題とは別の既知の制約が原因だった。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: SEA化の前段に、`npx esbuild server.js --bundle --platform=node --outfile=server.bundled.js`で`server.js`と`lib/`以下の依存ファイルを1つの自己完結したファイルにまとめるステップを追加(全5ステップに変更)。
+  - `goal2-app/sea-config.json`: `main`を`server.js`から`server.bundled.js`に変更。
+  - `.gitignore`に生成物`goal2-app/server.bundled.js`を追加。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: バンドルが必要な理由の説明、`esbuild`失敗時のトラブルシューティング、`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合(古い手順でビルドされた.exeが残っている場合)の対処、署名なしバイナリがアンチウイルス/Windows Defenderにブロックされる可能性についての注記を追加。
+- 検証: この開発環境(Linux)で、esbuildバンドル→SEA化→postject注入という同じ手順を再現し、生成したバイナリを実際に起動して`/api/health`・`/api/rules`(61ルール)・`/api/michecker-checkitems`(268件)・`index.html`・`michecker-compare.html`のいずれも正しく応答することを確認した(バンドル前の状態では同じ手順で確実に`ERR_UNKNOWN_BUILTIN_MODULE`が再現することも確認済み)。`node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。
+- **重要な未検証事項**: バンドル・SEA化・実行の一連の流れはLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。署名なしバイナリに対するWindows Defender/アンチウイルスの挙動も未確認。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/sea-config.json`、`goal2-app/LOCAL_WINDOWS_APP.md`、`.gitignore`
+- 関連PR: (作成予定)
+
 ## 2026-07-07: SEA(.exe)ビルドが起動直後に落ちる不具合を修正(rootDir解決)
 
 - 背景・目的: ユーザーが実際にWindows実機で`goal2-app.exe`をビルド・起動したところ、「ダブルクリックしても何も起きない、一瞬何かを開こうとしてそこで終わる」という現象が発生した。原因は、Node.js SEA(単一実行ファイル化)でパッケージ化した場合、埋め込まれたエントリスクリプトの`__dirname`が`.exe`の実際の設置場所を指さない(Node内部の仮想パスになる)という、Node SEA機能の既知の制約だった。`server.js`は`rootDir = __dirname`を起点に`public/`(静的ファイル)・`data/`(ルールデータ)を読み込む設計だったため、SEAビルドでは起動直後にファイル読み込みエラーで即座にクラッシュし、ダブルクリック起動時はコンソール画面が一瞬表示されてすぐ閉じる(エラー内容が読めない)という症状になっていた。

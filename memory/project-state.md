@@ -184,6 +184,21 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `server.js`を、SEAビルド時は`rootDir = path.dirname(process.execPath)`(`.exe`自身の場所)を使うよう修正(通常の`node server.js`実行時は従来通り`__dirname`)。
   - `LOCAL_WINDOWS_APP.md`に、`goal2-app.exe`単体ではなく`public`/`data`を含む`goal2-app`フォルダごと配布・移動する必要がある旨と、ダブルクリックで無反応な場合はコマンドプロンプトから実行してエラー内容を確認する手順を追加。
   - **未検証**: この修正が実際にWindows実機での不具合を解消するかは、ユーザーによる再ビルド・再起動確認待ち(この開発環境(Linux)ではSEAビルドの起動自体を検証できないため)。
+- ユーザーがrootDir修正版を再ビルドしても依然クラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査した結果、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`で`server.js`冒頭の`require`から即座にクラッシュすることを確認した。rootDirの問題とは別に、Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という既知の制約が根本原因だった。
+  - `build-windows-app.bat`に、SEA化の前段で`npx esbuild`により`server.js`と`lib/`以下をひとつの自己完結したファイルにバンドルするステップを追加。`sea-config.json`の`main`をバンドル後のファイルに変更。
+  - Linux環境でesbuildバンドル→SEA化→postject注入→起動という同じ手順を再現し、`/api/health`・`/api/rules`(61件)・`/api/michecker-checkitems`(268件)・両HTMLページがいずれも正しく動作することを確認した(バンドル前は同じ手順で確実に同じエラーが再現することも確認済み)。
+  - `LOCAL_WINDOWS_APP.md`に、バンドルが必要な理由・`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合の対処(古い.exeビルド成果物の削除・再ビルド)・署名なしバイナリがアンチウイルスにブロックされる可能性についての注記を追加。
+  - **未検証**: バンドル・SEA化はLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。ユーザーの再検証待ち。
+- ユーザーがesbuildバンドル版の`build-windows-app.bat`をWindows実機(PowerShell経由)で実行したところ、`[1/5]`(esbuildバンドル)は正常終了するが、`[2/5]`以降が一切実行されずスクリプトが無言で終了する不具合が発生した。原因はWindowsバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`)を`call`無しで別のバッチファイルから呼び出すと、そこで制御が戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかった。
+  - `build-windows-app.bat`の`npx esbuild`・`npx postject`呼び出しに`call`を追加して修正。
+- `call`修正後、ビルドは`[1/5]`〜`[5/5]`まで完走し`goal2-app.exe`も生成されたが、実行するとアプリではなくNode.jsの対話モード(REPL)が開いてしまう不具合が発生した。`postject`実行時に`warning: The signature seems corrupted!`という警告が出ており、これが原因と判明した。`node.exe`は署名済みバイナリで、Node.js公式のSEAドキュメントも「署名済みバイナリを改変する場合は事前に署名除去が必要」と明記している。従来`signtool`が無い場合は署名除去を静かにスキップする作りだったため、`signtool`未導入環境ではビルドは完走するが中身が壊れた(SEAフューズが正しく設定されない)`.exe`が生成され、実行時にNode.jsの通常のCLI引数解析にフォールバックしてREPLが起動していた。
+  - `build-windows-app.bat`: `signtool`が見つからない場合はエラー終了し、インストール方法を案内するよう変更(スキップして続行、から必須化に変更)。
+  - `LOCAL_WINDOWS_APP.md`: `signtool`を前提条件に追加し、インストール手順(Windows SDKインストーラーで「Windows SDK Signing Tools for Desktop Apps」のみ導入)を新設。トラブルシューティングにREPLが開く症状の説明を追加。
+  - **未検証**: `signtool`によるバイナリ署名除去・Windows PE形式でのSEA注入はこの開発環境(Linux)では検証できない。ユーザーの実機再検証待ち。
+- signtool必須化の直後、ユーザーが「signtoolはインストール済みなのに見つからないと言われる」と報告した。Windows SDKインストーラーが`signtool.exe`をPATHに自動追加しないこと、および既に開いているシェルにはインストール後のPATH更新が反映されないことが原因と考えられる。`build-windows-app.bat`に、`where`で見つからない場合は`C:\Program Files (x86)\Windows Kits\10\bin\`以下を再帰検索するフォールバックを追加した。`LOCAL_WINDOWS_APP.md`のトラブルシューティングも対応更新。
+- 上記の対応後、`signtool`は正しく検出・署名除去に成功したが、`[5/5]`の`postject`が「Error: Couldn't write executable」で失敗した。プロセスロックまたはアンチウイルスによるブロックが疑われたため、実行中プロセスの終了・再試行を案内したところ、**ユーザーのWindows実機でついにビルド→`goal2-app.exe`の起動→画面表示(KBルール61件の読み込み含む)まで一連の流れが初めて成功した**。
+  - `LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理: PowerShellでは`.\build-windows-app.bat`が必要な旨を「ビルド手順」本文に明記、「注意」を実機確認済み(2026-07-08)に更新、トラブルシューティングを「ビルド中のエラー」「実行時のエラー」「アンチウイルスによるブロック」の3グループに再構成し`Error: Couldn't write executable`の対処法を追加。
+  - これでSEA(.exe)ビルドの一連の不具合(`__dirname`解決・require()解決・call忘れ・signtool必須化・signtool検出)はすべて実機で解消を確認した。
 
 ## Decisions
 
