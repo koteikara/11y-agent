@@ -129,6 +129,12 @@ async function main() {
     "AI image name draft should include the image type for the flower sample"
   );
   assert.ok(appJs.includes("const noticeRuleIds = new Set"), "notice rule ids should be defined");
+  assert.ok(appJs.includes("isMicheckerRelevantRule"), "rule scope mode filter should be implemented in app.js");
+  assert.ok(appJs.includes("rule_scope_mode"), "rule scope mode should be recorded in evidence output");
+  const compareJs = fs.readFileSync(path.join(rootDir, "public/michecker-compare.js"), "utf8");
+  const compareScreenHtml = fs.readFileSync(path.join(rootDir, "public/michecker-compare.html"), "utf8");
+  assert.ok(compareJs.includes("handleRuleBasisChange"), "rule basis toggle should be implemented in michecker-compare.js");
+  assert.ok(compareScreenHtml.includes('id="ruleBasisSelect"'), "rule basis selector should exist on the compare screen");
   assert.ok(appJs.includes("\"image.display-width\""), "image display width should be treated as a notice");
   assert.ok(appJs.includes("\"image.multiple-images\""), "multiple image layout should be treated as a CMS notice");
   assert.ok(appJs.includes("\"image.image-text-layout\""), "image/text layout should be treated as a CMS notice");
@@ -181,6 +187,7 @@ async function main() {
 
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
+  assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");
   assert.ok(indexHtml.includes("bulkAcceptButton"), "bulk accept button should exist");
   assert.ok(indexHtml.includes("pageAgentPanel"), "workflow guidance panel should exist before the review workspace");
   assert.ok(!indexHtml.includes('class="output-drawer" open'), "output drawer should be closed on initial load");

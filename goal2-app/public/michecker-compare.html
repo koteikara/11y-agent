@@ -85,12 +85,23 @@
           「本文スコープ外」はテンプレート・スクリプト実装・サイト全体設計などCMS本文の編集では対応できない項目、
           「KB未対応」は本文で対応できる可能性があるのにKBにルールが無い項目(KB拡張の検討対象)、
           「照合不可」は公式定義と一致しなかった項目です。
+          「対応ルールの基準」を「miChecker基準のみ」にすると、マニュアル版とmiChecker版の両方があるルールで
+          miChecker版(最小限の修正観点)だけを表示します(検収基準がmiChecker通過のみの案件向け)。
         </p>
         <div class="michecker-summary" id="summaryGrid"></div>
-        <label class="michecker-filter">
-          <input type="checkbox" id="contentOnlyFilter" />
-          本文(content)に分類した行だけ表示する
-        </label>
+        <div class="michecker-controls">
+          <label class="michecker-filter">
+            <input type="checkbox" id="contentOnlyFilter" />
+            本文(content)に分類した行だけ表示する
+          </label>
+          <label class="michecker-filter" for="ruleBasisSelect">
+            対応ルールの基準
+            <select id="ruleBasisSelect">
+              <option value="kb">KB基準（miChecker含む）</option>
+              <option value="michecker">miChecker基準のみ</option>
+            </select>
+          </label>
+        </div>
         <div class="michecker-table-wrap">
           <table class="michecker-table" id="resultTable">
             <thead>

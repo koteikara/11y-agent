@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-08: 「KB全ルール(miChecker含む)」と「miChecker指摘対応のみ」の切り替えを両画面に追加
+
+- 背景・目的: ユーザーから「KB(miChecker含む)とmiCheckerのみの切り替えを検討」との依頼があり、対象を確認したところGoal 2修正候補画面とmiChecker比較画面の両方だった。検収基準がmiChecker通過のみの案件で、最小限の修正に絞って作業したいという想定。
+- 主な変更内容:
+  - Goal 2修正候補画面(`index.html`/`app.js`): 「候補生成」ボタンの並びに「修正基準」セレクタ(「KB全ルール(miChecker含む)」(既定)/「miChecker指摘対応のみ」)を追加。miCheckerモードでは、候補生成時に`michecker_check_ids`を持つルールに対応する候補だけを生成する。画面独自の擬似ルールID(`iframe.title`)は`html-structure.iframe-frame-title`へ対応づけて判定し、`iframe.cms-review`(CMS運用確認でmiChecker外)はmiCheckerモードでは除外される。モードを変更すると「候補生成を押すと反映される」旨のヒントを表示し、証跡JSONに`rule_scope_mode`を記録する。
+  - miChecker比較画面(`michecker-compare.html`/`.js`): 「対応ルールの基準」セレクタ(「KB基準(miChecker含む)」(既定)/「miChecker基準のみ」)を追加。miChecker基準モードでは、マニュアル版とmiChecker版の両方に一致する行でmiChecker版(最小限の修正観点)だけを表示し、「(マニュアル版の◯◯に内包)」の注記も非表示にする。マニュアル版しか無い行は、それがmiChecker指摘を解消する唯一の対応ルールなのでそのまま表示する。
+  - `test/run-tests.js`に両画面のセレクタ・実装の存在チェックを追加。
+- 検証: Playwrightで、Goal 2のmiCheckerモードで候補が絞られること(tables 12→10件、links-text 20→7件、procedure-overview 6→4件)、証跡に`"rule_scope_mode": "michecker"`が記録されること、比較画面で基準切替により「内包」注記が表示/非表示されること、既定(KB)モードでは既存サンプル6件の候補件数に変化がないこと(回帰なし)を確認。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/app.js`、`goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: 逆引きの精度向上(偽ギャップ解消・本文スコープ外分類・トリアージ運用の確立)
 
 - 背景・目的: ワークフロー明文化に続く「逆引きの完成度向上」(ユーザー指定の優先順位2番目)。実データで「KB未対応」となっていた51件(59シグネチャ中)を1件ずつ精査したところ、大半は「既存ルールが実質カバーしているのに`michecker_check_ids`が未設定」という偽のギャップ、または本文編集のスコープ外(テンプレート・実装・サイト全体設計等)の項目だった。

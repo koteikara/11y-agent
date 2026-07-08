@@ -425,6 +425,22 @@ select {
   min-width: 112px;
 }
 
+.rule-scope-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  font-size: var(--text-small);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rule-scope-picker select {
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: var(--text-small);
+}
+
 .goal3-loading {
   display: inline-flex;
   align-items: center;
@@ -2010,12 +2026,25 @@ label {
   color: var(--success);
 }
 
+.michecker-controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
 .michecker-filter {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: var(--text-small);
   color: var(--text);
+}
+
+.michecker-filter select {
+  min-height: 32px;
+  padding: 2px 6px;
+  font-size: var(--text-small);
 }
 
 .michecker-filter input {

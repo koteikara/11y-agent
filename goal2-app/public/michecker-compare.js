@@ -12,6 +12,7 @@
     resultTableBody: document.getElementById("resultTableBody"),
     contentOnlyFilter: document.getElementById("contentOnlyFilter"),
     emptyFilterNote: document.getElementById("emptyFilterNote"),
+    ruleBasisSelect: document.getElementById("ruleBasisSelect"),
     beforeHtmlInput: document.getElementById("beforeHtmlInput"),
     afterHtmlInput: document.getElementById("afterHtmlInput"),
     localCompareButton: document.getElementById("localCompareButton"),
@@ -45,9 +46,11 @@
 
   let currentResults = [];
   let lookupIndexes = null;
+  let ruleBasis = "kb";
 
   els.compareButton.addEventListener("click", handleCompareClick);
   els.contentOnlyFilter.addEventListener("change", applyContentOnlyFilter);
+  els.ruleBasisSelect.addEventListener("change", handleRuleBasisChange);
   els.resultTableBody.addEventListener("change", handleClassificationChange);
   els.localCompareButton.addEventListener("click", handleLocalCompareClick);
   els.saveSettingsButton.addEventListener("click", handleSaveSettingsClick);
@@ -475,10 +478,23 @@
     });
   }
 
+  function handleRuleBasisChange() {
+    ruleBasis = els.ruleBasisSelect.value;
+    if (!currentResults.length) return;
+    renderTable(currentResults);
+    applyContentOnlyFilter();
+  }
+
   function renderRuleMatch(result) {
     if (!lookupIndexes) return "";
     if (result.kbMatches && result.kbMatches.length) {
-      const badges = result.kbMatches
+      // miChecker基準のみモードでは、マニュアル版とmiChecker版の両方に一致する行で
+      // miChecker版(最小限の修正観点)だけを表示する。マニュアル版しか無い行は、
+      // それがmiChecker指摘を解消する唯一の対応ルールなのでそのまま表示する。
+      const micheckerMatches = result.kbMatches.filter((rule) => rule.origin === "michecker");
+      const matchesToShow =
+        ruleBasis === "michecker" && micheckerMatches.length ? micheckerMatches : result.kbMatches;
+      const badges = matchesToShow
         .map((rule) => {
           const isManual = rule.origin === "manual";
           const badgeClass = isManual ? "michecker-origin-manual" : "michecker-origin-michecker";
@@ -487,7 +503,7 @@
         })
         .join("");
       const notes =
-        result.manualNotes && result.manualNotes.length
+        ruleBasis === "kb" && result.manualNotes && result.manualNotes.length
           ? `<span class="michecker-rule-note">(${result.manualNotes.map((note) => escapeHtml(note.title)).join("、")}に内包)</span>`
           : "";
       return `${badges}${notes}`;

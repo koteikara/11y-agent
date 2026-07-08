@@ -212,6 +212,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 本文編集で対応できない54チェック項目を`reference/michecker-out-of-content-scope.json`に理由付きで分類し、比較画面でグレーの「本文スコープ外」バッジとして「KB未対応」(赤、KB拡張の検討対象)と区別表示するようにした。
   - トリアージ運用(タグ追記/新規ルール/スコープ外分類の3択)を`reference/michecker-triage.md`に文書化。バックログ2件(C_54.0 fieldset・C_79.5 label内容)を記録。
   - 検証: 同じ実データ(59シグネチャ)でKBルール一致8→32件、KB未対応51→2件(バックログのみ)、本文スコープ外25件、照合不可0件。既存サンプル回帰・テストとも成功。
+- ユーザーの依頼(「KB(miChecker含む)とmiCheckerのみの切り替えを検討」)を受け、両画面に基準切り替えを実装した。
+  - Goal 2修正候補画面: 「修正基準」セレクタ(KB全ルール(既定)/miChecker指摘対応のみ)を追加。miCheckerモードでは`michecker_check_ids`を持つルールの候補だけを生成(擬似ルールID`iframe.title`は`html-structure.iframe-frame-title`に対応づけ、`iframe.cms-review`は除外)。証跡JSONに`rule_scope_mode`を記録。モード変更時は再生成を促すヒントを表示。
+  - miChecker比較画面: 「対応ルールの基準」セレクタ(KB基準(既定)/miChecker基準のみ)を追加。miChecker基準ではマニュアル版・miChecker版の両方に一致する行でmiChecker版のみを表示し、「内包」注記も非表示にする(検収基準がmiChecker通過のみの案件向けの最小修正観点)。
+  - Playwright検証: Goal 2のmiCheckerモードで候補が絞られること(tables 12→10、links-text 20→7、procedure-overview 6→4)、既定モードで既存6サンプルに回帰が無いことを確認。
 
 ## Decisions
 
