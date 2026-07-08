@@ -10,21 +10,21 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/5] Bundling server.js and its local dependencies into a single file...
+echo [1/6] Bundling server.js and its local dependencies into a single file...
 echo (Node's single-executable feature does not resolve require() calls to local
 echo  files such as ./lib/rules at runtime, so everything must be bundled first.)
 call npx esbuild server.js --bundle --platform=node --outfile=server.bundled.js
 if errorlevel 1 exit /b 1
 
-echo [2/5] Generating the SEA blob from sea-config.json...
+echo [2/6] Generating the SEA blob from sea-config.json...
 node --experimental-sea-config sea-config.json
 if errorlevel 1 exit /b 1
 
-echo [3/5] Copying node.exe as goal2-app.exe...
+echo [3/6] Copying node.exe as goal2-app.exe...
 node -e "require('fs').copyFileSync(process.execPath, 'goal2-app.exe')"
 if errorlevel 1 exit /b 1
 
-echo [4/5] Removing the existing signature from the copied node.exe...
+echo [4/6] Removing the existing signature from the copied node.exe...
 set "SIGNTOOL="
 where signtool >nul 2>nul
 if not errorlevel 1 (
@@ -47,13 +47,20 @@ if not defined SIGNTOOL (
 "%SIGNTOOL%" remove /s goal2-app.exe
 if errorlevel 1 exit /b 1
 
-echo [5/5] Injecting the blob into goal2-app.exe with postject...
+echo [5/6] Injecting the blob into goal2-app.exe with postject...
 call npx postject goal2-app.exe NODE_SEA_BLOB sea-prep.blob ^
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 ^
   --overwrite
 if errorlevel 1 exit /b 1
 
+echo [6/6] Packaging goal2-app.exe together with public/data into a single ZIP...
+echo (goal2-app.exe needs the public and data folders next to it to run, so
+echo  everything a recipient needs is bundled into one file to hand over.)
+powershell -NoProfile -Command "Compress-Archive -Path 'goal2-app.exe','public','data' -DestinationPath 'goal2-app-windows.zip' -Force"
+if errorlevel 1 exit /b 1
+
 echo.
-echo Done. Double-click goal2-app.exe (together with the public and data folders
-echo next to it) to start the app. A browser tab will open automatically.
+echo Done. goal2-app-windows.zip is ready to share - send that single file to
+echo whoever needs to use the app. They just extract it anywhere and
+echo double-click goal2-app.exe inside; a browser tab will open automatically.
 endlocal

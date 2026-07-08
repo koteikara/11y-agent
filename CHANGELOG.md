@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-08: 配布用ZIPをビルド時に自動生成(goal2-app.exe単体配布の誤解を解消)
+
+- 背景・目的: ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`フォルダ)を受け取って使うだけの人には一切不要であることを説明し、意図は「配る側の負担を減らしたい」ではなく「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という点の運用を分かりやすくしたい、ということだったため、配布物を1つのZIPファイルにまとめる自動化を行った。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: 末尾に`[6/6]`としてPowerShellの`Compress-Archive`を使い、`goal2-app.exe`・`public`・`data`を`goal2-app-windows.zip`にまとめるステップを追加(全6ステップに変更)。完了メッセージも「このZIP1つを渡せばよい」という内容に更新。
+  - `goal2-app/LOCAL_WINDOWS_APP.md`: 「ビルド手順」「利用者側の使い方」を、`goal2-app-windows.zip`を配布・展開する前提の内容に書き換え。トラブルシューティングのステップ番号を`[1/6]`〜`[6/6]`に更新し、ZIP作成失敗時の対処(手動でのZIP作成含む)を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。`Compress-Archive`はWindows標準搭載のPowerShellコマンドのため追加インストール不要。実際のZIP生成動作はこの開発環境(Linux)では検証できないため、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: Windows実機でのSEA(.exe)ビルド成功を受けドキュメントを整理
 
 - 背景・目的: `call`の付け忘れ・`signtool`必須化・`signtool`検出のフォールバック追加、という3件の修正を経て、ユーザーのWindows実機で`goal2-app.exe`のビルド→起動→画面表示(KBルール61件の読み込み含む)までの一連の流れが初めて成功した。この過程で判明した「PowerShellでは`.\`が必要」「`[5/5]`でpostjectがファイル書き込みに失敗することがある(プロセスロック/アンチウイルス)」等の知見を反映し、`LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理した。
