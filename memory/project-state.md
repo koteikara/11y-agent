@@ -202,6 +202,20 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - ビルド成功後、ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`)を受け取って使うだけの人には不要であることを説明した上で、意図は「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という運用の分かりにくさだったと判明したため、配布物を1つのZIPにまとめる自動化で対応した。
   - `build-windows-app.bat`に`[6/6]`としてPowerShellの`Compress-Archive`で`goal2-app.exe`・`public`・`data`を`goal2-app-windows.zip`にまとめるステップを追加。
   - `LOCAL_WINDOWS_APP.md`の「ビルド手順」「利用者側の使い方」を、この1つのZIPを配布・展開する前提の内容に書き換え。
+- ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、AskUserQuestionで意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。`AGENTS.md`/`workstream.md`のmiChecker関連記述が抽象的なまま(このセッションで実装済みの`michecker-compare.html`を反映していない)だったため、具体的な手順として書き直した。
+  - `workstream.md`のGoal 2 Target Flowを、移行前HTML確保→CMS登録→移行後検査→`michecker-compare.html`への読み込み(ローカルWindows版での自動比較/Cloud Runホスト版でのCSV手動アップロードの2経路)→「対応ルール」列(KBルールへの逆引き・KB未対応の可視化)を使った本文起因指摘の絞り込み、という具体的な13ステップに再構成。Goal 1にも同ツールを将来流用できる旨を一文追記。
+  - `AGENTS.md`の「miChecker Quality Signal」節に、`michecker-compare.html`の機能と2つの検査結果取得方法(Cloud Run版/ローカルWindows版)を追記。
+  - 次の作業(ユーザーの優先順位2番目): 逆引き機能自体の完成度向上(現状は`michecker_check_ids`を持つルールのみ逆引きでき、KB未対応となった項目をどうKB拡張にフィードバックするかの運用は未定義)。→ 下記で対応済み。
+- 逆引きの精度向上を実施した(ユーザーの優先順位2番目)。実データで「KB未対応」だった51件を1件ずつ精査し、3方向で対応した。
+  - 既存ルール17件に`michecker_check_ids`を追記(タグ付きルール12→29件、カバーする公式チェック項目77件)。大半の「KB未対応」は、ルール自体は存在するのにタグが未設定という偽のギャップだった。
+  - 実データで「問題あり」レベルだったth要素のscope属性欠如に対応する`rules/table/th-scope.md`を新規作成(62ルール目)。
+  - 本文編集で対応できない54チェック項目を`reference/michecker-out-of-content-scope.json`に理由付きで分類し、比較画面でグレーの「本文スコープ外」バッジとして「KB未対応」(赤、KB拡張の検討対象)と区別表示するようにした。
+  - トリアージ運用(タグ追記/新規ルール/スコープ外分類の3択)を`reference/michecker-triage.md`に文書化。バックログ2件(C_54.0 fieldset・C_79.5 label内容)を記録。
+  - 検証: 同じ実データ(59シグネチャ)でKBルール一致8→32件、KB未対応51→2件(バックログのみ)、本文スコープ外25件、照合不可0件。既存サンプル回帰・テストとも成功。
+- ユーザーの依頼(「KB(miChecker含む)とmiCheckerのみの切り替えを検討」)を受け、両画面に基準切り替えを実装した。
+  - Goal 2修正候補画面: 「修正基準」セレクタ(KB全ルール(既定)/miChecker指摘対応のみ)を追加。miCheckerモードでは`michecker_check_ids`を持つルールの候補だけを生成(擬似ルールID`iframe.title`は`html-structure.iframe-frame-title`に対応づけ、`iframe.cms-review`は除外)。証跡JSONに`rule_scope_mode`を記録。モード変更時は再生成を促すヒントを表示。
+  - miChecker比較画面: 「対応ルールの基準」セレクタ(KB基準(既定)/miChecker基準のみ)を追加。miChecker基準ではマニュアル版・miChecker版の両方に一致する行でmiChecker版のみを表示し、「内包」注記も非表示にする(検収基準がmiChecker通過のみの案件向けの最小修正観点)。
+  - Playwright検証: Goal 2のmiCheckerモードで候補が絞られること(tables 12→10、links-text 20→7、procedure-overview 6→4)、既定モードで既存6サンプルに回帰が無いことを確認。
 
 ## Decisions
 

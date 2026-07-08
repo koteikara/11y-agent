@@ -11,7 +11,7 @@ processing_class: ai
 municipality_specific: false
 cms_auto: false
 origin: michecker
-michecker_check_ids: ["C_15.0", "C_500.4"]
+michecker_check_ids: ["C_15.0", "C_388.0", "C_500.4"]
 related: [/rules/html-structure/heading-order.md]
 ---
 

@@ -21,7 +21,39 @@
 
 ## Entries
 
-## 2026-07-08: 配布用ZIPをビルド時に自動生成(goal2-app.exe単体配布の誤解を解消)
+## 2026-07-08: 「KB全ルール(miChecker含む)」と「miChecker指摘対応のみ」の切り替えを両画面に追加
+
+- 背景・目的: ユーザーから「KB(miChecker含む)とmiCheckerのみの切り替えを検討」との依頼があり、対象を確認したところGoal 2修正候補画面とmiChecker比較画面の両方だった。検収基準がmiChecker通過のみの案件で、最小限の修正に絞って作業したいという想定。
+- 主な変更内容:
+  - Goal 2修正候補画面(`index.html`/`app.js`): 「候補生成」ボタンの並びに「修正基準」セレクタ(「KB全ルール(miChecker含む)」(既定)/「miChecker指摘対応のみ」)を追加。miCheckerモードでは、候補生成時に`michecker_check_ids`を持つルールに対応する候補だけを生成する。画面独自の擬似ルールID(`iframe.title`)は`html-structure.iframe-frame-title`へ対応づけて判定し、`iframe.cms-review`(CMS運用確認でmiChecker外)はmiCheckerモードでは除外される。モードを変更すると「候補生成を押すと反映される」旨のヒントを表示し、証跡JSONに`rule_scope_mode`を記録する。
+  - miChecker比較画面(`michecker-compare.html`/`.js`): 「対応ルールの基準」セレクタ(「KB基準(miChecker含む)」(既定)/「miChecker基準のみ」)を追加。miChecker基準モードでは、マニュアル版とmiChecker版の両方に一致する行でmiChecker版(最小限の修正観点)だけを表示し、「(マニュアル版の◯◯に内包)」の注記も非表示にする。マニュアル版しか無い行は、それがmiChecker指摘を解消する唯一の対応ルールなのでそのまま表示する。
+  - `test/run-tests.js`に両画面のセレクタ・実装の存在チェックを追加。
+- 検証: Playwrightで、Goal 2のmiCheckerモードで候補が絞られること(tables 12→10件、links-text 20→7件、procedure-overview 6→4件)、証跡に`"rule_scope_mode": "michecker"`が記録されること、比較画面で基準切替により「内包」注記が表示/非表示されること、既定(KB)モードでは既存サンプル6件の候補件数に変化がないこと(回帰なし)を確認。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/app.js`、`goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+
+## 2026-07-08: 逆引きの精度向上(偽ギャップ解消・本文スコープ外分類・トリアージ運用の確立)
+
+- 背景・目的: ワークフロー明文化に続く「逆引きの完成度向上」(ユーザー指定の優先順位2番目)。実データで「KB未対応」となっていた51件(59シグネチャ中)を1件ずつ精査したところ、大半は「既存ルールが実質カバーしているのに`michecker_check_ids`が未設定」という偽のギャップ、または本文編集のスコープ外(テンプレート・実装・サイト全体設計等)の項目だった。
+- 主な変更内容:
+  - 既存ルール17件に`michecker_check_ids`を追記(公式カタログのキーワード検索で同族IDファミリーも含めて登録)。タグ付きルール12件→29件、カバーする公式チェック項目77件に拡大。`embedded-script-behavior`にはキーボードトラップ等の3項目とWCAG 2.1.2/2.2.2を、`sensory-characteristics`には1.4.1を追加。
+  - 実データで「問題あり」レベルで検出されていたth要素のscope属性欠如に対応する新規ルール`rules/table/th-scope.md`(origin: michecker)を作成(62ルール目)。
+  - 本文編集で対応できない54チェック項目を`reference/michecker-out-of-content-scope.json`に理由付きで分類し、`tools/actf2json.py`が`content_scope_note`としてマージ。`michecker-compare.js`は該当項目をグレーの「本文スコープ外」バッジ+理由で表示(「KB未対応」と区別)。
+  - トリアージ運用((1)既存ルールへタグ追記 (2)新規ルール作成 (3)スコープ外分類)を`reference/michecker-triage.md`として文書化。バックログ2件(C_54.0 fieldset・C_79.5 label内容)を記録。タグ付けとスコープ外の二重登録は`test/run-tests.js`が自動検出。
+- 検証: 同じ実データ(59シグネチャ)で、KBルール一致8件→32件、KB未対応51件→2件(意図したバックログのみ)、本文スコープ外25件、照合不可0件を確認。既存サンプル6件のPlaywright回帰確認・`node test/run-tests.js`成功。
+- 関連ファイル: `a11y-migration-kb/rules/`(17ファイルのタグ追記+`table/th-scope.md`新規+`table/index.md`)、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md,index.md}`、`a11y-migration-kb/tools/actf2json.py`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL、`goal2-app/public/{michecker-compare.js,michecker-compare.html,styles.css}`、`goal2-app/test/run-tests.js`、`a11y-migration-kb/README.md`、`memory/michecker-research.md`
+- 関連PR: (作成予定)
+
+## 2026-07-08: goal2-appとmiChecker/htmlchecker.exeの実務ワークフローをAGENTS.md/workstream.mdに明文化
+
+- 背景・目的: ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。これまでの`AGENTS.md`/`workstream.md`のmiChecker関連記述は「CMS登録後のプレビューURLでmiChecker確認を行い分類する」といった抽象的な記述に留まり、このセッションで実装済みの`michecker-compare.html`(移行前後比較・分類・KBルールへの逆引き)を具体的に反映していなかったため、実際に使えるツールに基づいた具体的な手順として書き直した。
+- 主な変更内容:
+  - `workstream.md`のGoal 2 Target Flowに、移行前HTMLの確保タイミング、CMS登録後の移行後検査、`michecker-compare.html`への読み込み(ローカルWindows版での自動比較 / Cloud Runホスト版でのCSV手動アップロードの2経路)、「対応ルール」列(マニュアル版/miChecker版への逆引き、KB未対応の可視化)を使った本文起因指摘の絞り込みまでを具体的な手順として追記(全13ステップに再構成)。
+  - `workstream.md`のGoal 1 Target Flowにも、Goal 2向けに実装済みの`michecker-compare.html`を将来流用できる旨を一文追記。
+  - `AGENTS.md`の「miChecker Quality Signal」節に、`goal2-app/public/michecker-compare.html`の機能(新規/未解消/解消の自動分類、KBルールへの逆引き表示、KB未対応の可視化)と、検査結果の2つの取得方法(Cloud Run版: CSV手動アップロード / ローカルWindows版: htmlchecker.exe自動比較)を追記。
+- 検証: ドキュメントのみの変更(コードへの影響なし)。
+- 関連ファイル: `AGENTS.md`、`workstream.md`
+- 関連PR: (作成予定)
 
 - 背景・目的: ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`フォルダ)を受け取って使うだけの人には一切不要であることを説明し、意図は「配る側の負担を減らしたい」ではなく「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という点の運用を分かりやすくしたい、ということだったため、配布物を1つのZIPファイルにまとめる自動化を行った。
 - 主な変更内容:

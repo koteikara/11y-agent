@@ -44,6 +44,13 @@
           <div class="input-primary-actions" aria-label="入力HTMLの操作">
             <button type="button" id="analyzeButton" class="primary">候補生成</button>
             <button type="button" id="resetButton">リセット</button>
+            <label class="rule-scope-picker" for="ruleScopeSelect">
+              修正基準
+              <select id="ruleScopeSelect">
+                <option value="kb">KB全ルール（miChecker含む）</option>
+                <option value="michecker">miChecker指摘対応のみ</option>
+              </select>
+            </label>
           </div>
       </section>
 

@@ -63,6 +63,10 @@
 - miCheckerの結果はページ全体検査になりやすいため、`content`、`old-site-template`、`new-cms-template`、`unknown` に分類して扱う。
 - `old-site-template` や `new-cms-template` 起因の指摘は、移行HTML修正とは分離し、テンプレート課題またはスコープ外課題として記録する。
 - miCheckerを使う場合は、実行日、miCheckerバージョン、検査対象URLまたはHTML、検査対象種別、指摘分類、対応結果、未解消理由を証跡として残す。
+- Goal 2実行画面には `goal2-app/public/michecker-compare.html` を実装済み。移行前・移行後のmiChecker検査結果(CSV)を読み込ませると、指摘を「新規」「未解消」「解消」に自動分類し、内容欄のテキストを公式チェック項目定義と照合して対応する `a11y-migration-kb/` ルール(マニュアル版/miChecker版の別を含む)へ逆引き表示する。該当ルールが無い指摘は「KB未対応」+関連WCAG基準として可視化されるため、KB拡張の判断材料にもなる。
+- 検査結果の取得方法は2通りある。Cloud Runホスト版ではmiChecker(GUI)で個別にエクスポートしたCSVを手動アップロードする。ローカルWindows版(`goal2-app.exe`)かつ`htmlchecker.exe`(miChecker本体とは別のCLIツール)が使える場合は、移行前・移行後のHTMLを貼り付けるだけで検査から比較までを自動実行できる。詳細は `goal2-app/LOCAL_WINDOWS_APP.md` と `memory/michecker-research.md` を参照。
+- 検収基準がmiChecker通過のみの案件向けに、両画面とも基準を切り替えられる。Goal 2修正候補画面の「修正基準」は「KB全ルール(miChecker含む)」(既定)と「miChecker指摘対応のみ」(miCheckerに関係する候補だけを生成、証跡に`rule_scope_mode`として記録)、miChecker比較画面の「対応ルールの基準」は「KB基準」(既定)と「miChecker基準のみ」(マニュアル版/miChecker版の両方があるルールでminimalなmiChecker版だけを表示)を選べる。既定は常にKB全ルールとし、絞り込みモードの利用は案件の検収条件を確認したうえで判断する。
+- 比較画面の「対応ルール」列で「KB未対応」と表示された指摘は放置せず、`a11y-migration-kb/reference/michecker-triage.md`のトリアージ手順((1)既存ルールへタグ追記 (2)新規ルール作成 (3)本文スコープ外として分類)に従ってKBへフィードバックする。
 
 ## Important Constraints
 

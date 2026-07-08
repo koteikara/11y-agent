@@ -11,7 +11,7 @@ processing_class: hybrid
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_71.0"]
+michecker_check_ids: ["C_71.0", "C_80.0", "C_89.1", "C_600.0"]
 related: [/rules/image/caption.md, /rules/image/complex-image-report.md, /wcag/ch3-images.md]
 ---
 

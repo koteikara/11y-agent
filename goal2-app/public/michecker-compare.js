@@ -12,6 +12,7 @@
     resultTableBody: document.getElementById("resultTableBody"),
     contentOnlyFilter: document.getElementById("contentOnlyFilter"),
     emptyFilterNote: document.getElementById("emptyFilterNote"),
+    ruleBasisSelect: document.getElementById("ruleBasisSelect"),
     beforeHtmlInput: document.getElementById("beforeHtmlInput"),
     afterHtmlInput: document.getElementById("afterHtmlInput"),
     localCompareButton: document.getElementById("localCompareButton"),
@@ -45,9 +46,11 @@
 
   let currentResults = [];
   let lookupIndexes = null;
+  let ruleBasis = "kb";
 
   els.compareButton.addEventListener("click", handleCompareClick);
   els.contentOnlyFilter.addEventListener("change", applyContentOnlyFilter);
+  els.ruleBasisSelect.addEventListener("change", handleRuleBasisChange);
   els.resultTableBody.addEventListener("change", handleClassificationChange);
   els.localCompareButton.addEventListener("click", handleLocalCompareClick);
   els.saveSettingsButton.addEventListener("click", handleSaveSettingsClick);
@@ -144,16 +147,28 @@
         });
       });
       const wcagGap = [];
+      const scopeNotes = [];
       if (!kbMatches.length) {
         checkitemIds.forEach((checkId) => {
           const item = indexes.checkitemById.get(checkId);
-          if (item) item.wcag20.forEach((entry) => wcagGap.push(entry.criterion));
+          if (!item) return;
+          item.wcag20.forEach((entry) => wcagGap.push(entry.criterion));
+          if (item.content_scope_note && !scopeNotes.includes(item.content_scope_note)) {
+            scopeNotes.push(item.content_scope_note);
+          }
         });
       }
       result.checkitemIds = checkitemIds;
       result.kbMatches = kbMatches;
       result.manualNotes = manualNotes;
       result.wcagGap = [...new Set(wcagGap)];
+      // 一致したチェック項目のすべてに本文スコープ外の分類が付いている場合のみ、
+      // 「KB未対応」ではなく「本文スコープ外」として扱う(一部でも本文対応可能性が
+      // 残る場合はKB未対応側に倒す)。
+      result.outOfContentScope =
+        checkitemIds.length > 0 &&
+        checkitemIds.every((checkId) => indexes.checkitemById.get(checkId)?.content_scope_note);
+      result.scopeNotes = scopeNotes;
     });
     return results;
   }
@@ -463,10 +478,23 @@
     });
   }
 
+  function handleRuleBasisChange() {
+    ruleBasis = els.ruleBasisSelect.value;
+    if (!currentResults.length) return;
+    renderTable(currentResults);
+    applyContentOnlyFilter();
+  }
+
   function renderRuleMatch(result) {
     if (!lookupIndexes) return "";
     if (result.kbMatches && result.kbMatches.length) {
-      const badges = result.kbMatches
+      // miChecker基準のみモードでは、マニュアル版とmiChecker版の両方に一致する行で
+      // miChecker版(最小限の修正観点)だけを表示する。マニュアル版しか無い行は、
+      // それがmiChecker指摘を解消する唯一の対応ルールなのでそのまま表示する。
+      const micheckerMatches = result.kbMatches.filter((rule) => rule.origin === "michecker");
+      const matchesToShow =
+        ruleBasis === "michecker" && micheckerMatches.length ? micheckerMatches : result.kbMatches;
+      const badges = matchesToShow
         .map((rule) => {
           const isManual = rule.origin === "manual";
           const badgeClass = isManual ? "michecker-origin-manual" : "michecker-origin-michecker";
@@ -475,12 +503,17 @@
         })
         .join("");
       const notes =
-        result.manualNotes && result.manualNotes.length
+        ruleBasis === "kb" && result.manualNotes && result.manualNotes.length
           ? `<span class="michecker-rule-note">(${result.manualNotes.map((note) => escapeHtml(note.title)).join("、")}に内包)</span>`
           : "";
       return `${badges}${notes}`;
     }
     if (result.checkitemIds && result.checkitemIds.length) {
+      if (result.outOfContentScope) {
+        const note = result.scopeNotes && result.scopeNotes.length ? result.scopeNotes[0] : "";
+        const noteLabel = note ? `<span class="michecker-rule-note">${escapeHtml(note)}</span>` : "";
+        return `<span class="michecker-origin-badge michecker-origin-scope-out">本文スコープ外</span>${noteLabel}`;
+      }
       const wcagText = result.wcagGap && result.wcagGap.length ? result.wcagGap.join(", ") : "";
       const wcagLabel = wcagText ? ` <span class="michecker-wcag-gap">(WCAG ${escapeHtml(wcagText)})</span>` : "";
       return `<span class="michecker-origin-badge michecker-origin-gap">KB未対応</span>${wcagLabel}`;

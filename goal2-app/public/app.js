@@ -221,6 +221,7 @@
     selectedSampleId: inputSamples[0].id,
     pageAgentDrag: null,
     pageAgentDismissed: false,
+    ruleScopeMode: "kb",
   };
 
   const els = {
@@ -237,6 +238,7 @@
     loadSampleButton: document.getElementById("loadSampleButton"),
     analyzeButton: document.getElementById("analyzeButton"),
     resetButton: document.getElementById("resetButton"),
+    ruleScopeSelect: document.getElementById("ruleScopeSelect"),
     candidateSummary: document.getElementById("candidateSummary"),
     completionPill: document.getElementById("completionPill"),
     bulkSelectAll: document.getElementById("bulkSelectAll"),
@@ -293,6 +295,7 @@
     els.loadSampleButton.addEventListener("click", () => loadSample(els.sampleSelect.value));
     els.analyzeButton.addEventListener("click", analyze);
     els.resetButton.addEventListener("click", reset);
+    els.ruleScopeSelect.addEventListener("change", handleRuleScopeChange);
     els.bulkSelectAll.addEventListener("change", toggleBulkSelection);
     els.bulkAcceptButton.addEventListener("click", bulkAcceptSelected);
     els.acceptButton.addEventListener("click", () => decide("accepted"));
@@ -487,7 +490,10 @@
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
       const fragment = parseFragment(state.sourceHtml);
-      const reviewItems = generateCandidates(fragment);
+      let reviewItems = generateCandidates(fragment);
+      if (state.ruleScopeMode === "michecker") {
+        reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
+      }
       await enrichLinkTitleCandidates(reviewItems);
       state.candidates = reviewItems
         .filter((item) => !isNoticeItem(item))
@@ -519,6 +525,25 @@
       state.workingHtml = state.sourceHtml || els.htmlInput.value.trim();
       renderAll();
       setAnalyzeStatus("error", error);
+    }
+  }
+
+  // 画面独自の擬似ルールIDを、miChecker関連判定に使うKBルールIDへ対応づける。
+  // iframe.cms-reviewはCMS運用上の確認事項でmiCheckerのチェック項目ではないため、対応先なし。
+  const MICHECKER_RULE_ALIASES = {
+    "iframe.title": "html-structure.iframe-frame-title",
+  };
+
+  function isMicheckerRelevantRule(ruleId) {
+    const resolvedId = MICHECKER_RULE_ALIASES[ruleId] || ruleId;
+    const rule = state.ruleMap.get(resolvedId);
+    return Boolean(rule?.michecker_check_ids?.length);
+  }
+
+  function handleRuleScopeChange() {
+    state.ruleScopeMode = els.ruleScopeSelect.value;
+    if (state.candidates.length || state.notices.length) {
+      els.candidateSummary.textContent = "修正基準を変更しました。「候補生成」を押すと反映されます（既存の判断はリセットされます）。";
     }
   }
 
@@ -4906,6 +4931,7 @@
       cms_target: els.cmsTargetInput.value.trim(),
       worker: els.workerInput.value.trim(),
       generated_at: state.generatedAt,
+      rule_scope_mode: state.ruleScopeMode,
       input_hash: hashText(state.sourceHtml),
       final_hash: hashText(finalHtml),
       completion: {

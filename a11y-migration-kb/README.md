@@ -42,10 +42,12 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 ```
 
 ## 現状の規模
-- migration-rule: 61ルール（text 18 / link 10 / table 9 / image 9 / file 2 / html-structure 9 / form 4）
-- 処理分類: mechanical 18 / ai 15 / hybrid 23 / escalation 5
-- before/after 例: 80件
-- うち`origin: michecker`（miChecker公式チェックエンジン由来）: 8ルール、うち2ルールは対応するマニュアル版ルールの`includes`に含まれる
+- migration-rule: 62ルール（text 18 / link 10 / table 10 / image 9 / file 2 / html-structure 9 / form 4）
+- 処理分類: mechanical 18 / ai 15 / hybrid 24 / escalation 5
+- before/after 例: 82件
+- うち`origin: michecker`（miChecker公式チェックエンジン由来）: 9ルール、うち2ルールは対応するマニュアル版ルールの`includes`に含まれる
+- `michecker_check_ids`を持つルール: 29件（77チェック項目IDをカバー）。本文スコープ外として分類済みのチェック項目: 54件（`reference/michecker-out-of-content-scope.json`）
+- 「KB未対応」項目が見つかった場合のトリアージ手順は [reference/michecker-triage.md](/reference/michecker-triage.md) を参照。
 
 map・mobile ドメイン等を追加すればさらに拡張できる。
 - 画像＋関連リンクの共通ルールは [rules/image/showcase-section.md](/rules/image/showcase-section.md) を参照。

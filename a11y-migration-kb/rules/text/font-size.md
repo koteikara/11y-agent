@@ -10,6 +10,8 @@ jis: ["1.4.4"]
 processing_class: mechanical
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_13.0", "C_500.12", "C_500.15", "C_500.19", "C_500.20", "C_500.21"]
 related: [/wcag/ch2-site.md]
 ---
 

@@ -10,6 +10,8 @@ jis: ["なし"]
 processing_class: ai
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_25.1", "C_25.2", "C_25.3"]
 related: [/wcag/ch6-table.md]
 ---
 

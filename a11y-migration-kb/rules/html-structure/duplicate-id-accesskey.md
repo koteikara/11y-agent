@@ -10,6 +10,8 @@ jis: ["なし"]
 processing_class: mechanical
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_600.17"]
 related: [/rules/link/in-page-anchor.md, /wcag/ch2-site.md]
 ---
 
