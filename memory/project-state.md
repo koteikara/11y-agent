@@ -199,6 +199,9 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 上記の対応後、`signtool`は正しく検出・署名除去に成功したが、`[5/5]`の`postject`が「Error: Couldn't write executable」で失敗した。プロセスロックまたはアンチウイルスによるブロックが疑われたため、実行中プロセスの終了・再試行を案内したところ、**ユーザーのWindows実機でついにビルド→`goal2-app.exe`の起動→画面表示(KBルール61件の読み込み含む)まで一連の流れが初めて成功した**。
   - `LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理: PowerShellでは`.\build-windows-app.bat`が必要な旨を「ビルド手順」本文に明記、「注意」を実機確認済み(2026-07-08)に更新、トラブルシューティングを「ビルド中のエラー」「実行時のエラー」「アンチウイルスによるブロック」の3グループに再構成し`Error: Couldn't write executable`の対処法を追加。
   - これでSEA(.exe)ビルドの一連の不具合(`__dirname`解決・require()解決・call忘れ・signtool必須化・signtool検出)はすべて実機で解消を確認した。
+- ビルド成功後、ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`)を受け取って使うだけの人には不要であることを説明した上で、意図は「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という運用の分かりにくさだったと判明したため、配布物を1つのZIPにまとめる自動化で対応した。
+  - `build-windows-app.bat`に`[6/6]`としてPowerShellの`Compress-Archive`で`goal2-app.exe`・`public`・`data`を`goal2-app-windows.zip`にまとめるステップを追加。
+  - `LOCAL_WINDOWS_APP.md`の「ビルド手順」「利用者側の使い方」を、この1つのZIPを配布・展開する前提の内容に書き換え。
 
 ## Decisions
 
