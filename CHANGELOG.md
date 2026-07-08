@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-08: Windows実機でのSEA(.exe)ビルド成功を受けドキュメントを整理
+
+- 背景・目的: `call`の付け忘れ・`signtool`必須化・`signtool`検出のフォールバック追加、という3件の修正を経て、ユーザーのWindows実機で`goal2-app.exe`のビルド→起動→画面表示(KBルール61件の読み込み含む)までの一連の流れが初めて成功した。この過程で判明した「PowerShellでは`.\`が必要」「`[5/5]`でpostjectがファイル書き込みに失敗することがある(プロセスロック/アンチウイルス)」等の知見を反映し、`LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理した。
+- 主な変更内容:
+  - `goal2-app/LOCAL_WINDOWS_APP.md`:
+    - 「ビルド手順」に、PowerShellでは`.\build-windows-app.bat`と入力する必要がある旨を明記。
+    - 「注意」の記載を、Windows実機での動作確認が完了した旨(2026-07-08)に更新。
+    - トラブルシューティングを「ビルド中のエラー」「`goal2-app.exe`実行時のエラー」「アンチウイルスによるブロック」の3グループに再構成し、`postject`の`Error: Couldn't write executable`(プロセスロック・アンチウイルスが原因になりうる)の対処法を追加。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。ドキュメントの内容は、このセッション中に実際にユーザーのWindows実機で発生した一連の事象とその解決に基づく。
+- 関連ファイル: `goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: signtool検出をPATH以外の標準インストール先にも対応
 
 - 背景・目的: signtoolを必須化した直後、ユーザーが「signtoolはインストール済みなのに`signtool was not found`と表示される」と報告した。Windows SDKのインストーラーは`signtool.exe`をPATHに自動追加しないことが多く、また既に開いているコマンドプロンプト/PowerShellのウィンドウにはインストール後のPATH更新が反映されない(新しいウィンドウを開き直す必要がある)ため、`where signtool`だけに頼る検出方法では見つけられないケースがあることが分かった。
