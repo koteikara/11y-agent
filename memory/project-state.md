@@ -202,6 +202,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - ビルド成功後、ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`)を受け取って使うだけの人には不要であることを説明した上で、意図は「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という運用の分かりにくさだったと判明したため、配布物を1つのZIPにまとめる自動化で対応した。
   - `build-windows-app.bat`に`[6/6]`としてPowerShellの`Compress-Archive`で`goal2-app.exe`・`public`・`data`を`goal2-app-windows.zip`にまとめるステップを追加。
   - `LOCAL_WINDOWS_APP.md`の「ビルド手順」「利用者側の使い方」を、この1つのZIPを配布・展開する前提の内容に書き換え。
+- ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、AskUserQuestionで意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。`AGENTS.md`/`workstream.md`のmiChecker関連記述が抽象的なまま(このセッションで実装済みの`michecker-compare.html`を反映していない)だったため、具体的な手順として書き直した。
+  - `workstream.md`のGoal 2 Target Flowを、移行前HTML確保→CMS登録→移行後検査→`michecker-compare.html`への読み込み(ローカルWindows版での自動比較/Cloud Runホスト版でのCSV手動アップロードの2経路)→「対応ルール」列(KBルールへの逆引き・KB未対応の可視化)を使った本文起因指摘の絞り込み、という具体的な13ステップに再構成。Goal 1にも同ツールを将来流用できる旨を一文追記。
+  - `AGENTS.md`の「miChecker Quality Signal」節に、`michecker-compare.html`の機能と2つの検査結果取得方法(Cloud Run版/ローカルWindows版)を追記。
+  - 次の作業(ユーザーの優先順位2番目): 逆引き機能自体の完成度向上(現状は`michecker_check_ids`を持つルールのみ逆引きでき、KB未対応となった項目をどうKB拡張にフィードバックするかの運用は未定義)。
 
 ## Decisions
 

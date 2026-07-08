@@ -21,7 +21,16 @@
 
 ## Entries
 
-## 2026-07-08: 配布用ZIPをビルド時に自動生成(goal2-app.exe単体配布の誤解を解消)
+## 2026-07-08: goal2-appとmiChecker/htmlchecker.exeの実務ワークフローをAGENTS.md/workstream.mdに明文化
+
+- 背景・目的: ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。これまでの`AGENTS.md`/`workstream.md`のmiChecker関連記述は「CMS登録後のプレビューURLでmiChecker確認を行い分類する」といった抽象的な記述に留まり、このセッションで実装済みの`michecker-compare.html`(移行前後比較・分類・KBルールへの逆引き)を具体的に反映していなかったため、実際に使えるツールに基づいた具体的な手順として書き直した。
+- 主な変更内容:
+  - `workstream.md`のGoal 2 Target Flowに、移行前HTMLの確保タイミング、CMS登録後の移行後検査、`michecker-compare.html`への読み込み(ローカルWindows版での自動比較 / Cloud Runホスト版でのCSV手動アップロードの2経路)、「対応ルール」列(マニュアル版/miChecker版への逆引き、KB未対応の可視化)を使った本文起因指摘の絞り込みまでを具体的な手順として追記(全13ステップに再構成)。
+  - `workstream.md`のGoal 1 Target Flowにも、Goal 2向けに実装済みの`michecker-compare.html`を将来流用できる旨を一文追記。
+  - `AGENTS.md`の「miChecker Quality Signal」節に、`goal2-app/public/michecker-compare.html`の機能(新規/未解消/解消の自動分類、KBルールへの逆引き表示、KB未対応の可視化)と、検査結果の2つの取得方法(Cloud Run版: CSV手動アップロード / ローカルWindows版: htmlchecker.exe自動比較)を追記。
+- 検証: ドキュメントのみの変更(コードへの影響なし)。
+- 関連ファイル: `AGENTS.md`、`workstream.md`
+- 関連PR: (作成予定)
 
 - 背景・目的: ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`フォルダ)を受け取って使うだけの人には一切不要であることを説明し、意図は「配る側の負担を減らしたい」ではなく「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という点の運用を分かりやすくしたい、ということだったため、配布物を1つのZIPファイルにまとめる自動化を行った。
 - 主な変更内容:
