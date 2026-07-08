@@ -195,6 +195,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `build-windows-app.bat`: `signtool`が見つからない場合はエラー終了し、インストール方法を案内するよう変更(スキップして続行、から必須化に変更)。
   - `LOCAL_WINDOWS_APP.md`: `signtool`を前提条件に追加し、インストール手順(Windows SDKインストーラーで「Windows SDK Signing Tools for Desktop Apps」のみ導入)を新設。トラブルシューティングにREPLが開く症状の説明を追加。
   - **未検証**: `signtool`によるバイナリ署名除去・Windows PE形式でのSEA注入はこの開発環境(Linux)では検証できない。ユーザーの実機再検証待ち。
+- signtool必須化の直後、ユーザーが「signtoolはインストール済みなのに見つからないと言われる」と報告した。Windows SDKインストーラーが`signtool.exe`をPATHに自動追加しないこと、および既に開いているシェルにはインストール後のPATH更新が反映されないことが原因と考えられる。`build-windows-app.bat`に、`where`で見つからない場合は`C:\Program Files (x86)\Windows Kits\10\bin\`以下を再帰検索するフォールバックを追加した。`LOCAL_WINDOWS_APP.md`のトラブルシューティングも対応更新。ユーザーの再検証待ち。
 
 ## Decisions
 

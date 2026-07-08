@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-08: signtool検出をPATH以外の標準インストール先にも対応
+
+- 背景・目的: signtoolを必須化した直後、ユーザーが「signtoolはインストール済みなのに`signtool was not found`と表示される」と報告した。Windows SDKのインストーラーは`signtool.exe`をPATHに自動追加しないことが多く、また既に開いているコマンドプロンプト/PowerShellのウィンドウにはインストール後のPATH更新が反映されない(新しいウィンドウを開き直す必要がある)ため、`where signtool`だけに頼る検出方法では見つけられないケースがあることが分かった。
+- 主な変更内容:
+  - `goal2-app/build-windows-app.bat`: `where signtool`で見つからない場合、`C:\Program Files (x86)\Windows Kits\10\bin\`以下を再帰的に検索して`signtool.exe`を探すフォールバックを追加。見つかった場合はそのフルパスを使用する。
+  - エラーメッセージに、インストール済みの場合は新しいウィンドウを開き直すよう案内する一文を追加。
+  - `LOCAL_WINDOWS_APP.md`のトラブルシューティングを対応更新。
+- 検証: `node --check server.js`・`node test/run-tests.js`成功(server.js自体は今回変更なし)。バッチファイルの実際の検索動作はこの開発環境(Linux)では検証できないため、ユーザーの実機再検証待ち。
+- 関連ファイル: `goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-08: signtoolによる署名除去を必須化(goal2-app.exeがNode REPLで起動する不具合を修正)
 
 - 背景・目的: `call`修正後にビルドは`[1/5]`〜`[5/5]`まで完走し`goal2-app.exe`も生成されたが、実行するとアプリではなくNode.jsの対話モード(REPL)が開いてしまう不具合が報告された。`postject`の実行ログに`warning: The signature seems corrupted!`という警告が出ており、これが原因と判明した。`node.exe`は署名済みバイナリであり、Node.js公式のSEA機能ドキュメントでも「署名済みバイナリを改変する場合は事前に署名を除去する必要がある」と明記されている。従来の`build-windows-app.bat`は`signtool`が無い場合は署名除去を静かにスキップする作りだったため、`signtool`が入っていない環境では、ビルド自体は完走するものの中身が壊れた(SEAのフューズが正しく設定されない)`.exe`が生成され、実行時にNode.jsの通常のCLI引数解析にフォールバックしてREPLが起動していた。

@@ -25,17 +25,26 @@ node -e "require('fs').copyFileSync(process.execPath, 'goal2-app.exe')"
 if errorlevel 1 exit /b 1
 
 echo [4/5] Removing the existing signature from the copied node.exe...
+set "SIGNTOOL="
 where signtool >nul 2>nul
-if errorlevel 1 (
+if not errorlevel 1 (
+  set "SIGNTOOL=signtool"
+) else (
+  rem signtool is commonly installed under the Windows SDK folder without
+  rem being added to PATH. Search the usual install location as a fallback.
+  for /f "delims=" %%F in ('dir /s /b "C:\Program Files (x86)\Windows Kits\10\bin\signtool.exe" 2^>nul') do set "SIGNTOOL=%%F"
+)
+if not defined SIGNTOOL (
   echo Error: signtool was not found. node.exe is a digitally signed binary, and
   echo the signature MUST be removed before injecting the SEA blob into it, or
   echo the resulting goal2-app.exe will be corrupted and will not run correctly
   echo ^(it will just start a plain Node.js REPL instead of the app^).
-  echo Install "Windows SDK Signing Tools for Desktop Apps" and try again.
+  echo If you just installed "Windows SDK Signing Tools for Desktop Apps",
+  echo close this window and open a new one so the updated PATH takes effect.
   echo See LOCAL_WINDOWS_APP.md for installation steps.
   exit /b 1
 )
-signtool remove /s goal2-app.exe
+"%SIGNTOOL%" remove /s goal2-app.exe
 if errorlevel 1 exit /b 1
 
 echo [5/5] Injecting the blob into goal2-app.exe with postject...
