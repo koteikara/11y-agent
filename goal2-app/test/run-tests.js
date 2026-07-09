@@ -185,6 +185,68 @@ async function main() {
   assert.ok(appJs.includes("oldSiteTemplateHeadingProposal"), "old-site template headings should become removal candidates");
   assert.ok(appJs.includes("loadSagaSamples"), "Saga fixture samples should be loaded into the sample picker");
 
+  // miChecker error-type parity additions (C_33.0/34.0, C_36.0/36.1, C_422.0/423.0, C_51.0/51.4,
+  // C_57.2, C_331.0/331.1, C_332.1/332.2). See detector functions and their generated ruleIds/messages below.
+  assert.ok(appJs.includes("collectDeprecatedMotionElementCandidate"), "blink/marquee detection should be implemented");
+  assert.ok(appJs.includes('"BLINK", "MARQUEE"'), "blink/marquee tags should be recognized as deprecated motion elements");
+  assert.ok(appJs.includes("hasTextDescendant"), "blink detection should require a text descendant, matching miChecker item_33");
+  assert.ok(appJs.includes("blink要素が含まれています。"), "blink candidates should have a Japanese message");
+  assert.ok(appJs.includes("marquee要素が含まれています。"), "marquee candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.deprecated-elements"'),
+    "blink/marquee candidates should use the deprecated-elements KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectMetaRefreshCandidates"), "meta refresh detection should be implemented");
+  assert.ok(appJs.includes('meta[http-equiv]'), "meta refresh detection should scan http-equiv attributes");
+  assert.ok(appJs.includes("周期的にページを再読み込みするmeta refreshが含まれています。"), "meta refresh reload should have a Japanese message");
+  assert.ok(appJs.includes("自動的にページを切り替えるmeta refresh"), "meta refresh redirect should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.embedded-script-behavior"'),
+    "meta refresh candidates should use the embedded-script-behavior KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectDuplicateAttributeCandidates"), "duplicate id/accesskey detection should be implemented");
+  assert.ok(appJs.includes("collectDuplicateAttributeCandidatesFor"), "duplicate id/accesskey detection should share a per-attribute helper");
+  assert.ok(appJs.includes("が他の要素と重複しています"), "duplicate id/accesskey candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.duplicate-id-accesskey"'),
+    "duplicate id/accesskey candidates should use the duplicate-id-accesskey KB rule id"
+  );
+
+  assert.ok(appJs.includes('querySelectorAll("iframe,frame")'), "frame elements should be checked for title like iframe (C_51.0/51.4)");
+  assert.ok(
+    appJs.includes("collectFrameElementNotices"),
+    "frame elements dropped by the HTML parser should be detected from the raw source (C_51.0/51.4)"
+  );
+  assert.ok(appJs.includes('"iframe.frame-unsupported"'), "frame notices should use the iframe.frame-unsupported pseudo rule id");
+  assert.ok(
+    appJs.includes('"iframe.frame-unsupported": "html-structure.iframe-frame-title"'),
+    "iframe.frame-unsupported should map to the iframe-frame-title KB rule for miChecker mode"
+  );
+  assert.ok(
+    appJs.includes("sanitizeVisualPreviewHtml"),
+    "visual preview must sanitize active content (meta refresh navigated the app page before this fix)"
+  );
+
+  assert.ok(appJs.includes("computeLinkAccessibleText"), "empty-link-text detection should compute an accessible text value");
+  assert.ok(appJs.includes("リンク内に読み上げ可能なテキストがありません。"), "empty link candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "link.link-purpose-standalone"'),
+    "empty link candidates should use the link-purpose-standalone KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectTableHeaderScopeCandidates"), "per-cell th scope/headers validation should be implemented");
+  assert.ok(appJs.includes("guessThScopeValue"), "th scope auto-fix should guess a scope value from cell position");
+  assert.ok(appJs.includes("th要素にscope属性がありません。"), "missing scope candidates should have a Japanese message");
+  assert.ok(appJs.includes("が不正です。"), "invalid scope value candidates should have a Japanese message");
+  assert.ok(appJs.includes("headers属性が参照するid"), "headers reference validation should check for a matching id in the table");
+  assert.ok(appJs.includes("がth・td要素ではありません"), "headers reference validation should check the referenced element's tag");
+  assert.ok(
+    appJs.includes('ruleId: "table.th-scope"'),
+    "th scope/headers candidates should use the table.th-scope KB rule id"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");

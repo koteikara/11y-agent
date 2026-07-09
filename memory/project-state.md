@@ -223,6 +223,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `reference/michecker-triage.md`のバックログを更新(解決済みのC_54.0・C_79.5を削除、新たに見つかった未対応バックログ11項目を追記)。
   - `build/rules.jsonl`(56ルール)・`build/michecker-checkitems.json`(268件)を再生成・同期。
   - 検証: 実データ(59シグネチャ)でKB未対応(赤)2件→0件、本文スコープ外(グレー)25件→33件、ルール一致32件(変化なし、回帰なし)を確認。既存サンプル6件のPlaywright回帰確認・`node test/run-tests.js`成功。
+- ユーザーから「検出・チェックの方法もmiChecker本体と全く同じにしたい(候補生成が上位互換ならそのままでよい)」との依頼を受け、タグ付け済み88チェック項目とapp.js候補生成のギャップ分析を実施した(A: 上位互換14件 / B: 部分カバー32件 / C: 未検出42件)。miChecker本体の検出アルゴリズム(eclipse-actf CheckEngine.javaのitem_NN()メソッド群)はWebFetchで参照可能なことを確認済みで、発火条件の裏取りに使える。
+  - Phase 1として、error型(機械的確定検出)14件のパリティを実装: blink/marquee(C_33.0/34.0)、meta refresh(C_36.0/36.1)、id・accesskey重複(C_422.0/423.0)、frame要素title(C_51.0/51.4、パーサーがframeを破棄するため生HTML再解析で注意として出力)、空リンク(C_57.2)、セル単位scope検査(C_331.0/331.1)、headers属性参照検証(C_332.1/332.2、C_332.0はmiChecker本体でも未発火のため対象外)。
+  - この検証中に、候補詳細「見た目の比較」が候補HTMLを親ページへ直接挿入しているためmeta refreshでアプリごと遷移する実バグを発見し、`sanitizeVisualPreviewHtml()`で修正した。
+  - 検証: 陽性13+陰性6+miCheckerモード1の計21ケース全PASS、既存6サンプルの候補数完全一致、テスト成功。
+  - 残作業: Phase 2(warning/B系32件の検出漏れ補強: 廃止要素の対象拡大・bgcolor属性・レイアウト表の素朴判定・テーブルセル内色指定の設計穴等)、Phase 3(user/info型の確認通知: 見出し内容の質・リスト構造・隣接リンク等、「注意」枠での出力を想定)。summary属性系(C_25.2/C_25.4)はKBの廃止属性方針と衝突するため方針判断待ち(推奨: summaryは実装せずcaption/本文での概要提供を促す通知に読み替え)。
+  - 運用メモ: このセッションからユーザー指示により「Fable 5が司令塔(計画・判断・レビュー)、Sonnet 5が基本作業(実装・調査)」の体制。ギャップ分析とPhase 1実装の大部分はSonnet 5サブエージェントが実施し、Fable 5が検証・バグ修正・フォローアップを行った。
 
 ## Decisions
 

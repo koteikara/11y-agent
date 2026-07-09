@@ -22,6 +22,7 @@
     "link.link-broken",
     "file.external-pdf",
     "iframe.cms-review",
+    "iframe.frame-unsupported",
     "text.bold",
     "text.note-symbol",
   ]);
@@ -532,6 +533,7 @@
   // iframe.cms-reviewはCMS運用上の確認事項でmiCheckerのチェック項目ではないため、対応先なし。
   const MICHECKER_RULE_ALIASES = {
     "iframe.title": "html-structure.iframe-frame-title",
+    "iframe.frame-unsupported": "html-structure.iframe-frame-title",
   };
 
   function isMicheckerRelevantRule(ruleId) {
@@ -604,7 +606,111 @@
     collectLinkCandidates(fragment, candidates);
     collectIframeCandidates(fragment, candidates);
     collectTextCandidates(fragment, candidates);
+    collectMetaRefreshCandidates(fragment, candidates);
+    collectDuplicateAttributeCandidates(fragment, candidates);
+    collectFrameElementNotices(candidates);
     return candidates;
+  }
+
+  // miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白。
+  // frame要素はframeset外ではHTMLパーサーが破棄するため、通常のfragment走査では検出できない
+  // (貼り付けた時点で作業用HTMLからも自動的に消える)。生の入力HTMLをframeset文書として
+  // 解析し直して検出し、修正候補ではなく「注意」(patchMode: none)として出力する。
+  function collectFrameElementNotices(candidates) {
+    const source = state.sourceHtml || "";
+    if (!/<frame[\s/>]/i.test(source)) {
+      return;
+    }
+    const doc = new DOMParser().parseFromString(`<frameset>${source}</frameset>`, "text/html");
+    doc.querySelectorAll("frame").forEach((frame) => {
+      const title = normalizeText(frame.getAttribute("title") || "");
+      const titleIssue = !title
+        ? "title属性が無い、または空白のみのため、miCheckerでは「frame要素にtitle属性がありません」と指摘されます。"
+        : "";
+      candidates.push(
+        makeCandidate({
+          ruleId: "iframe.frame-unsupported",
+          element: frame,
+          message: "frame要素が含まれています。CMS本文には取り込めません。",
+          reason: `frame要素はCMSの本文HTMLでは利用できず、貼り付けた時点で自動的に失われます。フレーム内の各ページの内容を、通常の本文コンテンツとして再構成してください。${titleIssue}`,
+          afterHtml: "",
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+  }
+
+  // miChecker C_36.0/C_36.1: <meta http-equiv="Refresh"> による自動リロード・自動リダイレクト。
+  // content値に"url"が含まれていればページ遷移(リダイレクト)、含まれていなければ単純な自動リロードとして扱う。
+  function collectMetaRefreshCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("meta[http-equiv]").forEach((meta) => {
+      const httpEquiv = (meta.getAttribute("http-equiv") || "").trim().toLowerCase();
+      if (httpEquiv !== "refresh") {
+        return;
+      }
+      const content = meta.getAttribute("content") || "";
+      const isRedirect = /url/i.test(content);
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.embedded-script-behavior",
+          element: meta,
+          message: isRedirect
+            ? "自動的にページを切り替えるmeta refresh（リダイレクト）が含まれています。"
+            : "周期的にページを再読み込みするmeta refreshが含まれています。",
+          reason: isRedirect
+            ? "自動的なページ遷移は利用者の操作を妨げるため、meta refreshによるリダイレクトを削除し、必要であれば通常のリンクを設置します。"
+            : "自動リロードは利用者が読んでいる内容を突然更新してしまうため、meta refreshを削除し、必要であれば更新用のリンクやボタンを設置します。",
+          afterHtml: "",
+          patch: { type: "remove-element" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
+  }
+
+  // miChecker C_422.0/C_423.0: id・accesskey属性値の重複。
+  // 複数の案件・記事を貼り付けたページで同じidやaccesskeyが重複しやすいため、fragment全体で値ごとに集計する。
+  // 最初の出現は基準として残し、2件目以降を「一意な値へ書き換えが必要」な候補として提示する（patchMode: noneで自動置換はしない）。
+  function collectDuplicateAttributeCandidates(fragment, candidates) {
+    collectDuplicateAttributeCandidatesFor(fragment, candidates, "id", "id属性");
+    collectDuplicateAttributeCandidatesFor(fragment, candidates, "accesskey", "accesskey属性");
+  }
+
+  function collectDuplicateAttributeCandidatesFor(fragment, candidates, attrName, attrLabel) {
+    const groups = new Map();
+    fragment.content.querySelectorAll(`[${attrName}]`).forEach((element) => {
+      const value = (element.getAttribute(attrName) || "").trim();
+      if (!value) {
+        return;
+      }
+      if (!groups.has(value)) {
+        groups.set(value, []);
+      }
+      groups.get(value).push(element);
+    });
+
+    groups.forEach((elements, value) => {
+      if (elements.length < 2) {
+        return;
+      }
+      elements.slice(1).forEach((element, index) => {
+        candidates.push(
+          makeCandidate({
+            ruleId: "html-structure.duplicate-id-accesskey",
+            element,
+            message: `${attrLabel}の値「${value}」が他の要素と重複しています（${elements.length}件）。`,
+            reason: `${attrLabel}はページ内で一意である必要があります。ページ内アンカーやラベルの参照先が変わらないか確認しながら、値を一意になるよう書き換えてください（例: 「${value}-${index + 2}」）。`,
+            afterHtml: element.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      });
+    });
   }
 
   async function enrichLinkTitleCandidates(items) {
@@ -1035,6 +1141,23 @@
       const href = link.getAttribute("href") || "";
       const hrefInfo = classifyHref(href);
 
+      // miChecker C_57.2: リンク内に読み上げ可能なテキストが無い(画像のみ・アイコンのみ等)。
+      // テキストノード + img[alt] + aria-label/aria-labelledby を合成した「読み上げ可能テキスト」で判定する。
+      if (!computeLinkAccessibleText(link, fragment.content)) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "link.link-purpose-standalone",
+            element: link,
+            message: "リンク内に読み上げ可能なテキストがありません。",
+            reason: "画像のみ・アイコンのみのリンクなど、読み上げ可能なテキストが無いリンクはスクリーンリーダーで内容が伝わりません。alt属性の追加やリンクテキストの追加で、リンク先が分かるようにしてください。",
+            afterHtml: link.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
+
       const cleanedFileText = removeFileMeta(text);
       if (cleanedFileText !== text) {
         const clone = link.cloneNode(true);
@@ -1280,6 +1403,11 @@
         );
       }
 
+      // miChecker C_331.0/C_331.1/C_332.1/C_332.2: th単位のscope検査とheaders参照検証。
+      // 表全体をデータ表/レイアウト表として再構築する下記のplanTableTreatment判定とは独立に、
+      // 個々のth・headers属性を機械的に走査する(表単位のhasScope判定は変更しない)。
+      collectTableHeaderScopeCandidates(table, candidates);
+
       const plan = planTableTreatment(table);
 
       if (plan.kind === "structural") {
@@ -1396,6 +1524,108 @@
     }
 
     return { kind: "data" };
+  }
+
+  // miChecker C_331.0/C_331.1: th要素はscope属性(col/row/colgroup/rowgroup)を持つ必要がある。
+  // miChecker C_332.1/C_332.2: headers属性の値は、同じ表内に存在するth・td要素のidを指す必要がある。
+  // (checkitem.xmlにはC_332.0も定義されているが、miChecker本体のCheckEngine.java item_332()では
+  //  C_332.1/C_332.2のみが発火し、C_332.0は実装上呼び出されない。そのため本実装でもC_332.1/C_332.2相当のみを検出する。)
+  function collectTableHeaderScopeCandidates(table, candidates) {
+    table.querySelectorAll("th").forEach((th) => {
+      if (!th.hasAttribute("scope")) {
+        const suggested = guessThScopeValue(th);
+        const clone = th.cloneNode(true);
+        clone.setAttribute("scope", suggested);
+        candidates.push(
+          makeCandidate({
+            ruleId: "table.th-scope",
+            element: th,
+            message: "th要素にscope属性がありません。",
+            reason: "表の見出しセル(th)には、見出しの方向を示すscope属性(col/row/colgroup/rowgroup)が必要です。表の構造を確認し、正しい方向を設定してください。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "scope", value: suggested },
+            confidence: "low",
+            requiresHumanReview: true,
+          })
+        );
+        return;
+      }
+
+      const scopeValue = normalizeText(th.getAttribute("scope") || "");
+      if (!/^(row|col|rowgroup|colgroup)$/.test(scopeValue)) {
+        const suggested = guessThScopeValue(th);
+        const clone = th.cloneNode(true);
+        clone.setAttribute("scope", suggested);
+        candidates.push(
+          makeCandidate({
+            ruleId: "table.th-scope",
+            element: th,
+            message: `th要素のscope属性値「${scopeValue}」が不正です。`,
+            reason: "scope属性にはcol・row・colgroup・rowgroupのいずれかを指定します。表の構造を確認し、正しい方向に修正してください。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "scope", value: suggested },
+            confidence: "low",
+            requiresHumanReview: true,
+          })
+        );
+      }
+    });
+
+    table.querySelectorAll("[headers]").forEach((cell) => {
+      const ids = (cell.getAttribute("headers") || "").split(/\s+/).filter(Boolean);
+      ids.forEach((id) => {
+        let referred = null;
+        try {
+          referred = table.querySelector(`#${cssEscape(id)}`);
+        } catch {
+          referred = null;
+        }
+        if (!referred) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.th-scope",
+              element: cell,
+              message: `headers属性が参照するid「${id}」が表内に見つかりません。`,
+              reason: "headers属性の値には、同じ表内にある見出しセル(th)のid値を指定します。参照先が存在しない、または表外を指している場合は、idの記載やth側へのid付与を見直してください。",
+              afterHtml: cell.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        } else if (!["TH", "TD"].includes(referred.tagName)) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.th-scope",
+              element: cell,
+              message: `headers属性が参照する要素(id="${id}")がth・td要素ではありません(<${referred.tagName.toLowerCase()}>)。`,
+              reason: "headers属性はth・td要素のidだけを参照できます。参照先を見出しセル(th)またはデータセル(td)に修正してください。",
+              afterHtml: cell.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
+      });
+    });
+  }
+
+  function guessThScopeValue(th) {
+    const row = th.parentElement && th.parentElement.tagName === "TR" ? th.parentElement : null;
+    if (th.closest("thead")) {
+      return "col";
+    }
+    const cellIndex = row ? [...row.children].indexOf(th) : 0;
+    if (cellIndex === 0) {
+      return "row";
+    }
+    const table = th.closest("table");
+    const firstRow = table?.querySelector("tr");
+    if (firstRow && row === firstRow) {
+      return "col";
+    }
+    return "col";
   }
 
   function shouldPreserveAsDataTable(table) {
@@ -1934,8 +2164,11 @@
     return "low";
   }
 
+  // "iframe"に加え"frame"も対象にする(miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白)。
+  // 判定ロジックはiframeと共通のため、タグ名だけメッセージに反映して流用する。
   function collectIframeCandidates(fragment, candidates) {
-    fragment.content.querySelectorAll("iframe").forEach((iframe) => {
+    fragment.content.querySelectorAll("iframe,frame").forEach((iframe) => {
+      const tagLabel = iframe.tagName.toLowerCase();
       const title = normalizeText(iframe.getAttribute("title") || "");
       if (!title || isGenericIframeTitle(title)) {
         const clone = iframe.cloneNode(true);
@@ -1945,8 +2178,8 @@
           makeCandidate({
             ruleId: "iframe.title",
             element: iframe,
-            message: title ? "iframeのtitle属性が汎用的です。" : "iframeにtitle属性がありません。",
-            reason: "iframeは内容や目的が分かるtitle属性が必要です。リンク先や埋め込み内容を確認して具体化します。",
+            message: title ? `${tagLabel}要素のtitle属性が汎用的です。` : `${tagLabel}要素にtitle属性がありません。`,
+            reason: `${tagLabel}要素は内容や目的が分かるtitle属性が必要です。リンク先や埋め込み内容を確認して具体化します。`,
             afterHtml: clone.outerHTML,
             patch: { type: "set-attribute", name: "title", value: suggestedTitle },
             confidence: "low",
@@ -1959,8 +2192,8 @@
         makeCandidate({
           ruleId: "iframe.cms-review",
           element: iframe,
-          message: "iframe埋め込みが含まれています。",
-          reason: "CMS登録用本文HTMLでiframeを利用できるか、代替リンクや埋め込み元の許可が必要かを確認します。",
+          message: `${tagLabel}埋め込みが含まれています。`,
+          reason: "CMS登録用本文HTMLでこの埋め込みを利用できるか、代替リンクや埋め込み元の許可が必要かを確認します。",
           afterHtml: iframe.outerHTML,
           confidence: "low",
           requiresHumanReview: true,
@@ -2079,7 +2312,40 @@
     }
   }
 
+  // miChecker C_33.0/C_34.0: blink・marquee要素。廃止要素として除去(unwrap)し、テキストは保持する。
+  // blinkは中身のテキストが無ければ発火しない(miChecker本体のitem_33のhasTextDescendant相当の条件に合わせる)。
+  // marqueeは中身の有無を問わず常に候補化する(item_34は無条件)。
+  function collectDeprecatedMotionElementCandidate(element, candidates, seen) {
+    if (!["BLINK", "MARQUEE"].includes(element.tagName)) {
+      return false;
+    }
+    if (element.tagName === "BLINK" && !hasTextDescendant(element)) {
+      return true;
+    }
+
+    pushUniqueCandidate(
+      candidates,
+      seen,
+      makeCandidate({
+        ruleId: "html-structure.deprecated-elements",
+        element,
+        message: element.tagName === "BLINK" ? "blink要素が含まれています。" : "marquee要素が含まれています。",
+        reason: element.tagName === "BLINK"
+          ? "blinkによる5秒以上の明滅はWCAG違反となるため、要素を除去し通常のテキストとして表示します。"
+          : "marqueeによる自動スクロールはWCAG違反となるため、要素を除去し通常のテキストとして表示します。",
+        afterHtml: element.innerHTML,
+        patch: { type: "unwrap-element" },
+        confidence: "high",
+        requiresHumanReview: false,
+      })
+    );
+    return true;
+  }
+
   function collectDecorationElementCandidate(element, candidates, seen) {
+    if (collectDeprecatedMotionElementCandidate(element, candidates, seen)) {
+      return;
+    }
     if (!["U", "S", "STRIKE", "I", "FONT"].includes(element.tagName)) {
       return;
     }
@@ -3372,6 +3638,12 @@
         processingClass: "escalation",
         wcag: [],
       },
+      "iframe.frame-unsupported": {
+        category: "iframe",
+        title: "frame要素の移行確認",
+        processingClass: "escalation",
+        wcag: ["4.1.2"],
+      },
     };
     const ruleInfo = rules[id];
     if (!ruleInfo) {
@@ -4560,8 +4832,16 @@
       items.push("複雑な画像は、本文説明と報告を分けて扱います。");
     } else if (ruleId === "link.link-text") {
       items.push("『こちら』のような曖昧なリンクを、行き先が分かる言い方にします。");
+    } else if (ruleId === "link.link-purpose-standalone") {
+      items.push("読み上げでもリンクの行き先が分かるようにします。");
     } else if (ruleId.startsWith("table.")) {
       items.push("表は、見出しやキャプションの役割が分かる形に整えます。");
+    } else if (ruleId === "html-structure.deprecated-elements") {
+      items.push("古い装飾用のタグを取り除き、通常のテキストとして表示します。");
+    } else if (ruleId === "html-structure.embedded-script-behavior") {
+      items.push("自動で動く仕組み（自動更新・自動移動）を取り除きます。");
+    } else if (ruleId === "html-structure.duplicate-id-accesskey") {
+      items.push("ページ内で重複しているid・accesskeyを一意になるよう直します。");
     } else if (ruleId.startsWith("html-structure.")) {
       items.push("見出しの順番や構造を、読み上げても追いやすい形に整えます。");
     } else if (ruleId.startsWith("text.")) {
@@ -4776,7 +5056,7 @@
   }
 
   function buildVisualPreviewCard(title, html, tone) {
-    const previewHtml = stripInternalFromHtml(html || "<p>（内容なし）</p>");
+    const previewHtml = sanitizeVisualPreviewHtml(stripInternalFromHtml(html || "<p>（内容なし）</p>"));
     return `
       <article class="compare-card compare-card-${tone}">
         <div class="compare-card-header">
@@ -4786,6 +5066,29 @@
         <div class="compare-visual" data-goal2-visual-preview="${escapeHtml(previewHtml)}"></div>
       </article>
     `;
+  }
+
+  // 見た目比較は候補のHTMLを親ページのDOMへ直接挿入するため、挿入時に実行・遷移を引き起こす
+  // 能動的コンテンツを除去する。特に<meta http-equiv="refresh">は動的挿入でもブラウザが処理し、
+  // アプリのページ自体を遷移させてしまう(miChecker C_36.x候補のプレビューで実際に発生)。
+  function sanitizeVisualPreviewHtml(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    template.content.querySelectorAll("meta, script, base, link").forEach((el) => el.remove());
+    template.content.querySelectorAll("*").forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        if (/^on/i.test(attr.name)) {
+          el.removeAttribute(attr.name);
+        } else if (["href", "src"].includes(attr.name.toLowerCase()) && /^\s*javascript:/i.test(attr.value)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    const sanitized = template.innerHTML.trim();
+    if (!sanitized && (html || "").trim()) {
+      return "<p>（画面には表示されない要素です）</p>";
+    }
+    return sanitized;
   }
 
   function renderAiImageNamePanel(candidate) {
@@ -5343,6 +5646,10 @@
     return Boolean(element.closest("script, style, noscript, textarea, select, option"));
   }
 
+  function hasTextDescendant(element) {
+    return textNodes(element).some((node) => normalizeText(node.nodeValue).length > 0);
+  }
+
   function replaceTextInElement(element, before, after) {
     const isRegex = before instanceof RegExp;
     const node = textNodes(element).find((textNode) => {
@@ -5712,6 +6019,34 @@
 
   function isGenericLinkText(text) {
     return /^(こちら|ここ|詳細はこちら|詳しくはこちら|クリック|click here)$/i.test(text);
+  }
+
+  // リンクの「読み上げ可能テキスト」= テキストノード + img[alt]の値 + aria-label/aria-labelledbyの参照先テキスト。
+  // miChecker C_57.2の算入範囲(CheckEngine.java item_57のgetNameByAriaフォールバック)を参考に、
+  // このいずれにも実質的な文字列が無ければリンクは読み上げ不能とみなす。
+  function computeLinkAccessibleText(link, root) {
+    const parts = [normalizeText(link.textContent || "")];
+    link.querySelectorAll("img[alt]").forEach((img) => {
+      const alt = img.getAttribute("alt") || "";
+      if (alt.trim()) {
+        parts.push(normalizeText(alt));
+      }
+    });
+    const ariaLabel = link.getAttribute("aria-label") || "";
+    if (ariaLabel.trim()) {
+      parts.push(normalizeText(ariaLabel));
+    }
+    const labelledBy = link.getAttribute("aria-labelledby") || "";
+    labelledBy
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((id) => {
+        const referenced = root?.querySelector?.(`#${cssEscape(id)}`);
+        if (referenced) {
+          parts.push(normalizeText(referenced.textContent || ""));
+        }
+      });
+    return normalizeText(parts.join(" "));
   }
 
   function buildGenericLinkGuidanceProposal(link) {

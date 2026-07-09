@@ -27,7 +27,25 @@
 - 主な変更内容:
   - `memory/project-understanding-summary.md` を新規作成し、今後の検討・実装前に参照できる理解サマリーとして、公共団体向けCMS移行とアクセシビリティ修正の効率化方針を整理した。
 - 関連ファイル: `memory/project-understanding-summary.md`
-- 関連PR: (このコミットで作成予定)
+- 関連PR: #29(マージ済み)
+
+## 2026-07-09: miChecker error型チェック項目の検出パリティ実装(Phase 1)と見た目比較のサニタイズ修正
+
+- 背景・目的: ユーザーから「ルールとしてはmiCheckerのものを網羅できたが、検出・チェックの方法も全く同じにしたい。ただしgoal2-appの候補生成が上位互換であればそのままでよい」との依頼。タグ付け済み88チェック項目と`app.js`の候補生成ロジックを突き合わせるギャップ分析を実施した結果、A(上位互換)14件・B(部分カバー)32件・C(未検出)42件で、特にmiCheckerが機械的に確定検出する「error型」なのに未検出・不完全なものが14件あった。本エントリはそのerror型14件(Phase 1)の実装。発火条件はmiChecker本体のJavaソース(eclipse-actf `CheckEngine.java`のitem_NN()メソッド群)で裏取りした。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_33.0/C_34.0: blink・marquee要素の検出とunwrap候補(blinkはmiChecker本体と同じくテキスト子孫がある場合のみ発火)。
+  - C_36.0/C_36.1: `<meta http-equiv="refresh">`の検出(content値にurlがあればリダイレクト、無ければ自動リロード)と除去候補。
+  - C_422.0/C_423.0: fragment全体でのid・accesskey属性値の重複検出(2件目以降を一意化が必要な候補として提示、patchMode: none)。
+  - C_51.0/C_51.4: frame要素のtitle欠落・空白検出。frame要素はframeset外ではHTMLパーサーが完全に破棄しDOM走査では原理的に検出できない(貼り付けた時点で作業用HTMLからも消える)ことが判明したため、生入力HTMLをframeset文書として再解析する`collectFrameElementNotices()`を新設し、「CMS本文には取り込めない」旨の注意(`iframe.frame-unsupported`、miCheckerモードでは`html-structure.iframe-frame-title`へ対応づけ)として出力する方式にした。
+  - C_57.2: 読み上げ可能テキストの無いリンクの検出。テキストノード+img[alt]+aria-label/aria-labelledby参照先を合成した「読み上げ可能テキスト」が空のリンクを候補化(`computeLinkAccessibleText()`)。
+  - C_331.0/C_331.1: th要素のセル単位scope検査(scope欠落、col/row/colgroup/rowgroup以外の不正値)。従来の表単位boolean判定(hasScope)は変更せず検出を追加。
+  - C_332.1/C_332.2: headers属性の参照検証(表内に該当idが無い/参照先がth・tdでない)。なおC_332.0はCheckEngine.javaのitem_332()では発火しない(C_332.1/C_332.2のみ実装されている)ことを確認し、本実装でも対象外とした。
+  - **バグ修正**: 候補詳細の「見た目の比較」が候補HTMLを親ページへ`innerHTML`で直接挿入しており、meta refresh候補のプレビュー表示でアプリのページ自体が外部URLへ遷移する問題をPlaywright検証中に発見。`sanitizeVisualPreviewHtml()`を新設し、挿入前にmeta/script/base/link要素・on*属性・javascript: URLを除去するようにした。
+  - 新候補の「この候補で変わること」要約文言を追加(従来は廃止要素候補等にも見出し系の汎用文言が表示されていた)。
+- 検証: 陽性13ケース(各チェック項目の違反HTML)+陰性6ケース(違反なしHTML・空blink・title付きframe等での偽陽性なし)+miCheckerモード動作の計21ケースをPlaywrightで全件PASS。既存6サンプルの候補数は完全一致(回帰なし)。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: ギャップ分析の全量(88項目のA/B/C分類表・B/C項目の実装メモ)はセッション内スクラッチパッドの`michecker-parity-gap-analysis.md`に基づく。残るPhase 2(warning/B系32件の補強)・Phase 3(user/info型の確認通知)は未着手。summary属性系(C_25.2/C_25.4)はKBの廃止属性方針と衝突するため方針判断待ち。
 
 ## 2026-07-09: フォーム・title・lang属性をKBのコンテンツ対象外として整理、逆引きタグの追加補強
 
