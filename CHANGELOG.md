@@ -21,6 +21,20 @@
 
 ## Entries
 
+## 2026-07-09: フォーム・title・lang属性をKBのコンテンツ対象外として整理、逆引きタグの追加補強
+
+- 背景・目的: PR #27での逆引き精度向上作業を踏まえ、ユーザーから「バックログ2件(C_54.0・C_79.5)はフォームなのでコンテンツに入ってこない。他にも本文コンテンツに入らない可能性のあるものはないか」との指摘があった。全268チェック項目を棚卸しした結果、(1)フォームは移行対象の「本文コンテンツ」ではなくCMSのフォーム機能側の実装に依存するためKB対象外とすべき、(2)ページtitleとhtml要素のlang属性は新CMSのテンプレート側で自動生成・自動設定されるため本文編集のスコープ外、という2点をユーザーに確認し、双方とも「対応ルールを削除しスコープ外に分類する」方針で合意した(フォーム: 承認、title/lang: 当初「titleは残しlangのみ削除」で検討したが、ユーザーが「titleもlangも両方削除」に訂正)。あわせて、この棚卸しで見つかった他の高確度なタグ漏れ(見出し入れ子・id/accesskey重複・廃止要素・自動リロード・リスト・表ヘッダ・キャプション・iframe/frame title等)も一括でタグ追記した。
+- 主な変更内容:
+  - `a11y-migration-kb/rules/form/`配下4ルール+`index.md`を削除(送信ボタン・label配置・必須項目明示・入力形式ヒント)。`rules/index.md`のform/行を削除。
+  - `a11y-migration-kb/rules/html-structure/page-title.md`・`lang-attribute.md`を削除。`rules/html-structure/index.md`から該当行を削除。
+  - `reference/michecker-out-of-content-scope.json`に、上記削除で解放された6件(C_78.2, C_389.0, C_383.0, C_380.0, C_382.0, C_600.16)を含むフォーム関連約37項目、title/lang関連6項目(C_60.x, C_600.12, C_21.x)、および棚卸しで見つかったframe/frameset・head/メタデータ・サイト内ナビゲーション・スクリプト実装・テンプレートCSS・ARIA実装・廃止要素(applet alt)・汎用的すぎる項目など約80項目を、理由付きで追加(合計148項目)。
+  - 既存ルール10件に`michecker_check_ids`を追記: `heading-order.md`(+C_14.0)、`duplicate-id-accesskey.md`(+C_422.0, C_423.0)、`deprecated-elements.md`(+C_33.0-C_33.2, C_34.0)、`embedded-script-behavior.md`(+C_36.0, C_36.1)、`text/list.md`(origin: manual + C_16.0-C_16.2を新規付与)、`table/th-scope.md`(+C_331.2, C_332.0-C_332.2)、`table/caption.md`(+C_25.4)、`html-structure/iframe-frame-title.md`(+C_51.2, C_51.3, C_52.0, C_52.1)、`image/complex-image-report.md`(origin: manual + C_4.0を新規付与)、`image/avoid-text-as-image.md`(+C_500.14)。
+  - `reference/michecker-triage.md`: 解決済みのC_54.0・C_79.5バックログ行を削除し、今回の棚卸しで新たに見つかった未対応バックログ(longdesc/D-link、blockquote/cite、リンク区切り、アスキーアート、C_67.0、C_70.0、ふりがな、object alt、リンクaccesskey、area alt等)を新しいバックログ表として追記。フォーム・title・lang削除の経緯を追記。
+  - `a11y-migration-kb/build/{rules.jsonl,michecker-checkitems.json}`を再生成し`goal2-app/data/`へ同期(56ルール、268チェック項目)。
+- 検証: 実データ(59シグネチャ、`real_before_sjis.csv`+`michecker_after_sample.csv`)で、KB未対応(赤バッジ)が2件→0件に減少、本文スコープ外(グレーバッジ)が25件→33件に増加、ルール一致(マニュアル版24+miChecker版8=32件)は変化なし(回帰なし)を確認。既存サンプル6件でのGoal 2候補生成もPlaywrightで回帰なしを確認。`node --check`(server.js/app.js/michecker-compare.js)・`node test/run-tests.js`成功(スコープ外とタグ付けの二重登録なしを確認するテストも通過)。
+- 関連ファイル: `a11y-migration-kb/rules/form/`(削除)、`a11y-migration-kb/rules/index.md`、`a11y-migration-kb/rules/html-structure/{page-title.md,lang-attribute.md}`(削除)、`a11y-migration-kb/rules/html-structure/index.md`、`a11y-migration-kb/rules/html-structure/{heading-order.md,duplicate-id-accesskey.md,deprecated-elements.md,embedded-script-behavior.md,iframe-frame-title.md}`、`a11y-migration-kb/rules/text/list.md`、`a11y-migration-kb/rules/table/{th-scope.md,caption.md}`、`a11y-migration-kb/rules/image/{complex-image-report.md,avoid-text-as-image.md}`、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md}`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL
+- 関連PR: (作成予定)
+
 ## 2026-07-08: 「KB全ルール(miChecker含む)」と「miChecker指摘対応のみ」の切り替えを両画面に追加
 
 - 背景・目的: ユーザーから「KB(miChecker含む)とmiCheckerのみの切り替えを検討」との依頼があり、対象を確認したところGoal 2修正候補画面とmiChecker比較画面の両方だった。検収基準がmiChecker通過のみの案件で、最小限の修正に絞って作業したいという想定。

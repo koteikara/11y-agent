@@ -11,7 +11,7 @@ processing_class: escalation
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_30.0", "C_30.1", "C_38.0", "C_600.8", "C_600.9"]
+michecker_check_ids: ["C_30.0", "C_30.1", "C_38.0", "C_600.8", "C_600.9", "C_36.0", "C_36.1"]
 related: [/wcag/ch7-script.md]
 ---
 

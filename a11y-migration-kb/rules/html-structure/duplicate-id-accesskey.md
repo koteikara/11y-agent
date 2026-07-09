@@ -11,7 +11,7 @@ processing_class: mechanical
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_600.17"]
+michecker_check_ids: ["C_600.17", "C_422.0", "C_423.0"]
 related: [/rules/link/in-page-anchor.md, /wcag/ch2-site.md]
 ---
 

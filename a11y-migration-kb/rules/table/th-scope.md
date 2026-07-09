@@ -11,7 +11,7 @@ processing_class: hybrid
 municipality_specific: false
 cms_auto: false
 origin: michecker
-michecker_check_ids: ["C_75.0", "C_76.0", "C_331.0", "C_331.1"]
+michecker_check_ids: ["C_75.0", "C_76.0", "C_331.0", "C_331.1", "C_331.2", "C_332.0", "C_332.1", "C_332.2"]
 related: [/rules/table/caption.md, /rules/table/layout-table.md, /wcag/ch6-table.md]
 ---
 
