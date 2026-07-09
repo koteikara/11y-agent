@@ -10,6 +10,8 @@ jis: ["なし"]
 processing_class: mechanical
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_16.0", "C_16.1", "C_16.2"]
 related: [/rules/html-structure/heading-required.md]
 ---
 

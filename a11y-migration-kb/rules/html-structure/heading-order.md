@@ -11,6 +11,7 @@ processing_class: ai
 municipality_specific: false
 cms_auto: true
 origin: manual
+michecker_check_ids: ["C_14.0"]
 includes: [/rules/html-structure/heading-content-quality.md]
 related: [/rules/html-structure/heading-required.md, /wcag/ch5-text.md, /rules/html-structure/heading-content-quality.md]
 ---

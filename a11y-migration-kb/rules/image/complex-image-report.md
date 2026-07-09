@@ -10,6 +10,8 @@ jis: ["1.1.1"]
 processing_class: escalation
 municipality_specific: false
 cms_auto: false
+origin: manual
+michecker_check_ids: ["C_4.0"]
 related: [/rules/image/alt-text.md, /wcag/ch3-images.md]
 ---
 

@@ -11,7 +11,7 @@ processing_class: hybrid
 municipality_specific: false
 cms_auto: false
 origin: michecker
-michecker_check_ids: ["C_500.2"]
+michecker_check_ids: ["C_500.2", "C_500.14"]
 related: [/rules/image/alt-text.md]
 ---
 

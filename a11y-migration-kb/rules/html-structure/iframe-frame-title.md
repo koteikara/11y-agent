@@ -11,7 +11,7 @@ processing_class: mechanical
 municipality_specific: false
 cms_auto: false
 origin: michecker
-michecker_check_ids: ["C_51.0", "C_51.1", "C_51.4", "C_51.5"]
+michecker_check_ids: ["C_51.0", "C_51.1", "C_51.2", "C_51.3", "C_51.4", "C_51.5", "C_52.0", "C_52.1"]
 related: []
 ---
 

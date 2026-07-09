@@ -216,6 +216,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Goal 2修正候補画面: 「修正基準」セレクタ(KB全ルール(既定)/miChecker指摘対応のみ)を追加。miCheckerモードでは`michecker_check_ids`を持つルールの候補だけを生成(擬似ルールID`iframe.title`は`html-structure.iframe-frame-title`に対応づけ、`iframe.cms-review`は除外)。証跡JSONに`rule_scope_mode`を記録。モード変更時は再生成を促すヒントを表示。
   - miChecker比較画面: 「対応ルールの基準」セレクタ(KB基準(既定)/miChecker基準のみ)を追加。miChecker基準ではマニュアル版・miChecker版の両方に一致する行でmiChecker版のみを表示し、「内包」注記も非表示にする(検収基準がmiChecker通過のみの案件向けの最小修正観点)。
   - Playwright検証: Goal 2のmiCheckerモードで候補が絞られること(tables 12→10、links-text 20→7、procedure-overview 6→4)、既定モードで既存6サンプルに回帰が無いことを確認。
+- ユーザーから「バックログ2件(C_54.0・C_79.5)はフォームなのでコンテンツに入ってこない。他にも本文コンテンツに入らない可能性のあるものはないか」との指摘を受け、全268チェック項目を棚卸しした。フォーム全般、およびCMSテンプレート側で自動設定されるページtitle・lang属性を、KBの対応ルールごと削除しスコープ外に分類する方針でユーザーと合意した(ユーザーの最終回答: フォーム=ルール削除+スコープ外化、title/lang=当初「titleのみ残す」案を検討したが最終的に両方削除に訂正)。
+  - `rules/form/`配下4ルール+`index.md`、`rules/html-structure/{page-title.md,lang-attribute.md}`を削除し、各索引ファイルから該当行を除去した。
+  - `reference/michecker-out-of-content-scope.json`に、削除で解放された6件を含むフォーム関連約37項目・title/lang関連6項目・frame/head/nav/script/CSS/ARIA/廃止要素/汎用項目など約80項目を理由付きで追加(合計148項目)。
+  - 棚卸しで見つかった高確度なタグ漏れ10件(見出し入れ子、id/accesskey重複、廃止要素のblink/marquee、meta refresh、リスト、th要素headers関連、キャプションsummary、iframe/frame titleの残り変種、複雑画像の詳細説明、テキスト画像化のコントラスト)を既存ルールに追記した。
+  - `reference/michecker-triage.md`のバックログを更新(解決済みのC_54.0・C_79.5を削除、新たに見つかった未対応バックログ11項目を追記)。
+  - `build/rules.jsonl`(56ルール)・`build/michecker-checkitems.json`(268件)を再生成・同期。
+  - 検証: 実データ(59シグネチャ)でKB未対応(赤)2件→0件、本文スコープ外(グレー)25件→33件、ルール一致32件(変化なし、回帰なし)を確認。既存サンプル6件のPlaywright回帰確認・`node test/run-tests.js`成功。
 
 ## Decisions
 
