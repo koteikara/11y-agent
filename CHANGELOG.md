@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-10: ADC/Vertex AI認証(Stage B)を実装、lib/llm.jsのヌルバイト混入も修正
+
+- 背景・目的: LLM統合の当初計画で「まずAPIキー方式のみで実装し、動作確認後にADC方式を追加検討する2段階方針」として合意していたStage Bに着手。Cloud Run上ではAPIキーをSecret Managerで管理する代わりに、メタデータサーバー経由のサービスアカウント認証でVertex AI Gemini APIを呼び出せるようにする。
+- 主な変更内容(`goal2-app/lib/llm.js`):
+  - 新規`GEMINI_AUTH_MODE`環境変数(既定`"api-key"`、明示的に`"adc"`を指定した場合のみADCモードへ切り替え)。既定値のままなら`callGemini()`の挙動・エンドポイント・認証は完全に無変更。
+  - ADCモード時は、Cloud Runのメタデータサーバー(`http://metadata.google.internal/...`)からアクセストークンとプロジェクトID(`GEMINI_VERTEX_PROJECT`未設定時)を取得し、Vertex AI経由(`https://{location}-aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent`)でGeminiを呼び出す。`GEMINI_VERTEX_PROJECT`/`GEMINI_VERTEX_LOCATION`(既定`us-central1`)で対象を指定可能。取得したアクセストークンはプロセス内でキャッシュし、期限60秒前から再取得する。
+  - Vertex AIのgenerateContentリクエスト/レスポンス形式はDeveloper APIとほぼ同一(`contents`/`generationConfig`/`usageMetadata`等が共通)のため、認証ヘッダーとURL構築部分のみを分岐させ、ボディ構築・レスポンス解析・コスト概算・キャッシュ・予算ガードのロジックは完全に共有した。
+  - メタデータサーバーに到達できない環境(Cloud Run以外)でADCモードを指定した場合は、明確なエラーメッセージ(`llm_adc_token_failed`/`llm_adc_project_failed`)で失敗し、既存の全呼び出し元のフォールバック機構(失敗時はヒューリスティック案を維持)がそのまま機能する。
+  - 副次的に発見・修正: `buildCacheKey()`内の区切り文字用`hash.update(" ")`が3箇所とも実際にはヌルバイト(`\x00`)としてファイルに保存されていたことを発見(`file`コマンドで`data`と判定される非テキストファイルになっていた)。原因は不明(過去のセッションでの編集時のエンコーディング事故と推測)だが、意図した半角スペースへ修正した。機能上はハッシュが変わるだけで動作に影響はなかったが、ソースファイルとして不健全な状態だったため修正した。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定・`GEMINI_AUTH_MODE`未設定(既定)でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致(回帰なし)。`GEMINI_AUTH_MODE=adc`を設定した状態で`callGemini()`を直接呼び出し、`isConfigured()`が`true`を返すこと、メタデータサーバーに到達できないこのサンドボックス環境では`llm_adc_token_failed`という明確なエラーで(クラッシュせず)失敗することを確認。**このサンドボックスは実際のGCP環境ではないため、Cloud Run上でメタデータサーバー経由の認証が実際に成功することは検証できていない。ユーザーが実際にCloud Runへデプロイして確認する。**
+- 関連ファイル: `goal2-app/lib/llm.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: image.avoid-text-as-imageを実装(vision LLMによる画像内文字検出)
 
 - 背景・目的: 未実装5ルール(ascii-art/quotation/avoid-text-as-image/heritage-image/showcase-section)を調査した結果、`text.ascii-art`・`text.quotation`は`michecker-triage.md`で既に「自動検出コードを持たない、AI/人間判断でのレビュー時に参照するKB文書」と意図的にスコープ外化されていることが判明。`image.heritage-image`・`image.showcase-section`は他ルールのbefore/afterパターンと異なり、ページ種別の判断基準を記した文書(検出対象ではなくコンテキスト供給用)であることが判明。明確なbefore/afterパターンを持ち、vision LLMで実装可能な`image.avoid-text-as-image`のみを新規実装する方針をユーザーに確認・合意した。
