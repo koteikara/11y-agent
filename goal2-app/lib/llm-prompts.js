@@ -199,6 +199,31 @@ const TASKS = {
       return JSON.stringify(items.map((item) => ({ id: item.id, table_html: item.tableHtml, target_th_text: item.targetThText })));
     },
   },
+
+  // Unlike the other tasks, image-alt processes one image per request (vision calls need
+  // the actual image bytes fetched server-side, so they can't be cheaply batched the same
+  // way as text items) — buildUserText() here takes a single item, not an array.
+  "image-alt": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "与えられた画像を見て、画像を見られない利用者にも内容が伝わる簡潔な代替テキスト(altテキスト、30文字程度まで)を日本語で提案してください。" +
+      "「画像」「写真」などの単語だけで終わらせず、何が写っているか具体的に書いてください。" +
+      "内容を持たない装飾目的のみの画像(罫線・アイコン等)と判断した場合はis_decorativeをtrueにしてください。" +
+      "地図・グラフ・図表など、alt一行では内容を伝えきれない複雑な画像の場合はis_complexをtrueにしてください。" +
+      "近接するキャプション文言(caption)が渡されている場合は、キャプションと重複しない情報を優先してください。",
+    responseSchema: {
+      type: "OBJECT",
+      properties: {
+        alt_text: { type: "STRING" },
+        is_decorative: { type: "BOOLEAN" },
+        is_complex: { type: "BOOLEAN" },
+      },
+      required: ["alt_text"],
+    },
+    buildUserText(item) {
+      return JSON.stringify({ caption: item.caption || "" });
+    },
+  },
 };
 
 function getTaskConfig(task) {

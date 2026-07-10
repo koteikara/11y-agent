@@ -293,6 +293,38 @@ async function fetchLinkTitle(targetUrl) {
   }
 }
 
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const ALLOWED_IMAGE_CONTENT_TYPES = /^image\/(jpeg|png|webp|gif)/i;
+
+async function fetchImageAsBase64(targetUrl) {
+  const url = new URL(targetUrl);
+  await assertFetchUrlAllowed(url);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetchWithSafeRedirects(url, {
+      signal: controller.signal,
+      headers: { "user-agent": "goal2-a11y-review/0.1 (+image-alt-preview)" },
+    });
+    const contentType = (response.headers.get("content-type") || "").split(";")[0].trim();
+    if (!response.ok || !ALLOWED_IMAGE_CONTENT_TYPES.test(contentType)) {
+      const error = new Error(`Unsupported or unreachable image (status ${response.status}, content-type ${contentType || "unknown"})`);
+      error.statusCode = 400;
+      throw error;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+      const error = new Error("Image exceeds the 4MB size limit");
+      error.statusCode = 413;
+      throw error;
+    }
+    return { base64: Buffer.from(arrayBuffer).toString("base64"), mimeType: contentType };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function readJsonBody(request, maxBytes = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -555,6 +587,42 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, error.statusCode || 500, {
         ok: false,
         error: error.code || "llm_enrich_failed",
+        message: error.message,
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/llm/image-alt") {
+    try {
+      const body = await readJsonBody(request);
+      const imageUrl = typeof body?.imageUrl === "string" ? body.imageUrl : "";
+      const caption = typeof body?.caption === "string" ? body.caption : "";
+      if (!imageUrl) {
+        sendJson(response, 400, { ok: false, error: "missing_image_url", message: "imageUrlを指定してください。" });
+        return;
+      }
+      const config = getTaskConfig("image-alt");
+      const { base64, mimeType } = await fetchImageAsBase64(imageUrl);
+      const result = await callGemini({
+        systemPrompt: config.systemPrompt,
+        userText: config.buildUserText({ caption }),
+        imageBase64: base64,
+        imageMimeType: mimeType,
+        responseSchema: config.responseSchema,
+      });
+      let parsed;
+      try {
+        parsed = JSON.parse(result.text);
+      } catch {
+        sendJson(response, 502, { ok: false, error: "llm_invalid_response", message: "LLMの応答をJSONとして解釈できませんでした。" });
+        return;
+      }
+      sendJson(response, 200, { ok: true, result: parsed, usage: result.usage });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, {
+        ok: false,
+        error: error.code || "llm_image_alt_failed",
         message: error.message,
       });
     }

@@ -21,6 +21,28 @@
 
 ## Entries
 
+## 2026-07-10: ステージ3(image.alt-text)のライブ動作確認
+
+- 背景・目的: 直前のステージ3コミットは`GEMINI_API_KEY`未設定環境での検証止まりだった。ユーザーからテスト用APIキーの再提供を受け、実際のGemini vision呼び出しまで含めて検証した。
+- 検証内容:
+  - `/api/llm/image-alt`を実在する画像URL(`raw.githubusercontent.com`上のJavaScriptロゴ画像)で直接呼び出し、`alt_text: "JSのロゴ"`という画像内容に即した結果が返ることを確認。
+  - 組み込みサンプルの画像は全て架空ドメイン(`https://www.example-city.jp/...`)を指しており実在しないため、実際に取得可能な絶対URLを持つカスタムHTML(`<img src="https://raw.githubusercontent.com/...">`)をUIに貼り付けてPlaywrightで検証し、`alt=""`が実際に`alt="JSのロゴ"`へ書き換えられること、コスト概算(USD/円)が正しく表示されることをエンドツーエンドで確認。
+  - 既存6サンプルで実際にGeminiが稼働している状態のまま候補・注意の総件数がベースラインと完全一致することを確認(`images`サンプルは架空ドメインのため画像取得に失敗し、既存ヒューリスティックへ正しくフォールバックすることも確認)。
+  - 動作確認に使用したテスト用APIキーは確認後に削除済み(リポジトリには含まれない)。
+- 関連ファイル: なし(検証のみ、コード変更なし)
+- 関連PR: (作成予定)
+
+## 2026-07-10: image.alt-textへLLM(Gemini vision)enrichmentを接続(ステージ3/4)
+
+- 背景・目的: 偽AI2件のうちの1件、`image.alt-text`(旧実装は4種類の決め打ちPoCサンプル画像ファイル名への固定文言のみ)へ、実際に画像を見て代替テキストを生成する仕組みを接続した。
+- 主な変更内容:
+  - `goal2-app/server.js`: `fetchImageAsBase64()`を新設。既存のSSRF対策済み`fetchWithSafeRedirects`/`assertFetchUrlAllowed`を再利用し、画像URLから画像バイトを取得(4MB上限、`image/jpeg`・`png`・`webp`・`gif`のみ許可)してbase64化する。`POST /api/llm/image-alt`エンドポイントを新設し、取得した画像とキャプション文脈をGeminiのvision対応エンドポイントへ渡す。
+  - `goal2-app/lib/llm-prompts.js`: `image-alt`タスクを追加。他のタスクと異なり画像1件=1リクエスト(vision呼び出しは画像バイト取得を伴うためバッチ化できない)。
+  - `goal2-app/public/app.js`: `enrichImageAltWithLlm()`を新設し、`analyze()`から`enrichWithLlm()`と並行実行(`Promise.all`)。`image.alt-text`・`image.complex-image-report`の両ルール(同じ`<img>`を対象にすることがある)を対象の`target.node_id`単位でグルーピングし、1画像1回のGemini呼び出しで両方の候補を更新。移行元ページURL(「旧ページURL」入力欄)に対して`img[src]`を絶対URL解決し、解決できた場合のみ(http/https URLのみ対応、data:等は既存ヒューリスティックのまま)enrichmentを実行。同時実行数を4に制限。`makeCandidate()`の`llmContext`に近接キャプション文言を保存し、`image.alt-text`(未設定/汎用の2ケース)・`image.complex-image-report`の生成箇所に追加。
+- 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。`/api/llm/image-alt`の契約レベル検証として、(1)到達不能なURLで適切にエラーを返すこと、(2)実在する画像URL(`raw.githubusercontent.com`、組織のプロキシポリシーで`google.com`等は遮断されているため到達可能なホストで代替)で画像取得・content-type判定・Gemini呼び出し直前までの経路が正常に動作し`llm_not_configured`で応答することを確認。実際のGemini vision呼び出しまでのライブ検証は、テスト用APIキーの再提供待ちのため未実施(Stop hookにより確認未了のままコミット)。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: LLM利用コスト概算に円換算を併記
 
 - 背景・目的: ユーザーから「コストは円換算も併記しましょう」との要望を受けた。従来はUSDの概算のみ表示していた。
