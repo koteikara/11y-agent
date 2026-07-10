@@ -223,7 +223,7 @@
     pageAgentDrag: null,
     pageAgentDismissed: false,
     ruleScopeMode: "kb",
-    llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },
+    llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
   };
 
   const els = {
@@ -488,7 +488,7 @@
     setAnalyzeStatus("running");
     els.outputDrawer.open = false;
     state.pageAgentDismissed = false;
-    state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+    state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 };
     try {
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
@@ -882,42 +882,114 @@
   // message/reason/patch in place afterward. Any failure (no API key, network error,
   // budget exceeded, malformed response) silently keeps the original heuristic draft.
   async function enrichWithLlm(items) {
-    await enrichForeignLanguageWithLlm(items);
+    await Promise.all([
+      runLlmBatch(
+        "foreign-language",
+        items.filter((item) => item.rule_id === "text.foreign-language"),
+        (candidate) => ({ text: stripTags(candidate.proposal.before_html) }),
+        applyForeignLanguageLlmResult
+      ),
+      runLlmBatch(
+        "sensory-characteristics",
+        items.filter((item) => item.rule_id === "text.sensory-characteristics"),
+        (candidate) => ({ text: stripTags(candidate.proposal.before_html) }),
+        applySensoryCharacteristicsLlmResult
+      ),
+      runLlmBatch(
+        "link-text",
+        items.filter((item) => item.rule_id === "link.link-text" && item.proposal.patch?.type === "set-text" && item.proposal.llm_context),
+        (candidate) => ({
+          href: candidate.proposal.llm_context.href,
+          precedingHeading: candidate.proposal.llm_context.precedingHeading,
+          nearbyText: candidate.proposal.llm_context.nearbyText,
+        }),
+        applyLinkTextLlmResult
+      ),
+      runLlmBatch(
+        "mail-link",
+        items.filter((item) => item.rule_id === "link.mail-link" && item.proposal.llm_context),
+        (candidate) => ({ mailAddress: candidate.proposal.llm_context.mailAddress, nearbyText: candidate.proposal.llm_context.nearbyText }),
+        applyLinkTextLlmResult
+      ),
+      runLlmBatch(
+        "toppage-link",
+        items.filter((item) => item.rule_id === "link.toppage-link"),
+        () => ({ pageTitle: els.pageTitleInput?.value || "" }),
+        applyLinkTextLlmResult
+      ),
+      runLlmBatch(
+        "table-caption",
+        // table.caption candidates come from three code paths: a simple "insert-caption"
+        // patch, the structural data-table-semantics rewrite (patchMode "replace" with no
+        // `patch` object), and a flag-only check on an *existing* generic caption
+        // (element: the <caption> itself, patchMode "none", not a whole-table rewrite —
+        // excluded here since before_html wouldn't start with <table).
+        items.filter(
+          (item) =>
+            item.rule_id === "table.caption" &&
+            /^<table[\s>]/i.test(item.proposal.before_html || "") &&
+            /<caption[\s>]/i.test(item.proposal.after_html || "")
+        ),
+        (candidate) => ({ tableHtml: candidate.proposal.before_html }),
+        applyTableCaptionLlmResult
+      ),
+      runLlmBatch(
+        "cell-merge",
+        items.filter((item) => item.rule_id.startsWith("table.cell-merge-")),
+        (candidate) => ({ tableHtml: candidate.proposal.before_html, currentCategory: candidate.rule_id.replace("table.cell-merge-", "") }),
+        applyCellMergeLlmResult
+      ),
+      runLlmBatch(
+        "th-scope",
+        items.filter(
+          (item) =>
+            item.rule_id === "table.th-scope" &&
+            item.proposal.patch?.type === "set-attribute" &&
+            item.proposal.patch.name === "scope" &&
+            item.proposal.llm_context
+        ),
+        (candidate) => ({ tableHtml: candidate.proposal.llm_context.tableHtml, targetThText: stripTags(candidate.proposal.before_html) }),
+        applyThScopeLlmResult
+      ),
+    ]);
   }
 
-  async function enrichForeignLanguageWithLlm(items) {
-    const targets = items.filter((item) => item.rule_id === "text.foreign-language");
+  // Shared batching helper: sends up to 50 items per request (server-side cap), matches
+  // results back to candidates by array index, and silently no-ops on any failure so the
+  // original heuristic draft is kept untouched.
+  async function runLlmBatch(task, targets, buildItem, applyResult) {
     if (!targets.length) {
       return;
     }
-    const payloadItems = targets.map((candidate, index) => ({
-      id: String(index),
-      text: stripTags(candidate.proposal.before_html),
-    }));
-    try {
-      const response = await fetch("/api/llm/enrich", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ task: "foreign-language", items: payloadItems }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!payload) {
-        return;
-      }
-      recordLlmUsage(payload.usage);
-      if (!payload.ok || !Array.isArray(payload.results)) {
-        return;
-      }
-      const resultsById = new Map(payload.results.map((result) => [String(result.id), result]));
-      targets.forEach((candidate, index) => {
-        const result = resultsById.get(String(index));
-        if (result) {
-          applyForeignLanguageLlmResult(candidate, result);
+    const chunkSize = 50;
+    for (let start = 0; start < targets.length; start += chunkSize) {
+      const chunk = targets.slice(start, start + chunkSize);
+      const payloadItems = chunk.map((candidate, index) => ({ id: String(index), ...buildItem(candidate) }));
+      try {
+        const response = await fetch("/api/llm/enrich", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ task, items: payloadItems }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!payload) {
+          continue;
         }
-      });
-    } catch {
-      // LLM enrichment is a best-effort upgrade over the regex-based heuristic; keep the
-      // existing draft candidate untouched if the request itself fails.
+        recordLlmUsage(payload.usage);
+        if (!payload.ok || !Array.isArray(payload.results)) {
+          continue;
+        }
+        const resultsById = new Map(payload.results.map((result) => [String(result.id), result]));
+        chunk.forEach((candidate, index) => {
+          const result = resultsById.get(String(index));
+          if (result) {
+            applyResult(candidate, result);
+          }
+        });
+      } catch {
+        // LLM enrichment is a best-effort upgrade over the heuristic draft; keep it
+        // untouched if the request itself fails.
+      }
     }
   }
 
@@ -940,6 +1012,83 @@
     candidate.proposal.after_html = candidate.proposal.after_html.replace(/lang="[^"]*"/, `lang="${langCode}"`);
   }
 
+  function applySensoryCharacteristicsLlmResult(candidate, result) {
+    if (!result.is_issue) {
+      candidate.issue.reason = `${candidate.issue.reason}(AIによる再判定では問題ない可能性があります。実際の内容を確認してください。)`;
+      return;
+    }
+    const explanation = normalizeText(result.explanation || "");
+    if (!explanation) {
+      return;
+    }
+    candidate.issue.reason = `${explanation}(AI判定)`;
+  }
+
+  // Shared by link.link-text / link.mail-link / link.toppage-link: all three draft a
+  // replacement link text via `patch: { type: "set-text" }` and rebuild after_html by
+  // setting the linked element's textContent, so the LLM result can be applied identically.
+  function applyLinkTextLlmResult(candidate, result) {
+    const suggestion = normalizeText(result.suggested_text || "");
+    if (!suggestion || !candidate.proposal.patch || candidate.proposal.patch.type !== "set-text") {
+      return;
+    }
+    const rewritten = setElementTextInHtml(candidate.proposal.after_html, suggestion);
+    if (!rewritten) {
+      return;
+    }
+    candidate.proposal.patch.value = suggestion;
+    candidate.proposal.after_html = rewritten;
+    candidate.issue.reason = `${candidate.issue.reason}(AIによる文言案です。内容を確認してください。)`;
+  }
+
+  function setElementTextInHtml(html, text) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    const element = template.content.firstElementChild;
+    if (!element) {
+      return "";
+    }
+    element.textContent = text;
+    return cleanHtml(element.outerHTML);
+  }
+
+  function applyTableCaptionLlmResult(candidate, result) {
+    const suggestion = normalizeText(result.suggested_caption || "");
+    if (!suggestion) {
+      return;
+    }
+    const template = document.createElement("template");
+    template.innerHTML = candidate.proposal.after_html || "";
+    const captionElement = template.content.querySelector("caption");
+    const tableElement = template.content.firstElementChild;
+    if (!captionElement || !tableElement) {
+      return;
+    }
+    captionElement.textContent = suggestion;
+    if (candidate.proposal.patch?.type === "insert-caption") {
+      candidate.proposal.patch.value = suggestion;
+    }
+    candidate.proposal.after_html = cleanHtml(tableElement.outerHTML);
+  }
+
+  function applyCellMergeLlmResult(candidate, result) {
+    const explanation = normalizeText(result.explanation || "");
+    if (!explanation) {
+      return;
+    }
+    candidate.issue.reason = `${explanation}(AI判定)`;
+  }
+
+  function applyThScopeLlmResult(candidate, result) {
+    const scope = normalizeText(result.scope || "").toLowerCase();
+    if (!["row", "col", "rowgroup", "colgroup"].includes(scope) || !candidate.proposal.patch) {
+      return;
+    }
+    candidate.proposal.patch.value = scope;
+    candidate.proposal.after_html = candidate.proposal.after_html.replace(/scope="[^"]*"/, `scope="${scope}"`);
+    candidate.issue.reason = `${candidate.issue.reason}(AI判定)`;
+  }
+
   function recordLlmUsage(usage) {
     if (!usage) {
       return;
@@ -948,14 +1097,16 @@
     state.llmUsage.inputTokens += usage.inputTokens || 0;
     state.llmUsage.outputTokens += usage.outputTokens || 0;
     state.llmUsage.estimatedCostUsd += usage.estimatedCostUsd || 0;
+    state.llmUsage.estimatedCostJpy += usage.estimatedCostJpy || 0;
   }
 
   function llmUsageSummaryText() {
     if (!state.llmUsage || state.llmUsage.calls === 0) {
       return "";
     }
-    const cost = state.llmUsage.estimatedCostUsd.toFixed(4);
-    return ` LLM利用: 概算$${cost}（呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）※概算です。実際の請求額はGoogle Cloud側でご確認ください。`;
+    const costUsd = state.llmUsage.estimatedCostUsd.toFixed(4);
+    const costJpy = state.llmUsage.estimatedCostJpy.toFixed(2);
+    return ` LLM利用: 概算$${costUsd}（約${costJpy}円、呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）※概算です。実際の請求額はGoogle Cloud側でご確認ください。`;
   }
 
   function linkTitleLookupBase() {
@@ -1544,6 +1695,11 @@
                 patch: { type: "set-text", value: inferredText },
                 confidence: inferredText.includes("具体的に入力") ? "low" : "medium",
                 requiresHumanReview: true,
+                llmContext: {
+                  href,
+                  precedingHeading: closestPreviousHeadingText(link),
+                  nearbyText: normalizeText(link.parentElement?.textContent || ""),
+                },
               })
         );
       }
@@ -1705,6 +1861,7 @@
             patch: { type: "set-text", value: suggestedText },
             confidence: suggestedText.includes("担当部署") ? "low" : "medium",
             requiresHumanReview: true,
+            llmContext: { nearbyText: normalizeText(link.closest("p,li,td,th,div")?.textContent || ""), mailAddress: text },
           })
         );
       }
@@ -1913,6 +2070,7 @@
             patch: { type: "set-attribute", name: "scope", value: suggested },
             confidence: "low",
             requiresHumanReview: true,
+            llmContext: { tableHtml: table.outerHTML },
           })
         );
         return;
@@ -1933,6 +2091,7 @@
             patch: { type: "set-attribute", name: "scope", value: suggested },
             confidence: "low",
             requiresHumanReview: true,
+            llmContext: { tableHtml: table.outerHTML },
           })
         );
       }
@@ -4357,6 +4516,10 @@
         ai_draft: options.aiDraft
           ? { ...options.aiDraft, inserted: false, confirmed_name: null, confirmed_by: null, confirmed_at: null }
           : null,
+        // Extra surrounding-DOM context (not shown in the UI) that the post-hoc LLM
+        // enrichment pass needs but before_html/target.snippet alone don't carry
+        // (e.g. nearby paragraph text, the containing table's full structure).
+        llm_context: options.llmContext || null,
       },
       decision: {
         status: null,

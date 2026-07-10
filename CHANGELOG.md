@@ -21,6 +21,47 @@
 
 ## Entries
 
+## 2026-07-10: LLM利用コスト概算に円換算を併記
+
+- 背景・目的: ユーザーから「コストは円換算も併記しましょう」との要望を受けた。従来はUSDの概算のみ表示していた。
+- 主な変更内容:
+  - `goal2-app/lib/llm.js`: `USD_JPY_RATE`環境変数(既定値155、変動するためプレースホルダである旨をコメントで明記)を新設し、`estimateCostJpy()`を追加。`callGemini()`が返す`usage`に`estimatedCostJpy`を含めるようにした。
+  - `goal2-app/public/app.js`: `state.llmUsage`に`estimatedCostJpy`を追加し累積、候補一覧サマリーの表示を「概算$0.00XX（約Y円、呼び出しN回、トークン計M）」の形式に変更。
+- 検証: `node --check`・`node test/run-tests.js`成功。`estimateCostUsd`/`estimateCostJpy`の計算を単体で確認(`USD_JPY_RATE`環境変数の上書きも含め正しく計算されることを確認)。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。今回はテスト用APIキーが手元に無かったため、円換算表示の実際のUIでのライブ確認は未実施(計算ロジック自体は単体テスト済み、USD分はステージ2で実証済みのため技術的リスクは低い)。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
+## 2026-07-10: ステージ2のライブ動作確認、table.captionの適用範囲を拡大
+
+- 背景・目的: 直前のステージ2コミット(未プッシュ、追記内容参照)後、ユーザーからテスト用Gemini APIキーの再提供を受け、7タスク全てを実際のGemini呼び出しまで含めて検証した。
+- 検証の過程で、`table.caption`のenrichment対象条件(`patch?.type === "insert-caption"`)が狭すぎることが判明した。`collectTableCandidates()`内の`table.caption`候補には実際には3つの発生経路があり、うち最も一般的な「データテーブルとして構造的に保持し、caption/thead/th/scopeをまとめて追加する」経路(`planTableTreatment`の`kind: "structural"`、`patchMode: "replace"`で`patch`オブジェクトを持たない)は元のフィルタ条件に一致せず、enrichmentが素通りしていた。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `table-caption`タスクの対象条件を、`after_html`に`<caption>`要素を含む`table.caption`候補全般に拡大(`patch`の有無を問わない)。ただし「既存のキャプションが汎用語のみ」を検出するだけの確認専用候補(`element`がテーブルではなくcaption要素自体、`patchMode: "none"`)は、`before_html`が`<table`で始まるかどうかで判定して明確に除外した(この候補は表全体の書き換えを意図していないため)。
+  - `applyTableCaptionLlmResult()`を、`patch`が無い(構造的書き換え)候補にも対応できるよう汎用化。
+- 検証: `node --check`・`node test/run-tests.js`成功。テスト用APIキーで実際にGemini呼び出しまで実施し、7タスク全てが期待通りの高品質な出力を返すことを確認(例: `link-text`「防災ガイドブック（PDF版）」、`mail-link`「健康推進課へメールを送信」、`toppage-link`「弘前市トップページ」、`table-caption`は旧実装の固定文言"Table details"に代わり「粗大ごみ処理手数料」のような内容に即した要約、`sensory-characteristics`は「右のボタン」を問題ありと判定しつつ「「電子申請」ボタン」は問題なしと正しく区別、`cell-merge`は表内容に即した具体的な理由文、`th-scope`は表構造から`col`/`row`を正しく判定)。既存6サンプル全てで実際にGeminiを呼び出した状態での回帰確認も行い、候補・注意の総件数がベースライン(procedure-overview 7, images 10, tables 14, links-text 24, iframe 5, goal3-hirosaki-news2019 17)と完全一致することを確認(LLMによる書き換えは既存候補の内容更新のみで、件数の増減は発生しない設計のため)。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)。動作確認に使用したテスト用APIキーは確認後に削除済み(リポジトリには含まれない)。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
+## 2026-07-10: 残り8ルールへLLM(Gemini)enrichmentを接続(ステージ2/4)
+
+- 背景・目的: ステージ1(PR #34)で構築したLLM連携基盤・`enrichWithLlm()`パターンを、対象9実装対象のうち残り8ルール(実装対象としては7関数、`table.cell-merge-*`は6ルールIDを1関数でカバー)へ展開した。ユーザー承認を得て着手。
+- 主な変更内容:
+  - `goal2-app/public/app.js`: `enrichWithLlm()`を共通バッチ処理ヘルパー`runLlmBatch(task, targets, buildItem, applyResult)`を軸にリファクタリングし、以下7タスクを追加接続(既存の`text.foreign-language`と合わせ計8タスク)。
+    - `text.sensory-characteristics`: 形・位置だけの案内表現が実際に問題か否かをLLMが再判定し、該当文脈に即した具体的な理由(`reason`)に差し替え(`patchMode: none`のため文言修正は行わない)。
+    - `link.link-text`: リンク先URL・直前見出し・周辺テキストを渡し、「こちら」等の曖昧なリンク文言をLLMが具体的な文言案に差し替え。
+    - `link.mail-link`: メールアドレス・周辺テキストを渡し、担当部署名を含む文言案を生成。
+    - `link.toppage-link`: 入力中の「ページ名」からLLMが市区町村名を抽出し「◯◯市トップページ」を生成。
+    - `table.caption`: キャプション欠落の表(HTML)を渡し、内容を要約したキャプション文言を生成(旧実装は英語の固定文言"Table details"だった)。
+    - `table.cell-merge-*`(6ルールID): セル結合表(HTML)+機械分類済みカテゴリを渡し、実際の内容に即した具体的な理由文を生成(分類自体・構造再構成ロジックは安全のため変更しない)。
+    - `table.th-scope`: 表全体のHTML+対象th要素のテキストを渡し、col/row/colgroup/rowgroupを判定(旧実装は位置だけの機械的な推測で常にlow確信度)。
+    - 各タスクとも、LLM呼び出し失敗・未設定・判定不能時は既存ヒューリスティックの下書きをそのまま維持する(既存パターンを踏襲)。
+  - `makeCandidate()`に`options.llmContext`を追加し、`candidate.proposal.llm_context`として保存(UIには表示しない)。`before_html`/`target.snippet`だけでは復元できない周辺DOM文脈(リンク周辺の段落テキスト・直前見出し、対象thを含む表全体のHTML)を、同期の候補生成時点でenrichmentパス用に保存しておく設計。`link.link-text`(1524行目付近)・`link.mail-link`(1694行目付近)・`table.th-scope`の2箇所(missing scope/invalid scope、1900行目付近)の生成コードに`llmContext`を追加。
+  - `goal2-app/lib/llm-prompts.js`: 7タスク分のシステムプロンプト・JSONスキーマ・`buildUserText()`を追加。
+- 検証: `node --check`(app.js/server.js/lib/llm.js/lib/llm-prompts.js)・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がステージ1と完全に同じベースラインと一致(回帰なし)。追加した7タスクすべてが`/api/llm/enrich`で`unknown_task`エラーにならず正しく認識されることを確認(未設定環境のため`llm_not_configured`で応答することも確認)。`html-structure.heading-content-quality`は、既存のヒューリスティックが「短い/記号のみ」の見出ししか候補化しない構造上、既存候補の上書きではなく新規候補の提案(見出し全体をLLMが走査)が必要と判断し、同じく新規提案パスが必要な`html-structure.heading-required`(ステージ4)とまとめて扱う方針に変更した。
+- 今後の予定(未実施): `image.alt-text`(ステージ3)、`html-structure.heading-required`+`heading-content-quality`(ステージ4、新規候補提案パス)。ステージ2の実際のGemini呼び出しでの動作確認(ライブテスト)は、テスト用APIキーの再提供があれば実施予定。プロンプト・スキーマの技術的な仕組み自体はステージ1で実証済みのため、未検証でもリスクは「AIによる改善が発生しない」に留まり、既存動作を壊すことはない設計。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/lib/llm-prompts.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: LLM(Gemini)連携基盤を新設し、text.foreign-languageルールに接続(ステージ1/4)
 
 - 背景・目的: ユーザーから「今のプログラムはLLMをAPIで利用していますか？」と問われ調査した結果、`processing_class: ai`/`hybrid`とタグ付けされた36ルール(KB定義では「LLM判断」「LLM+人間」を意味する)が実際には全て正規表現・DOM解析・一部はハードコードされた対応表で実装されており、実LLM APIは一切呼び出されていないことが判明した。特に画面表示「AI画像名生成」は4種類の決め打ちPoCサンプル画像ファイル名への固定文言のみだった。Explore agentによる36ルール全数調査の結果、偽AI2件(`image.alt-text`、`html-structure.heading-required`)+素朴なヒューリスティックで改善余地が大きい9実装対象(約14ルールID)を今回の改修対象と決定。ユーザーの強いコスト懸念を踏まえ、プロバイダはGoogle Gemini(既存Cloud Run/GCP運用との親和性)、認証はまずAPIキー方式のみ(ADC/Vertex AIは将来拡張として保留)、キャッシュ・バッチ化・呼び出し上限・LLM未設定時の完全な現状維持フォールバックを設計の中心に据えた。実装前にplanモードで設計をまとめ、ユーザー了承のAPIキー(利用量上限つきのテスト用)を使って実際にGemini APIまで通した動作確認まで実施した。
