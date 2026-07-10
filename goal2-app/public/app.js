@@ -5293,59 +5293,92 @@
     els.completionPill.className = `completion-pill ${done ? "done" : total > 0 ? "blocked" : ""}`;
     renderBulkControls();
 
+    // Candidates that are alternative fix methods for the same target element are always
+    // pushed consecutively by the collectors, so a run of same-target-node_id candidates can
+    // be wrapped in a single bordered group to make "these belong together" visible at a
+    // glance (not just via the per-item "同じ箇所の代替手段" badge text).
     let selectedButton = null;
-    state.candidates.forEach((candidate) => {
-      const row = document.createElement("div");
-      const button = document.createElement("button");
-      const checkbox = document.createElement("input");
-      const status = candidate.decision.status || "unresolved";
-      const isUnresolved = !candidate.decision.status;
-      row.className = `candidate-row ${status}`;
-      checkbox.type = "checkbox";
-      checkbox.className = "candidate-check";
-      checkbox.value = candidate.candidate_id;
-      checkbox.checked = state.bulkSelectedCandidateIds.has(candidate.candidate_id);
-      checkbox.disabled = !isUnresolved;
-      checkbox.setAttribute("aria-label", `${candidate.rule.title}を一括採用対象に含める`);
-      checkbox.addEventListener("change", () => {
-        state.bulkActionMessage = "";
-        if (checkbox.checked) {
-          state.bulkSelectedCandidateIds.add(candidate.candidate_id);
-        } else {
-          state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
-        }
-        renderBulkControls();
-      });
-      const siblingCount = candidatesForSameTarget(candidate).length;
-      button.type = "button";
-      button.className = `candidate-item ${status}`;
-      button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
-      button.setAttribute(
-        "aria-label",
-        `${candidate.rule.title}、${statusLabels[status] || status}、${candidate.candidate_id}` +
-          (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
-      );
-      button.addEventListener("click", () => {
-        state.selectedCandidateId = candidate.candidate_id;
-        state.selectedFixMethodId = null;
-        state.quickEditOpen = false;
-        renderAll();
-      });
-
-      button.innerHTML = `
-        <div class="candidate-title">${escapeHtml(candidate.rule.title)}</div>
-        ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
-      `;
-      row.append(checkbox, button);
-      els.candidateList.appendChild(row);
-      if (candidate.candidate_id === state.selectedCandidateId) {
-        selectedButton = button;
+    const candidates = state.candidates;
+    let index = 0;
+    while (index < candidates.length) {
+      const candidate = candidates[index];
+      let runEnd = index;
+      while (runEnd + 1 < candidates.length && candidates[runEnd + 1].target.node_id === candidate.target.node_id) {
+        runEnd += 1;
       }
-    });
+      const groupSize = runEnd - index + 1;
+      const host = groupSize > 1 ? document.createElement("div") : els.candidateList;
+      if (groupSize > 1) {
+        host.className = "candidate-group";
+        host.setAttribute("role", "group");
+        host.setAttribute("aria-label", `同じ箇所の候補、${groupSize}件`);
+        const label = document.createElement("div");
+        label.className = "candidate-group-label";
+        label.textContent = `同じ箇所の候補・${groupSize}件`;
+        host.appendChild(label);
+      }
+      for (let i = index; i <= runEnd; i += 1) {
+        const row = buildCandidateRow(candidates[i]);
+        host.appendChild(row);
+        if (candidates[i].candidate_id === state.selectedCandidateId) {
+          selectedButton = row.querySelector("button");
+        }
+      }
+      if (groupSize > 1) {
+        els.candidateList.appendChild(host);
+      }
+      index = runEnd + 1;
+    }
 
     if (selectedButton) {
       requestAnimationFrame(() => selectedButton.scrollIntoView({ block: "nearest" }));
     }
+  }
+
+  function buildCandidateRow(candidate) {
+    const row = document.createElement("div");
+    const button = document.createElement("button");
+    const checkbox = document.createElement("input");
+    const status = candidate.decision.status || "unresolved";
+    const isUnresolved = !candidate.decision.status;
+    row.className = `candidate-row ${status}`;
+    checkbox.type = "checkbox";
+    checkbox.className = "candidate-check";
+    checkbox.value = candidate.candidate_id;
+    checkbox.checked = state.bulkSelectedCandidateIds.has(candidate.candidate_id);
+    checkbox.disabled = !isUnresolved;
+    checkbox.setAttribute("aria-label", `${candidate.rule.title}を一括採用対象に含める`);
+    checkbox.addEventListener("change", () => {
+      state.bulkActionMessage = "";
+      if (checkbox.checked) {
+        state.bulkSelectedCandidateIds.add(candidate.candidate_id);
+      } else {
+        state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
+      }
+      renderBulkControls();
+    });
+    const siblingCount = candidatesForSameTarget(candidate).length;
+    button.type = "button";
+    button.className = `candidate-item ${status}`;
+    button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
+    button.setAttribute(
+      "aria-label",
+      `${candidate.rule.title}、${statusLabels[status] || status}、${candidate.candidate_id}` +
+        (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
+    );
+    button.addEventListener("click", () => {
+      state.selectedCandidateId = candidate.candidate_id;
+      state.selectedFixMethodId = null;
+      state.quickEditOpen = false;
+      renderAll();
+    });
+
+    button.innerHTML = `
+      <div class="candidate-title">${escapeHtml(candidate.rule.title)}</div>
+      ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
+    `;
+    row.append(checkbox, button);
+    return row;
   }
 
   function renderBulkControls() {
