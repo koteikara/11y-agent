@@ -269,7 +269,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - body背景にレイヤードグラデーション+2つのアンビエント光の玉の90秒ドリフトアニメーションを追加。全ボタンにホバーリフト+ソフトシャドウ、primaryボタンは外側グローを追加。
   - 新トークンのコントラスト比をWCAG AA基準(4.5:1)で計算検証したところ、`--sun`/`--tag-h2`(白文字コントラスト2.83)と`--faint`(3.53)が未達だったため、それぞれ濃色に調整して基準を満たすようにした(自己発見・自己修正)。
   - Playwrightでスクリーンショットを撮影し目視確認、`node test/run-tests.js`で機能面への影響が無いことを確認。ユーザーへスクリーンショットを共有し、確認・フィードバック待ちの状態でStop hookにより一旦コミット。
-  - 次のアクション: ユーザーからのデザインフィードバック反映、承認後に`michecker-compare.html`・`goal3.html`など他画面への展開。
+- ユーザーの指示「他画面（michecker-compare.html・goal3.html）への展開に進みます」を受け、上記デザイン刷新を両画面へ展開した。両画面とも`index.html`と同一の`styles.css`を共有しているため`:root`トークンは自動反映。ページ固有のハードコード色として`.goal3-source-preview`の背景(旧ミント系`#f8fbfa`→新パレット`#f6f9fc`)のみ修正が必要だった(`michecker-compare.html`側は元々中立トーンで修正不要)。
+  - 展開の実データ検証中(CSV 59行の比較結果を`michecker-compare.html`に読み込んでフルページスクリーンショット取得)に、本題とは無関係の既存バグを偶然発見: `document.body.scrollHeight`が9923pxまで異常肥大化し、フルページ表示が大きく崩れる現象。調査の結果、`.app-shell`(`display: grid; height: 100vh; overflow: auto;`)自体は`clientHeight: 1000`で正しく制約されており内部スクロールも機能していた(`scrollTop`を`scrollHeight`まで動かせることを確認)が、containment未指定のため子要素(実データで高さ約8676pxの結果テーブル)のスクロール可能領域が祖先`document.body`(`overflow: hidden`)のscrollHeight計算に漏れ出していた。`HEAD~1`時点の`styles.css`と`.app-shell`/`.michecker-shell`定義を比較し、今回のデザイン変更が原因ではない(既存の潜在バグ)ことを確認した上でユーザーに報告し、「デザイン展開+overflowバグも今回まとめて修正」の指示を受けた。
+  - 修正: `.michecker-shell`・`.goal3-shell`(`.app-shell`と同一要素に付与される追加クラス)に`contain: layout;`を追加。`.app-shell`単体(index.html用)には適用しなかった — `index.html`は`.app-shell`直下に`position: fixed`の「次にやること」パネル(`.page-agent-panel`)を持ち、`contain: layout`を付けるとfixedの基準がビューポートから`.app-shell`に変わり、パネルがビューポート右下に固定されなくなる回帰が生じるため、対象を`.app-shell`内に`position: fixed`要素を持たない2画面に限定した。
+  - 検証: 修正前後で`document.body.scrollHeight`を計測し9923px→1000px(ビューポート高と一致)を確認。`.app-shell`の内部スクロール自体は修正後も機能(`scrollHeight: 10120`のまま)。`index.html`の`.page-agent-panel`が修正後も`position: fixed`でビューポート右下に留まることを別途確認(影響なし)。`node --check`・`node test/run-tests.js`成功(機能面の変更なし)。
+  - コミット確認の質問に対し、ユーザーから追加フィードバック「濃色のボタンにホバーした時の視認性が悪いので修正して」を受けた。調査したところ、全ページ共通の`button.primary:hover`ルールが背景色を`var(--primary-strong)`(#17274d、ほぼ黒に近い紺)へ変更しており、Playwrightで実際にホバー状態をスクリーンショットして確認したところ、元のブルーの色味が失われ、外側グロー(6px・透過82%)も控えめすぎて、ボタンが押せそうに見えない(視覚的な手がかりが弱い)状態だった。コントラスト比自体は問題なかった(白文字に対し14.6:1、AA基準4.5:1を大幅にクリア)。修正として、背景色を`color-mix(in srgb, var(--primary), black 15%)`(ブルーの色味を保った濃紺)に変更し、外側グローも`4px・透過68%`へ強化。修正後のホバー状態を再度Playwrightでスクリーンショット確認し、視認性の改善を確認した。この修正は`button.primary`を使う全CTAボタン(比較する・候補抽出・GOAL2へ渡す等)に共通適用されるため3画面すべてに影響する。
+  - PR #31は既にマージ済みだったため、ブランチ運用ルールに従いブランチを最新の`origin/main`から`git checkout -B`で建て直した(local HEADとPR #31マージコミットのツリーが完全一致していることを確認済み)。上記の未コミット変更(CHANGELOG.md/styles.css/project-state.md)を`git stash`で退避してから建て直し、`stash pop`で復元。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(新規PRとして作成予定)。
 
 ## Decisions
 
