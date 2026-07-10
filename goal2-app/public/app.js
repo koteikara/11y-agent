@@ -499,7 +499,12 @@
       }
       await enrichLinkTitleCandidates(reviewItems);
       setAnalyzeStatus("enriching");
-      await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems), enrichHeadingReviewWithLlm(fragment, reviewItems)]);
+      await Promise.all([
+        enrichWithLlm(reviewItems),
+        enrichImageAltWithLlm(reviewItems),
+        enrichHeadingReviewWithLlm(fragment, reviewItems),
+        enrichAvoidTextAsImageWithLlm(fragment, reviewItems),
+      ]);
       // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
       // already-enriched standalone image.alt-text result instead of firing a duplicate vision
       // call when the same image also appears inside a decomposed layout table.
@@ -1215,6 +1220,74 @@
     }
     matches.forEach((img) => img.setAttribute("alt", altText));
     candidate.proposal.after_html = cleanHtml(template.innerHTML);
+  }
+
+  // image.avoid-text-as-image: unlike every other image enrichment above, this doesn't
+  // upgrade an existing heuristic draft — there is no mechanical way to tell from HTML alone
+  // whether an image's pixels contain banner-style text that should be real body text
+  // instead, so this walks every reasonably-sized <img> in the document (isNormalSizedImage-
+  // ForComplexCheck skips tiny icons) and only proposes a candidate when the vision call
+  // actually finds embedded text. Requires a resolvable source page URL like the other vision
+  // enrichments; produces zero candidates (and zero calls) without one.
+  async function enrichAvoidTextAsImageWithLlm(fragment, items) {
+    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      return;
+    }
+    const images = [...fragment.content.querySelectorAll("img")].filter((img) => isNormalSizedImageForComplexCheck(img));
+    if (!images.length) {
+      return;
+    }
+    const concurrency = 4;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < images.length) {
+        const img = images[cursor];
+        cursor += 1;
+        await enrichOneAvoidTextAsImage(img, baseUrl, items);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, images.length) }, worker));
+  }
+
+  async function enrichOneAvoidTextAsImage(img, baseUrl, items) {
+    const imageUrl = resolveAbsoluteImageUrl(img.getAttribute("src") || "", baseUrl);
+    if (!imageUrl) {
+      return;
+    }
+    const caption = normalizeText(closestCaptionElement(img)?.textContent || "");
+    try {
+      const response = await fetch("/api/llm/image-alt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ task: "avoid-text-as-image", imageUrl, caption }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!payload) {
+        return;
+      }
+      recordLlmUsage(payload.usage);
+      if (!payload.ok || !payload.result?.has_embedded_text) {
+        return;
+      }
+      const extractedText = normalizeText(payload.result.extracted_text || "");
+      if (!extractedText) {
+        return;
+      }
+      items.push(
+        makeCandidate({
+          ruleId: "image.avoid-text-as-image",
+          element: img,
+          message: "画像内に本文テキストとして提供すべき文字情報が描き込まれています。(AI判定)",
+          reason: `画像を解析したAIが画像内に「${extractedText}」という文字情報を検出しました。CMSの装飾機能で同等の見た目を再現できないか検討し、この文字情報を本文テキストとして追加してください。(AI判定、内容を確認してください)`,
+          afterHtml: `${cleanHtml(img.outerHTML)}<p>${escapeHtml(extractedText)}</p>`,
+          confidence: "low",
+          requiresHumanReview: true,
+        })
+      );
+    } catch {
+      // best-effort detection; skip silently on any failure (unreachable image, network error, etc.)
+    }
   }
 
   // html-structure.heading-required / html-structure.heading-content-quality: unlike every
