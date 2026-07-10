@@ -765,6 +765,26 @@ label {
   gap: 5px;
 }
 
+.candidate-group {
+  display: grid;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary-container), var(--surface) 55%);
+}
+
+.candidate-group-label {
+  padding: 0 2px;
+  color: var(--primary-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.candidate-group .candidate-item {
+  background: var(--surface);
+}
+
 .candidate-check {
   justify-self: center;
   margin: 0;

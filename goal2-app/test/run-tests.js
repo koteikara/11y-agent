@@ -411,6 +411,32 @@ async function main() {
     "positional language candidates should use the text.sensory-characteristics KB rule id"
   );
 
+  // text.foreign-language: detection should not fire on URLs/email addresses (they are not
+  // "foreign language" prose), and should recognize non-Latin scripts (Hangul/Thai/Cyrillic/
+  // Han-with-Chinese-markers) and accented Latin (French/Portuguese/Spanish/Vietnamese), not
+  // just plain ASCII English.
+  assert.ok(appJs.includes("collectForeignLanguageCandidate"), "foreign-language detection should be implemented");
+  assert.ok(
+    appJs.includes("URL_OR_EMAIL_PATTERN") && appJs.includes("textWithoutUrlsOrEmails"),
+    "foreign-language detection should exclude URLs and email addresses from the language check"
+  );
+  assert.ok(
+    appJs.includes("HANGUL_SCRIPT_PATTERN") &&
+      appJs.includes("THAI_SCRIPT_PATTERN") &&
+      appJs.includes("CYRILLIC_SCRIPT_PATTERN") &&
+      appJs.includes("LATIN_FOREIGN_PATTERN"),
+    "foreign-language detection should recognize Hangul/Thai/Cyrillic scripts and accented Latin, not just ASCII English"
+  );
+  assert.ok(
+    appJs.includes("CHINESE_MARKER_PATTERN") && appJs.includes("HAN_SCRIPT_PATTERN"),
+    "Chinese detection should require a Chinese-specific marker word, not just kana-free Han text " +
+      "(kanji-only Japanese headings like 受付窓口 are extremely common and must not be misdetected)"
+  );
+  assert.ok(
+    appJs.includes('ruleId: "text.foreign-language"'),
+    "foreign-language candidates should use the text.foreign-language KB rule id"
+  );
+
   // html-structure.heading-link-only: headings that consist solely of a single internal/external/file
   // link should be unwrapped (the heading tag removed, the link kept), per user-reported real-content
   // review (card-style link lists using heading tags purely for visual emphasis).
