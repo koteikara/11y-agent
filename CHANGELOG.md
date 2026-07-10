@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-10: LLM(Gemini)連携基盤を新設し、text.foreign-languageルールに接続(ステージ1/4)
+
+- 背景・目的: ユーザーから「今のプログラムはLLMをAPIで利用していますか？」と問われ調査した結果、`processing_class: ai`/`hybrid`とタグ付けされた36ルール(KB定義では「LLM判断」「LLM+人間」を意味する)が実際には全て正規表現・DOM解析・一部はハードコードされた対応表で実装されており、実LLM APIは一切呼び出されていないことが判明した。特に画面表示「AI画像名生成」は4種類の決め打ちPoCサンプル画像ファイル名への固定文言のみだった。Explore agentによる36ルール全数調査の結果、偽AI2件(`image.alt-text`、`html-structure.heading-required`)+素朴なヒューリスティックで改善余地が大きい9実装対象(約14ルールID)を今回の改修対象と決定。ユーザーの強いコスト懸念を踏まえ、プロバイダはGoogle Gemini(既存Cloud Run/GCP運用との親和性)、認証はまずAPIキー方式のみ(ADC/Vertex AIは将来拡張として保留)、キャッシュ・バッチ化・呼び出し上限・LLM未設定時の完全な現状維持フォールバックを設計の中心に据えた。実装前にplanモードで設計をまとめ、ユーザー了承のAPIキー(利用量上限つきのテスト用)を使って実際にGemini APIまで通した動作確認まで実施した。
+- 主な変更内容:
+  - `goal2-app/lib/llm.js`(新規): Gemini Developer API(`generativelanguage.googleapis.com`)への薄いラッパー`callGemini()`。認証は`GEMINI_API_KEY`環境変数のみ。プロセス内インメモリキャッシュ(同一入力の再計算防止)、`LLM_MAX_CALLS_PER_MINUTE`による呼び出し上限ガード、レスポンスの`usageMetadata`からトークン数・概算コスト(`GEMINI_INPUT_PRICE_PER_1M_TOKENS`/`GEMINI_OUTPUT_PRICE_PER_1M_TOKENS`環境変数、既定値はプレースホルダでユーザーに最新料金表での確認を促す)を算出。`GEMINI_API_KEY`未設定時は即座に`llm_not_configured`エラーを投げ、課金なしで確実にフォールバックする設計。
+  - `goal2-app/lib/llm-prompts.js`(新規): タスク種別(現状`foreign-language`のみ)ごとのシステムプロンプトとGemini構造化出力用JSONスキーマを定義。
+  - `goal2-app/server.js`: `POST /api/llm/enrich`エンドポイントを新設(`readJsonBody`/`sendJson`など既存の`/api/link-title`等と同じ規約に準拠)。`{ task, items }`を受け取りタスク別プロンプトでGeminiを呼び出し、`{ ok, results, usage }`を返す。
+  - `goal2-app/public/app.js`: 既存の`enrichLinkTitleCandidates`(`/api/link-title`を叩く事後enrichmentパス)と同じパターンで`enrichWithLlm()`を追加。`generateCandidates()`本体(全ルール収集のオーケストレーター、完全同期処理)は一切変更せず、`analyze()`内で候補生成後に`await enrichWithLlm(reviewItems)`を1行追加するのみ。`text.foreign-language`候補を対象に、ページ内の全該当候補をまとめて1回のバッチリクエストで送信し、成功した項目のみ`issue.message`/`issue.reason`/`proposal.patch.value`/`proposal.after_html`のlang値をLLM判定で上書き(`confidence`は`low`、`requires_human_review`は`true`のまま維持、失敗時は既存ヒューリスティックの案をそのまま残す)。候補一覧サマリーに「LLM利用: 概算$0.00XX（呼び出しN回、トークン計M）」という概算コスト表示を追加(`GEMINI_API_KEY`未設定時は非表示)。
+- 検証: `node --check`(app.js/server.js/lib/llm.js/lib/llm-prompts.js)・`node test/run-tests.js`成功(`GEMINI_API_KEY`未設定環境、既存6サンプルの検出件数がベースラインと完全一致し回帰なしを確認)。ユーザー提供のテスト用APIキーで実際にGemini呼び出しまで実施し、(1)正規表現版では検出できなかったフランス語("Bienvenue à la mairie...")を正しく`lang="fr"`と判定できること、(2)予算ガードが3件目で429エラーを返すこと、(3)画面の「問題」「この候補で変わること」欄に`(AI判定)`/`(Gemini APIによる判定)`という表示とコスト概算が正しく反映されることをPlaywrightで確認。確認後、テスト用キーを保存した一時ファイルは削除済み(リポジトリには一切含まれない)。
+- 今後の予定(未実施): 残り8ルールへのテキスト系enrichment適用、`image.alt-text`(画像バイト取得・vision呼び出し)、`html-structure.heading-required`(新規候補提案パス)、ADC/Vertex AI方式への対応拡張。詳細は plan ファイル(`/root/.claude/plans/melodic-purring-karp.md`)を参照。
+- 関連ファイル: `goal2-app/lib/llm.js`(新規)、`goal2-app/lib/llm-prompts.js`(新規)、`goal2-app/server.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: 修正候補リストで同じ箇所の代替手段候補を枠で囲んでグループ表示
 
 - 背景・目的: ユーザーからスクリーンショット付きで「同じ箇所の代替手段●件と出ていますが、どれとどれが同じ箇所なのかわかりにくいのでグループとして括って明示できませんか？」との要望を受けた。従来は`同じ箇所の代替手段 N件中`というバッジが各候補ボタン内に個別に表示されているだけで、どのボタンとどのボタンが実際に同じ箇所(同じ`target.node_id`)を指しているのかが、リスト上で視覚的にひとまとまりになっていなかった。

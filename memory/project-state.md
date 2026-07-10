@@ -295,7 +295,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - ユーザーからスクリーンショット(手描きの赤枠マークアップ付き)で「同じ箇所の代替手段●件と出ていますが、どれとどれが同じ箇所なのかわかりにくいのでグループとして括って明示できませんか？」との要望を受けた。従来は候補リストの各ボタン内に`同じ箇所の代替手段 N件中`というバッジが個別表示されるだけで、どのボタン同士が同じ対象(`target.node_id`)を指すのかがリスト上で視覚的にひとまとまりになっていなかった。
   - 実装: `renderCandidates()`を、`state.candidates`を先頭から走査して同じ`target.node_id`が連続する区間(候補生成コードは同一対象の代替手段を必ず連続してpushするため常に連続区間になる、と確認した上で採用)を検出しグループ化するよう変更。各ボタン生成処理を`buildCandidateRow()`として関数分離。2件以上のグループは`role="group"` + `aria-label`付きのコンテナ(`.candidate-group`)でラップし、視覚ラベル「同じ箇所の候補・N件」も表示(枠線という視覚情報だけに頼らずスクリーンリーダーにも伝わるようにした)。`styles.css`に青系の枠線・角丸・淡い背景のグループスタイルを追加。
   - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプルすべてでPlaywrightによりグループ数を確認(procedure-overview 2、tables 4、links-text 3、goal3-hirosaki-news2019 3、images/iframeは代替手段なしのため0)。スクリーンショットでユーザー提示のイメージ通りの枠囲み表示になっていることを確認。
-  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(PR #33への追加コミット)。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(PR #33への追加コミット)。→ コミット`f9dbaef`としてPR #33へ反映済み。
+- ユーザーから「今のプログラムはLLMをAPIで利用していますか？」と問われ調査したところ、`processing_class: ai`/`hybrid`タグ付きの36ルール(KB定義では「LLM判断」を意味する)が実際には全て正規表現・DOM解析・一部はハードコード対応表で実装されており、実LLM APIは一切呼び出されていないことが判明した。「AI画像名生成」表示も4種類の決め打ちPoCサンプル画像ファイル名への固定文言のみだった。
+  - Explore agentで36ルール全数を調査し、偽AI2件(`image.alt-text`: `generateImageNameDraft`が4種類の決め打ちファイル名限定、`html-structure.heading-required`: `collectContextualHeadingCandidates`がPoC文書の内容にべた書きで一致させているだけ)、素朴なヒューリスティックで穴あり9実装対象/約14ルールID(link.link-text/mail-link/toppage-link、table.caption/cell-merge-*/th-scope、text.foreign-language/sensory-characteristics、html-structure.heading-content-quality)、既に妥当17件、未実装5件、に分類した。
+  - ユーザーは「偽AI2件+素朴なヒューリスティック12件」を対象、プロバイダはGoogle Gemini(既存Cloud Run/GCP運用との親和性・コスト)、APIキーはserver.js経由のプロキシで保持、と方針決定。サーバーサイド知識がほぼ無いとのことで、APIキー方式とADC/Vertex AI方式の違いを平易に説明し、「まずAPIキーのみで実装し、動作確認後にADC方式を追加検討する」2段階方針で合意。ページごとのLLM利用コスト概算表示も追加要望として受けた。
+  - 実装前にplanモードへ入り、Explore agentでコード構造を調査した結果、`generateCandidates(fragment)`(全ルール収集の唯一のオーケストレーター)が完全に同期処理で、対象ルールは2〜7階層下にネストしていることが判明。一方`analyze()`には既に`enrichLinkTitleCandidates`という「同期生成→事後の非同期enrichmentパスで上書き、失敗時は既存ヒューリスティックへフォールバック」パターンが確立されていたため、これを踏襲する設計とし、`generateCandidates()`本体には一切手を入れない方針を確定した。
+  - ユーザーがGemini APIキー(利用量上限付きのテスト用)をチャットで提供。会話ログへの残留を懸念し、環境変数設定(Claude Code on the web)やファイル添付の方法も検討したが、いずれも今動いているセッションを継続したまま完全に痕跡を残さずに渡す方法は無いと判断し、最終的にチャット貼り付け方式で提供を受けた。受け取ったキーはリポジトリ外のスクラッチパッド領域にのみ保存し、動作確認後に削除、リポジトリには一切含めていない。
+  - ステージ1(実装順序4段階のうち1段階目)を実装: `goal2-app/lib/llm.js`(`callGemini()`、キャッシュ、`LLM_MAX_CALLS_PER_MINUTE`予算ガード、`usageMetadata`からのコスト概算)、`goal2-app/lib/llm-prompts.js`(タスク別プロンプト、`foreign-language`のみ実装)、`server.js`の`POST /api/llm/enrich`、`app.js`の`enrichWithLlm()`(`text.foreign-language`に接続)、候補一覧サマリーへのコスト表示。
+  - 検証: `node --check`・`node test/run-tests.js`(`GEMINI_API_KEY`未設定)成功、既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。ユーザー提供の実キーで実際にGemini呼び出しまで確認し、(1)正規表現版のフォールバック(`inferLanguageCode`)では検出不能だったフランス語("Bienvenue à la mairie...")をLLMが正しく`lang="fr"`と判定できることを実証、(2)予算ガードが3件目で429を返すこと、(3)UIの「問題」「この候補で変わること」欄に`(AI判定)`表示、コスト概算(例: 1ページ$0.0001程度)が正しく反映されることをPlaywrightで確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ(PR #33への追加コミット、またはstage単位の別PR)。その後、残り3ステージ(テキスト系8ルール→image.alt-text→heading-required)を計画(`/root/.claude/plans/melodic-purring-karp.md`)に沿って進める。
 
 ## Decisions
 
