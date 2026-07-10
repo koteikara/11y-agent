@@ -46,6 +46,10 @@ cp build/michecker-checkitems.json ../goal2-app/data/michecker-checkitems.json
 
 ユーザーとの協議の結果、「summary属性が存在すればシステム側で自動的に削除する（内容の追加・改善は行わない）」方針で確定した。これに伴い、C_25.2・C_25.4を`table/caption.md`から`html-structure/deprecated-elements.md`へ付け替えた（`html-structure/deprecated-elements.md`のsummary属性除去ロジック(`goal2-app/public/app.js`の`collectDeprecatedAttributeCandidates`、C_48.8実装と共通)が、この2項目を実質的に解決するため）。表の概要は`summary`属性ではなく`caption`要素（`table/caption.md`、C_25.1・C_25.3）で提供する。
 
+## 逆引き検出パリティ Phase 1〜3 の完了（2026-07-10）
+
+タグ付け済みチェック項目について、KBルールへの対応づけだけでなく`goal2-app`の候補生成ロジック自体をmiChecker本体の判定条件に近づける作業（Phase 1: error型14件、Phase 2A/2B: warning型32件中の対応分、Phase 3: 当初C分類のうちユーザーと協議した15グループ中6グループ）が完了した。詳細は`CHANGELOG.md`の該当エントリを参照。意図的に未実装とした項目（miChecker本体でも要素条件を持たない`always()`型の常時リマインダー、デッドコード、出現頻度が低いレア要素、機械判定が困難で人間レビューに委ねる方が実効的な項目）はCHANGELOGに理由付きで記録済み。
+
 ## 現在のバックログ（トリアージ保留中）
 
 | チェック項目ID | 内容(要約) | WCAG | 検討状況 |

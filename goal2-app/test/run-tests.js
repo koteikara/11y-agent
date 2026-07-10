@@ -346,6 +346,71 @@ async function main() {
     "adjacent same-href link merge suggestion (C_57.5) should have a Japanese message"
   );
 
+  // miChecker Phase 3 parity additions (final phase, user-agreed minimal-noise subset of the
+  // remaining C-classification items): C_15.0/C_388.0/C_500.4 (heading content quality), C_25.3
+  // (generic table caption), C_80.0 (alt length > 150), C_16.0/C_16.1/C_16.2 (list structure),
+  // C_331.2 (th row/col-only layout pattern), C_83.0 (positional/shape language).
+  assert.ok(
+    appJs.includes("collectHeadingContentQualityCandidates"),
+    "heading content quality detection (C_15.0/C_388.0/C_500.4) should be implemented"
+  );
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.heading-content-quality"'),
+    "heading content quality candidates should use the heading-content-quality KB rule id"
+  );
+  assert.ok(appJs.includes("見出しのテキストが極端に短くなっています。"), "short heading candidates should have a Japanese message");
+  assert.ok(appJs.includes("見出しのテキストが記号のみで構成されています。"), "symbol-only heading candidates should have a Japanese message");
+
+  assert.ok(
+    appJs.includes("isGenericTableCaptionText"),
+    "generic table caption detection (C_25.3) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("表のキャプションが汎用的で、この表の内容を特定できません。"),
+    "generic table caption candidates should have a Japanese message"
+  );
+
+  assert.ok(appJs.includes("alt.length > 150"), "alt-text length detection (C_80.0) should be implemented");
+  assert.ok(
+    appJs.includes("代替テキストが150文字を超えています。"),
+    "long alt-text candidates should have a Japanese message"
+  );
+
+  assert.ok(
+    appJs.includes("collectListStructureCandidates"),
+    "list structure detection (C_16.0/C_16.1/C_16.2) should be implemented"
+  );
+  assert.ok(appJs.includes("要素にli要素がありません。"), "list-without-li candidates should have a Japanese message (C_16.1)");
+  assert.ok(
+    appJs.includes("このli要素には親となるul要素もしくはol要素が存在しません。"),
+    "orphan li candidates should have a Japanese message (C_16.2)"
+  );
+  assert.ok(appJs.includes("項目が1件だけのリストです。"), "single-item list candidates should have a Japanese message (C_16.0)");
+  assert.ok(
+    appJs.includes('ruleId: "text.list"'),
+    "list structure candidates should use the text.list KB rule id"
+  );
+
+  assert.ok(
+    appJs.includes("collectThLayoutPatternCandidate"),
+    "th row/col-only layout pattern detection (C_331.2) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("th要素が1行目・1列目のみにある単純な表の左上のtd要素にテキストが存在しています。"),
+    "th layout pattern candidates should have a Japanese message matching the miChecker wording"
+  );
+
+  assert.ok(
+    appJs.includes("collectPositionalLanguageCandidate"),
+    "positional/shape-dependent language detection (C_83.0) should be implemented"
+  );
+  assert.ok(appJs.includes("POSITIONAL_LANGUAGE_PATTERN"), "positional language detection should use an explicit vocabulary pattern");
+  assert.ok(appJs.includes("下記の"), "positional language vocabulary should include 下記の");
+  assert.ok(
+    appJs.includes('ruleId: "text.sensory-characteristics"'),
+    "positional language candidates should use the text.sensory-characteristics KB rule id"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");

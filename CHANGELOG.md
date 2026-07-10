@@ -21,6 +21,25 @@
 
 ## Entries
 
+## 2026-07-10: miChecker検出パリティ Phase 3(絞り込み確認通知)の実装とノイズ設計協議
+
+- 背景・目的: Phase 1・2A・2Bで対応しきれなかった「C分類(当初未検出42件)」について、ユーザーに「洗い出してほしい」と依頼され、Phase1/2A/2Bで既に解決済みの項目・上位互換への訂正・ノイズ回避での除外を差し引いた結果、実質的な検討対象は15グループ・約30項目まで絞り込めた。ユーザーの希望「個々に選択肢を提示して話し合いながら決める」に従い、15グループそれぞれについて「実装しない/最小限のシグナルのみ/miChecker同等の広い実装」の選択肢を提示し、1グループずつ確認した。
+- **協議結果**: 15グループ中6グループを実装(ユーザーが「最小限のシグナル」「機械判定しやすいので両方実装」等を選択)、9グループは実装見送り(理由: 機械判定が困難で人間レビューに委ねる方が実効的、出現頻度が低い、既存の運用で代替可能、等)。
+  - 実装: E(見出し内容の質、極端に短い/記号のみに限定)、J(caption品質、汎用語のみに限定)、G(alt150文字超)、M(リスト構造3項目)、K(th配置パターン)、N(形・位置依存語彙、代表的な複合表現のみ)。
+  - 見送り: H(テキスト画像化検出)、I(リンクtitle属性)、A(廃止要素の残りタグ)、D(スクリプト依存)、B(動き・閃光の停止手段確認)、F(frame/iframeのtitle品質確認)、O(画像内の色のみ依存)、C(タグ・属性整合性)、L(略語・頭字語abbr化)。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_15.0/C_388.0/C_500.4: 正規化後2文字以下、または記号・句読点のみで構成される見出しを低確信度で確認候補にする(`collectHeadingContentQualityCandidates`、`html-structure.heading-content-quality`)。
+  - C_25.3: 「表」「一覧」等、内容を特定しない汎用語のみのcaptionを低確信度でフラグ(`isGenericTableCaptionText`、`table.caption`)。
+  - C_80.0: alt属性が150文字を超える画像に、aria-describedby等での詳細説明分離を促す確認候補(`image.complex-image-report`、既存のC_4.0「詳細な説明が必要」と同じruleIdへ寄せた)。
+  - C_16.0/C_16.1/C_16.2: li要素を持たないul/ol、親ul/ol/menuを持たないli要素(`collectListStructureCandidates`)。li要素の親子関係はブラウザのHTMLパーサーが自動修復しないことをPlaywrightで確認した上で実装。C_16.0は承認済みの簡易ヒューリスティック(項目1件のみのリスト)で低確信度フラグ。
+  - C_331.2: th要素が1行目・1列目のみにある単純な表(行列見出しパターン)で、左上のtd要素にテキストがある場合の確認候補(`collectThLayoutPatternCandidate`、既存の`buildExpandedTableGrid`を流用)。
+  - C_83.0: 「右の」「上記の」「下のボタン」等、位置・形状に依存する代表的な複合表現をテキストノードから検出(`collectPositionalLanguageCandidate`、`text.sensory-characteristics`)。単独の「右」「左」は過検出防止のため対象外。
+  - **KBタグの補完**: `image/complex-image-report.md`にC_80.0のタグ付けが漏れていた(サブエージェントは「既存タグで十分」と報告したが、レビューで発見・修正)。app.js側の候補生成自体はruleId単位のフィルタのため実害はなかったが、`michecker-compare.js`の逆引き表示の正確性のため追記し、ケース2(alt長すぎる例)も本文に追加。`build/rules.jsonl`を再生成・同期。
+- 検証: 陽性15+陰性6+miCheckerモード2の計17ケース(親セッションで独立検証)全PASS。既存6サンプルは`iframe`(4→5)・`goal3-hirosaki-news2019`(17→18)がそれぞれ+1(C_83.0の「下記の」該当箇所があり意図した増加)、他4サンプルは完全一致。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`、`a11y-migration-kb/rules/image/complex-image-report.md`、`a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`
+- 関連PR: (作成予定、PR #30へ追加)
+- 備考: これでmiChecker検出パリティの取り組み(Phase 1〜3)が完了。当初のギャップ分析88項目は、上位互換15件・実装対応(Phase1-3合計)約40件・意図的な未実装(dead code・ノイズ回避・要素条件なしの常時リマインダー・出現頻度低)約33件に整理された。トリアージバックログ(michecker-triage.mdの11項目)の個別協議は別途実施予定。
+
 ## 2026-07-10: PR #28マージ後の分岐修正、summary属性(C_25.2/C_25.4)の方針決定、不整合データの削除
 
 - 背景・目的: PR #28がPhase 1・2A・2Bのコミットを含まないまま(最初のコミットのみで)マージされていたことが判明した。以後の3コミット(Phase 1・2A・2B)が閉じたPRのブランチに積まれたままどのPRにも属していない状態になっていたため、ユーザーの指示に基づき是正した。あわせて、Phase 1完了時から「要方針判断」として保留していたsummary属性(C_25.2/C_25.4)の扱い、旧セッションから残っていた不整合データの解消もユーザーの指示に基づき対応した。

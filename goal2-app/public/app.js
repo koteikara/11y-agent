@@ -610,6 +610,7 @@
     collectLinkCandidates(fragment, candidates);
     collectIframeCandidates(fragment, candidates);
     collectTextCandidates(fragment, candidates);
+    collectListStructureCandidates(fragment, candidates);
     collectMetaRefreshCandidates(fragment, candidates);
     collectDuplicateAttributeCandidates(fragment, candidates);
     collectFrameElementNotices(candidates);
@@ -1034,6 +1035,25 @@
           })
         );
       }
+
+      // miChecker C_80.0(item_80(): alt.length > 150): 代替テキストが150文字を超える画像は、
+      // 詳細説明を本文側(aria-describedby等)に分離することを検討する確認候補を出す。
+      // 「詳細な説明が必要」という主旨が既存のimage.complex-image-report(C_4.0)候補と共通のため、
+      // 別ruleId(image.alt-text)ではなくこちらへ寄せる。
+      if (alt !== null && alt.length > 150) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.complex-image-report",
+            element: img,
+            message: "代替テキストが150文字を超えています。",
+            reason: "長い代替テキストは読み上げの負担が大きくなります。aria-describedby等を使って、画像の詳細な説明を本文側に分離できないか検討してください。",
+            afterHtml: img.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
     });
 
     fragment.content.querySelectorAll("figure, p, div").forEach((container) => {
@@ -1138,6 +1158,40 @@
     });
 
     collectContextualHeadingCandidates(fragment, candidates);
+    collectHeadingContentQualityCandidates(fragment, candidates);
+  }
+
+  // miChecker C_15.0/C_388.0/C_500.4(html-structure.heading-content-quality): 見出し(h1〜h6)の内容が
+  // セクションを説明しているかは機械判定できないため、miChecker本体は原則すべての見出しを確認対象として
+  // 通知する(item_15()はheadings配列を無条件にaddCheckerProblemへ渡す)。本実装ではノイズを抑えるため、
+  // ユーザー承認済みの方針として「極端に短い(正規化後2文字以下)」または「記号・句読点のみ」の見出しに限定し、
+  // 低確信度(patchMode: none)の確認候補として出す。空の見出しはcollectContextualHeadingCandidates側の
+  // isEmptyHeadingSection()判定と重複しないよう対象外にする。
+  function collectHeadingContentQualityCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((heading) => {
+      const text = normalizeText(heading.textContent);
+      if (!text) {
+        return;
+      }
+      const isTooShort = Array.from(text).length <= 2;
+      const isSymbolOnly = !/[\p{L}\p{N}]/u.test(text);
+      if (!isTooShort && !isSymbolOnly) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-content-quality",
+          element: heading,
+          message: isSymbolOnly ? "見出しのテキストが記号のみで構成されています。" : "見出しのテキストが極端に短くなっています。",
+          reason:
+            "見出し(h1〜h6)は対応するセクションの内容を説明する文言にします。テキストを太字にするためだけの目的で見出しタグを使っている場合は、見出しタグではなくCMSの装飾機能に置き換えてください。",
+          afterHtml: heading.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
   }
 
   function collectContextualHeadingCandidates(fragment, candidates) {
@@ -1623,6 +1677,26 @@
             requiresHumanReview: true,
           })
         );
+      } else {
+        // miChecker C_25.3(table.caption): captionが既に存在する表について、その内容が表を特定できる
+        // ものかを確認する。「表」「一覧」等、内容を特定しない汎用語のみのcaptionに限定して低確信度で
+        // フラグする(具体的な語を含むcaption、例:「対象者一覧」は対象外)。
+        const captionElement = table.querySelector("caption");
+        const captionText = normalizeText(captionElement.textContent);
+        if (isGenericTableCaptionText(captionText)) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.caption",
+              element: captionElement,
+              message: "表のキャプションが汎用的で、この表の内容を特定できません。",
+              reason: "「表」「一覧」などの語だけでは、この表が何を表しているか特定できません。表の内容が分かる具体的なキャプションに修正してください。",
+              afterHtml: captionElement.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
       }
     });
   }
@@ -1772,6 +1846,69 @@
         }
       });
     });
+
+    collectThLayoutPatternCandidate(table, candidates);
+  }
+
+  // miChecker C_331.2(item_331()のisSimpleTable2): th要素が1行目・1列目のみにある単純な表
+  // (1行目: 左上のみtd、それ以外は全てth / 2行目以降: 各行の先頭セルのみth(rowspan無し)、
+  // 残りは全てtd)を検出し、左上のtd要素にテキストがあれば「削除するかth要素に変更することを
+  // 検討」の確認候補を出す。isLikelyLayoutTable()と判定される表は対象外にする
+  // (miChecker本体もdataTableListのみを対象にitem_331()を実行するため)。
+  function collectThLayoutPatternCandidate(table, candidates) {
+    if (isLikelyLayoutTable(table)) {
+      return;
+    }
+    const grid = buildExpandedTableGrid(table);
+    if (grid.length < 2) {
+      return;
+    }
+    const firstRow = grid[0];
+    if (!firstRow || firstRow.length < 2) {
+      return;
+    }
+
+    const topLeft = firstRow[0];
+    if (!topLeft || !topLeft.isOrigin || topLeft.cell.tagName !== "TD") {
+      return;
+    }
+    const topLeftText = normalizeText(topLeft.text);
+    if (!topLeftText) {
+      return;
+    }
+
+    // 1行目(左上を除く)は、その行で始まる(isOrigin)セルが全てth。
+    const columnHeaderCells = firstRow.slice(1).filter((item) => item && item.rowIndex === 0);
+    if (columnHeaderCells.length === 0 || !columnHeaderCells.every((item) => item.isHeader)) {
+      return;
+    }
+
+    // 1列目(1行目を除く)は、各行の先頭セルが全てth(その行で始まる、rowspanで上から続くものは除く)。
+    const rowHeaderCells = grid.slice(1).map((row) => row?.[0]);
+    if (rowHeaderCells.length === 0 || rowHeaderCells.some((item) => !item || !item.isOrigin || !item.isHeader)) {
+      return;
+    }
+
+    // 1行目・1列目以外にth要素が無いこと(単純な行列見出しパターン以外は対象外)。
+    const hasStrayHeader = grid.some((row, rowIndex) =>
+      row.some((item, columnIndex) => item?.isOrigin && item.isHeader && rowIndex !== 0 && columnIndex !== 0)
+    );
+    if (hasStrayHeader) {
+      return;
+    }
+
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.th-scope",
+        element: topLeft.cell,
+        message: "th要素が1行目・1列目のみにある単純な表の左上のtd要素にテキストが存在しています。",
+        reason: "この左上のセルはどの見出し(th)の方向にも対応しない位置です。このセルのテキストを削除するか、th要素に変更することを検討してください。",
+        afterHtml: topLeft.cell.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
   }
 
   function guessThScopeValue(th) {
@@ -2512,6 +2649,99 @@
       collectTextReplacementCandidates(element, text, candidates, seen);
       collectForeignLanguageCandidate(element, text, candidates, seen);
       collectNoteSymbolCandidate(element, text, candidates, seen);
+      collectPositionalLanguageCandidate(element, text, candidates, seen);
+    });
+  }
+
+  // miChecker C_83.0(text.sensory-characteristics): コンテンツの形・位置だけに依存した案内文言
+  // (「右の」「上記の」「下のボタン」等)をテキストノードから検出する。miChecker本体は形・位置・色を
+  // 総合的に扱う手動確認項目のため機械的な語彙リストを持たないが、過検出を避けるため単独の「右」
+  // 「左」ではなく、位置・方向を具体的に指す複合表現のみを対象にした低確信度の確認候補にする。
+  const POSITIONAL_LANGUAGE_PATTERN =
+    /右側の|右の|左側の|左の|上記の|下記の|上の図|下の図|上の画像|下の画像|上のボタン|下のボタン|上のリンク|下のリンク/;
+
+  function collectPositionalLanguageCandidate(element, text, candidates, seen) {
+    const match = text.match(POSITIONAL_LANGUAGE_PATTERN);
+    if (!match) {
+      return;
+    }
+    pushUniqueCandidate(
+      candidates,
+      seen,
+      makeCandidate({
+        ruleId: "text.sensory-characteristics",
+        element,
+        message: `形や位置だけに依存した案内表現(「${match[0]}」)が含まれています。`,
+        reason:
+          "ページの内容を理解・操作するために必要な情報を、コンテンツの形・位置だけに依存させないでください。形や位置を認識できない利用者にも伝わるよう、ボタン名や見出し名などテキストで特定できる情報を併記できないか確認します。",
+        afterHtml: element.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
+  // miChecker C_16.1/C_16.2(text.list): 既存ul/ol/liの構造検査。
+  // C_16.1(item_16()): li要素を子孫に1つも持たないul・ol要素。
+  // C_16.2(item_16()): 祖先にul・ol(またはmenu)を持たないli要素。ブラウザのHTMLパーサ(DOMParser/
+  // template.innerHTML)はli要素の親にul/ol/menuを要求しないため、この種の不正な入れ子はパース後も
+  // 保持される(Playwright実機検証済み)。
+  // C_16.0(item_16()には対応する機械判定が無い): レイアウト目的で使われているリストの疑い。
+  // ユーザー承認済みの簡易ヒューリスティックとして「liが1件のみのul/ol」を低確信度でフラグする。
+  function collectListStructureCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("ul,ol").forEach((list) => {
+      if (!list.querySelector("li")) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "text.list",
+            element: list,
+            message: `${list.tagName.toLowerCase()}要素にli要素がありません。`,
+            reason: "箇条書きを表すul・ol要素には、項目を表すli要素が必要です。リスト構造を見直してください。",
+            afterHtml: list.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+        return;
+      }
+
+      const directItems = [...list.children].filter((child) => child.tagName === "LI");
+      if (directItems.length === 1) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "text.list",
+            element: list,
+            message: "項目が1件だけのリストです。",
+            reason:
+              "リスト要素はレイアウトのためではなく、本来のリストを表現する際にのみ利用します。項目が1件しかないリストは、レイアウト調整のためだけに使われている可能性があるため、本来のリストとして複数項目を列挙する内容か確認してください。",
+            afterHtml: list.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
+    });
+
+    fragment.content.querySelectorAll("li").forEach((li) => {
+      const parentTag = li.parentElement?.tagName;
+      if (["UL", "OL", "MENU"].includes(parentTag)) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "text.list",
+          element: li,
+          message: "このli要素には親となるul要素もしくはol要素が存在しません。",
+          reason: "li要素は必ずul・ol(またはmenu)要素の子として配置します。親要素を確認し、正しいリスト構造に修正してください。",
+          afterHtml: li.outerHTML,
+          confidence: "medium",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
     });
   }
 
@@ -6397,6 +6627,12 @@
   function isGenericAlt(alt) {
     const text = normalizeText(alt);
     return /^(画像|写真|イメージ|image|photo)$/.test(text) || /^(.*の)?写真$/.test(text);
+  }
+
+  // miChecker C_25.3: 表の内容を特定しない汎用語のみで構成されたcaptionを検出する。
+  // 「対象者一覧」のように具体的な語を伴うcaptionは対象外にする(完全一致のみ)。
+  function isGenericTableCaptionText(text) {
+    return /^(?:表[0-9０-９]*|図表|一覧|表組|データ|テーブル|table)$/i.test(text);
   }
 
   function isGenericIframeTitle(title) {
