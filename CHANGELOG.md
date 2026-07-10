@@ -21,6 +21,19 @@
 
 ## Entries
 
+## 2026-07-10: PR #28マージ後の分岐修正、summary属性(C_25.2/C_25.4)の方針決定、不整合データの削除
+
+- 背景・目的: PR #28がPhase 1・2A・2Bのコミットを含まないまま(最初のコミットのみで)マージされていたことが判明した。以後の3コミット(Phase 1・2A・2B)が閉じたPRのブランチに積まれたままどのPRにも属していない状態になっていたため、ユーザーの指示に基づき是正した。あわせて、Phase 1完了時から「要方針判断」として保留していたsummary属性(C_25.2/C_25.4)の扱い、旧セッションから残っていた不整合データの解消もユーザーの指示に基づき対応した。
+- 主な変更内容:
+  - ブランチを`origin/main`(PR #28およびPR #29がマージ済みの最新main)にリベースし直した。`CHANGELOG.md`の同一挿入位置での競合(PR #29の「プロジェクト理解サマリーの追加」エントリと自分のPhase 1エントリ)を日付順に解消。
+  - summary属性(C_25.2/C_25.4)の方針をユーザーと確定: 「summary属性が存在すればシステム側で自動的に削除する(内容の追加・改善は行わない)」。`table/caption.md`から`html-structure/deprecated-elements.md`へ`michecker_check_ids`を付け替え、`deprecated-elements.md`の本文にlongdesc/summary属性の除去方針とケース3(summary属性除去の例)を追記。`reference/michecker-triage.md`に決定内容を記録。
+  - `reference/michecker-out-of-content-scope.json`から、実在しないチェックID`C_5.4`(過去セッションの入力ミスと推測、実害なし)を削除。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成し`goal2-app/data/`へ同期(56ルール、268チェック項目、本文スコープ外147件)。タグ付けとスコープ外の二重登録が無いことを確認。
+- 検証: `node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `a11y-migration-kb/rules/table/caption.md`、`a11y-migration-kb/rules/html-structure/deprecated-elements.md`、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md}`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL
+- 関連PR: (作成予定、新規PR)
+- 備考: 今後、PRをマージする際は同一ブランチへの追加コミット前に必ず`origin/main`とのマージ状態を確認する。トリアージバックログ(michecker-triage.mdの表)とPhase 3(user/info型の確認通知)の設計方針はユーザーと協議しながら別途進める。
+
 ## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2B: 廃止要素拡大・リンク関連・配色確認、最終フェーズ)
 
 - 背景・目的: Phase 2A(テーブル層・色/コントラスト)に続き、B分類(部分カバー)の残り(廃止要素の対象拡大、リンク関連、複雑画像シグナル、配色のみの情報伝達確認)を実装した。Phase 2Aで「事前のギャップ分析レポート自体に誤りがある」ことが判明したため、本Phaseでは実装対象の全項目についてmiChecker本体のJavaソース(`CheckEngine.java`・`HtmlEvalUtil.java`)を先に取得して発火条件を裏取りしてから実装する方針を徹底した。

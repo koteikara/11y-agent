@@ -11,7 +11,7 @@ processing_class: ai
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_25.1", "C_25.2", "C_25.3", "C_25.4"]
+michecker_check_ids: ["C_25.1", "C_25.3"]
 related: [/wcag/ch6-table.md]
 ---
 
@@ -26,3 +26,4 @@ related: [/wcag/ch6-table.md]
 ```after
 <table><caption>届出に必要なもの一覧</caption>...</table>
 ```
+ポイント: summary属性は追加せず、廃止属性として除去する（`html-structure/deprecated-elements.md`を参照）。表の概要はcaption要素で提供する。

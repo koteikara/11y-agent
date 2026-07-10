@@ -238,6 +238,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 副次的なバグ修正: `text.decoration-lines`ルールにmichecker_check_idsが未設定だったため、miCheckerモードでU/S/STRIKE/CENTER/BIG/TT候補が本来検出しているmiChecker項目(C_33.1/33.2/48.2等)にもかかわらず一切表示されない既存バグを発見。`MICHECKER_RULE_ALIASES`で解消。
   - 検証: Fable 5が親セッションで独立に再検証(陽性12全PASS)、既存6サンプルは`links-text`のみ20→21件(C_8.0該当箇所があり意図した増加)、他5サンプル完全一致。C_4.0拡張により丁寧な説明的alt文にも確認候補が出ることを確認したが、confidence: low・patchMode: none・人間確認前提でありmiChecker本体自体の粒度と一致するため意図した挙動と判断。
   - Phase 1・2A・2Bでmichecker検出パリティの作業は完了。ギャップ分析88項目のうちA(上位互換、訂正後15件)・B(実装対象を絞り込んだ上で対応済み、dead code 6件+意図的ノイズ回避2件を除く)は対応済み、C(未検出42件、Phase 3)は未着手のまま。
+- ユーザーに「現状で判断が必要なものはないか」洗い出しを依頼された。確認したところ、**PR #28が最初のコミットのみでマージ済みで、その後のPhase 1・2A・2Bの3コミットが閉じたPRのブランチに積まれたままどのPRにも属していない**という見落としが判明(標準手順「マージ済みPRの上に積む前にorigin/mainから作り直す」を怠っていた)。ユーザーから5点の指示を受け対応した。
+  - ①**リベース実施**: `origin/main`(PR #28・PR #29マージ済み)に対してrebaseし、CHANGELOG.mdの競合(PR #29のエントリと自分のエントリが同一挿入位置)を日付順に解消。3コミットは正常に載せ替え完了、テスト・6サンプル回帰も再確認予定(次のコミット時)。
+  - ②**summary属性(C_25.2/C_25.4)は「存在すればシステム側で自動削除、内容の追加・改善はしない」方針で確定**。`table/caption.md`から`html-structure/deprecated-elements.md`へ`michecker_check_ids`を付け替え、本文にlongdesc/summary除去方針とケース3を追記。`michecker-triage.md`に決定を記録。
+  - ③**Phase 3(C分類42件、user/info型の確認通知)のノイズ量設計は、着手時にユーザーと協議しながら決める**(自律実装しない)方針を確認。
+  - ④**michecker-triage.mdのバックログ11項目(longdesc/D-link、blockquote/cite、リンク区切り、アスキーアート、heading-content-quality重複可能性、内容の分かりやすさ確認、ふりがな、object alt、リンクaccesskey、area alt、applet alt)は個別に協議しながらKBルール化/スコープ外/保留を判断する**方針を確認(まだ個別協議は未実施)。
+  - ⑤**PR監視(watch)は不要**と確認。
+  - ⑥`reference/michecker-out-of-content-scope.json`の不整合データ`C_5.4`(実在しないチェックID、過去セッションの入力ミスと推測)を削除。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成・同期(56ルール、268チェック項目、本文スコープ外147件)、タグ/スコープ外の二重登録なしを確認。`node test/run-tests.js`成功。
+  - 次のアクション: 新規PRの作成(このコミット後)、michecker-triage.mdのバックログ11項目の個別協議、Phase 3着手判断はユーザーとの協議待ち。
 
 ## Decisions
 

@@ -40,6 +40,12 @@ cp build/michecker-checkitems.json ../goal2-app/data/michecker-checkitems.json
 
 これに伴い、該当するチェック項目ID（フォーム関連約37件、C_60.x/C_600.12、C_21.x）はすべて`reference/michecker-out-of-content-scope.json`へ「本文スコープ外」として登録し直した。旧バックログのC_54.0・C_79.5もこの整理でスコープ外に解決したため、以下のバックログ表から除外した。
 
+## table要素のsummary属性（C_25.2・C_25.4）の方針決定（2026-07-10）
+
+`summary`属性はHTML Living Standardで廃止済みであり、KBの`deprecated-elements.md`は元々この属性の除去を推奨していた。一方miChecker側のC_25.2（summary属性の追加検討）・C_25.4（既存summary属性の内容確認）は、summary属性を前提にした指摘であり、KBの廃止方針と矛盾していた。
+
+ユーザーとの協議の結果、「summary属性が存在すればシステム側で自動的に削除する（内容の追加・改善は行わない）」方針で確定した。これに伴い、C_25.2・C_25.4を`table/caption.md`から`html-structure/deprecated-elements.md`へ付け替えた（`html-structure/deprecated-elements.md`のsummary属性除去ロジック(`goal2-app/public/app.js`の`collectDeprecatedAttributeCandidates`、C_48.8実装と共通)が、この2項目を実質的に解決するため）。表の概要は`summary`属性ではなく`caption`要素（`table/caption.md`、C_25.1・C_25.3）で提供する。
+
 ## 現在のバックログ（トリアージ保留中）
 
 | チェック項目ID | 内容(要約) | WCAG | 検討状況 |
