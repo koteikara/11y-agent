@@ -3410,12 +3410,42 @@
 
   }
 
+  const URL_OR_EMAIL_PATTERN =
+    /\bhttps?:\/\/[^\s"'<>）)]+|\bwww\.[A-Za-z0-9.-]+(?:\/[^\s"'<>）)]*)?|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+
+  // Latin script incl. accented/diacritic letters (French/Portuguese/Spanish/Vietnamese/etc.),
+  // not just plain ASCII — otherwise those languages are silently missed.
+  const LATIN_FOREIGN_PATTERN = /[A-Za-zÀ-ſḀ-ỿ]{3,}(?:[ ,.'"-]+[A-Za-zÀ-ſḀ-ỿ]{2,}){2,}/;
+  const HANGUL_SCRIPT_PATTERN = /\p{Script=Hangul}{2,}/u;
+  const THAI_SCRIPT_PATTERN = /\p{Script=Thai}{2,}/u;
+  const CYRILLIC_SCRIPT_PATTERN = /\p{Script=Cyrillic}{3,}/u;
+  // Kanji-only labels/headings are extremely common in ordinary Japanese municipal
+  // pages (e.g. "受付窓口", "対象者一覧"), so "Han script with no kana nearby" is not
+  // a safe signal for Chinese by itself. Require a Chinese-only function word/pronoun
+  // (things Japanese text never spells this way) alongside a Han run as corroboration.
+  const CHINESE_MARKER_PATTERN =
+    /我们|我們|你们|你們|他们|他們|它们|它們|不是|没有|沒有|可以|因为|因為|所以|但是|如果|虽然|雖然|哪里|哪裡|什么|什麼|怎么|怎麼|谢谢|謝謝|欢迎|歡迎|这个|這個|你好|请问|請問/;
+  const HAN_SCRIPT_PATTERN = /\p{Script=Han}{2,}/u;
+  const VIETNAMESE_TONE_MARK_PATTERN = /[Ạ-ỹ]/;
+
+  function isForeignLanguageText(text) {
+    return (
+      LATIN_FOREIGN_PATTERN.test(text) ||
+      HANGUL_SCRIPT_PATTERN.test(text) ||
+      THAI_SCRIPT_PATTERN.test(text) ||
+      CYRILLIC_SCRIPT_PATTERN.test(text) ||
+      (HAN_SCRIPT_PATTERN.test(text) && CHINESE_MARKER_PATTERN.test(text))
+    );
+  }
+
   function collectForeignLanguageCandidate(element, text, candidates, seen) {
-    if (!/[A-Za-z]{3,}(?:[ ,.'"-]+[A-Za-z]{2,}){2,}/.test(text)) {
+    const textWithoutUrlsOrEmails = text.replace(URL_OR_EMAIL_PATTERN, " ");
+    if (!isForeignLanguageText(textWithoutUrlsOrEmails)) {
       return;
     }
 
-    const languageHtml = buildForeignLanguageHtml(element, text);
+    const langCode = inferLanguageCode(textWithoutUrlsOrEmails);
+    const languageHtml = buildForeignLanguageHtml(element, langCode);
     pushUniqueCandidate(
       candidates,
       seen,
@@ -3425,7 +3455,7 @@
         message: "外国語の文章または語句が含まれている可能性があります。",
         reason: "本文中の外国語には、CMSで対応する言語属性を付与できるか確認します。",
         afterHtml: languageHtml,
-        patch: { type: "set-attribute", name: "lang", value: inferLanguageCode(text) },
+        patch: { type: "set-attribute", name: "lang", value: langCode },
         confidence: "low",
         requiresHumanReview: true,
       })
@@ -3989,15 +4019,23 @@
     root.appendChild(paragraph);
   }
 
-  function buildForeignLanguageHtml(element, text) {
+  function buildForeignLanguageHtml(element, langCode) {
     const clone = element.cloneNode(true);
     stripInternalAttributes(clone);
-    clone.setAttribute("lang", inferLanguageCode(text));
+    clone.setAttribute("lang", langCode);
     return cleanHtml(clone.outerHTML);
   }
 
   function inferLanguageCode(text) {
-    return /[A-Za-z]/.test(text) ? "en" : "";
+    if (HANGUL_SCRIPT_PATTERN.test(text)) return "ko";
+    if (THAI_SCRIPT_PATTERN.test(text)) return "th";
+    if (CYRILLIC_SCRIPT_PATTERN.test(text)) return "ru";
+    if (HAN_SCRIPT_PATTERN.test(text) && CHINESE_MARKER_PATTERN.test(text)) return "zh";
+    if (VIETNAMESE_TONE_MARK_PATTERN.test(text)) return "vi";
+    if (/ñ/i.test(text)) return "es";
+    if (/[ãõç]/i.test(text)) return "pt";
+    if (/[A-Za-z]/.test(text)) return "en";
+    return "";
   }
 
   function buildAdjacentNoteMergeProposal(element) {
