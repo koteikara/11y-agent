@@ -369,7 +369,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `lib/llm.js`にADC/Vertex AI認証モードを実装。新規`GEMINI_AUTH_MODE`環境変数(既定`api-key`、明示的に`adc`指定時のみ有効化)で、既定動作(未設定)を完全に無変更のまま維持。ADCモード時はCloud Runのメタデータサーバーからアクセストークン・プロジェクトIDを取得し、Vertex AI経由でGeminiを呼び出す。Vertex AIとDeveloper APIのリクエスト/レスポンス形式がほぼ同一(`contents`/`generationConfig`/`usageMetadata`共通)と判明したため、既存の`callGemini()`のボディ構築・レスポンス解析・キャッシュ・予算ガードは一切変更せず、認証ヘッダーとURL構築のみを分岐させる最小差分の実装とした。
   - 実装中、`lib/llm.js`の`buildCacheKey()`内の区切り文字(本来半角スペース)が3箇所ともヌルバイト(`\x00`)としてファイルに保存されていることを自己発見(`file`コマンドで`data`型と判定される非テキストファイルになっていた)。原因は不明(過去セッションでの編集時のエンコーディング事故と推測)。機能上の実害は無かった(ハッシュキーが変わるだけで一貫性は保たれる)が、不健全なソースファイル状態だったため半角スペースへ修正した。
   - 検証: `node --check`成功。`GEMINI_AUTH_MODE`未設定(既定)でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致(回帰なし)。`GEMINI_AUTH_MODE=adc`を設定した状態で直接`callGemini()`を呼び出し、`isConfigured()`が`true`を返すこと、メタデータサーバーに到達できないこの環境では`llm_adc_token_failed`という明確なエラーで(クラッシュせず)失敗することを確認。Cloud Run上での実際の成功動作は、原理的にこの環境では検証できないため、ユーザーが実際にデプロイして確認する。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後、項目1(環境変数の運用ドキュメント整備、`GEMINI_AUTH_MODE`/`GEMINI_VERTEX_PROJECT`/`GEMINI_VERTEX_LOCATION`を含む)へ進む。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後、項目1(環境変数の運用ドキュメント整備、`GEMINI_AUTH_MODE`/`GEMINI_VERTEX_PROJECT`/`GEMINI_VERTEX_LOCATION`を含む)へ進む。→ コミット`7c21a9c`としてPR #40を作成、マージ済み。
+  - 項目1(環境変数の運用ドキュメント整備)に着手。`goal2-app/README.md`の「Scope」節に残っていた「実案件HTMLの外部LLM送信」「実案件画像の外部AI送信」を「まだ扱わないもの」とする記述(LLM統合完了により事実と異なっていた)を修正し、実装済みだが既定で無効・データポリシー未確定である旨に書き換え。新規「LLM (Gemini) 連携」節で全環境変数を表形式にまとめ、2つの認証方式(APIキー/ADC)の使い分けを説明。`CLOUD_RUN_DEPLOY.md`には「LLM (Gemini) 連携を有効にする場合」節を追加し、APIキーをSecret Manager経由で安全に注入する手順、ADCモード有効化に必要なVertex AI API有効化・IAM権限付与・デプロイ時の環境変数設定を、実行可能な`gcloud`コマンド例とともに記載。
+  - ドキュメントのみの変更のためコード検証は不要。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
 
 ## Decisions
 

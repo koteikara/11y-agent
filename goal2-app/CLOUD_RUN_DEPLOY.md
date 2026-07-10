@@ -75,6 +75,43 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 - ブラウザのキャッシュが残っていないか
 - Cloud Run の最新リビジョンに 100% のトラフィックがあるか
 
+## LLM (Gemini) 連携を有効にする場合
+
+既定では `GEMINI_API_KEY` が未設定のため、LLM連携は無効(呼び出しなし・課金なし)のままデプロイされる。有効にする場合のみ、以下のいずれかを行う。各環境変数の意味は [README.md](README.md#llm-gemini-連携) を参照。
+
+### APIキー方式(Secret Manager経由を推奨)
+
+```powershell
+# 1回だけ: シークレットを作成してキーを登録
+echo "ここに実際のAPIキー" | gcloud secrets create gemini-api-key --data-file=-
+
+# デプロイ時にシークレットをそのまま環境変数として注入する(平文でコマンド履歴に残さない)
+gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated `
+  --update-secrets="GEMINI_API_KEY=gemini-api-key:latest"
+```
+
+APIキーを直接 `--set-env-vars` に書くとコマンド履歴・Cloud Runのリビジョン設定に平文で残るため避ける。
+
+### ADC/Vertex AI方式(APIキー不要)
+
+```powershell
+# 1. プロジェクトでVertex AI APIを有効化(初回のみ)
+gcloud services enable aiplatform.googleapis.com
+
+# 2. Cloud RunサービスアカウントにVertex AI呼び出し権限を付与(初回のみ)
+$PROJECT_ID = gcloud config get-value project
+$SERVICE_ACCOUNT = gcloud run services describe $SERVICE --region $REGION --format="value(spec.template.spec.serviceAccountName)"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/aiplatform.user"
+
+# 3. デプロイ時にADCモードを指定
+gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated `
+  --set-env-vars="GEMINI_AUTH_MODE=adc,GEMINI_VERTEX_PROJECT=$PROJECT_ID,GEMINI_VERTEX_LOCATION=asia-northeast1"
+```
+
+`GEMINI_VERTEX_LOCATION` はVertex AI Gemini APIが提供されているリージョンを指定する(未対応リージョンだとエラーになる場合はいったん `us-central1` を試す)。
+
+いずれの方式でも、有効化後は実際に候補生成を実行し、画面上のコスト概算表示が出ること・候補の内容がLLMで改善されていること(`(AI判定)`等の注記が付く)を確認する。
+
 ## よくあるつまずき
 
 ### `git` コマンドが見つからない、または認証を求められる

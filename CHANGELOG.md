@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-10: GEMINI_*環境変数の運用ドキュメントを整備
+
+- 背景・目的: LLM統合(PR #34〜#40)完了後、`GEMINI_API_KEY`をはじめとする環境変数群がREADME/CLOUD_RUN_DEPLOY.mdのどこにも説明されておらず、運用者が機能の存在に気づけない状態だった(残バックログの項目1)。ユーザーの指示で項目2(ADC実装)を先に完了させた後、この項目に着手。
+- 主な変更内容:
+  - `goal2-app/README.md`: 「Scope」節の「このPoCでまだ扱わないもの」から「実案件HTMLの外部LLM送信」「実案件画像の外部AI送信」を削除(実装済みのため事実と異なっていた)し、LLM連携は実装済みだが既定で無効・データポリシー未確定である旨に書き換え。新規「LLM (Gemini) 連携」節を追加し、全環境変数(`GEMINI_API_KEY`/`GEMINI_MODEL`/`LLM_MAX_CALLS_PER_MINUTE`/`GEMINI_INPUT_PRICE_PER_1M_TOKENS`/`GEMINI_OUTPUT_PRICE_PER_1M_TOKENS`/`USD_JPY_RATE`/`GEMINI_AUTH_MODE`/`GEMINI_VERTEX_PROJECT`/`GEMINI_VERTEX_LOCATION`)を表形式で説明し、APIキー方式とADC/Vertex AI方式の使い分けを記載。
+  - `goal2-app/CLOUD_RUN_DEPLOY.md`: 「LLM (Gemini) 連携を有効にする場合」節を追加。APIキー方式(Secret Manager経由での安全な注入手順、`--set-env-vars`に平文で書かない旨の注意)と、ADC方式(Vertex AI API有効化・サービスアカウントへの`roles/aiplatform.user`権限付与・デプロイ時の環境変数設定)の両方について、実際に実行可能な`gcloud`コマンド例を記載。
+- 検証: ドキュメントのみの変更(コード変更なし)。
+- 関連ファイル: `goal2-app/README.md`、`goal2-app/CLOUD_RUN_DEPLOY.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: ADC/Vertex AI認証(Stage B)を実装、lib/llm.jsのヌルバイト混入も修正
 
 - 背景・目的: LLM統合の当初計画で「まずAPIキー方式のみで実装し、動作確認後にADC方式を追加検討する2段階方針」として合意していたStage Bに着手。Cloud Run上ではAPIキーをSecret Managerで管理する代わりに、メタデータサーバー経由のサービスアカウント認証でVertex AI Gemini APIを呼び出せるようにする。
