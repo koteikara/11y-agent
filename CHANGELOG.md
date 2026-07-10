@@ -21,6 +21,40 @@
 
 ## Entries
 
+## 2026-07-10: LLM確認中の処理状態をUIに明示
+
+- 背景・目的: ユーザーから「呼び出しから返答までに時間がかかったようですが処理中を示す表現がないと何度もボタンを押してしまいそうです」との指摘を受けた。LLM enrichment導入後は`analyze()`のうち`enrichWithLlm`/`enrichImageAltWithLlm`/`enrichHeadingReviewWithLlm`の並行実行部分が数十秒かかることがあるが、この間もボタン表示は最初の「生成中」のままで、ヒューリスティック生成(1秒未満)とAI確認(最大数十秒)の区別がつかなかった。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `setAnalyzeStatus()`に新しい状態`"enriching"`を追加(`"running"`と同様、ボタンを無効化したまま早期returnする分岐)。ボタン文言を「AIで確認中」、候補一覧サマリーを「AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。」に変更。
+  - `analyze()`で、`enrichLinkTitleCandidates()`完了後・LLM enrichmentの`Promise.all`開始前に`setAnalyzeStatus("enriching")`を呼ぶよう変更。
+  - 実装中に、`setAnalyzeStatus()`の既存コードが`"running"`以外のstatus値に対して無条件で`els.analyzeButton.disabled = false`にフォールスルーする作りだったため、新しい状態を単純に追加するとボタンが処理中に再度押せる状態になってしまう("running"と同様の早期return分岐が無いと発生する)潜在的な不具合を発見し、正しく早期returnする形で実装した。
+- 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、状態表示のみの変更で機能面への影響なし)。Playwrightで`/api/llm/enrich`のレスポンスを人為的に2秒遅延させ、遅延中はボタンが「AIで確認中」表示・無効化されたまま維持され、完了後に正しく「候補生成」表示・有効化に戻ることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
+## 2026-07-10: ステージ4(heading-required/heading-content-quality)のライブ動作確認とプロンプト調整
+
+- 背景・目的: 直前のステージ4コミットは`GEMINI_API_KEY`未設定環境での検証止まりだった。ユーザーからテスト用APIキーの再提供を受け、実際のGemini呼び出しまで含めて検証した。
+- 検証中に発見・修正した問題:
+  - `before_block_id`の解釈にズレがあり、LLMが提案した見出し文言の内容と、実際に挿入される段落の内容が一致しない(1つ前の段落に挿入されてしまう)ケースが再現性をもって発生した。プロンプトに「見出し文言が要約している内容そのものを持つ段落のblock_idを指定すること」を明記して修正し、再検証で正しい段落への挿入を確認。
+  - `links-text`サンプル(短い断片的な段落の集合)で、ほぼ全ての段落に見出し追加が提案される過剰生成を発見(8件)。プロンプトに「1文だけの短い段落や断片的な段落には見出しを追加しない」「本当に構造が読み取りにくい箇所のみを対象にする」という制約を追加し、3件まで抑制されることを確認(残った3件は複数の情報を含む段落や複数項目の箇条書きで、より妥当な提案になった)。
+- 既存6サンプル全てで実際にGeminiが稼働している状態のまま最終確認: `procedure-overview`(7、変化なし)・`images`(10、変化なし)・`tables`(14、変化なし)・`links-text`(24→27、見出し提案3件が妥当な内容)・`iframe`(5、変化なし)・`goal3-hirosaki-news2019`(17→26、見出し提案9件)。ステージ1〜3は既存候補の上書きのみのため件数が変化しない設計だが、ステージ4は新規候補提案が設計上の目的のため、件数の増加は意図した挙動。
+  - `goal3-hirosaki-news2019`(実データサンプル)で見出し提案9件の内容を確認したところ、日時・場所・定員・参加料など、見出しもラベルも無いまま羅列されているイベント詳細の各項目に、それぞれ「開催日時」「開催場所」等の見出しを提案する内容だった。実務上は`<dl>`(定義リスト)化との判断が分かれる可能性はあるが、明確に誤った提案ではなく、確信度lowかつ要人間確認の設計のため、最終判断は人間のレビューに委ねられる。
+  - 大きめのページでは複数のLLM呼び出しが並行するため処理時間が数十秒に達することがある(検証用スクリプトのタイムアウトを20秒→45秒に緩和して確認)。機能上の不具合ではなく、実際の待ち時間として認識しておく必要がある。
+  - 動作確認に使用したテスト用APIキーは確認後に削除済み(リポジトリには含まれない)。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`
+- 関連PR: (作成予定)
+
+## 2026-07-10: heading-required・heading-content-qualityへLLM enrichmentを接続(ステージ4/4)
+
+- 背景・目的: 偽AI2件のもう1件`html-structure.heading-required`(PoC文書の内容にべた書きで一致させているだけ)と、ステージ2でスコープを合わせた`html-structure.heading-content-quality`(短い/記号のみの見出ししか候補化しない)へ対応。両ルールとも既存ヒューリスティックは「候補を生成する条件」自体が狭く、これまでの7タスクのような「既存候補の上書き」では価値を出せないため、LLMが文書全体を読んで新規に候補を提案する設計にした(4ステージの中で最も新規性が高い箇所)。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`: `heading-review`タスクを追加。他のテキスト系タスクと異なり、独立した項目の配列ではなく文書全体のアウトライン(見出し・段落を出現順に並べたもの)を1つの合成アイテム(`{id: "outline", blocks: [...]}`)として渡し、既存の`/api/llm/enrich`エンドポイント(1件配列・1件レスポンスの規約)をそのまま再利用できる形にした。レスポンスは`vague_headings`(曖昧な見出しの指摘)と`missing_headings`(見出し追加提案)の2種類。
+  - `goal2-app/public/app.js`: `enrichHeadingReviewWithLlm(fragment, items)`を新設し、`analyze()`から他のLLM enrichmentと並行実行(`Promise.all`)。`buildHeadingReviewOutline()`が`fragment`から見出し・段落を最大80件抽出(各要素は`parseFragment()`が既に付与している`data-goal2-node-id`で識別)。`applyHeadingReviewResult()`が結果を適用: (1)曖昧な見出しは、同じ見出しに既存の`heading-content-quality`候補があれば理由文を上書き、無ければ新規候補を作成。(2)見出し追加提案は、既存の`heading-required`候補が同じ対象に既にあれば重複を避けてスキップし、無ければ新規候補を作成(`<h{level}>提案文言</h{level}>` + 対象要素のHTML、という既存の`procedureParentHeadingProposal`等と同じ「見出しを前に挿入する」パターンを踏襲)。LLMが返すblock_idは、送信したアウトラインに実在するIDかを毎回検証し、存在しないIDは無視する。
+- 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、新規候補提案パスは常にLLM成功時のみ候補を追加するため無設定時は何も増えない)。`/api/llm/enrich`に`heading-review`タスクを直接投げて`unknown_task`にならず正しく認識されることを確認。実際のGemini呼び出しまでのライブ検証はテスト用APIキー待ちのため未実施。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: ステージ3(image.alt-text)のライブ動作確認
 
 - 背景・目的: 直前のステージ3コミットは`GEMINI_API_KEY`未設定環境での検証止まりだった。ユーザーからテスト用APIキーの再提供を受け、実際のGemini vision呼び出しまで含めて検証した。

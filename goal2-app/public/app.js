@@ -498,7 +498,8 @@
         reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
       }
       await enrichLinkTitleCandidates(reviewItems);
-      await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems)]);
+      setAnalyzeStatus("enriching");
+      await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems), enrichHeadingReviewWithLlm(fragment, reviewItems)]);
       state.candidates = reviewItems
         .filter((item) => !isNoticeItem(item))
         .map((candidate, index) => ({
@@ -565,6 +566,13 @@
       els.analyzeButton.textContent = "生成中";
       els.candidateSummary.textContent = "修正候補を生成しています。";
       els.completionPill.textContent = "生成中";
+      return;
+    }
+    if (status === "enriching") {
+      els.analyzeButton.disabled = true;
+      els.analyzeButton.textContent = "AIで確認中";
+      els.candidateSummary.textContent = "AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。";
+      els.completionPill.textContent = "AI確認中";
       return;
     }
     els.analyzeButton.disabled = false;
@@ -1100,6 +1108,131 @@
     candidate.proposal.patch.value = altText;
     candidate.proposal.after_html = cleanHtml(element.outerHTML);
     candidate.issue.reason = `${candidate.issue.reason}(画像を解析したAIの下書きです。内容を確認してください。)`;
+  }
+
+  // html-structure.heading-required / html-structure.heading-content-quality: unlike every
+  // other enrichment above, this doesn't upgrade an existing heuristic draft — the mechanical
+  // collectors only catch a handful of hardcoded content patterns (see
+  // collectContextualHeadingCandidates) or trivially-short headings (see
+  // collectHeadingContentQualityCandidates), so most real cases never produce a candidate to
+  // enrich in the first place. Instead this asks the LLM to read the whole document outline
+  // and propose brand-new candidates, following the exact same shape (element/afterHtml
+  // conventions) the mechanical collectors already use, so they render identically in the UI.
+  async function enrichHeadingReviewWithLlm(fragment, items) {
+    const outline = buildHeadingReviewOutline(fragment);
+    if (!outline.length) {
+      return;
+    }
+    const validIds = new Set(outline.map((block) => block.id));
+    try {
+      const response = await fetch("/api/llm/enrich", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ task: "heading-review", items: [{ id: "outline", blocks: outline }] }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!payload) {
+        return;
+      }
+      recordLlmUsage(payload.usage);
+      if (!payload.ok || !Array.isArray(payload.results) || !payload.results[0]) {
+        return;
+      }
+      applyHeadingReviewResult(fragment, items, payload.results[0], validIds);
+    } catch {
+      // LLM enrichment is a best-effort addition; the mechanical candidates (if any)
+      // are already in `items` regardless of whether this succeeds.
+    }
+  }
+
+  function buildHeadingReviewOutline(fragment) {
+    const blocks = [];
+    fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach((element) => {
+      const text = normalizeText(element.textContent);
+      if (!text) {
+        return;
+      }
+      blocks.push({
+        id: element.getAttribute("data-goal2-node-id"),
+        tag: element.tagName.toLowerCase(),
+        text: text.length > 100 ? `${text.slice(0, 100)}…` : text,
+      });
+    });
+    return blocks.slice(0, 80);
+  }
+
+  function applyHeadingReviewResult(fragment, items, result, validIds) {
+    (result.vague_headings || []).forEach((finding) => {
+      if (!validIds.has(finding.block_id)) {
+        return;
+      }
+      const reason = normalizeText(finding.reason || "");
+      if (!reason) {
+        return;
+      }
+      const existing = items.find(
+        (item) => item.rule_id === "html-structure.heading-content-quality" && item.target.node_id === finding.block_id
+      );
+      if (existing) {
+        existing.issue.reason = `${reason}(AI判定)`;
+        return;
+      }
+      const element = fragment.content.querySelector(`[data-goal2-node-id="${finding.block_id}"]`);
+      if (!element || !/^H[1-6]$/.test(element.tagName)) {
+        return;
+      }
+      items.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-content-quality",
+          element,
+          message: "見出しの内容がセクションを説明していない可能性があります。(AI判定)",
+          reason: `${reason}(AI判定)`,
+          afterHtml: element.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+
+    (result.missing_headings || []).forEach((finding) => {
+      if (!validIds.has(finding.before_block_id)) {
+        return;
+      }
+      const suggestedText = normalizeText(finding.suggested_text || "");
+      const reason = normalizeText(finding.reason || "");
+      if (!suggestedText || !reason) {
+        return;
+      }
+      const alreadyProposed = items.some(
+        (item) => item.rule_id === "html-structure.heading-required" && item.target.node_id === finding.before_block_id
+      );
+      if (alreadyProposed) {
+        return;
+      }
+      const element = fragment.content.querySelector(`[data-goal2-node-id="${finding.before_block_id}"]`);
+      if (!element) {
+        return;
+      }
+      const level = normalizeHeadingLevel(finding.level);
+      const afterHtml = `<h${level}>${escapeHtml(suggestedText)}</h${level}>${cleanHtml(element.outerHTML)}`;
+      items.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-required",
+          element,
+          message: "見出しの追加を検討できます。(AI提案)",
+          reason: `${reason}(AI提案)`,
+          afterHtml,
+          confidence: "low",
+          requiresHumanReview: true,
+        })
+      );
+    });
+  }
+
+  function normalizeHeadingLevel(level) {
+    const match = String(level || "").match(/[2-6]/);
+    return match ? match[0] : "2";
   }
 
   function applyForeignLanguageLlmResult(candidate, result) {
