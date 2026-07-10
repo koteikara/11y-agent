@@ -330,7 +330,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 組み込みサンプルの画像は全て架空ドメインを指しており実際には取得できないため、実在する絶対URLを持つカスタムHTMLをUIに貼り付けてPlaywrightでエンドツーエンド検証し、`alt=""`が実際に`alt="JSのロゴ"`へ書き換わることを確認。
   - 既存6サンプルで実際にGeminiが稼働している状態のまま件数がベースラインと完全一致することを確認(`images`サンプルは架空ドメインのため画像取得に失敗し、既存ヒューリスティックへ正しくフォールバックすることも確認)。
   - 動作確認後、テスト用APIキーは削除済み。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ(検証結果のみのコミット、コード変更なし)。その後ステージ4(heading-required + heading-content-quality)へ進む。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ(検証結果のみのコミット、コード変更なし)。その後ステージ4(heading-required + heading-content-quality)へ進む。→ コミット`67c2e79`としてPR #36を作成・マージ済み。ブランチをorigin/mainから建て直し。
+- ユーザーから「承認したので進めましょう」との指示を受け、ステージ4(`heading-required` + `heading-content-quality`)に着手した。4ステージの中で唯一「既存候補の上書き」ではなく「新規候補の提案」パターンが必要な箇所。
+  - `heading-review`タスクは、他のテキスト系タスクと違い独立項目の配列ではなく文書全体のアウトラインを扱う必要があったため、`{id: "outline", blocks: [...]}`という合成1アイテムとして既存の`/api/llm/enrich`(1件配列・1件レスポンスの規約)にそのまま乗せる設計にし、新規のサーバーエンドポイントを追加せずに済ませた(既存基盤の再利用を優先)。
+  - `buildHeadingReviewOutline()`は`parseFragment()`が既に全要素に付与している`data-goal2-node-id`をそのままblock_idとして使い、見出し・段落を出現順に最大80件抽出。`applyHeadingReviewResult()`はLLMが返すblock_idが実際に送信したアウトラインに存在するかを毎回検証(存在しないIDは無視)し、`heading-required`は既存候補との重複(同じtarget.node_id)を避け、新規候補は既存の`procedureParentHeadingProposal`等と同じ「見出しを前に挿入する」afterHtmlパターンを踏襲した。
+  - 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、新規候補提案パスはLLM成功時のみ候補を追加する設計のため無設定時は増加しない)。`heading-review`タスクが`/api/llm/enrich`で正しく認識されることを確認。
+  - 次のアクション: ユーザーへテスト用APIキーの再提供を依頼し、実際のGemini呼び出しまでのライブ検証を行う予定。
 
 ## Decisions
 

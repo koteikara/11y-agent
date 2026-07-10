@@ -224,6 +224,53 @@ const TASKS = {
       return JSON.stringify({ caption: item.caption || "" });
     },
   },
+
+  // Unlike the other text tasks, heading-review reasons over the whole document's outline
+  // at once rather than independent per-candidate items — it is called with a single
+  // synthetic item ({ id: "outline", blocks: [...] }) so it can reuse the same batched
+  // /api/llm/enrich endpoint and one-result-per-item response shape as everything else.
+  "heading-review": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "文書を構成する見出し・段落を出現順に受け取ります(各要素にblock_idが付いています)。以下の2点を判定してください。" +
+      "(1) 見出し(タグがh1〜h6)のうち、その文言だけでは直後のセクション内容を説明できていない曖昧な見出し(「概要」「詳細」「その他」等)があれば、vague_headingsにblock_idと理由を列挙してください。既に内容を具体的に説明している見出しは対象外です。" +
+      "(2) 見出しの無い段落のまとまりの先頭に見出しを追加すると文書構造が分かりやすくなる箇所があれば、missing_headingsに、見出しを追加する直前の段落のblock_id(before_block_id)・見出しレベル(2〜4の数字)・見出し文言(suggested_text)・理由を列挙してください。確信が持てない場合は無理に提案しないでください。" +
+      "block_idは必ず入力に実在するものだけを使ってください。",
+    responseSchema: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          id: { type: "STRING" },
+          vague_headings: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: { block_id: { type: "STRING" }, reason: { type: "STRING" } },
+              required: ["block_id", "reason"],
+            },
+          },
+          missing_headings: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                before_block_id: { type: "STRING" },
+                level: { type: "STRING" },
+                suggested_text: { type: "STRING" },
+                reason: { type: "STRING" },
+              },
+              required: ["before_block_id", "level", "suggested_text", "reason"],
+            },
+          },
+        },
+        required: ["id", "vague_headings", "missing_headings"],
+      },
+    },
+    buildUserText(items) {
+      return JSON.stringify(items.map((item) => ({ id: item.id, blocks: item.blocks })));
+    },
+  },
 };
 
 function getTaskConfig(task) {

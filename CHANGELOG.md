@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-10: heading-required・heading-content-qualityへLLM enrichmentを接続(ステージ4/4)
+
+- 背景・目的: 偽AI2件のもう1件`html-structure.heading-required`(PoC文書の内容にべた書きで一致させているだけ)と、ステージ2でスコープを合わせた`html-structure.heading-content-quality`(短い/記号のみの見出ししか候補化しない)へ対応。両ルールとも既存ヒューリスティックは「候補を生成する条件」自体が狭く、これまでの7タスクのような「既存候補の上書き」では価値を出せないため、LLMが文書全体を読んで新規に候補を提案する設計にした(4ステージの中で最も新規性が高い箇所)。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`: `heading-review`タスクを追加。他のテキスト系タスクと異なり、独立した項目の配列ではなく文書全体のアウトライン(見出し・段落を出現順に並べたもの)を1つの合成アイテム(`{id: "outline", blocks: [...]}`)として渡し、既存の`/api/llm/enrich`エンドポイント(1件配列・1件レスポンスの規約)をそのまま再利用できる形にした。レスポンスは`vague_headings`(曖昧な見出しの指摘)と`missing_headings`(見出し追加提案)の2種類。
+  - `goal2-app/public/app.js`: `enrichHeadingReviewWithLlm(fragment, items)`を新設し、`analyze()`から他のLLM enrichmentと並行実行(`Promise.all`)。`buildHeadingReviewOutline()`が`fragment`から見出し・段落を最大80件抽出(各要素は`parseFragment()`が既に付与している`data-goal2-node-id`で識別)。`applyHeadingReviewResult()`が結果を適用: (1)曖昧な見出しは、同じ見出しに既存の`heading-content-quality`候補があれば理由文を上書き、無ければ新規候補を作成。(2)見出し追加提案は、既存の`heading-required`候補が同じ対象に既にあれば重複を避けてスキップし、無ければ新規候補を作成(`<h{level}>提案文言</h{level}>` + 対象要素のHTML、という既存の`procedureParentHeadingProposal`等と同じ「見出しを前に挿入する」パターンを踏襲)。LLMが返すblock_idは、送信したアウトラインに実在するIDかを毎回検証し、存在しないIDは無視する。
+- 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、新規候補提案パスは常にLLM成功時のみ候補を追加するため無設定時は何も増えない)。`/api/llm/enrich`に`heading-review`タスクを直接投げて`unknown_task`にならず正しく認識されることを確認。実際のGemini呼び出しまでのライブ検証はテスト用APIキー待ちのため未実施。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: ステージ3(image.alt-text)のライブ動作確認
 
 - 背景・目的: 直前のステージ3コミットは`GEMINI_API_KEY`未設定環境での検証止まりだった。ユーザーからテスト用APIキーの再提供を受け、実際のGemini vision呼び出しまで含めて検証した。
