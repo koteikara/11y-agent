@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-10: 新規ルール「リンク単体の見出しタグを使わない」を追加
+
+- 背景・目的: ユーザーがビルド前の最終確認をしている中で、「リンク（内部・外部・ファイル）が見出しに設定されている場合は見出しでなくしましょう」との修正依頼があった。カード型の一覧表示（お知らせ一覧・関連ファイル一覧等）で、CMSテンプレートが見た目の強調のために見出しタグ(h1〜h6)でリンクをラップしているだけのケースがあり、これは文書構造上の見出しではなくリンクの一種であるため、見出しジャンプ機能（スクリーンリーダーの見出し単位ナビゲーション）を妨げる。既存の見出し関連ルール3件（heading-required/heading-order/heading-content-quality）はいずれもこのケースに正確には当てはまらないため、新規ルールとして追加した。
+- 主な変更内容:
+  - 新規ルール`a11y-migration-kb/rules/html-structure/heading-link-only.md`(origin: manual、processing_class: mechanical)を作成。見出しの中身が内部・外部・ファイル(PDF等)リンク1件だけで構成されている場合を対象とし、同一ページ内アンカー・リンク切れ・見出しにリンク以外のテキストも含む場合は対象外(人間の確認に委ねる)とする方針を明記。
+  - `goal2-app/public/app.js`に`collectHeadingLinkOnlyCandidates()`を実装。見出しの子要素が`a`要素1件のみ、かつ見出し全体のテキストとリンクのテキストが一致し、`classifyHref()`で内部・外部・ファイル・別ページアンカー・トップページのいずれかと判定された場合に、見出しタグを外す(`unwrap-element`)高確信度・自動適用可能な候補を生成する。壊れたリンク(`isBrokenCandidate`)は対象外にする実装上のガードも追加(開発中に発見)。
+  - `a11y-migration-kb/rules/html-structure/index.md`に新規ルールを追記。`build/rules.jsonl`を再生成・同期(59ルール)。
+- 検証: 陽性4(内部/外部/ファイル/別ページアンカーリンク)+陰性5(同一ページ内アンカー・混在テキスト・壊れたリンク・通常見出し・複数リンク)+実際に候補を採用して見出しタグが外れリンクが保持されることの確認、計10ケース全PASS。既存6サンプルは実サンプル`goal3-hirosaki-news2019`で実際にこのパターン(PDFファイルへのリンクをh6見出しでラップしている箇所)を正しく検出し+1件(意図した増加)、他5サンプルは完全一致。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `a11y-migration-kb/rules/html-structure/{heading-link-only.md(新規),index.md}`、`a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`、`goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: miChecker-triageバックログ11件の解消(タグ追記・新規ルール2件・スコープ外化)
 
 - 背景・目的: miChecker検出パリティ(Phase 1〜3)完了後、ユーザーから「トリアージバックログの個別判断も同じ形式で進めよう」との依頼を受け、`reference/michecker-triage.md`に残っていた11件のバックログをJavaソース由来の正確な文言を確認した上で1項目ずつ協議し、全件解消した。

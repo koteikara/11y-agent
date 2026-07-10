@@ -411,6 +411,22 @@ async function main() {
     "positional language candidates should use the text.sensory-characteristics KB rule id"
   );
 
+  // html-structure.heading-link-only: headings that consist solely of a single internal/external/file
+  // link should be unwrapped (the heading tag removed, the link kept), per user-reported real-content
+  // review (card-style link lists using heading tags purely for visual emphasis).
+  assert.ok(
+    appJs.includes("collectHeadingLinkOnlyCandidates"),
+    "link-only heading detection should be implemented"
+  );
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.heading-link-only"'),
+    "link-only heading candidates should use the html-structure.heading-link-only KB rule id"
+  );
+  assert.ok(
+    appJs.includes('patch: { type: "unwrap-element" }') && appJs.includes("見出しの中身がリンク単体になっています。"),
+    "link-only heading candidates should unwrap the heading tag with a Japanese message"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");

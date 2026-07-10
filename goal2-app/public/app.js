@@ -1159,6 +1159,52 @@
 
     collectContextualHeadingCandidates(fragment, candidates);
     collectHeadingContentQualityCandidates(fragment, candidates);
+    collectHeadingLinkOnlyCandidates(fragment, candidates);
+  }
+
+  // html-structure.heading-link-only: 見出し(h1〜h6)の中身が内部・外部・ファイルリンク1件だけで
+  // 構成されている場合、見出しタグを外し通常のリンクとして扱う。カード型の一覧表示等で、CMSテンプレートが
+  // 見出しタグでリンクをラップしているだけのケースが典型例(文書構造上の見出しではなくリンクの一種)。
+  // 同一ページ内アンカー・mailto・javascript・壊れたリンク(空/#のみ)は対象外。見出しにリンク以外の
+  // テキストも含む場合は、見出しとしての構造を保つ可能性があるため対象外とし人間の確認に委ねる。
+  function collectHeadingLinkOnlyCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((heading) => {
+      const links = [...heading.children].filter((child) => child.tagName === "A");
+      if (links.length !== 1 || heading.children.length !== 1) {
+        return;
+      }
+      const link = links[0];
+      const headingText = normalizeText(heading.textContent);
+      const linkText = normalizeText(link.textContent);
+      if (!headingText || headingText !== linkText) {
+        return;
+      }
+      const hrefInfo = classifyHref(link.getAttribute("href") || "");
+      const isRealLink =
+        !hrefInfo.isBrokenCandidate &&
+        (hrefInfo.isPdf ||
+          hrefInfo.isExternal ||
+          hrefInfo.isInternalAbsolute ||
+          hrefInfo.isInternalRelative ||
+          hrefInfo.isCrossPageAnchor ||
+          hrefInfo.isTopPage);
+      if (!isRealLink) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-link-only",
+          element: heading,
+          message: "見出しの中身がリンク単体になっています。",
+          reason:
+            "リンク先ページへの案内だけの見出しは、文書構造上の見出しではなくリンクの一種です。見出しタグを外し、通常のリンクとして扱ってください。",
+          afterHtml: heading.innerHTML,
+          patch: { type: "unwrap-element" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
   }
 
   // miChecker C_15.0/C_388.0/C_500.4(html-structure.heading-content-quality): 見出し(h1〜h6)の内容が
