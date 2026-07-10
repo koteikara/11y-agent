@@ -3428,6 +3428,21 @@
   const HAN_SCRIPT_PATTERN = /\p{Script=Han}{2,}/u;
   const VIETNAMESE_TONE_MARK_PATTERN = /[Ạ-ỹ]/;
 
+  const LANGUAGE_LABELS = {
+    en: "英語",
+    zh: "中国語",
+    ko: "韓国語",
+    es: "スペイン語",
+    pt: "ポルトガル語",
+    ru: "ロシア語",
+    th: "タイ語",
+    vi: "ベトナム語",
+  };
+
+  function languageLabel(langCode) {
+    return LANGUAGE_LABELS[langCode] || langCode || "不明な言語";
+  }
+
   function isForeignLanguageText(text) {
     return (
       LATIN_FOREIGN_PATTERN.test(text) ||
@@ -3452,8 +3467,8 @@
       makeCandidate({
         ruleId: "text.foreign-language",
         element,
-        message: "外国語の文章または語句が含まれている可能性があります。",
-        reason: "本文中の外国語には、CMSで対応する言語属性を付与できるか確認します。",
+        message: `外国語(${languageLabel(langCode)}の可能性)の文章または語句が含まれています。lang="${langCode}" を付与します。`,
+        reason: "本文中の外国語には、CMSで対応する言語属性を付与できるか確認します。判定した言語が違う場合は「文言を調整」からlangの値を直接修正できます。",
         afterHtml: languageHtml,
         patch: { type: "set-attribute", name: "lang", value: langCode },
         confidence: "low",
@@ -5507,6 +5522,9 @@
       items.push("ページ内で重複しているid・accesskeyを一意になるよう直します。");
     } else if (ruleId.startsWith("html-structure.")) {
       items.push("見出しの順番や構造を、読み上げても追いやすい形に整えます。");
+    } else if (ruleId === "text.foreign-language") {
+      const langCode = candidate.proposal.patch?.value || "";
+      items.push(`この文章にlang="${langCode}"（${languageLabel(langCode)}）を付与します。`);
     } else if (ruleId.startsWith("text.")) {
       items.push("表記ゆれや読みづらさを、自然な日本語に整えます。");
     }
@@ -5566,6 +5584,17 @@
         label: patch.name === "alt" ? "画像の説明" : "埋め込み内容の名前",
         value: patch.value || "",
         help: patch.name === "alt" ? "画像を見られない人にも伝わる短い説明にします。" : "動画、地図、外部コンテンツの内容が分かる名前にします。",
+      };
+    }
+    if (patch.type === "set-attribute" && patch.name === "lang") {
+      return {
+        mode: "attribute",
+        attribute: "lang",
+        selector: tagSelectorFromHtml(candidate.proposal.after_html),
+        title: "言語を調整",
+        label: "lang属性の値(言語コード)",
+        value: patch.value || "",
+        help: `自動判定: ${languageLabel(patch.value)}。判定が違う場合はBCP47言語コード(en/zh/ko/es/pt/ru/th/vi等)で書き換えてください。`,
       };
     }
     if (patch.type === "replace-text") {
