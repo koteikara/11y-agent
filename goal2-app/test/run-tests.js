@@ -247,6 +247,51 @@ async function main() {
     "th scope/headers candidates should use the table.th-scope KB rule id"
   );
 
+  // miChecker warning/B-classification parity additions (Phase 2A: table layout heuristics + color/contrast).
+  // C_12.0/12.1/12.2 (naive table structure), C_23.0/23.2 (th/caption/summary on suspected layout tables),
+  // C_75.0 (th-less data table fallback), C_48.8 (longdesc/summary deprecated attributes),
+  // C_500.17/18 (color/background-color inside table cells + bgcolor attribute).
+  assert.ok(appJs.includes("classifyNaiveTableStructure"), "naive table structure classifier (C_12.0/12.1/12.2) should be implemented");
+  assert.ok(appJs.includes('return "nested"'), "naive table structure classifier should detect nested tables (C_12.0)");
+  assert.ok(appJs.includes('return "1row1col"'), "naive table structure classifier should detect 1-row/1-col tables (C_12.1)");
+  assert.ok(appJs.includes('return "notdata"'), "naive table structure classifier should detect non-data leaf tables (C_12.2)");
+  assert.ok(
+    appJs.includes("collectNaiveTableStructureCandidates"),
+    "naive layout-table notice generation (C_12.x/C_23.x) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("collectThlessDataTableFallbackCandidate"),
+    "th-less data table fallback (C_75.0) should be implemented"
+  );
+  assert.ok(appJs.includes("表にth要素(見出しセル)がありません。"), "th-less data table fallback should have a Japanese message");
+
+  assert.ok(
+    appJs.includes("collectDeprecatedAttributeCandidates"),
+    "deprecated longdesc/summary attribute detection (C_48.8) should be implemented"
+  );
+  assert.ok(appJs.includes('querySelectorAll("img[longdesc]")'), "C_48.8 should scan img longdesc attributes");
+  assert.ok(appJs.includes('querySelectorAll("table[summary]")'), "C_48.8 should scan table summary attributes");
+  assert.ok(appJs.includes("廃止されたlongdesc属性"), "longdesc candidates should have a Japanese message");
+  assert.ok(appJs.includes("廃止されたsummary属性"), "summary candidates should have a Japanese message");
+
+  assert.ok(
+    !appJs.includes('if (element.closest("table")) {\n      return;\n    }'),
+    "collectInlineStyleCandidate should no longer skip elements inside tables (C_500.17/18 parity fix)"
+  );
+  assert.ok(appJs.includes("hasBgColorAttr"), "bgcolor attribute should be treated as a background-color signal (C_500.18)");
+  assert.ok(
+    appJs.includes('table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing],[bgcolor]")'),
+    "hasTableFormatting should recognize bgcolor as legacy table formatting"
+  );
+  assert.ok(
+    appJs.includes('"style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing", "bgcolor"'),
+    "stripFormatting should remove the bgcolor attribute along with other legacy formatting attributes"
+  );
+  assert.ok(
+    appJs.includes('removeStyleProperties(clone, ["color", "background", "background-color"]);'),
+    "cloneTableCellAs should strip color/background styling so structural table rebuilds stay consistent with the color candidates"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");

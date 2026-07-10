@@ -609,7 +609,53 @@
     collectMetaRefreshCandidates(fragment, candidates);
     collectDuplicateAttributeCandidates(fragment, candidates);
     collectFrameElementNotices(candidates);
+    collectDeprecatedAttributeCandidates(fragment, candidates);
     return candidates;
+  }
+
+  // miChecker C_48.8: 廃止属性の除去。checkitem.xmlの説明文言は「古い属性全般」だが、CheckEngine.java
+  // (item_3()のlongdesc判定・item_23()のsummary判定)を実際に確認すると、HTML5判定時に発火するのは
+  // img要素のlongdesc属性とtable要素のsummary属性の2つのみである。align/valign/width/height/border/
+  // cellpadding/cellspacing等のテーブル書式属性はhasTableFormatting()/stripFormatting()
+  // (table.format-clear)側で別途、無条件に検出・除去しており、miChecker本体のC_48.8としては
+  // 対象外(発火しない)ため、本実装でもlongdesc・summaryの2属性のみを対象にする。
+  function collectDeprecatedAttributeCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("img[longdesc]").forEach((img) => {
+      const clone = img.cloneNode(true);
+      clone.removeAttribute("longdesc");
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.deprecated-elements",
+          element: img,
+          message: "img要素に廃止されたlongdesc属性が使われています。",
+          reason: "longdesc属性はHTML Living Standardで廃止されています。詳細な説明が必要な場合は、本文中にテキストで補足するか、alt属性の見直しで対応してください。",
+          afterHtml: clone.outerHTML,
+          patch: { type: "remove-attribute", name: "longdesc" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
+
+    fragment.content.querySelectorAll("table[summary]").forEach((table) => {
+      if (!normalizeText(table.getAttribute("summary") || "")) {
+        return;
+      }
+      const clone = table.cloneNode(true);
+      clone.removeAttribute("summary");
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.deprecated-elements",
+          element: table,
+          message: "table要素に廃止されたsummary属性が使われています。",
+          reason: "summary属性はHTML Living Standardで廃止されています。表の概要はcaption要素または前後の本文で提供してください。",
+          afterHtml: clone.outerHTML,
+          patch: { type: "remove-attribute", name: "summary" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
   }
 
   // miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白。
@@ -1426,6 +1472,11 @@
         return;
       }
 
+      // miChecker C_12.0/C_12.1/C_12.2/C_23.0/C_23.2/C_75.0: 上のplanTableTreatment()が
+      // 「構造的な解体・再構築が必要」と判断しなかった表に対して、miChecker本体の素朴な構造判定
+      // (nested/1row1col/notdata/data)を独立したシグナルとして適用する。
+      collectNaiveTableStructureCandidates(table, candidates);
+
       if (hasTableFormatting(table)) {
         const clone = table.cloneNode(true);
         stripFormatting(clone);
@@ -1941,7 +1992,7 @@
   function cloneTableCellAs(cell, tagName, scope) {
     const clone = document.createElement(tagName);
     [...cell.attributes].forEach((attr) => {
-      if (!["scope", "headers"].includes(attr.name.toLowerCase())) {
+      if (!["scope", "headers", "bgcolor"].includes(attr.name.toLowerCase())) {
         clone.setAttribute(attr.name, attr.value);
       }
     });
@@ -1949,6 +2000,10 @@
       clone.setAttribute("scope", scope);
     }
     clone.innerHTML = cell.innerHTML;
+    // miChecker C_500.17/C_500.18: 色・背景色の指定は表の再構築後にも引き継がない
+    // (collectInlineStyleCandidate()がテーブルセル内の色系styleも候補化・除去対象にしたことと整合を取る。
+    //  bgcolor属性は上のattributesコピーから既に除外している)。
+    removeStyleProperties(clone, ["color", "background", "background-color"]);
     return clone;
   }
 
@@ -2164,6 +2219,127 @@
     return "low";
   }
 
+  // miChecker C_12.0/C_12.1/C_12.2: 表の素朴な構造判定(HtmlEvalUtil.javaのis1Row1ColTable/isDataTable相当)。
+  // 既存のisLikelyLayoutTable()(border=0・セル内ブロック等の装飾/レイアウト手掛かりに基づく判定)とは
+  // 完全に独立したシグナルとして、以下の4種類に分類する。
+  //   - "nested":  表の中に別の表が入れ子になっている(C_12.0の対象母集団)
+  //   - "1row1col": 行が1つしかない、または全ての行が0〜1セルしか持たない単純な構造(C_12.1)
+  //   - "notdata": フォーム部品を含む・td要素が1つも無い・長文(250字超)や大量の画像(11枚以上)を含む
+  //     セルがあり、データ表と言い切れない構造(C_12.2)
+  //   - "data":    上記のいずれにも該当しない、複数行・複数列を持つデータ表相当の構造
+  // (miChecker本体はtr要素数のみで「1行」を判定し、列数の多寡は問わない点に注意。単一行で3列という
+  //  表も、tr数が1のためC_12.1側に分類される。)
+  function classifyNaiveTableStructure(table) {
+    if (table.querySelector("table")) {
+      return "nested";
+    }
+    const rows = [...table.querySelectorAll("tr")];
+    const rowCellCounts = rows.map(
+      (row) => [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName)).length
+    );
+    if (rows.length <= 1 || rowCellCounts.every((count) => count <= 1)) {
+      return "1row1col";
+    }
+    if (table.querySelector("form, input, select, textarea")) {
+      return "notdata";
+    }
+    const cells = [...table.querySelectorAll("td, th")];
+    if (!cells.some((cell) => cell.tagName === "TD")) {
+      return "notdata";
+    }
+    const hasNonDataCell = cells.some((cell) => {
+      const text = normalizeText(cell.textContent || "");
+      return text.length > 250 || cell.querySelectorAll("img").length > 10;
+    });
+    return hasNonDataCell ? "notdata" : "data";
+  }
+
+  // miChecker C_12.0/C_12.1/C_12.2 + C_23.0/C_23.2: classifyNaiveTableStructure()でレイアウト表と
+  // 推定される表(nested/1row1col/notdata)に対し確認候補(patchMode: none)を追加する。加えて、その表が
+  // th・caption・summary属性を持つ場合は「レイアウト表であればこれらを使わない」旨の警告(C_23.0/C_23.2相当)
+  // も別候補として追加する。
+  //
+  // 注: miChecker本体のitem_23()では、通常のデータ表(bottom_data_tables、本実装の"data"分類)がth・caption
+  // を持つ場合にもC_23.1として同種の確認を発火するが、これは正しく構造化された表(th・captionを適切に使って
+  // いる、望ましい状態の表)にも無条件に発火し候補数が過大になるため、本実装ではレイアウト表と推定した表
+  // (nested/1row1col/notdata)に限定してC_23相当の警告を出す。"data"分類の表はcollectThlessDataTableFallback
+  // Candidate()でth欠落(C_75.0)のみ確認する。
+  //
+  // 呼び出し元(collectTableCandidates)では、既存のisLikelyLayoutTable()等に基づく構造的解体候補
+  // (plan.kind === "structural")が生成されなかった表に対してのみ本関数を呼ぶため、既存の
+  // table.layout-table/table.th-scope候補と重複することはない。
+  function collectNaiveTableStructureCandidates(table, candidates) {
+    const classification = classifyNaiveTableStructure(table);
+    if (classification === "data") {
+      collectThlessDataTableFallbackCandidate(table, candidates);
+      return;
+    }
+
+    const structureMessages = {
+      nested: "表の中に別の表が入れ子になっています。",
+      "1row1col": "行が1つ、または全ての行が1セル以下しかない単純な構造の表です。",
+      notdata: "フォーム部品を含む、または長文・多数の画像を含むセルがあり、データ表と言い切れない構造の表です。",
+    };
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.layout-table",
+        element: table,
+        message: `${structureMessages[classification]}レイアウト目的で使われていないか確認してください。`,
+        reason:
+          "miCheckerの素朴な構造判定(行・列数やデータセルとして扱えるか)に基づく確認です。内容の対応関係を表す表であれば問題ありませんが、見た目の配置調整のためだけに表を使っている場合はスタイルシートでの表現に置き換えてください。",
+        afterHtml: table.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+
+    const hasHeaderCell = Boolean(table.querySelector("th"));
+    const hasCaption = Boolean(table.querySelector(":scope > caption"));
+    const hasSummary = Boolean(normalizeText(table.getAttribute("summary") || ""));
+    if (hasHeaderCell || hasCaption || hasSummary) {
+      const used = [hasHeaderCell && "th要素", hasCaption && "caption要素", hasSummary && "summary属性"]
+        .filter(Boolean)
+        .join("・");
+      candidates.push(
+        makeCandidate({
+          ruleId: "table.layout-table",
+          element: table,
+          message: `レイアウト目的の可能性がある表で${used}が使われています。`,
+          reason: `この表がレイアウト目的であれば、${used}は使用せず通常のテキストとして表現してください。内容の対応関係を表すデータ表であれば、この指摘は無視して構いません。`,
+          afterHtml: table.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    }
+  }
+
+  // miChecker C_75.0: classifyNaiveTableStructure()が"data"(データ表相当の構造)と判定した表のうち、
+  // th要素を1つも持たない表に、th提供またはレイアウト表としての解体を検討する確認候補を追加する。
+  // 既存のshouldPreserveAsDataTable()/tableNeedsDataTableSemantics()による構造化(caption/thead/th/scope
+  // の一括付与)よりも緩い判定(見出しらしいセルの有無を問わない)のため、構造化経路に乗らない小規模な表
+  // (例: 1列の名簿等)もここで拾える。
+  function collectThlessDataTableFallbackCandidate(table, candidates) {
+    if (table.querySelector("th")) {
+      return;
+    }
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.th-scope",
+        element: table,
+        message: "表にth要素(見出しセル)がありません。",
+        reason:
+          "データを表す表であれば、見出しとなるセルをth要素にしscope属性を設定してください。レイアウト目的で表を使っている場合は、表自体を解体して通常のテキストとして表現してください。",
+        afterHtml: table.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
   // "iframe"に加え"frame"も対象にする(miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白)。
   // 判定ロジックはiframeと共通のため、タグ名だけメッセージに反映して流用する。
   function collectIframeCandidates(fragment, candidates) {
@@ -2227,24 +2403,29 @@
     });
   }
 
+  // miChecker C_500.17/C_500.18: テーブルセル内のcolor/background-color指定も検出対象にする。
+  // (以前はelement.closest("table")で早期returnしており、構造化経路で温存されるテーブルセル内の
+  //  色・背景色指定が一切候補化されなかった。miChecker本体のstyleCheck()もテーブル内外を区別せず
+  //  elementsWithStyleList全件を検査するため、テーブル内外の区別自体を廃止する。)
   function collectInlineStyleCandidate(element, candidates, seen) {
-    if (element.closest("table")) {
-      return;
-    }
-
-    if (hasInlineStyleProperty(element, ["background", "background-color"])) {
+    // miChecker C_500.18: bgcolor属性(廃止された背景色指定属性)も背景色指定として扱う。
+    const hasBgColorAttr = element.hasAttribute("bgcolor");
+    if (hasInlineStyleProperty(element, ["background", "background-color"]) || hasBgColorAttr) {
       const clone = element.cloneNode(true);
       removeStyleProperties(clone, ["background", "background-color"]);
+      if (hasBgColorAttr) {
+        clone.removeAttribute("bgcolor");
+      }
       pushUniqueCandidate(
         candidates,
         seen,
         makeCandidate({
           ruleId: "text.background-color",
           element,
-          message: "背景色の指定が含まれています。",
-          reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。",
+          message: hasBgColorAttr ? "背景色の指定(廃止されたbgcolor属性を含む)が含まれています。" : "背景色の指定が含まれています。",
+          reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。bgcolor属性はHTML Living Standardでも廃止されています。",
           afterHtml: clone.outerHTML,
-          patch: { type: "remove-style-properties", names: ["background", "background-color"] },
+          patch: hasBgColorAttr ? undefined : { type: "remove-style-properties", names: ["background", "background-color"] },
           confidence: "high",
           requiresHumanReview: false,
         })
@@ -5872,8 +6053,8 @@
 
   function hasTableFormatting(table) {
     return Boolean(
-      table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing]") ||
-        table.querySelector("[style],[class],[align],[valign],[width],[height],font")
+      table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing],[bgcolor]") ||
+        table.querySelector("[style],[class],[align],[valign],[width],[height],[bgcolor],font")
     );
   }
 
@@ -5889,7 +6070,7 @@
     });
     const elements = [root, ...(root.querySelectorAll?.("*") || [])];
     elements.forEach((element) => {
-      ["style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing"].forEach((name) => {
+      ["style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing", "bgcolor"].forEach((name) => {
         element.removeAttribute?.(name);
       });
     });

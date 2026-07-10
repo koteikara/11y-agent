@@ -21,6 +21,25 @@
 
 ## Entries
 
+## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2A: テーブル層・色/コントラスト)
+
+- 背景・目的: Phase 1(error型14件)に続き、ギャップ分析でB分類(部分カバー)とされたテーブル構造・色/コントラスト系の検出漏れを補強した。実装前にmiChecker本体のJavaソース(eclipse-actf `CheckEngine.java`・`HtmlEvalUtil.java`)を直接取得して発火条件を裏取りしたところ、事前のギャップ分析レポートには複数の誤りがあることが判明したため、Javaソースを正として実装範囲を再確定した。
+- **ギャップ分析レポートの訂正点**(Javaソース確認により判明):
+  - C_76.0・C_500.13/14/15/16は、該当する`addCheckerProblem(...)`呼び出しがmiChecker本体のコード上でコメントアウトされており、実際には発火しないデッドコード。**未実装**(Phase 1のC_332.0と同様の扱い)。
+  - C_13.0は、実際の判定が`font[size]`属性と`table/tr/td/col`の`width`/`height`属性(px指定のCSSではなく非`%`のHTML属性)のみを対象としており、既存の廃止要素検出・`table.format-clear`(テーブル書式属性の一括除去)で既にカバー済みと判明。分類はB→**A(上位互換)に訂正**、追加実装なし。
+  - C_48.8は「古い属性全般」ではなく、実際は`img[longdesc]`と`table[summary]`(HTML5判定時)の2属性のみが対象と判明。align/bgcolor等はC_48.8としては発火しない(bgcolorは別途、一般的なアクセシビリティ改善として`text.background-color`側で独立に対応)。
+  - C_12.0/C_23.0は「レイアウト表の素朴判定」ではなく実際は「表の入れ子」の検出だったため、実装をJavaソースの定義に合わせて訂正。
+  - C_23.1(データ表がth/captionを持つ場合の確認)は、実際のコードでは正しく構造化された表にも無条件に発火する仕様のため、実装すると健全な表にまでノイズが出る。意図的に**未実装**。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_12.0/C_12.1/C_12.2 + C_23.0/C_23.2: 表の素朴な構造判定(`classifyNaiveTableStructure`: nested/1row1col/notdata/data)を、既存の`isLikelyLayoutTable()`等による構造化判定(`planTableTreatment`)とは独立したシグナルとして追加(`collectNaiveTableStructureCandidates`)。構造化経路で既に解体・再構築される表とは重複しないよう、構造化プランが立たなかった表にのみ適用。レイアウト表と推定される表でth/caption/summaryが使われている場合の確認候補も追加。
+  - C_75.0: 上記の"data"分類で、かつth要素を持たない表への確認候補(`collectThlessDataTableFallbackCandidate`)。既存の構造化経路(`shouldPreserveAsDataTable`等)に乗らない表(例: relation-explanation判定等でスキップされる表)のみを対象とする、狭いが実在するギャップ。
+  - C_48.8: `img[longdesc]`・`table[summary]`属性の検出・除去候補(`collectDeprecatedAttributeCandidates`)。
+  - C_500.17/C_500.18: `collectInlineStyleCandidate()`の`closest("table")`早期return(テーブルセル内のcolor/background-color指定を一切検出しない設計上の穴)を除去し、テーブル内外を区別せず色系style属性を検出するようにした。`bgcolor`属性も背景色指定として検出・除去対象に追加。表の構造化経路(`cloneTableCellAs`)でも、再構築後のセルにcolor/background系styleとbgcolor属性を引き継がないよう整合を取った。`hasTableFormatting`/`stripFormatting`(table.format-clear)にも`bgcolor`を追加。
+- 検証: 陽性11+陰性2の独立検証(サブエージェントの実装後、親セッションで別途Playwrightスクリプトを書いて再検証)全PASS。既存6サンプルの候補数は完全一致(回帰なし、Phase 1と同じ6/4/12/20/2/13)。`node --check`・`node test/run-tests.js`成功。C_75.0は初回の検証HTMLが既存の構造化経路に先に捕捉されてしまい一時的に不一致となったが、原因を追跡した結果テスト側のHTML選定の問題と判明し、真のギャップケース(relation-explanation判定などで構造化経路をすり抜ける表)で正しく発火することを確認した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: 残るPhase 2B(廃止要素拡大・リンク関連・画像/テキスト確認通知、C_48.0/48.2・C_19.0/500.6・C_71.0/600.0・C_600.14・C_4.0・C_500.11/12・C_8.0・C_57.5/57.6/58.0)は未着手。
+
 ## 2026-07-09: プロジェクト理解サマリーの追加
 
 - 背景・目的: ユーザーから「まずは内容を理解して整理」する依頼があったため、AGENTS.md、workstream.md、a11y-migration-kb/README.md、memory/project-state.md の内容を踏まえ、プロジェクトの目的・対象範囲・既存KB・miChecker・Goal 1〜3・人間確認との分担を再整理した。
