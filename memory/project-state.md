@@ -317,7 +317,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプル全てで実際にGeminiを呼び出した状態のまま回帰確認を行い、候補・注意の総件数がベースラインと完全一致することを確認。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)、コスト懸念に対する具体的なデータを得られた。動作確認後、テスト用APIキーは削除済み。
   - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。→ コミット`33a6710`としてPR #35を作成・送信済み。
 - ユーザーから「コストは円換算も併記しましょう」との要望を受けた。`lib/llm.js`に`USD_JPY_RATE`環境変数(既定値155、プレースホルダである旨を明記)を追加し`estimateCostJpy()`を新設、`usage`に`estimatedCostJpy`を含めるようにした。`app.js`の`state.llmUsage`・`llmUsageSummaryText()`を円換算併記に対応。検証時点でテスト用APIキーが手元になかったため、計算ロジック単体テスト(`USD_JPY_RATE`上書きも含む)と`GEMINI_API_KEY`未設定環境での既存6サンプル回帰確認(完全一致)のみ実施し、UIでの実ライブ確認は未実施。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ Stop hookによりコミット`9fb87ee`としてPR #35へプッシュ・マージ済み。ブランチをorigin/mainから建て直し。
+- ユーザーから「承認したので進めましょう」との指示を受け、ステージ3(`image.alt-text`)に着手した。
+  - `server.js`に`fetchImageAsBase64()`を新設し、既存のSSRF対策済み`fetchWithSafeRedirects`/`assertFetchUrlAllowed`を再利用(新しいセキュリティロジックを書かず、実証済みの仕組みを流用する方針)。`POST /api/llm/image-alt`エンドポイントを新設。画像1件=1リクエストのため、テキスト系タスクの`runLlmBatch`とは別に`enrichImageAltWithLlm()`(同時実行数4に制限したワーカープール)を新設。`image.alt-text`と`image.complex-image-report`は同じ`<img>`を対象にすることがあるため、`target.node_id`でグルーピングして1回のGemini呼び出しで両方を更新する設計にした。
+  - 移行元ページURL(「旧ページURL」入力欄)に対して`img[src]`を絶対URL解決する必要があるため、`makeCandidate()`の`llmContext`機構(ステージ2で追加済み)を再利用してキャプション文脈を保存。絶対URL解決できない場合(相対パスかつ旧ページURL未入力等)は既存ヒューリスティックのまま。
+  - 検証中、組織のプロキシポリシーで`www.google.com`等への到達がブロックされていることが判明(`recentRelayFailures`で確認、環境側の既知の制約であり自分のコードの問題ではないと判断)。到達可能な`raw.githubusercontent.com`を使って、画像取得・content-type判定・Gemini呼び出し直前までの経路(契約レベル)が正常に動作することを確認した。
+  - `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。
+  - 実際のGemini vision呼び出しまでのライブ検証のため、ユーザーへテスト用APIキーの再提供を依頼したが、回答を待っている間にStop hookが発火しコミットを強制されたため、ユーザー確認・ライブ検証未了のままコミットした。
+  - 次のアクション: ユーザーからのAPIキー提供を待ってライブ検証(または未検証のままコミット・プッシュの承認を得る)。
 
 ## Decisions
 

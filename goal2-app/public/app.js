@@ -498,7 +498,7 @@
         reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
       }
       await enrichLinkTitleCandidates(reviewItems);
-      await enrichWithLlm(reviewItems);
+      await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems)]);
       state.candidates = reviewItems
         .filter((item) => !isNoticeItem(item))
         .map((candidate, index) => ({
@@ -993,6 +993,115 @@
     }
   }
 
+  // image.alt-text / image.complex-image-report LLM enrichment: unlike runLlmBatch's text
+  // tasks, a vision call needs actual image bytes fetched server-side, so this can't be
+  // cheaply batched into one JSON request — each unique image gets its own request, with
+  // bounded concurrency. Candidates targeting the same <img> (both rules can fire for one
+  // image) are grouped so a single call updates all of them.
+  async function enrichImageAltWithLlm(items) {
+    const targets = items.filter(
+      (item) =>
+        (item.rule_id === "image.alt-text" || item.rule_id === "image.complex-image-report") &&
+        item.proposal.patch?.type === "set-attribute" &&
+        item.proposal.patch.name === "alt"
+    );
+    if (!targets.length) {
+      return;
+    }
+    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    const groups = new Map();
+    targets.forEach((candidate) => {
+      const nodeId = candidate.target.node_id;
+      if (!groups.has(nodeId)) {
+        groups.set(nodeId, []);
+      }
+      groups.get(nodeId).push(candidate);
+    });
+    const groupEntries = [...groups.values()];
+    const concurrency = 4;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < groupEntries.length) {
+        const group = groupEntries[cursor];
+        cursor += 1;
+        await enrichOneImageGroup(group, baseUrl);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, groupEntries.length) }, worker));
+  }
+
+  async function enrichOneImageGroup(candidatesForImage, baseUrl) {
+    const primary = candidatesForImage[0];
+    const src = extractAttributeFromHtml(primary.proposal.before_html, "src");
+    const imageUrl = resolveAbsoluteImageUrl(src, baseUrl);
+    if (!imageUrl) {
+      return;
+    }
+    const caption = primary.proposal.llm_context?.caption || "";
+    try {
+      const response = await fetch("/api/llm/image-alt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageUrl, caption }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!payload) {
+        return;
+      }
+      recordLlmUsage(payload.usage);
+      if (!payload.ok || !payload.result) {
+        return;
+      }
+      candidatesForImage.forEach((candidate) => applyImageAltLlmResult(candidate, payload.result));
+    } catch {
+      // LLM enrichment is a best-effort upgrade; keep the heuristic draft on failure
+      // (unreachable image, unsupported format, no source page URL configured, etc.)
+    }
+  }
+
+  function extractAttributeFromHtml(html, attrName) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    const element = template.content.firstElementChild;
+    return element ? element.getAttribute(attrName) || "" : "";
+  }
+
+  // Only resolves http(s) URLs — data: URIs and other schemes are left to the existing
+  // heuristic since there is no remote source to fetch image bytes from.
+  function resolveAbsoluteImageUrl(src, baseUrl) {
+    if (!src) {
+      return "";
+    }
+    try {
+      if (/^https?:\/\//i.test(src)) {
+        return new URL(src).href;
+      }
+      if (/^https?:\/\//i.test(baseUrl)) {
+        return new URL(src, baseUrl).href;
+      }
+    } catch {
+      return "";
+    }
+    return "";
+  }
+
+  function applyImageAltLlmResult(candidate, result) {
+    const altText = normalizeText(result.alt_text || "");
+    if (!altText || candidate.proposal.patch?.type !== "set-attribute") {
+      return;
+    }
+    const template = document.createElement("template");
+    template.innerHTML = candidate.proposal.after_html || "";
+    const element = template.content.firstElementChild;
+    if (!element) {
+      return;
+    }
+    element.setAttribute("alt", altText);
+    candidate.proposal.patch.value = altText;
+    candidate.proposal.after_html = cleanHtml(element.outerHTML);
+    candidate.issue.reason = `${candidate.issue.reason}(画像を解析したAIの下書きです。内容を確認してください。)`;
+  }
+
   function applyForeignLanguageLlmResult(candidate, result) {
     if (!result.is_foreign) {
       candidate.issue.reason = `${candidate.issue.reason}(AIによる再判定では外国語でない可能性があります。実際の内容を確認してください。)`;
@@ -1165,6 +1274,7 @@
             confidence: aiNameDraftForAlt ? aiNameDraftForAlt.confidence : caption ? "medium" : "low",
             requiresHumanReview: true,
             aiDraft: aiNameDraftForAlt,
+            llmContext: { caption },
           })
         );
       }
@@ -1186,6 +1296,7 @@
             confidence: aiNameDraftForAlt ? aiNameDraftForAlt.confidence : caption ? "medium" : "low",
             requiresHumanReview: true,
             aiDraft: aiNameDraftForAlt,
+            llmContext: { caption },
           })
         );
       }
@@ -1267,6 +1378,7 @@
             requiresHumanReview: true,
             patchMode: complexAiNameDraft?.name ? "replace" : "none",
             aiDraft: complexAiNameDraft,
+            llmContext: { caption },
           })
         );
       }
