@@ -349,6 +349,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 実装中に、既存の`setAnalyzeStatus()`が`"running"`以外の状態値に対して無条件でボタンを再有効化するフォールスルー構造だったため、新状態を単純に追加すると処理中でもボタンが押せてしまう(ユーザーが懸念した「何度も押してしまう」を実際に引き起こしかねない)潜在的な不具合を発見。`"running"`と同じ早期return分岐を追加して正しく実装した。
   - 検証: `node --check`・`node test/run-tests.js`成功、既存6サンプルの回帰なし。Playwrightで`/api/llm/enrich`のレスポンスを2秒遅延させ、遅延中ボタンが無効化・「AIで確認中」表示のまま維持されることを確認。
   - 次のアクション: ユーザー確認の上コミット・プッシュ。
+- PR #37マージ承認後、ユーザーから「今後の予定を立て直しましょう」との指示を受け、4候補を提示したところ「2と4を片付けてしまう」(table.layout-table系画像へのvision enrichment拡張 + Windows `.exe`ビルド確認)を選択。
+  - オプション4(Windows`.exe`ビルド確認)から着手。`build-windows-app.bat`はesbuildで`server.js`をバンドルする際、新規追加した`lib/llm.js`/`lib/llm-prompts.js`を含む全`require()`を自動的に解決するため、ビルドスクリプト自体は無変更で済むことを確認。Linuxサンドボックスから検証できる範囲(esbuildバンドル成功・新規LLMコードがバンドルに含まれること・バンドル済みサーバーの起動と`/api/health`/`/api/llm/enrich`の応答)は全て確認できたが、SEA blob注入(`postject`)・署名除去(`signtool`)・実機での`.exe`起動はWindows実機が必要なため確認できず、その旨をユーザーに報告した。
+  - 続けてオプション2(table.layout-table系画像へのvision enrichment拡張)に着手。`decomposeLayoutTable()`(表をレイアウト用途とみなして解体・再構成する処理)が`prepareLayoutTableImage()`で画像altを旧ヒューリスティックのみで直接`after_html`に焼き込んでおり、独立候補(`image.alt-text`)を作らないためステージ3の`enrichImageAltWithLlm`から漏れていた問題を修正。`decomposeLayoutTable`/`tableCellDraft`/`normalizeLayoutTableImages`/`prepareLayoutTableImage`に任意の`imageContexts`収集引数を追加し(既存呼び出しは無変更)、`table.layout-table`/`table.cell-merge-layout`/`table.cell-merge-file`/`table.cell-merge-mark`の各候補に`llm_context.images`として付与、新規`enrichLayoutTableImagesWithLlm()`が事後的に`after_html`内の対応する`<img>`のaltのみを書き換える設計とした。
+  - 実装中、同一画像が独立`image.alt-text`候補としても存在する場合(実際に「表」サンプルで再現)、2回の重複vision呼び出しが発生することを自己発見。`enrichLayoutTableImagesWithLlm`を`enrichImageAltWithLlm`完了後に実行する順序に変更し、`findExistingAltForImageUrl()`で既存の確定済みalt文言を再利用することで重複呼び出しをゼロにした(コストを強く懸念するユーザーの方針に沿った自己修正)。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致することを確認(回帰なし)。「表」サンプルの`table.layout-table`候補で新設フィールドが正しく機能し、`/api/llm/image-alt`への重複呼び出しが2回→1回に削減されることをネットワークインターセプトで確認。ライブAPIキー検証は、Stage3で同一エンドポイント・同一適用ロジックが実機検証済みであることから、ユーザーに確認した上でスキップする判断を得た。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
 
 ## Decisions
 

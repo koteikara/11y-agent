@@ -500,6 +500,10 @@
       await enrichLinkTitleCandidates(reviewItems);
       setAnalyzeStatus("enriching");
       await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems), enrichHeadingReviewWithLlm(fragment, reviewItems)]);
+      // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
+      // already-enriched standalone image.alt-text result instead of firing a duplicate vision
+      // call when the same image also appears inside a decomposed layout table.
+      await enrichLayoutTableImagesWithLlm(reviewItems);
       state.candidates = reviewItems
         .filter((item) => !isNoticeItem(item))
         .map((candidate, index) => ({
@@ -1108,6 +1112,109 @@
     candidate.proposal.patch.value = altText;
     candidate.proposal.after_html = cleanHtml(element.outerHTML);
     candidate.issue.reason = `${candidate.issue.reason}(画像を解析したAIの下書きです。内容を確認してください。)`;
+  }
+
+  // table.layout-table / table.cell-merge-*: decomposeLayoutTable() bakes heuristic alt text
+  // directly into the restructured table's after_html (see prepareLayoutTableImage) instead of
+  // producing standalone image.alt-text candidates, so enrichImageAltWithLlm's node_id-based
+  // filtering above never sees these images. Candidates built through that path instead carry
+  // the heuristically-touched images in proposal.llm_context.images (collected while
+  // decomposeLayoutTable runs); this pass looks each one up by src inside the candidate's
+  // after_html and patches its alt attribute in place after a vision call.
+  // Called after enrichImageAltWithLlm so that when the same image also has a standalone
+  // image.alt-text/image.complex-image-report candidate (a common overlap: collectImageCandidates
+  // flags a generic-alt <img> on its own regardless of whether collectTableCandidates also
+  // decomposes the table it lives in), this reuses that already-fetched result instead of
+  // issuing a second vision call for the identical image.
+  async function enrichLayoutTableImagesWithLlm(items) {
+    const targets = items.filter((item) => item.proposal.llm_context?.images?.length);
+    if (!targets.length) {
+      return;
+    }
+    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    const jobs = [];
+    targets.forEach((candidate) => {
+      const uniqueBySrc = new Map();
+      candidate.proposal.llm_context.images.forEach((imageContext) => {
+        if (!uniqueBySrc.has(imageContext.src)) {
+          uniqueBySrc.set(imageContext.src, imageContext);
+        }
+      });
+      uniqueBySrc.forEach((imageContext) => jobs.push({ candidate, imageContext }));
+    });
+    const concurrency = 4;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < jobs.length) {
+        const job = jobs[cursor];
+        cursor += 1;
+        await enrichOneLayoutTableImage(job.candidate, job.imageContext, baseUrl, items);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
+  }
+
+  function findExistingAltForImageUrl(items, imageUrl, baseUrl) {
+    for (const item of items) {
+      if (item.rule_id !== "image.alt-text" && item.rule_id !== "image.complex-image-report") {
+        continue;
+      }
+      if (item.proposal.patch?.type !== "set-attribute" || item.proposal.patch.name !== "alt") {
+        continue;
+      }
+      const src = extractAttributeFromHtml(item.proposal.before_html, "src");
+      if (resolveAbsoluteImageUrl(src, baseUrl) === imageUrl) {
+        return normalizeText(item.proposal.patch.value || "");
+      }
+    }
+    return "";
+  }
+
+  async function enrichOneLayoutTableImage(candidate, imageContext, baseUrl, items) {
+    const imageUrl = resolveAbsoluteImageUrl(imageContext.src, baseUrl);
+    if (!imageUrl) {
+      return;
+    }
+    const existingAlt = findExistingAltForImageUrl(items, imageUrl, baseUrl);
+    if (existingAlt) {
+      applyLayoutTableImageAltResult(candidate, imageContext.src, { alt_text: existingAlt });
+      return;
+    }
+    try {
+      const response = await fetch("/api/llm/image-alt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageUrl, caption: imageContext.caption || "" }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!payload) {
+        return;
+      }
+      recordLlmUsage(payload.usage);
+      if (!payload.ok || !payload.result) {
+        return;
+      }
+      applyLayoutTableImageAltResult(candidate, imageContext.src, payload.result);
+    } catch {
+      // best-effort upgrade; the heuristic alt baked in by decomposeLayoutTable stays as-is
+    }
+  }
+
+  function applyLayoutTableImageAltResult(candidate, src, result) {
+    const altText = normalizeText(result.alt_text || "");
+    if (!altText) {
+      return;
+    }
+    const template = document.createElement("template");
+    template.innerHTML = candidate.proposal.after_html || "";
+    const matches = [...template.content.querySelectorAll("img")].filter(
+      (img) => (img.getAttribute("src") || "") === src
+    );
+    if (!matches.length) {
+      return;
+    }
+    matches.forEach((img) => img.setAttribute("alt", altText));
+    candidate.proposal.after_html = cleanHtml(template.innerHTML);
   }
 
   // html-structure.heading-required / html-structure.heading-content-quality: unlike every
@@ -2128,6 +2235,7 @@
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
             requiresHumanReview: true,
+            llmContext: mergeProposal.images?.length ? { images: mergeProposal.images } : null,
           })
         );
       }
@@ -2165,6 +2273,7 @@
             patchMode: plan.patchMode,
             confidence: plan.confidence,
             requiresHumanReview: plan.requiresHumanReview,
+            llmContext: plan.llmContext,
           })
         );
         return;
@@ -2266,15 +2375,18 @@
     }
 
     if (isLikelyLayoutTable(table)) {
+      const imageContexts = [];
+      const afterHtml = decomposeLayoutTable(table, imageContexts);
       return {
         kind: "structural",
         ruleId: "table.layout-table",
         message: "Table may be being used for layout.",
         reason: `${layoutTableReason(table)} The table should be considered a layout candidate rather than a data table.`,
-        afterHtml: decomposeLayoutTable(table),
+        afterHtml,
         patchMode: "replace",
         confidence: layoutTableConfidence(table),
         requiresHumanReview: true,
+        llmContext: imageContexts.length ? { images: imageContexts } : null,
       };
     }
 
@@ -2289,6 +2401,7 @@
         patchMode: mergeProposal.patchMode,
         confidence: mergeRule.confidence,
         requiresHumanReview: true,
+        llmContext: mergeProposal.images?.length ? { images: mergeProposal.images } : null,
       };
     }
 
@@ -4024,7 +4137,10 @@
     );
   }
 
-  function decomposeLayoutTable(table) {
+  // imageContexts, when passed, collects { src, caption } for every <img> whose alt text
+  // this function fills in heuristically (see prepareLayoutTableImage), so a post-hoc LLM
+  // vision enrichment pass can upgrade them later without re-walking the decomposed HTML.
+  function decomposeLayoutTable(table, imageContexts) {
     const template = document.createElement("template");
     const caption = table.querySelector(":scope > caption");
     const captionText = normalizeText(caption?.textContent || "");
@@ -4039,7 +4155,7 @@
     table.querySelectorAll("tr").forEach((row) => {
       const drafts = [...row.children]
         .filter((cell) => ["TD", "TH"].includes(cell.tagName))
-        .map(tableCellDraft)
+        .map((cell) => tableCellDraft(cell, imageContexts))
         .filter(Boolean);
 
       if (drafts.length === 1 && isLayoutTableSectionHeadingDraft(drafts[0])) {
@@ -4122,23 +4238,32 @@
     }
 
     if (mergeRule.ruleId === "table.cell-merge-layout") {
+      const imageContexts = [];
+      const afterHtml = canSplitMergedRowsIntoTables(table)
+        ? splitMergedRowsIntoTablesHtml(table)
+        : decomposeLayoutTable(table, imageContexts);
       return {
-        afterHtml: canSplitMergedRowsIntoTables(table) ? splitMergedRowsIntoTablesHtml(table) : decomposeLayoutTable(table),
+        afterHtml,
         patchMode: "replace",
+        images: imageContexts,
       };
     }
 
     if (mergeRule.ruleId === "table.cell-merge-file") {
+      const imageContexts = [];
       return {
-        afterHtml: decomposeLayoutTable(table),
+        afterHtml: decomposeLayoutTable(table, imageContexts),
         patchMode: "replace",
+        images: imageContexts,
       };
     }
 
     if (mergeRule.ruleId === "table.cell-merge-mark") {
+      const imageContexts = [];
       return {
-        afterHtml: buildMarkSeparatedTableHtml(table),
+        afterHtml: buildMarkSeparatedTableHtml(table, imageContexts),
         patchMode: "replace",
+        images: imageContexts,
       };
     }
 
@@ -4310,7 +4435,7 @@
     return cleanHtml(output.innerHTML);
   }
 
-  function buildMarkSeparatedTableHtml(table) {
+  function buildMarkSeparatedTableHtml(table, imageContexts) {
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (captionText) {
@@ -4354,7 +4479,7 @@
       return cleanHtml(output.innerHTML);
     }
 
-    return decomposeLayoutTable(table).replace(/[●○◎◯✓✔■□]/g, "該当");
+    return decomposeLayoutTable(table, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
   }
 
   function buildExpandedTableGrid(table) {
@@ -4603,11 +4728,11 @@
     return cleanHtml(clone.outerHTML);
   }
 
-  function tableCellDraft(cell) {
+  function tableCellDraft(cell, imageContexts) {
     const clone = cell.cloneNode(true);
     stripInternalAttributes(clone);
     clone.querySelectorAll("script, style, noscript").forEach((element) => element.remove());
-    normalizeLayoutTableImages(clone);
+    normalizeLayoutTableImages(clone, imageContexts);
 
     const text = normalizeText(clone.textContent);
     const hasMeaningfulElement = Boolean(clone.querySelector("img, figure, a, ul, ol, dl, p, h2, h3, h4, h5, h6, blockquote"));
@@ -4650,9 +4775,9 @@
     };
   }
 
-  function normalizeLayoutTableImages(root) {
+  function normalizeLayoutTableImages(root, imageContexts) {
     root.querySelectorAll("img").forEach((img) => {
-      prepareLayoutTableImage(img);
+      prepareLayoutTableImage(img, imageContexts);
     });
 
     [...root.childNodes].forEach((node) => {
@@ -4665,7 +4790,7 @@
     });
   }
 
-  function prepareLayoutTableImage(img) {
+  function prepareLayoutTableImage(img, imageContexts) {
     const alt = img.getAttribute("alt");
     if (alt !== null && alt.trim() !== "" && !isGenericAlt(alt)) {
       return;
@@ -4675,18 +4800,24 @@
     const baseDraft = generateImageNameDraft(img, caption);
     const draft = isComplexImageCandidate(img, caption) ? generateComplexImageNameDraft(img, caption, baseDraft) : baseDraft;
     const suggestedAlt = draft?.name || (caption && !isGenericAlt(caption) ? caption : "");
+    const recordImageContext = () => {
+      imageContexts?.push({ src: img.getAttribute("src") || "", caption });
+    };
 
     if (suggestedAlt) {
       img.setAttribute("alt", suggestedAlt);
+      recordImageContext();
       return;
     }
 
     if (alt === null || alt.trim() === "") {
       img.setAttribute("alt", "画像内容を具体的に入力");
+      recordImageContext();
       return;
     }
 
     img.setAttribute("alt", `${alt.replace(/の?写真$/, "")}の内容を具体的に説明`);
+    recordImageContext();
   }
 
   function canCombineLayoutCells(labelDraft, valueDraft) {
