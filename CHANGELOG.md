@@ -21,6 +21,23 @@
 
 ## Entries
 
+## 2026-07-10: 修正候補カードの処理状態を背景色で明示
+
+- 背景・目的: ユーザーから「処理選択中のcurrentと処理完了のもの、処理未完了のものを明示的に違いをつけよう(今はカードの左側のラインだけの違い)」との依頼。処理選択中/処理完了/同じ箇所で自動的に処理完了/処理未処理の4状態が、カード左端の細い縦線(採用=緑・却下=赤・要確認=橙)でしか区別できておらず、一覧をぱっと見て状態を把握しにくかった。
+- 配色案(コントラスト比を計算して選定、ユーザー承認済み):
+  - 処理選択中(`aria-selected="true"`): 青 `--primary-container`(#dbe6fb、既存トークン再利用)。文字コントラスト13.9:1。
+  - 処理完了(`accepted`/`edited`/`rejected`/`needs_review`): 濃いグレー 新規`--status-done-bg`(#ccd3dc)。文字11.5:1、リンク色バッジ文字4.6:1(いずれもWCAG AA適合)。
+  - 同じ箇所で他の候補が採用されたことで自動解決された候補(`conflicted`、`resolveSupersededTableCandidates`が設定): 薄いグレー `--surface-2`(#eaf0f7、既存トークン再利用)。文字15.2:1。
+  - 未処理(既定): 白 `--surface`、現状維持。
+- 主な変更内容(`goal2-app/public/styles.css`):
+  - `:root`に`--status-done-bg: #ccd3dc`を追加(意思決定の色=`--success`/`--danger`/`--warn`とは別軸の「処理済みかどうか」を表す状態色として、既存の「Semantic status」コメント欄に追記)。
+  - `.candidate-item.accepted/.edited/.rejected/.needs_review`に`background: var(--status-done-bg)`を追加(既存のborder-left色分けは維持、背景色は独立して重ねる設計)。
+  - `.candidate-item.conflicted`に`background: var(--surface-2)`を新設(このクラス自体は既にJS側で付与されていたが、専用のCSSスタイルはこれまで無かった)。
+  - `.candidate-item[aria-selected="true"]`のbackgroundを、ほぼ白に近い薄い色(`color-mix(...)`)から、より明確に青と分かる`--primary-container`へ変更。CSSソース順を「状態別背景→選択状態」に並べ替え、同一詳細度でカスケードにより選択状態が常に最優先で勝つようにした(既に決定済みの候補を選択して見返す場合でも青が優先表示される)。
+- 検証: `node --check`なし(CSSのみ)。Playwrightで「表」サンプルを使い、候補を採用(accepted)・却下(rejected)・選択のみ(current)・自動解決(conflicted、表の構造変換候補を採用してtable関連の兄弟候補を自動解決させて再現)の4状態を実際に発生させ、`getComputedStyle`で背景色が設計通りの4色(#dbe6fb/#ccd3dc/#eaf0f7/#fdfeff)になっていることを確認。`node test/run-tests.js`成功(回帰なし、CSSのみの変更のためロジックへの影響なし)。Goal 3(`goal3.js`)は`.candidate-item.selected`/`.unresolved`という別クラス体系を使っており、今回変更したセレクタとは重複しないため無影響であることをコード確認。
+- 関連ファイル: `goal2-app/public/styles.css`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: 実案件データの外部LLM送信ポリシーたたき台を作成
 
 - 背景・目的: LLM(Gemini)統合完了後も、実案件(自治体サイト)のHTML・画像を外部LLMへ送信してよいかのデータポリシーが未確定のままだった(残バックログの項目10)。ユーザーの指示で項目3の後に着手。

@@ -48,6 +48,10 @@
   --warn: var(--warning);
   --danger: var(--error);
   --ok: var(--success);
+  /* Candidate-card processing state (current/done/auto-resolved), distinct from the
+     accept/edit/reject/needs-review decision colors above. Contrast-checked against
+     --text (>=11:1) and --link (>=4.6:1) for the badge text that can appear on any card. */
+  --status-done-bg: #ccd3dc;
   --focus: var(--primary);
 
   /* Type */
@@ -806,11 +810,21 @@ label {
   box-shadow: none;
 }
 
-.candidate-item[aria-selected="true"] {
-  border-color: var(--primary);
-  border-left-color: var(--primary);
-  background: color-mix(in srgb, var(--primary-container), white 64%);
-  box-shadow: var(--shadow-1);
+/* Processing state background — layered under the accept/edit/reject/needs-review
+   border-left color so the two stay visually independent: border-left says *how* it was
+   decided, background says *whether* it's done. accepted/edited/rejected/needs_review all
+   share the same "done" background since they're equally no-longer-actionable from the list
+   view. conflicted (auto-resolved because another candidate touched the same spot) gets a
+   lighter tone to read as "resolved for you" rather than "you decided this". */
+.candidate-item.accepted,
+.candidate-item.edited,
+.candidate-item.rejected,
+.candidate-item.needs_review {
+  background: var(--status-done-bg);
+}
+
+.candidate-item.conflicted {
+  background: var(--surface-2);
 }
 
 .candidate-item.accepted,
@@ -824,6 +838,15 @@ label {
 
 .candidate-item.needs_review {
   border-left-color: var(--warn);
+}
+
+/* Currently-selected card: highest visual priority, overrides the processing-state
+   background above regardless of decision status (source order wins at equal specificity). */
+.candidate-item[aria-selected="true"] {
+  border-color: var(--primary);
+  border-left-color: var(--primary);
+  background: var(--primary-container);
+  box-shadow: var(--shadow-1);
 }
 
 .candidate-main {
