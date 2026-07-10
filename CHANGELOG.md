@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-10: LLM確認中の処理状態をUIに明示
+
+- 背景・目的: ユーザーから「呼び出しから返答までに時間がかかったようですが処理中を示す表現がないと何度もボタンを押してしまいそうです」との指摘を受けた。LLM enrichment導入後は`analyze()`のうち`enrichWithLlm`/`enrichImageAltWithLlm`/`enrichHeadingReviewWithLlm`の並行実行部分が数十秒かかることがあるが、この間もボタン表示は最初の「生成中」のままで、ヒューリスティック生成(1秒未満)とAI確認(最大数十秒)の区別がつかなかった。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `setAnalyzeStatus()`に新しい状態`"enriching"`を追加(`"running"`と同様、ボタンを無効化したまま早期returnする分岐)。ボタン文言を「AIで確認中」、候補一覧サマリーを「AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。」に変更。
+  - `analyze()`で、`enrichLinkTitleCandidates()`完了後・LLM enrichmentの`Promise.all`開始前に`setAnalyzeStatus("enriching")`を呼ぶよう変更。
+  - 実装中に、`setAnalyzeStatus()`の既存コードが`"running"`以外のstatus値に対して無条件で`els.analyzeButton.disabled = false`にフォールスルーする作りだったため、新しい状態を単純に追加するとボタンが処理中に再度押せる状態になってしまう("running"と同様の早期return分岐が無いと発生する)潜在的な不具合を発見し、正しく早期returnする形で実装した。
+- 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、状態表示のみの変更で機能面への影響なし)。Playwrightで`/api/llm/enrich`のレスポンスを人為的に2秒遅延させ、遅延中はボタンが「AIで確認中」表示・無効化されたまま維持され、完了後に正しく「候補生成」表示・有効化に戻ることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: ステージ4(heading-required/heading-content-quality)のライブ動作確認とプロンプト調整
 
 - 背景・目的: 直前のステージ4コミットは`GEMINI_API_KEY`未設定環境での検証止まりだった。ユーザーからテスト用APIキーの再提供を受け、実際のGemini呼び出しまで含めて検証した。

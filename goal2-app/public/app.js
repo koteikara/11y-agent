@@ -498,6 +498,7 @@
         reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
       }
       await enrichLinkTitleCandidates(reviewItems);
+      setAnalyzeStatus("enriching");
       await Promise.all([enrichWithLlm(reviewItems), enrichImageAltWithLlm(reviewItems), enrichHeadingReviewWithLlm(fragment, reviewItems)]);
       state.candidates = reviewItems
         .filter((item) => !isNoticeItem(item))
@@ -565,6 +566,13 @@
       els.analyzeButton.textContent = "生成中";
       els.candidateSummary.textContent = "修正候補を生成しています。";
       els.completionPill.textContent = "生成中";
+      return;
+    }
+    if (status === "enriching") {
+      els.analyzeButton.disabled = true;
+      els.analyzeButton.textContent = "AIで確認中";
+      els.candidateSummary.textContent = "AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。";
+      els.completionPill.textContent = "AI確認中";
       return;
     }
     els.analyzeButton.disabled = false;
