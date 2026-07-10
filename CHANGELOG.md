@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-10: 料金プレースホルダ(Gemini単価・為替レート)を最新値へ更新
+
+- 背景・目的: `lib/llm.js`のコスト概算に使う`GEMINI_INPUT_PRICE_PER_1M_TOKENS`/`GEMINI_OUTPUT_PRICE_PER_1M_TOKENS`/`USD_JPY_RATE`は実装当初からプレースホルダのままだった(残バックログの項目3)。WebSearchでGemini公式料金ページおよび複数の独立集計サイト(Hacker News議論、OpenRouter等)を確認した結果、`gemini-2.5-flash`(既定モデル)の料金は2026-07-02の改定後、$0.30/$2.50(入力/出力、per 1Mトークン)であることが判明し、これは既存のプレースホルダ値と偶然一致していたため据え置いた。為替レートはBank of Japan/市場データで確認したところ約161.7円/USDであり、既存の既定値155から乖離していたため162へ更新した。
+- 主な変更内容(`goal2-app/lib/llm.js`):
+  - `USD_JPY_RATE`の既定値を`155`→`162`に更新(2026-07-10時点の実勢レート約161.7円を反映)。
+  - 各定数のコメントに、確認日(2026-07-10)・確認元(公式料金ページ、Bank of Japan/市場データ)・「モデル変更時や時間経過後は再確認が必要」という運用上の注意を明記。
+  - `GEMINI_INPUT_PRICE_PER_1M_TOKENS`/`GEMINI_OUTPUT_PRICE_PER_1M_TOKENS`は値自体は据え置き(既に現在の公式料金と一致していたため)。
+  - `goal2-app/README.md`の該当表にも確認日・確認済みである旨を反映。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプルの検出件数がベースラインと完全一致)を実施。`estimateCostUsd`/`estimateCostJpy`が新しい既定値で正しく計算されることを直接呼び出しで確認。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/README.md`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: GEMINI_*環境変数の運用ドキュメントを整備
 
 - 背景・目的: LLM統合(PR #34〜#40)完了後、`GEMINI_API_KEY`をはじめとする環境変数群がREADME/CLOUD_RUN_DEPLOY.mdのどこにも説明されておらず、運用者が機能の存在に気づけない状態だった(残バックログの項目1)。ユーザーの指示で項目2(ADC実装)を先に完了させた後、この項目に着手。
