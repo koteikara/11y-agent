@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-10: ステージ2のライブ動作確認、table.captionの適用範囲を拡大
+
+- 背景・目的: 直前のステージ2コミット(未プッシュ、追記内容参照)後、ユーザーからテスト用Gemini APIキーの再提供を受け、7タスク全てを実際のGemini呼び出しまで含めて検証した。
+- 検証の過程で、`table.caption`のenrichment対象条件(`patch?.type === "insert-caption"`)が狭すぎることが判明した。`collectTableCandidates()`内の`table.caption`候補には実際には3つの発生経路があり、うち最も一般的な「データテーブルとして構造的に保持し、caption/thead/th/scopeをまとめて追加する」経路(`planTableTreatment`の`kind: "structural"`、`patchMode: "replace"`で`patch`オブジェクトを持たない)は元のフィルタ条件に一致せず、enrichmentが素通りしていた。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `table-caption`タスクの対象条件を、`after_html`に`<caption>`要素を含む`table.caption`候補全般に拡大(`patch`の有無を問わない)。ただし「既存のキャプションが汎用語のみ」を検出するだけの確認専用候補(`element`がテーブルではなくcaption要素自体、`patchMode: "none"`)は、`before_html`が`<table`で始まるかどうかで判定して明確に除外した(この候補は表全体の書き換えを意図していないため)。
+  - `applyTableCaptionLlmResult()`を、`patch`が無い(構造的書き換え)候補にも対応できるよう汎用化。
+- 検証: `node --check`・`node test/run-tests.js`成功。テスト用APIキーで実際にGemini呼び出しまで実施し、7タスク全てが期待通りの高品質な出力を返すことを確認(例: `link-text`「防災ガイドブック（PDF版）」、`mail-link`「健康推進課へメールを送信」、`toppage-link`「弘前市トップページ」、`table-caption`は旧実装の固定文言"Table details"に代わり「粗大ごみ処理手数料」のような内容に即した要約、`sensory-characteristics`は「右のボタン」を問題ありと判定しつつ「「電子申請」ボタン」は問題なしと正しく区別、`cell-merge`は表内容に即した具体的な理由文、`th-scope`は表構造から`col`/`row`を正しく判定)。既存6サンプル全てで実際にGeminiを呼び出した状態での回帰確認も行い、候補・注意の総件数がベースライン(procedure-overview 7, images 10, tables 14, links-text 24, iframe 5, goal3-hirosaki-news2019 17)と完全一致することを確認(LLMによる書き換えは既存候補の内容更新のみで、件数の増減は発生しない設計のため)。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)。動作確認に使用したテスト用APIキーは確認後に削除済み(リポジトリには含まれない)。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: 残り8ルールへLLM(Gemini)enrichmentを接続(ステージ2/4)
 
 - 背景・目的: ステージ1(PR #34)で構築したLLM連携基盤・`enrichWithLlm()`パターンを、対象9実装対象のうち残り8ルール(実装対象としては7関数、`table.cell-merge-*`は6ルールIDを1関数でカバー)へ展開した。ユーザー承認を得て着手。

@@ -919,7 +919,17 @@
       ),
       runLlmBatch(
         "table-caption",
-        items.filter((item) => item.rule_id === "table.caption" && item.proposal.patch?.type === "insert-caption"),
+        // table.caption candidates come from three code paths: a simple "insert-caption"
+        // patch, the structural data-table-semantics rewrite (patchMode "replace" with no
+        // `patch` object), and a flag-only check on an *existing* generic caption
+        // (element: the <caption> itself, patchMode "none", not a whole-table rewrite —
+        // excluded here since before_html wouldn't start with <table).
+        items.filter(
+          (item) =>
+            item.rule_id === "table.caption" &&
+            /^<table[\s>]/i.test(item.proposal.before_html || "") &&
+            /<caption[\s>]/i.test(item.proposal.after_html || "")
+        ),
         (candidate) => ({ tableHtml: candidate.proposal.before_html }),
         applyTableCaptionLlmResult
       ),
@@ -1044,7 +1054,7 @@
 
   function applyTableCaptionLlmResult(candidate, result) {
     const suggestion = normalizeText(result.suggested_caption || "");
-    if (!suggestion || !candidate.proposal.patch || candidate.proposal.patch.type !== "insert-caption") {
+    if (!suggestion) {
       return;
     }
     const template = document.createElement("template");
@@ -1055,7 +1065,9 @@
       return;
     }
     captionElement.textContent = suggestion;
-    candidate.proposal.patch.value = suggestion;
+    if (candidate.proposal.patch?.type === "insert-caption") {
+      candidate.proposal.patch.value = suggestion;
+    }
     candidate.proposal.after_html = cleanHtml(tableElement.outerHTML);
   }
 

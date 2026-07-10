@@ -310,6 +310,11 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `html-structure.heading-content-quality`は、既存ヒューリスティックが「見出しが2文字以下または記号のみ」という狭いケースしか候補化しない構造上、LLMで本当に価値を出すには「既存候補の上書き」ではなく「全見出しをLLMが走査して新規候補を提案する」パスが必要と判断。これは`html-structure.heading-required`(ステージ4)と同じ「新規候補提案」パターンのため、ステージ4にまとめる方針にスコープ変更した(ユーザーには変更内容と理由をCHANGELOGで明示)。
   - `enrichWithLlm()`を、共通バッチ処理ヘルパー`runLlmBatch(task, targets, buildItem, applyResult)`を軸にリファクタリングし、8タスク(foreign-language/sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)を統一的なパターンで接続。50件超過時は自動チャンク分割。
   - 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がステージ1と完全に同じベースラインと一致(回帰なし)。追加した7タスク全てが`/api/llm/enrich`で正しく認識される(`unknown_task`にならない)ことを確認。今回はテスト用APIキーの再提供が無かったため、ステージ1のような実際のGemini呼び出しまでのライブ検証は未実施(技術的な仕組み自体はステージ1で実証済みのため、未検証でも「AI改善が発生しないだけ」で既存動作は壊れない設計)。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。→ Stop hookによりコミット`bce8c7f`としてプッシュ済み(ユーザー確認は未了のままだった)。
+- ユーザーから「さっきのキーをそのまま使用して」との依頼。私が保持していないキーを再提供いただけるか確認したところ、ユーザーが同じキーを再度貼り付けてくれたため、ステージ2の7タスクを実際のGemini呼び出しまで含めてライブ検証した。
+  - 単体テスト(sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)で全タスクが期待通りの高品質な出力を返すことを確認(具体例はCHANGELOG参照)。
+  - UI経由の実データ検証で、`table.caption`のenrichment対象条件が狭すぎて最も一般的な「データテーブルとして構造的に保持する」経路(`planTableTreatment`の`kind: "structural"`)のキャプション生成に接続されていないバグを自己発見。原因を調査し、`table.caption`候補には実は3つの発生経路(単純patch/構造的書き換え/既存キャプションの確認専用フラグ)があることを突き止め、対象条件を拡大しつつ、確認専用フラグ候補(表全体ではなくcaption要素自体が対象)は誤って巻き込まないよう`before_html`が`<table`で始まるかで明確に除外する修正を行った(自己発見・自己修正)。
+  - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプル全てで実際にGeminiを呼び出した状態のまま回帰確認を行い、候補・注意の総件数がベースラインと完全一致することを確認。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)、コスト懸念に対する具体的なデータを得られた。動作確認後、テスト用APIキーは削除済み。
   - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。
 
 ## Decisions
