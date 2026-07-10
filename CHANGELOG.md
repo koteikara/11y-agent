@@ -21,6 +21,21 @@
 
 ## Entries
 
+## 2026-07-10: miChecker-triageバックログ11件の解消(タグ追記・新規ルール2件・スコープ外化)
+
+- 背景・目的: miChecker検出パリティ(Phase 1〜3)完了後、ユーザーから「トリアージバックログの個別判断も同じ形式で進めよう」との依頼を受け、`reference/michecker-triage.md`に残っていた11件のバックログをJavaソース由来の正確な文言を確認した上で1項目ずつ協議し、全件解消した。
+- 主な変更内容:
+  - **タグ追記(4件)**: `html-structure/deprecated-elements.md`にC_3.0/C_3.1(longdesc・D-link、longdescは既存のC_48.8除去方針で内容確認自体が不要になるため)を追加。`link/link-text.md`にC_46.0(連続リンクの区切り表現、ケース2を追記)。`html-structure/heading-content-quality.md`にC_67.0(見出し・段落・リストの先頭内容、自動検出は追加せず人間確認事項として明記)。`image/alt-text.md`にC_300.1(area要素のalt属性、ケース4を追記、画像マップの利用実績ありとの確認あり)。
+  - **新規ルール作成(2件)**: `text/quotation.md`(C_17.0/17.1/18.0/18.1/18.2、blockquote/q/cite要素による引用の構造化)、`text/ascii-art.md`(C_6.0/6.1/69.0、顔文字・アスキーアートの代替表現。顔文字が実務で頻出との確認があったため新規ルール化)。いずれも`goal2-app`側の自動検出コードは持たず、KBドキュメントとして人間/AI判断でのレビュー時に参照する位置づけ。
+  - **スコープ外化(5件)**: C_70.0(内容の分かりやすさの一般的確認、汎用的すぎ)、C_87.0(ふりがな、判定が主観的)、C_1.1(object要素alt、利用頻度低)、C_40.0(リンクaccesskey、現代の実務では非推奨のため付与しない方針)、C_300.2(applet要素alt、C_0.x系と同様deprecated-elements.mdでのapplet除去に吸収)を`reference/michecker-out-of-content-scope.json`へ追加。
+  - **レビューで発見した不整合の修正**: `image/alt-text.md`に以前からC_80.0が重複タグ付けされていたことを発見(実際の検出コードはPhase 3で`image/complex-image-report.md`側に実装済み)。`alt-text.md`側のタグを削除し、実装箇所と一致させた。
+  - `a11y-migration-kb/rules/text/index.md`に新規2ルールを追記。`reference/michecker-triage.md`のバックログ表を解消記録に置き換え。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成し`goal2-app/data/`へ同期(58ルール、268チェック項目、本文スコープ外152件)。タグの二重登録(スコープ外との矛盾)なし、意図しない多重タグ付けなしを確認。
+- 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプルの候補数は今回のKB/データ変更のみ(app.jsコード変更なし)のため完全一致(回帰なし)。
+- 関連ファイル: `a11y-migration-kb/rules/html-structure/{deprecated-elements.md,heading-content-quality.md}`、`a11y-migration-kb/rules/link/link-text.md`、`a11y-migration-kb/rules/image/alt-text.md`、`a11y-migration-kb/rules/text/{index.md,quotation.md,ascii-art.md}`(新規2件)、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md}`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL
+- 関連PR: (作成予定、PR #30へ追加)
+- 備考: これでmiChecker関連の逆引き精度向上・検出パリティ・トリアージバックログの一連の取り組みが完了した。
+
 ## 2026-07-10: miChecker検出パリティ Phase 3(絞り込み確認通知)の実装とノイズ設計協議
 
 - 背景・目的: Phase 1・2A・2Bで対応しきれなかった「C分類(当初未検出42件)」について、ユーザーに「洗い出してほしい」と依頼され、Phase1/2A/2Bで既に解決済みの項目・上位互換への訂正・ノイズ回避での除外を差し引いた結果、実質的な検討対象は15グループ・約30項目まで絞り込めた。ユーザーの希望「個々に選択肢を提示して話し合いながら決める」に従い、15グループそれぞれについて「実装しない/最小限のシグナルのみ/miChecker同等の広い実装」の選択肢を提示し、1グループずつ確認した。

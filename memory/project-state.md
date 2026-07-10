@@ -254,6 +254,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - レビューで、サブエージェントが「KBタグは既存で十分」と報告した`image.complex-image-report.md`にC_80.0のタグ付けが実際には漏れていることを発見(app.js側の候補生成には実害なし、michecker-compare.jsの逆引き表示精度のために追記)。サブエージェントの完了報告を鵜呑みにせず必ず独立検証する運用の重要性を再確認。
   - 既存6サンプルは`iframe`(4→5)・`goal3-hirosaki-news2019`(17→18)がC_83.0の正当な検出で+1、他4サンプル完全一致。
   - これでmiChecker検出パリティ(Phase 1〜3)が完了。88項目は上位互換15件・実装対応(Phase1-3合計)約40件・意図的未実装約33件に整理された。
+- `reference/michecker-triage.md`に残っていたバックログ11件を、同じく1項目ずつテキストで選択肢提示して協議し全件解消した。
+  - タグ追記4件: `deprecated-elements.md`(C_3.0/3.1、longdescは既存の除去方針で内容確認自体が不要)、`link-text.md`(C_46.0、連続リンクの区切り)、`heading-content-quality.md`(C_67.0、自動検出は追加せず人間確認事項として明記)、`alt-text.md`(C_300.1、画像マップは実務で利用実績ありとの確認)。
+  - 新規ルール2件: `text/quotation.md`(C_17.x/18.x、引用の構造化)、`text/ascii-art.md`(C_6.0/6.1/69.0、顔文字が実務で頻出との確認があり新規ルール化)。両方とも自動検出コードは持たずKBドキュメントのみ。
+  - スコープ外化5件: C_70.0(汎用的すぎ)、C_87.0(判定が主観的)、C_1.1(利用頻度低)、C_40.0(accesskeyは現代の実務で非推奨)、C_300.2(C_0.x系と同様deprecated-elements.mdに吸収)。
+  - レビューで、`image/alt-text.md`にC_80.0が以前から重複タグ付けされていたことを発見(実際の検出はPhase 3で`image/complex-image-report.md`側に実装済み)、`alt-text.md`側から削除して整合を取った。また自分自身の作業ミスで、ユーザーが「スコープ外」と選んだC_300.2を誤って`deprecated-elements.md`へタグ付けしてしまい、直後に気づいて訂正した(ユーザーの選択をタグ付け系の質問と混同したための単純ミス)。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成・同期(58ルール、268チェック項目、本文スコープ外152件)。`node test/run-tests.js`成功、既存6サンプルはコード変更なしのため完全一致。
+  - これでmiChecker関連の逆引き精度向上・検出パリティ・トリアージバックログの一連の取り組みが完了した。
 
 ## Decisions
 

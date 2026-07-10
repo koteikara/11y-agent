@@ -23,3 +23,5 @@ timestamp: 2025-12-15T00:00:00Z
 - [spaced-characters.md](/rules/text/spaced-characters.md) — 文字間の不要な空白
 - [sensory-characteristics.md](/rules/text/sensory-characteristics.md) — 形状・位置・色だけに依存した説明の回避
 - [abbreviation.md](/rules/text/abbreviation.md) — 略語・頭字語の表記
+- [quotation.md](/rules/text/quotation.md) — 引用の構造化（blockquote・q・cite）
+- [ascii-art.md](/rules/text/ascii-art.md) — アスキーアート・顔文字の代替表現
