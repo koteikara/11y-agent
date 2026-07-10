@@ -20,14 +20,17 @@ function getAuthMode() {
   return (process.env.GEMINI_AUTH_MODE || "api-key").trim().toLowerCase();
 }
 
-// Placeholder USD-per-1M-token rates. Gemini pricing changes over time and differs by
-// model/tier — these env vars must be set to the current published rate for the cost
-// estimate to be meaningful. Left unset, the estimate is a rough order-of-magnitude only.
+// USD-per-1M-token rates for the default model (gemini-2.5-flash, text prompts <=200k
+// tokens). Confirmed against ai.google.dev/gemini-api/docs/pricing on 2026-07-10. Gemini
+// pricing changes over time and differs by model/tier/prompt size — if DEFAULT_MODEL or
+// GEMINI_MODEL is changed, or enough time has passed, re-check the official page and update
+// these env vars (or the fallback below) to the current published rate.
 const INPUT_PRICE_PER_1M_USD = Number(process.env.GEMINI_INPUT_PRICE_PER_1M_TOKENS || 0.3);
 const OUTPUT_PRICE_PER_1M_USD = Number(process.env.GEMINI_OUTPUT_PRICE_PER_1M_TOKENS || 2.5);
-// Placeholder USD/JPY rate for the yen-equivalent shown alongside the USD estimate in the
-// UI. Exchange rates fluctuate — set USD_JPY_RATE to the current rate for accuracy.
-const USD_JPY_RATE = Number(process.env.USD_JPY_RATE || 155);
+// USD/JPY rate for the yen-equivalent shown alongside the USD estimate in the UI. Confirmed
+// against Bank of Japan / market data on 2026-07-10 (~161.7). Exchange rates fluctuate daily —
+// set USD_JPY_RATE to the current rate for accuracy; this fallback will drift over time.
+const USD_JPY_RATE = Number(process.env.USD_JPY_RATE || 162);
 
 const MAX_CALLS_PER_MINUTE = Number(process.env.LLM_MAX_CALLS_PER_MINUTE || 30);
 const callTimestamps = [];
