@@ -11,6 +11,8 @@ const { loadCheckitems } = require("./lib/michecker-checkitems");
 const { defaultSagaFixtureRoot } = require("./lib/sagaAutoFix");
 const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
+const { callGemini } = require("./lib/llm");
+const { getTaskConfig } = require("./lib/llm-prompts");
 
 const execFileAsync = promisify(execFile);
 
@@ -511,6 +513,48 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, error.statusCode || 500, {
         ok: false,
         error: error.code || "htmlchecker_local_compare_failed",
+        message: error.message,
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/llm/enrich") {
+    try {
+      const body = await readJsonBody(request);
+      const task = typeof body?.task === "string" ? body.task : "";
+      const items = Array.isArray(body?.items) ? body.items : [];
+      const config = getTaskConfig(task);
+      if (!config) {
+        sendJson(response, 400, { ok: false, error: "unknown_task", message: `未対応のtaskです: ${task}` });
+        return;
+      }
+      if (!items.length) {
+        sendJson(response, 400, { ok: false, error: "empty_items", message: "itemsが空です。" });
+        return;
+      }
+      if (items.length > 50) {
+        sendJson(response, 400, { ok: false, error: "too_many_items", message: "1リクエストあたりのitemsは50件までです。" });
+        return;
+      }
+      const userText = config.buildUserText(items);
+      const result = await callGemini({
+        systemPrompt: config.systemPrompt,
+        userText,
+        responseSchema: config.responseSchema,
+      });
+      let results;
+      try {
+        results = JSON.parse(result.text);
+      } catch {
+        sendJson(response, 502, { ok: false, error: "llm_invalid_response", message: "LLMの応答をJSONとして解釈できませんでした。" });
+        return;
+      }
+      sendJson(response, 200, { ok: true, results, usage: result.usage });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, {
+        ok: false,
+        error: error.code || "llm_enrich_failed",
         message: error.message,
       });
     }
