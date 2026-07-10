@@ -11,7 +11,7 @@ processing_class: escalation
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_4.0"]
+michecker_check_ids: ["C_4.0", "C_80.0"]
 related: [/rules/image/alt-text.md, /wcag/ch3-images.md]
 ---
 
@@ -27,3 +27,13 @@ related: [/rules/image/alt-text.md, /wcag/ch3-images.md]
 人口推移のグラフ 詳細は以下
 ```
 ポイント: 本文へ内容説明を追記し、報告欄に「グラフの内容説明を画像に続けてテキスト掲載してください」と起票する。
+
+## ケース2: alt属性が長すぎる（150文字超）
+```before
+<img src="chart.png" alt="令和3年度から令和8年度までの人口推移を示す折れ線グラフで、令和3年は12万3千人、令和4年は12万1千人、令和5年は11万9千人、令和6年は11万7千人、令和7年は11万5千人、令和8年は11万3千人と年々減少傾向にあることを示している（以下略、150文字超）">
+```
+```after
+<img src="chart.png" alt="人口推移のグラフ 詳細は以下">
+（詳しい数値は本文またはaria-describedbyで参照できる別要素に記載する）
+```
+ポイント: 代替テキストに詳細情報を全て詰め込むと読み上げの負担が大きくなる。aria-describedby等で本文側に詳細説明を分離できないか検討する。

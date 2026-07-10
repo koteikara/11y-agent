@@ -21,13 +21,112 @@
 
 ## Entries
 
+## 2026-07-10: miChecker-triageバックログ11件の解消(タグ追記・新規ルール2件・スコープ外化)
+
+- 背景・目的: miChecker検出パリティ(Phase 1〜3)完了後、ユーザーから「トリアージバックログの個別判断も同じ形式で進めよう」との依頼を受け、`reference/michecker-triage.md`に残っていた11件のバックログをJavaソース由来の正確な文言を確認した上で1項目ずつ協議し、全件解消した。
+- 主な変更内容:
+  - **タグ追記(4件)**: `html-structure/deprecated-elements.md`にC_3.0/C_3.1(longdesc・D-link、longdescは既存のC_48.8除去方針で内容確認自体が不要になるため)を追加。`link/link-text.md`にC_46.0(連続リンクの区切り表現、ケース2を追記)。`html-structure/heading-content-quality.md`にC_67.0(見出し・段落・リストの先頭内容、自動検出は追加せず人間確認事項として明記)。`image/alt-text.md`にC_300.1(area要素のalt属性、ケース4を追記、画像マップの利用実績ありとの確認あり)。
+  - **新規ルール作成(2件)**: `text/quotation.md`(C_17.0/17.1/18.0/18.1/18.2、blockquote/q/cite要素による引用の構造化)、`text/ascii-art.md`(C_6.0/6.1/69.0、顔文字・アスキーアートの代替表現。顔文字が実務で頻出との確認があったため新規ルール化)。いずれも`goal2-app`側の自動検出コードは持たず、KBドキュメントとして人間/AI判断でのレビュー時に参照する位置づけ。
+  - **スコープ外化(5件)**: C_70.0(内容の分かりやすさの一般的確認、汎用的すぎ)、C_87.0(ふりがな、判定が主観的)、C_1.1(object要素alt、利用頻度低)、C_40.0(リンクaccesskey、現代の実務では非推奨のため付与しない方針)、C_300.2(applet要素alt、C_0.x系と同様deprecated-elements.mdでのapplet除去に吸収)を`reference/michecker-out-of-content-scope.json`へ追加。
+  - **レビューで発見した不整合の修正**: `image/alt-text.md`に以前からC_80.0が重複タグ付けされていたことを発見(実際の検出コードはPhase 3で`image/complex-image-report.md`側に実装済み)。`alt-text.md`側のタグを削除し、実装箇所と一致させた。
+  - `a11y-migration-kb/rules/text/index.md`に新規2ルールを追記。`reference/michecker-triage.md`のバックログ表を解消記録に置き換え。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成し`goal2-app/data/`へ同期(58ルール、268チェック項目、本文スコープ外152件)。タグの二重登録(スコープ外との矛盾)なし、意図しない多重タグ付けなしを確認。
+- 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプルの候補数は今回のKB/データ変更のみ(app.jsコード変更なし)のため完全一致(回帰なし)。
+- 関連ファイル: `a11y-migration-kb/rules/html-structure/{deprecated-elements.md,heading-content-quality.md}`、`a11y-migration-kb/rules/link/link-text.md`、`a11y-migration-kb/rules/image/alt-text.md`、`a11y-migration-kb/rules/text/{index.md,quotation.md,ascii-art.md}`(新規2件)、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md}`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL
+- 関連PR: (作成予定、PR #30へ追加)
+- 備考: これでmiChecker関連の逆引き精度向上・検出パリティ・トリアージバックログの一連の取り組みが完了した。
+
+## 2026-07-10: miChecker検出パリティ Phase 3(絞り込み確認通知)の実装とノイズ設計協議
+
+- 背景・目的: Phase 1・2A・2Bで対応しきれなかった「C分類(当初未検出42件)」について、ユーザーに「洗い出してほしい」と依頼され、Phase1/2A/2Bで既に解決済みの項目・上位互換への訂正・ノイズ回避での除外を差し引いた結果、実質的な検討対象は15グループ・約30項目まで絞り込めた。ユーザーの希望「個々に選択肢を提示して話し合いながら決める」に従い、15グループそれぞれについて「実装しない/最小限のシグナルのみ/miChecker同等の広い実装」の選択肢を提示し、1グループずつ確認した。
+- **協議結果**: 15グループ中6グループを実装(ユーザーが「最小限のシグナル」「機械判定しやすいので両方実装」等を選択)、9グループは実装見送り(理由: 機械判定が困難で人間レビューに委ねる方が実効的、出現頻度が低い、既存の運用で代替可能、等)。
+  - 実装: E(見出し内容の質、極端に短い/記号のみに限定)、J(caption品質、汎用語のみに限定)、G(alt150文字超)、M(リスト構造3項目)、K(th配置パターン)、N(形・位置依存語彙、代表的な複合表現のみ)。
+  - 見送り: H(テキスト画像化検出)、I(リンクtitle属性)、A(廃止要素の残りタグ)、D(スクリプト依存)、B(動き・閃光の停止手段確認)、F(frame/iframeのtitle品質確認)、O(画像内の色のみ依存)、C(タグ・属性整合性)、L(略語・頭字語abbr化)。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_15.0/C_388.0/C_500.4: 正規化後2文字以下、または記号・句読点のみで構成される見出しを低確信度で確認候補にする(`collectHeadingContentQualityCandidates`、`html-structure.heading-content-quality`)。
+  - C_25.3: 「表」「一覧」等、内容を特定しない汎用語のみのcaptionを低確信度でフラグ(`isGenericTableCaptionText`、`table.caption`)。
+  - C_80.0: alt属性が150文字を超える画像に、aria-describedby等での詳細説明分離を促す確認候補(`image.complex-image-report`、既存のC_4.0「詳細な説明が必要」と同じruleIdへ寄せた)。
+  - C_16.0/C_16.1/C_16.2: li要素を持たないul/ol、親ul/ol/menuを持たないli要素(`collectListStructureCandidates`)。li要素の親子関係はブラウザのHTMLパーサーが自動修復しないことをPlaywrightで確認した上で実装。C_16.0は承認済みの簡易ヒューリスティック(項目1件のみのリスト)で低確信度フラグ。
+  - C_331.2: th要素が1行目・1列目のみにある単純な表(行列見出しパターン)で、左上のtd要素にテキストがある場合の確認候補(`collectThLayoutPatternCandidate`、既存の`buildExpandedTableGrid`を流用)。
+  - C_83.0: 「右の」「上記の」「下のボタン」等、位置・形状に依存する代表的な複合表現をテキストノードから検出(`collectPositionalLanguageCandidate`、`text.sensory-characteristics`)。単独の「右」「左」は過検出防止のため対象外。
+  - **KBタグの補完**: `image/complex-image-report.md`にC_80.0のタグ付けが漏れていた(サブエージェントは「既存タグで十分」と報告したが、レビューで発見・修正)。app.js側の候補生成自体はruleId単位のフィルタのため実害はなかったが、`michecker-compare.js`の逆引き表示の正確性のため追記し、ケース2(alt長すぎる例)も本文に追加。`build/rules.jsonl`を再生成・同期。
+- 検証: 陽性15+陰性6+miCheckerモード2の計17ケース(親セッションで独立検証)全PASS。既存6サンプルは`iframe`(4→5)・`goal3-hirosaki-news2019`(17→18)がそれぞれ+1(C_83.0の「下記の」該当箇所があり意図した増加)、他4サンプルは完全一致。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`、`a11y-migration-kb/rules/image/complex-image-report.md`、`a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`
+- 関連PR: (作成予定、PR #30へ追加)
+- 備考: これでmiChecker検出パリティの取り組み(Phase 1〜3)が完了。当初のギャップ分析88項目は、上位互換15件・実装対応(Phase1-3合計)約40件・意図的な未実装(dead code・ノイズ回避・要素条件なしの常時リマインダー・出現頻度低)約33件に整理された。トリアージバックログ(michecker-triage.mdの11項目)の個別協議は別途実施予定。
+
+## 2026-07-10: PR #28マージ後の分岐修正、summary属性(C_25.2/C_25.4)の方針決定、不整合データの削除
+
+- 背景・目的: PR #28がPhase 1・2A・2Bのコミットを含まないまま(最初のコミットのみで)マージされていたことが判明した。以後の3コミット(Phase 1・2A・2B)が閉じたPRのブランチに積まれたままどのPRにも属していない状態になっていたため、ユーザーの指示に基づき是正した。あわせて、Phase 1完了時から「要方針判断」として保留していたsummary属性(C_25.2/C_25.4)の扱い、旧セッションから残っていた不整合データの解消もユーザーの指示に基づき対応した。
+- 主な変更内容:
+  - ブランチを`origin/main`(PR #28およびPR #29がマージ済みの最新main)にリベースし直した。`CHANGELOG.md`の同一挿入位置での競合(PR #29の「プロジェクト理解サマリーの追加」エントリと自分のPhase 1エントリ)を日付順に解消。
+  - summary属性(C_25.2/C_25.4)の方針をユーザーと確定: 「summary属性が存在すればシステム側で自動的に削除する(内容の追加・改善は行わない)」。`table/caption.md`から`html-structure/deprecated-elements.md`へ`michecker_check_ids`を付け替え、`deprecated-elements.md`の本文にlongdesc/summary属性の除去方針とケース3(summary属性除去の例)を追記。`reference/michecker-triage.md`に決定内容を記録。
+  - `reference/michecker-out-of-content-scope.json`から、実在しないチェックID`C_5.4`(過去セッションの入力ミスと推測、実害なし)を削除。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成し`goal2-app/data/`へ同期(56ルール、268チェック項目、本文スコープ外147件)。タグ付けとスコープ外の二重登録が無いことを確認。
+- 検証: `node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `a11y-migration-kb/rules/table/caption.md`、`a11y-migration-kb/rules/html-structure/deprecated-elements.md`、`a11y-migration-kb/reference/{michecker-out-of-content-scope.json,michecker-triage.md}`、`a11y-migration-kb/build/`・`goal2-app/data/`の両JSONL
+- 関連PR: (作成予定、新規PR)
+- 備考: 今後、PRをマージする際は同一ブランチへの追加コミット前に必ず`origin/main`とのマージ状態を確認する。トリアージバックログ(michecker-triage.mdの表)とPhase 3(user/info型の確認通知)の設計方針はユーザーと協議しながら別途進める。
+
+## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2B: 廃止要素拡大・リンク関連・配色確認、最終フェーズ)
+
+- 背景・目的: Phase 2A(テーブル層・色/コントラスト)に続き、B分類(部分カバー)の残り(廃止要素の対象拡大、リンク関連、複雑画像シグナル、配色のみの情報伝達確認)を実装した。Phase 2Aで「事前のギャップ分析レポート自体に誤りがある」ことが判明したため、本Phaseでは実装対象の全項目についてmiChecker本体のJavaソース(`CheckEngine.java`・`HtmlEvalUtil.java`)を先に取得して発火条件を裏取りしてから実装する方針を徹底した。
+- **裏取りにより判明した重要な事実**: レポートに残っていたC_19.0/C_500.6(外国語検出)・C_71.0/C_600.0(非テキストコンテンツ代替確認)・C_600.14(曖昧リンク文言)・C_500.11/C_500.12(コントラスト・拡大確認)の計6件は、対応する`item_NN()`ロジックが存在せず、`always()`という**要素条件を一切持たないページ単位の無条件リマインダー**(checkitem.xmlの`type="info"`と整合)であることが判明した。これらをmiChecker通りに実装すると内容に無関係な定型ノイズになるため、Phase 2AのC_23.1と同じ理由で**意図的に未実装**とした。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_48.0/C_48.2: 廃止要素の対象拡大。CENTER・BASEFONT・BIG・TTを`collectDecorationElementCandidate()`に追加(item_48()で実際に発火するタグのみ)。NOBRはitem_48()にチェックロジックが存在せず対象外と確認。
+  - C_4.0: 複雑画像のキーワード非依存シグナル。`item_4()`の実際の条件(alt文字列が3語以上または20文字以上、かつ非ASCII含むか30文字超、小さすぎる/細長すぎるアイコンは除外)を`isMicheckerComplexImageAltText()`/`isNormalSizedImageForComplexCheck()`として実装し、既存のキーワード一致判定に追加(いずれかを満たせば発火)。
+  - C_8.0: 配色のみでの情報伝達確認。style属性でcolorとbackground/background-colorが**両方**指定されている場合(`styleCheck()`相当)、およびfont要素のcolor/bgcolor属性が**いずれか一方でも**指定されている場合(`item_8()`相当、font要素は条件が異なる)に確認候補を追加。`text.sensory-characteristics`ルールへ対応づけ。
+  - C_57.5/C_57.6/C_58.0: リンク関連。隣接(直前・直後)する同一hrefのリンクへの統合検討(C_57.5)、要素・テキストが完全に空のリンク(C_57.6、`href="#"`始まりは既存の`link.link-broken`に委ねるため対象外)、同一リンクテキストで異なるhrefを指す場合の確認(C_58.0)を追加。
+  - **副次的なバグ修正**: `text.decoration-lines`ルールのfrontmatterに`michecker_check_ids`が未設定だったため、miCheckerモードでU/S/STRIKE/CENTER/BIG/TT候補が(実際にはC_33.1/33.2/48.2等のmiChecker項目を検出しているにもかかわらず)一切表示されなかった既存バグを発見。`MICHECKER_RULE_ALIASES`に`"text.decoration-lines" → "html-structure.deprecated-elements"`を追加して解消。
+- 検証: 陽性12+陰性含む独立検証全PASS(サブエージェント実装後、親セッションで別途Playwrightスクリプトを書いて再検証)、既存6サンプルは`links-text`のみ20→21件(C_8.0のcolor+background-color併用スタイルに該当する既存サンプル文言があり、意図した増加)、他5サンプルは完全一致。`node --check`・`node test/run-tests.js`成功。C_4.0の拡張により、既に丁寧に書かれた説明的なalt文(例:「市役所本庁舎の外観、青空の下で撮影した写真」)にも確認候補が出ることを確認したが、`confidence: low`・`patchMode: none`・人間確認前提の設計であり、miChecker本体自体がこの粒度で動作するため、ユーザーの「検出方法も完全に一致させたい」という要望に沿った意図的な挙動と判断した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: これでmiChecker検出パリティのPhase 1・2A・2Bが完了。ギャップ分析88項目のうちA(上位互換、Phase 2A訂正後15件)はそのまま、B(部分カバー、当初32件)のうち実装したもの以外(dead code 6件・意図的ノイズ回避2件)は対象外と結論。残るC(未検出、42件)への対応(Phase 3、user/info型の確認通知)は未着手。
+
+## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2A: テーブル層・色/コントラスト)
+
+- 背景・目的: Phase 1(error型14件)に続き、ギャップ分析でB分類(部分カバー)とされたテーブル構造・色/コントラスト系の検出漏れを補強した。実装前にmiChecker本体のJavaソース(eclipse-actf `CheckEngine.java`・`HtmlEvalUtil.java`)を直接取得して発火条件を裏取りしたところ、事前のギャップ分析レポートには複数の誤りがあることが判明したため、Javaソースを正として実装範囲を再確定した。
+- **ギャップ分析レポートの訂正点**(Javaソース確認により判明):
+  - C_76.0・C_500.13/14/15/16は、該当する`addCheckerProblem(...)`呼び出しがmiChecker本体のコード上でコメントアウトされており、実際には発火しないデッドコード。**未実装**(Phase 1のC_332.0と同様の扱い)。
+  - C_13.0は、実際の判定が`font[size]`属性と`table/tr/td/col`の`width`/`height`属性(px指定のCSSではなく非`%`のHTML属性)のみを対象としており、既存の廃止要素検出・`table.format-clear`(テーブル書式属性の一括除去)で既にカバー済みと判明。分類はB→**A(上位互換)に訂正**、追加実装なし。
+  - C_48.8は「古い属性全般」ではなく、実際は`img[longdesc]`と`table[summary]`(HTML5判定時)の2属性のみが対象と判明。align/bgcolor等はC_48.8としては発火しない(bgcolorは別途、一般的なアクセシビリティ改善として`text.background-color`側で独立に対応)。
+  - C_12.0/C_23.0は「レイアウト表の素朴判定」ではなく実際は「表の入れ子」の検出だったため、実装をJavaソースの定義に合わせて訂正。
+  - C_23.1(データ表がth/captionを持つ場合の確認)は、実際のコードでは正しく構造化された表にも無条件に発火する仕様のため、実装すると健全な表にまでノイズが出る。意図的に**未実装**。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_12.0/C_12.1/C_12.2 + C_23.0/C_23.2: 表の素朴な構造判定(`classifyNaiveTableStructure`: nested/1row1col/notdata/data)を、既存の`isLikelyLayoutTable()`等による構造化判定(`planTableTreatment`)とは独立したシグナルとして追加(`collectNaiveTableStructureCandidates`)。構造化経路で既に解体・再構築される表とは重複しないよう、構造化プランが立たなかった表にのみ適用。レイアウト表と推定される表でth/caption/summaryが使われている場合の確認候補も追加。
+  - C_75.0: 上記の"data"分類で、かつth要素を持たない表への確認候補(`collectThlessDataTableFallbackCandidate`)。既存の構造化経路(`shouldPreserveAsDataTable`等)に乗らない表(例: relation-explanation判定等でスキップされる表)のみを対象とする、狭いが実在するギャップ。
+  - C_48.8: `img[longdesc]`・`table[summary]`属性の検出・除去候補(`collectDeprecatedAttributeCandidates`)。
+  - C_500.17/C_500.18: `collectInlineStyleCandidate()`の`closest("table")`早期return(テーブルセル内のcolor/background-color指定を一切検出しない設計上の穴)を除去し、テーブル内外を区別せず色系style属性を検出するようにした。`bgcolor`属性も背景色指定として検出・除去対象に追加。表の構造化経路(`cloneTableCellAs`)でも、再構築後のセルにcolor/background系styleとbgcolor属性を引き継がないよう整合を取った。`hasTableFormatting`/`stripFormatting`(table.format-clear)にも`bgcolor`を追加。
+- 検証: 陽性11+陰性2の独立検証(サブエージェントの実装後、親セッションで別途Playwrightスクリプトを書いて再検証)全PASS。既存6サンプルの候補数は完全一致(回帰なし、Phase 1と同じ6/4/12/20/2/13)。`node --check`・`node test/run-tests.js`成功。C_75.0は初回の検証HTMLが既存の構造化経路に先に捕捉されてしまい一時的に不一致となったが、原因を追跡した結果テスト側のHTML選定の問題と判明し、真のギャップケース(relation-explanation判定などで構造化経路をすり抜ける表)で正しく発火することを確認した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: 残るPhase 2B(廃止要素拡大・リンク関連・画像/テキスト確認通知、C_48.0/48.2・C_19.0/500.6・C_71.0/600.0・C_600.14・C_4.0・C_500.11/12・C_8.0・C_57.5/57.6/58.0)は未着手。
+
 ## 2026-07-09: プロジェクト理解サマリーの追加
 
 - 背景・目的: ユーザーから「まずは内容を理解して整理」する依頼があったため、AGENTS.md、workstream.md、a11y-migration-kb/README.md、memory/project-state.md の内容を踏まえ、プロジェクトの目的・対象範囲・既存KB・miChecker・Goal 1〜3・人間確認との分担を再整理した。
 - 主な変更内容:
   - `memory/project-understanding-summary.md` を新規作成し、今後の検討・実装前に参照できる理解サマリーとして、公共団体向けCMS移行とアクセシビリティ修正の効率化方針を整理した。
 - 関連ファイル: `memory/project-understanding-summary.md`
-- 関連PR: (このコミットで作成予定)
+- 関連PR: #29(マージ済み)
+
+## 2026-07-09: miChecker error型チェック項目の検出パリティ実装(Phase 1)と見た目比較のサニタイズ修正
+
+- 背景・目的: ユーザーから「ルールとしてはmiCheckerのものを網羅できたが、検出・チェックの方法も全く同じにしたい。ただしgoal2-appの候補生成が上位互換であればそのままでよい」との依頼。タグ付け済み88チェック項目と`app.js`の候補生成ロジックを突き合わせるギャップ分析を実施した結果、A(上位互換)14件・B(部分カバー)32件・C(未検出)42件で、特にmiCheckerが機械的に確定検出する「error型」なのに未検出・不完全なものが14件あった。本エントリはそのerror型14件(Phase 1)の実装。発火条件はmiChecker本体のJavaソース(eclipse-actf `CheckEngine.java`のitem_NN()メソッド群)で裏取りした。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_33.0/C_34.0: blink・marquee要素の検出とunwrap候補(blinkはmiChecker本体と同じくテキスト子孫がある場合のみ発火)。
+  - C_36.0/C_36.1: `<meta http-equiv="refresh">`の検出(content値にurlがあればリダイレクト、無ければ自動リロード)と除去候補。
+  - C_422.0/C_423.0: fragment全体でのid・accesskey属性値の重複検出(2件目以降を一意化が必要な候補として提示、patchMode: none)。
+  - C_51.0/C_51.4: frame要素のtitle欠落・空白検出。frame要素はframeset外ではHTMLパーサーが完全に破棄しDOM走査では原理的に検出できない(貼り付けた時点で作業用HTMLからも消える)ことが判明したため、生入力HTMLをframeset文書として再解析する`collectFrameElementNotices()`を新設し、「CMS本文には取り込めない」旨の注意(`iframe.frame-unsupported`、miCheckerモードでは`html-structure.iframe-frame-title`へ対応づけ)として出力する方式にした。
+  - C_57.2: 読み上げ可能テキストの無いリンクの検出。テキストノード+img[alt]+aria-label/aria-labelledby参照先を合成した「読み上げ可能テキスト」が空のリンクを候補化(`computeLinkAccessibleText()`)。
+  - C_331.0/C_331.1: th要素のセル単位scope検査(scope欠落、col/row/colgroup/rowgroup以外の不正値)。従来の表単位boolean判定(hasScope)は変更せず検出を追加。
+  - C_332.1/C_332.2: headers属性の参照検証(表内に該当idが無い/参照先がth・tdでない)。なおC_332.0はCheckEngine.javaのitem_332()では発火しない(C_332.1/C_332.2のみ実装されている)ことを確認し、本実装でも対象外とした。
+  - **バグ修正**: 候補詳細の「見た目の比較」が候補HTMLを親ページへ`innerHTML`で直接挿入しており、meta refresh候補のプレビュー表示でアプリのページ自体が外部URLへ遷移する問題をPlaywright検証中に発見。`sanitizeVisualPreviewHtml()`を新設し、挿入前にmeta/script/base/link要素・on*属性・javascript: URLを除去するようにした。
+  - 新候補の「この候補で変わること」要約文言を追加(従来は廃止要素候補等にも見出し系の汎用文言が表示されていた)。
+- 検証: 陽性13ケース(各チェック項目の違反HTML)+陰性6ケース(違反なしHTML・空blink・title付きframe等での偽陽性なし)+miCheckerモード動作の計21ケースをPlaywrightで全件PASS。既存6サンプルの候補数は完全一致(回帰なし)。`node --check`・`node test/run-tests.js`成功。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: ギャップ分析の全量(88項目のA/B/C分類表・B/C項目の実装メモ)はセッション内スクラッチパッドの`michecker-parity-gap-analysis.md`に基づく。残るPhase 2(warning/B系32件の補強)・Phase 3(user/info型の確認通知)は未着手。summary属性系(C_25.2/C_25.4)はKBの廃止属性方針と衝突するため方針判断待ち。
 
 ## 2026-07-09: フォーム・title・lang属性をKBのコンテンツ対象外として整理、逆引きタグの追加補強
 

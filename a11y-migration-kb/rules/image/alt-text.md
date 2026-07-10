@@ -11,7 +11,7 @@ processing_class: hybrid
 municipality_specific: false
 cms_auto: false
 origin: manual
-michecker_check_ids: ["C_71.0", "C_80.0", "C_89.1", "C_600.0"]
+michecker_check_ids: ["C_71.0", "C_89.1", "C_600.0", "C_300.1"]
 related: [/rules/image/caption.md, /rules/image/complex-image-report.md, /wcag/ch3-images.md]
 ---
 
@@ -42,3 +42,12 @@ related: [/rules/image/caption.md, /rules/image/complex-image-report.md, /wcag/c
 ```after
 祖父母と親子の5人が揃った集合写真
 ```
+
+## ケース4: 画像マップ(area要素)のalt属性
+```before
+<map name="siteMap"><area shape="rect" coords="0,0,100,50" href="/kosodate.html" alt="画像"></map>
+```
+```after
+<map name="siteMap"><area shape="rect" coords="0,0,100,50" href="/kosodate.html" alt="子育て支援ページへ"></map>
+```
+ポイント: 画像マップのarea要素も、通常の画像alt属性と同じ基準（内容・リンク先が分かる具体的な代替テキスト）で修正する。

@@ -22,6 +22,7 @@
     "link.link-broken",
     "file.external-pdf",
     "iframe.cms-review",
+    "iframe.frame-unsupported",
     "text.bold",
     "text.note-symbol",
   ]);
@@ -530,8 +531,13 @@
 
   // 画面独自の擬似ルールIDを、miChecker関連判定に使うKBルールIDへ対応づける。
   // iframe.cms-reviewはCMS運用上の確認事項でmiCheckerのチェック項目ではないため、対応先なし。
+  // text.decoration-lines: KB上はmichecker_check_idsが空だが、実体はU/S/STRIKE要素やCENTER/BIG/TT等の
+  // 廃止要素(miChecker C_33.1/C_33.2/C_48.2)を検出しているため、html-structure.deprecated-elementsへ
+  // 対応づけてmiCheckerモードでも候補が表示されるようにする。
   const MICHECKER_RULE_ALIASES = {
     "iframe.title": "html-structure.iframe-frame-title",
+    "iframe.frame-unsupported": "html-structure.iframe-frame-title",
+    "text.decoration-lines": "html-structure.deprecated-elements",
   };
 
   function isMicheckerRelevantRule(ruleId) {
@@ -604,7 +610,231 @@
     collectLinkCandidates(fragment, candidates);
     collectIframeCandidates(fragment, candidates);
     collectTextCandidates(fragment, candidates);
+    collectListStructureCandidates(fragment, candidates);
+    collectMetaRefreshCandidates(fragment, candidates);
+    collectDuplicateAttributeCandidates(fragment, candidates);
+    collectFrameElementNotices(candidates);
+    collectDeprecatedAttributeCandidates(fragment, candidates);
+    collectEmptyLinkCandidates(fragment, candidates);
+    collectDuplicateLinkTextCandidates(fragment, candidates);
     return candidates;
+  }
+
+  // miChecker C_57.6(item_57()): リンク内に要素もテキストも存在しない完全に空のリンク
+  // (例: <a href="/x"></a>)。item_57()は子ノード・img子孫のいずれも持たないリンクをhrefごとに
+  // グループ化して報告するが、本実装では空リンク1件ごとに削除/内容追加の確認候補を出す。
+  // href="#"始まりのリンク(item_57()がerrorCountのみ加算し問題を出さない区分。link.link-brokenで
+  // 別途拾われる)は対象外にする。
+  function collectEmptyLinkCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("a[href]").forEach((link) => {
+      const href = (link.getAttribute("href") || "").trim();
+      if (!href || href.startsWith("#") || link.childNodes.length > 0) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "link.link-purpose-standalone",
+          element: link,
+          message: "リンク内に要素やテキストが存在しません。",
+          reason: "リンク内が完全に空のため、スクリーンリーダーでも視覚的にも内容が伝わりません。リンク内に読み上げ可能なテキストや画像(alt付き)を追加するか、不要であればリンク自体を削除してください。",
+          afterHtml: link.outerHTML,
+          confidence: "medium",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+  }
+
+  // miChecker C_58.0(item_58()): 異なる複数のURLへのリンクに同一のリンクテキストを使っているケース。
+  // 読み上げ可能テキスト(computeLinkAccessibleText)ごとにグループ化し、hrefが2種類以上ある場合、
+  // 最初に現れたhref以外の(新しく現れた)hrefを持つリンクごとに確認候補を出す
+  // (collectDuplicateAttributeCandidatesFor()と同様、最初の出現は基準として残す)。
+  function collectDuplicateLinkTextCandidates(fragment, candidates) {
+    const groups = new Map();
+    fragment.content.querySelectorAll("a[href]").forEach((link) => {
+      const text = computeLinkAccessibleText(link, fragment.content);
+      const href = (link.getAttribute("href") || "").trim();
+      if (!text || !href) {
+        return;
+      }
+      if (!groups.has(text)) {
+        groups.set(text, []);
+      }
+      groups.get(text).push({ element: link, href });
+    });
+
+    groups.forEach((entries, text) => {
+      const uniqueHrefs = new Set(entries.map((entry) => entry.href));
+      if (uniqueHrefs.size < 2) {
+        return;
+      }
+      const seenHrefs = new Set([entries[0].href]);
+      entries.slice(1).forEach((entry) => {
+        if (seenHrefs.has(entry.href)) {
+          return;
+        }
+        seenHrefs.add(entry.href);
+        candidates.push(
+          makeCandidate({
+            ruleId: "link.link-purpose-standalone",
+            element: entry.element,
+            message: `同じリンクテキスト「${text}」で異なるリンク先が使われています。`,
+            reason: "同一テキストのリンクが異なる遷移先を指すと、利用者がリンク先を誤認する可能性があります。リンクテキストにリンク先固有の情報(年度・ファイル名等)を含めて区別できるようにしてください。",
+            afterHtml: entry.element.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      });
+    });
+  }
+
+  // miChecker C_48.8: 廃止属性の除去。checkitem.xmlの説明文言は「古い属性全般」だが、CheckEngine.java
+  // (item_3()のlongdesc判定・item_23()のsummary判定)を実際に確認すると、HTML5判定時に発火するのは
+  // img要素のlongdesc属性とtable要素のsummary属性の2つのみである。align/valign/width/height/border/
+  // cellpadding/cellspacing等のテーブル書式属性はhasTableFormatting()/stripFormatting()
+  // (table.format-clear)側で別途、無条件に検出・除去しており、miChecker本体のC_48.8としては
+  // 対象外(発火しない)ため、本実装でもlongdesc・summaryの2属性のみを対象にする。
+  function collectDeprecatedAttributeCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("img[longdesc]").forEach((img) => {
+      const clone = img.cloneNode(true);
+      clone.removeAttribute("longdesc");
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.deprecated-elements",
+          element: img,
+          message: "img要素に廃止されたlongdesc属性が使われています。",
+          reason: "longdesc属性はHTML Living Standardで廃止されています。詳細な説明が必要な場合は、本文中にテキストで補足するか、alt属性の見直しで対応してください。",
+          afterHtml: clone.outerHTML,
+          patch: { type: "remove-attribute", name: "longdesc" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
+
+    fragment.content.querySelectorAll("table[summary]").forEach((table) => {
+      if (!normalizeText(table.getAttribute("summary") || "")) {
+        return;
+      }
+      const clone = table.cloneNode(true);
+      clone.removeAttribute("summary");
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.deprecated-elements",
+          element: table,
+          message: "table要素に廃止されたsummary属性が使われています。",
+          reason: "summary属性はHTML Living Standardで廃止されています。表の概要はcaption要素または前後の本文で提供してください。",
+          afterHtml: clone.outerHTML,
+          patch: { type: "remove-attribute", name: "summary" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
+  }
+
+  // miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白。
+  // frame要素はframeset外ではHTMLパーサーが破棄するため、通常のfragment走査では検出できない
+  // (貼り付けた時点で作業用HTMLからも自動的に消える)。生の入力HTMLをframeset文書として
+  // 解析し直して検出し、修正候補ではなく「注意」(patchMode: none)として出力する。
+  function collectFrameElementNotices(candidates) {
+    const source = state.sourceHtml || "";
+    if (!/<frame[\s/>]/i.test(source)) {
+      return;
+    }
+    const doc = new DOMParser().parseFromString(`<frameset>${source}</frameset>`, "text/html");
+    doc.querySelectorAll("frame").forEach((frame) => {
+      const title = normalizeText(frame.getAttribute("title") || "");
+      const titleIssue = !title
+        ? "title属性が無い、または空白のみのため、miCheckerでは「frame要素にtitle属性がありません」と指摘されます。"
+        : "";
+      candidates.push(
+        makeCandidate({
+          ruleId: "iframe.frame-unsupported",
+          element: frame,
+          message: "frame要素が含まれています。CMS本文には取り込めません。",
+          reason: `frame要素はCMSの本文HTMLでは利用できず、貼り付けた時点で自動的に失われます。フレーム内の各ページの内容を、通常の本文コンテンツとして再構成してください。${titleIssue}`,
+          afterHtml: "",
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+  }
+
+  // miChecker C_36.0/C_36.1: <meta http-equiv="Refresh"> による自動リロード・自動リダイレクト。
+  // content値に"url"が含まれていればページ遷移(リダイレクト)、含まれていなければ単純な自動リロードとして扱う。
+  function collectMetaRefreshCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("meta[http-equiv]").forEach((meta) => {
+      const httpEquiv = (meta.getAttribute("http-equiv") || "").trim().toLowerCase();
+      if (httpEquiv !== "refresh") {
+        return;
+      }
+      const content = meta.getAttribute("content") || "";
+      const isRedirect = /url/i.test(content);
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.embedded-script-behavior",
+          element: meta,
+          message: isRedirect
+            ? "自動的にページを切り替えるmeta refresh（リダイレクト）が含まれています。"
+            : "周期的にページを再読み込みするmeta refreshが含まれています。",
+          reason: isRedirect
+            ? "自動的なページ遷移は利用者の操作を妨げるため、meta refreshによるリダイレクトを削除し、必要であれば通常のリンクを設置します。"
+            : "自動リロードは利用者が読んでいる内容を突然更新してしまうため、meta refreshを削除し、必要であれば更新用のリンクやボタンを設置します。",
+          afterHtml: "",
+          patch: { type: "remove-element" },
+          confidence: "high",
+          requiresHumanReview: false,
+        })
+      );
+    });
+  }
+
+  // miChecker C_422.0/C_423.0: id・accesskey属性値の重複。
+  // 複数の案件・記事を貼り付けたページで同じidやaccesskeyが重複しやすいため、fragment全体で値ごとに集計する。
+  // 最初の出現は基準として残し、2件目以降を「一意な値へ書き換えが必要」な候補として提示する（patchMode: noneで自動置換はしない）。
+  function collectDuplicateAttributeCandidates(fragment, candidates) {
+    collectDuplicateAttributeCandidatesFor(fragment, candidates, "id", "id属性");
+    collectDuplicateAttributeCandidatesFor(fragment, candidates, "accesskey", "accesskey属性");
+  }
+
+  function collectDuplicateAttributeCandidatesFor(fragment, candidates, attrName, attrLabel) {
+    const groups = new Map();
+    fragment.content.querySelectorAll(`[${attrName}]`).forEach((element) => {
+      const value = (element.getAttribute(attrName) || "").trim();
+      if (!value) {
+        return;
+      }
+      if (!groups.has(value)) {
+        groups.set(value, []);
+      }
+      groups.get(value).push(element);
+    });
+
+    groups.forEach((elements, value) => {
+      if (elements.length < 2) {
+        return;
+      }
+      elements.slice(1).forEach((element, index) => {
+        candidates.push(
+          makeCandidate({
+            ruleId: "html-structure.duplicate-id-accesskey",
+            element,
+            message: `${attrLabel}の値「${value}」が他の要素と重複しています（${elements.length}件）。`,
+            reason: `${attrLabel}はページ内で一意である必要があります。ページ内アンカーやラベルの参照先が変わらないか確認しながら、値を一意になるよう書き換えてください（例: 「${value}-${index + 2}」）。`,
+            afterHtml: element.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      });
+    });
   }
 
   async function enrichLinkTitleCandidates(items) {
@@ -805,6 +1035,25 @@
           })
         );
       }
+
+      // miChecker C_80.0(item_80(): alt.length > 150): 代替テキストが150文字を超える画像は、
+      // 詳細説明を本文側(aria-describedby等)に分離することを検討する確認候補を出す。
+      // 「詳細な説明が必要」という主旨が既存のimage.complex-image-report(C_4.0)候補と共通のため、
+      // 別ruleId(image.alt-text)ではなくこちらへ寄せる。
+      if (alt !== null && alt.length > 150) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.complex-image-report",
+            element: img,
+            message: "代替テキストが150文字を超えています。",
+            reason: "長い代替テキストは読み上げの負担が大きくなります。aria-describedby等を使って、画像の詳細な説明を本文側に分離できないか検討してください。",
+            afterHtml: img.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
     });
 
     fragment.content.querySelectorAll("figure, p, div").forEach((container) => {
@@ -909,6 +1158,40 @@
     });
 
     collectContextualHeadingCandidates(fragment, candidates);
+    collectHeadingContentQualityCandidates(fragment, candidates);
+  }
+
+  // miChecker C_15.0/C_388.0/C_500.4(html-structure.heading-content-quality): 見出し(h1〜h6)の内容が
+  // セクションを説明しているかは機械判定できないため、miChecker本体は原則すべての見出しを確認対象として
+  // 通知する(item_15()はheadings配列を無条件にaddCheckerProblemへ渡す)。本実装ではノイズを抑えるため、
+  // ユーザー承認済みの方針として「極端に短い(正規化後2文字以下)」または「記号・句読点のみ」の見出しに限定し、
+  // 低確信度(patchMode: none)の確認候補として出す。空の見出しはcollectContextualHeadingCandidates側の
+  // isEmptyHeadingSection()判定と重複しないよう対象外にする。
+  function collectHeadingContentQualityCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((heading) => {
+      const text = normalizeText(heading.textContent);
+      if (!text) {
+        return;
+      }
+      const isTooShort = Array.from(text).length <= 2;
+      const isSymbolOnly = !/[\p{L}\p{N}]/u.test(text);
+      if (!isTooShort && !isSymbolOnly) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-content-quality",
+          element: heading,
+          message: isSymbolOnly ? "見出しのテキストが記号のみで構成されています。" : "見出しのテキストが極端に短くなっています。",
+          reason:
+            "見出し(h1〜h6)は対応するセクションの内容を説明する文言にします。テキストを太字にするためだけの目的で見出しタグを使っている場合は、見出しタグではなくCMSの装飾機能に置き換えてください。",
+          afterHtml: heading.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
   }
 
   function collectContextualHeadingCandidates(fragment, candidates) {
@@ -1030,10 +1313,62 @@
   }
 
   function collectLinkCandidates(fragment, candidates) {
+    // miChecker C_57.5: 隣接(直前・直後)のhref付きリンクが同一URLかつ読み上げ可能テキストを持つ場合、
+    // 「1つのリンクに統合できないか」の確認に振り分ける(item_57()のsequenceOk判定)。
+    // 文書順のhref付きリンク一覧をあらかじめ計算しておく。
+    const hrefLinkList = [...fragment.content.querySelectorAll("a[href]")];
+    const hrefLinkTexts = hrefLinkList.map((el) => computeLinkAccessibleText(el, fragment.content));
+    const hrefLinkHrefs = hrefLinkList.map((el) => (el.getAttribute("href") || "").trim());
+    const hrefLinkIndex = new Map(hrefLinkList.map((el, idx) => [el, idx]));
+
     fragment.content.querySelectorAll("a").forEach((link) => {
       const text = normalizeText(link.textContent);
       const href = link.getAttribute("href") || "";
       const hrefInfo = classifyHref(href);
+
+      // miChecker C_57.2/C_57.5: リンク内に読み上げ可能なテキストが無い(画像のみ・アイコンのみ等)。
+      // テキストノード + img[alt] + aria-label/aria-labelledby を合成した「読み上げ可能テキスト」で判定する。
+      // 完全に要素・テキストが空のリンク(item_57()のC_57.6区分)はcollectEmptyLinkCandidates()で別途
+      // 扱うため、ここでは子ノードが1つ以上ある(画像等はあるがalt等の読み上げテキストが無い)場合のみ対象にする。
+      if (!computeLinkAccessibleText(link, fragment.content) && link.childNodes.length > 0) {
+        const idx = hrefLinkIndex.get(link);
+        let adjacentText = null;
+        if (idx !== undefined) {
+          const currentHref = hrefLinkHrefs[idx];
+          if (idx > 0 && hrefLinkHrefs[idx - 1] === currentHref && hrefLinkTexts[idx - 1]) {
+            adjacentText = hrefLinkTexts[idx - 1];
+          } else if (idx + 1 < hrefLinkList.length && hrefLinkHrefs[idx + 1] === currentHref && hrefLinkTexts[idx + 1]) {
+            adjacentText = hrefLinkTexts[idx + 1];
+          }
+        }
+        if (adjacentText) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "link.link-purpose-standalone",
+              element: link,
+              message: "直前または直後に同じリンク先へのリンクがあります。",
+              reason: `読み上げ可能なテキストが無いリンクですが、直前または直後にある「${adjacentText}」への同一リンク先のリンクと1つに統合できないか検討してください。統合しない場合は、このリンクにも読み上げ可能なテキストを追加してください。`,
+              afterHtml: link.outerHTML,
+              confidence: "medium",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        } else {
+          candidates.push(
+            makeCandidate({
+              ruleId: "link.link-purpose-standalone",
+              element: link,
+              message: "リンク内に読み上げ可能なテキストがありません。",
+              reason: "画像のみ・アイコンのみのリンクなど、読み上げ可能なテキストが無いリンクはスクリーンリーダーで内容が伝わりません。alt属性の追加やリンクテキストの追加で、リンク先が分かるようにしてください。",
+              afterHtml: link.outerHTML,
+              confidence: "medium",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
+      }
 
       const cleanedFileText = removeFileMeta(text);
       if (cleanedFileText !== text) {
@@ -1280,6 +1615,11 @@
         );
       }
 
+      // miChecker C_331.0/C_331.1/C_332.1/C_332.2: th単位のscope検査とheaders参照検証。
+      // 表全体をデータ表/レイアウト表として再構築する下記のplanTableTreatment判定とは独立に、
+      // 個々のth・headers属性を機械的に走査する(表単位のhasScope判定は変更しない)。
+      collectTableHeaderScopeCandidates(table, candidates);
+
       const plan = planTableTreatment(table);
 
       if (plan.kind === "structural") {
@@ -1297,6 +1637,11 @@
         );
         return;
       }
+
+      // miChecker C_12.0/C_12.1/C_12.2/C_23.0/C_23.2/C_75.0: 上のplanTableTreatment()が
+      // 「構造的な解体・再構築が必要」と判断しなかった表に対して、miChecker本体の素朴な構造判定
+      // (nested/1row1col/notdata/data)を独立したシグナルとして適用する。
+      collectNaiveTableStructureCandidates(table, candidates);
 
       if (hasTableFormatting(table)) {
         const clone = table.cloneNode(true);
@@ -1332,6 +1677,26 @@
             requiresHumanReview: true,
           })
         );
+      } else {
+        // miChecker C_25.3(table.caption): captionが既に存在する表について、その内容が表を特定できる
+        // ものかを確認する。「表」「一覧」等、内容を特定しない汎用語のみのcaptionに限定して低確信度で
+        // フラグする(具体的な語を含むcaption、例:「対象者一覧」は対象外)。
+        const captionElement = table.querySelector("caption");
+        const captionText = normalizeText(captionElement.textContent);
+        if (isGenericTableCaptionText(captionText)) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.caption",
+              element: captionElement,
+              message: "表のキャプションが汎用的で、この表の内容を特定できません。",
+              reason: "「表」「一覧」などの語だけでは、この表が何を表しているか特定できません。表の内容が分かる具体的なキャプションに修正してください。",
+              afterHtml: captionElement.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
       }
     });
   }
@@ -1396,6 +1761,171 @@
     }
 
     return { kind: "data" };
+  }
+
+  // miChecker C_331.0/C_331.1: th要素はscope属性(col/row/colgroup/rowgroup)を持つ必要がある。
+  // miChecker C_332.1/C_332.2: headers属性の値は、同じ表内に存在するth・td要素のidを指す必要がある。
+  // (checkitem.xmlにはC_332.0も定義されているが、miChecker本体のCheckEngine.java item_332()では
+  //  C_332.1/C_332.2のみが発火し、C_332.0は実装上呼び出されない。そのため本実装でもC_332.1/C_332.2相当のみを検出する。)
+  function collectTableHeaderScopeCandidates(table, candidates) {
+    table.querySelectorAll("th").forEach((th) => {
+      if (!th.hasAttribute("scope")) {
+        const suggested = guessThScopeValue(th);
+        const clone = th.cloneNode(true);
+        clone.setAttribute("scope", suggested);
+        candidates.push(
+          makeCandidate({
+            ruleId: "table.th-scope",
+            element: th,
+            message: "th要素にscope属性がありません。",
+            reason: "表の見出しセル(th)には、見出しの方向を示すscope属性(col/row/colgroup/rowgroup)が必要です。表の構造を確認し、正しい方向を設定してください。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "scope", value: suggested },
+            confidence: "low",
+            requiresHumanReview: true,
+          })
+        );
+        return;
+      }
+
+      const scopeValue = normalizeText(th.getAttribute("scope") || "");
+      if (!/^(row|col|rowgroup|colgroup)$/.test(scopeValue)) {
+        const suggested = guessThScopeValue(th);
+        const clone = th.cloneNode(true);
+        clone.setAttribute("scope", suggested);
+        candidates.push(
+          makeCandidate({
+            ruleId: "table.th-scope",
+            element: th,
+            message: `th要素のscope属性値「${scopeValue}」が不正です。`,
+            reason: "scope属性にはcol・row・colgroup・rowgroupのいずれかを指定します。表の構造を確認し、正しい方向に修正してください。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "scope", value: suggested },
+            confidence: "low",
+            requiresHumanReview: true,
+          })
+        );
+      }
+    });
+
+    table.querySelectorAll("[headers]").forEach((cell) => {
+      const ids = (cell.getAttribute("headers") || "").split(/\s+/).filter(Boolean);
+      ids.forEach((id) => {
+        let referred = null;
+        try {
+          referred = table.querySelector(`#${cssEscape(id)}`);
+        } catch {
+          referred = null;
+        }
+        if (!referred) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.th-scope",
+              element: cell,
+              message: `headers属性が参照するid「${id}」が表内に見つかりません。`,
+              reason: "headers属性の値には、同じ表内にある見出しセル(th)のid値を指定します。参照先が存在しない、または表外を指している場合は、idの記載やth側へのid付与を見直してください。",
+              afterHtml: cell.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        } else if (!["TH", "TD"].includes(referred.tagName)) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "table.th-scope",
+              element: cell,
+              message: `headers属性が参照する要素(id="${id}")がth・td要素ではありません(<${referred.tagName.toLowerCase()}>)。`,
+              reason: "headers属性はth・td要素のidだけを参照できます。参照先を見出しセル(th)またはデータセル(td)に修正してください。",
+              afterHtml: cell.outerHTML,
+              confidence: "low",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
+      });
+    });
+
+    collectThLayoutPatternCandidate(table, candidates);
+  }
+
+  // miChecker C_331.2(item_331()のisSimpleTable2): th要素が1行目・1列目のみにある単純な表
+  // (1行目: 左上のみtd、それ以外は全てth / 2行目以降: 各行の先頭セルのみth(rowspan無し)、
+  // 残りは全てtd)を検出し、左上のtd要素にテキストがあれば「削除するかth要素に変更することを
+  // 検討」の確認候補を出す。isLikelyLayoutTable()と判定される表は対象外にする
+  // (miChecker本体もdataTableListのみを対象にitem_331()を実行するため)。
+  function collectThLayoutPatternCandidate(table, candidates) {
+    if (isLikelyLayoutTable(table)) {
+      return;
+    }
+    const grid = buildExpandedTableGrid(table);
+    if (grid.length < 2) {
+      return;
+    }
+    const firstRow = grid[0];
+    if (!firstRow || firstRow.length < 2) {
+      return;
+    }
+
+    const topLeft = firstRow[0];
+    if (!topLeft || !topLeft.isOrigin || topLeft.cell.tagName !== "TD") {
+      return;
+    }
+    const topLeftText = normalizeText(topLeft.text);
+    if (!topLeftText) {
+      return;
+    }
+
+    // 1行目(左上を除く)は、その行で始まる(isOrigin)セルが全てth。
+    const columnHeaderCells = firstRow.slice(1).filter((item) => item && item.rowIndex === 0);
+    if (columnHeaderCells.length === 0 || !columnHeaderCells.every((item) => item.isHeader)) {
+      return;
+    }
+
+    // 1列目(1行目を除く)は、各行の先頭セルが全てth(その行で始まる、rowspanで上から続くものは除く)。
+    const rowHeaderCells = grid.slice(1).map((row) => row?.[0]);
+    if (rowHeaderCells.length === 0 || rowHeaderCells.some((item) => !item || !item.isOrigin || !item.isHeader)) {
+      return;
+    }
+
+    // 1行目・1列目以外にth要素が無いこと(単純な行列見出しパターン以外は対象外)。
+    const hasStrayHeader = grid.some((row, rowIndex) =>
+      row.some((item, columnIndex) => item?.isOrigin && item.isHeader && rowIndex !== 0 && columnIndex !== 0)
+    );
+    if (hasStrayHeader) {
+      return;
+    }
+
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.th-scope",
+        element: topLeft.cell,
+        message: "th要素が1行目・1列目のみにある単純な表の左上のtd要素にテキストが存在しています。",
+        reason: "この左上のセルはどの見出し(th)の方向にも対応しない位置です。このセルのテキストを削除するか、th要素に変更することを検討してください。",
+        afterHtml: topLeft.cell.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
+  function guessThScopeValue(th) {
+    const row = th.parentElement && th.parentElement.tagName === "TR" ? th.parentElement : null;
+    if (th.closest("thead")) {
+      return "col";
+    }
+    const cellIndex = row ? [...row.children].indexOf(th) : 0;
+    if (cellIndex === 0) {
+      return "row";
+    }
+    const table = th.closest("table");
+    const firstRow = table?.querySelector("tr");
+    if (firstRow && row === firstRow) {
+      return "col";
+    }
+    return "col";
   }
 
   function shouldPreserveAsDataTable(table) {
@@ -1711,7 +2241,7 @@
   function cloneTableCellAs(cell, tagName, scope) {
     const clone = document.createElement(tagName);
     [...cell.attributes].forEach((attr) => {
-      if (!["scope", "headers"].includes(attr.name.toLowerCase())) {
+      if (!["scope", "headers", "bgcolor"].includes(attr.name.toLowerCase())) {
         clone.setAttribute(attr.name, attr.value);
       }
     });
@@ -1719,6 +2249,10 @@
       clone.setAttribute("scope", scope);
     }
     clone.innerHTML = cell.innerHTML;
+    // miChecker C_500.17/C_500.18: 色・背景色の指定は表の再構築後にも引き継がない
+    // (collectInlineStyleCandidate()がテーブルセル内の色系styleも候補化・除去対象にしたことと整合を取る。
+    //  bgcolor属性は上のattributesコピーから既に除外している)。
+    removeStyleProperties(clone, ["color", "background", "background-color"]);
     return clone;
   }
 
@@ -1934,8 +2468,132 @@
     return "low";
   }
 
+  // miChecker C_12.0/C_12.1/C_12.2: 表の素朴な構造判定(HtmlEvalUtil.javaのis1Row1ColTable/isDataTable相当)。
+  // 既存のisLikelyLayoutTable()(border=0・セル内ブロック等の装飾/レイアウト手掛かりに基づく判定)とは
+  // 完全に独立したシグナルとして、以下の4種類に分類する。
+  //   - "nested":  表の中に別の表が入れ子になっている(C_12.0の対象母集団)
+  //   - "1row1col": 行が1つしかない、または全ての行が0〜1セルしか持たない単純な構造(C_12.1)
+  //   - "notdata": フォーム部品を含む・td要素が1つも無い・長文(250字超)や大量の画像(11枚以上)を含む
+  //     セルがあり、データ表と言い切れない構造(C_12.2)
+  //   - "data":    上記のいずれにも該当しない、複数行・複数列を持つデータ表相当の構造
+  // (miChecker本体はtr要素数のみで「1行」を判定し、列数の多寡は問わない点に注意。単一行で3列という
+  //  表も、tr数が1のためC_12.1側に分類される。)
+  function classifyNaiveTableStructure(table) {
+    if (table.querySelector("table")) {
+      return "nested";
+    }
+    const rows = [...table.querySelectorAll("tr")];
+    const rowCellCounts = rows.map(
+      (row) => [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName)).length
+    );
+    if (rows.length <= 1 || rowCellCounts.every((count) => count <= 1)) {
+      return "1row1col";
+    }
+    if (table.querySelector("form, input, select, textarea")) {
+      return "notdata";
+    }
+    const cells = [...table.querySelectorAll("td, th")];
+    if (!cells.some((cell) => cell.tagName === "TD")) {
+      return "notdata";
+    }
+    const hasNonDataCell = cells.some((cell) => {
+      const text = normalizeText(cell.textContent || "");
+      return text.length > 250 || cell.querySelectorAll("img").length > 10;
+    });
+    return hasNonDataCell ? "notdata" : "data";
+  }
+
+  // miChecker C_12.0/C_12.1/C_12.2 + C_23.0/C_23.2: classifyNaiveTableStructure()でレイアウト表と
+  // 推定される表(nested/1row1col/notdata)に対し確認候補(patchMode: none)を追加する。加えて、その表が
+  // th・caption・summary属性を持つ場合は「レイアウト表であればこれらを使わない」旨の警告(C_23.0/C_23.2相当)
+  // も別候補として追加する。
+  //
+  // 注: miChecker本体のitem_23()では、通常のデータ表(bottom_data_tables、本実装の"data"分類)がth・caption
+  // を持つ場合にもC_23.1として同種の確認を発火するが、これは正しく構造化された表(th・captionを適切に使って
+  // いる、望ましい状態の表)にも無条件に発火し候補数が過大になるため、本実装ではレイアウト表と推定した表
+  // (nested/1row1col/notdata)に限定してC_23相当の警告を出す。"data"分類の表はcollectThlessDataTableFallback
+  // Candidate()でth欠落(C_75.0)のみ確認する。
+  //
+  // 呼び出し元(collectTableCandidates)では、既存のisLikelyLayoutTable()等に基づく構造的解体候補
+  // (plan.kind === "structural")が生成されなかった表に対してのみ本関数を呼ぶため、既存の
+  // table.layout-table/table.th-scope候補と重複することはない。
+  function collectNaiveTableStructureCandidates(table, candidates) {
+    const classification = classifyNaiveTableStructure(table);
+    if (classification === "data") {
+      collectThlessDataTableFallbackCandidate(table, candidates);
+      return;
+    }
+
+    const structureMessages = {
+      nested: "表の中に別の表が入れ子になっています。",
+      "1row1col": "行が1つ、または全ての行が1セル以下しかない単純な構造の表です。",
+      notdata: "フォーム部品を含む、または長文・多数の画像を含むセルがあり、データ表と言い切れない構造の表です。",
+    };
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.layout-table",
+        element: table,
+        message: `${structureMessages[classification]}レイアウト目的で使われていないか確認してください。`,
+        reason:
+          "miCheckerの素朴な構造判定(行・列数やデータセルとして扱えるか)に基づく確認です。内容の対応関係を表す表であれば問題ありませんが、見た目の配置調整のためだけに表を使っている場合はスタイルシートでの表現に置き換えてください。",
+        afterHtml: table.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+
+    const hasHeaderCell = Boolean(table.querySelector("th"));
+    const hasCaption = Boolean(table.querySelector(":scope > caption"));
+    const hasSummary = Boolean(normalizeText(table.getAttribute("summary") || ""));
+    if (hasHeaderCell || hasCaption || hasSummary) {
+      const used = [hasHeaderCell && "th要素", hasCaption && "caption要素", hasSummary && "summary属性"]
+        .filter(Boolean)
+        .join("・");
+      candidates.push(
+        makeCandidate({
+          ruleId: "table.layout-table",
+          element: table,
+          message: `レイアウト目的の可能性がある表で${used}が使われています。`,
+          reason: `この表がレイアウト目的であれば、${used}は使用せず通常のテキストとして表現してください。内容の対応関係を表すデータ表であれば、この指摘は無視して構いません。`,
+          afterHtml: table.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    }
+  }
+
+  // miChecker C_75.0: classifyNaiveTableStructure()が"data"(データ表相当の構造)と判定した表のうち、
+  // th要素を1つも持たない表に、th提供またはレイアウト表としての解体を検討する確認候補を追加する。
+  // 既存のshouldPreserveAsDataTable()/tableNeedsDataTableSemantics()による構造化(caption/thead/th/scope
+  // の一括付与)よりも緩い判定(見出しらしいセルの有無を問わない)のため、構造化経路に乗らない小規模な表
+  // (例: 1列の名簿等)もここで拾える。
+  function collectThlessDataTableFallbackCandidate(table, candidates) {
+    if (table.querySelector("th")) {
+      return;
+    }
+    candidates.push(
+      makeCandidate({
+        ruleId: "table.th-scope",
+        element: table,
+        message: "表にth要素(見出しセル)がありません。",
+        reason:
+          "データを表す表であれば、見出しとなるセルをth要素にしscope属性を設定してください。レイアウト目的で表を使っている場合は、表自体を解体して通常のテキストとして表現してください。",
+        afterHtml: table.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
+  // "iframe"に加え"frame"も対象にする(miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白)。
+  // 判定ロジックはiframeと共通のため、タグ名だけメッセージに反映して流用する。
   function collectIframeCandidates(fragment, candidates) {
-    fragment.content.querySelectorAll("iframe").forEach((iframe) => {
+    fragment.content.querySelectorAll("iframe,frame").forEach((iframe) => {
+      const tagLabel = iframe.tagName.toLowerCase();
       const title = normalizeText(iframe.getAttribute("title") || "");
       if (!title || isGenericIframeTitle(title)) {
         const clone = iframe.cloneNode(true);
@@ -1945,8 +2603,8 @@
           makeCandidate({
             ruleId: "iframe.title",
             element: iframe,
-            message: title ? "iframeのtitle属性が汎用的です。" : "iframeにtitle属性がありません。",
-            reason: "iframeは内容や目的が分かるtitle属性が必要です。リンク先や埋め込み内容を確認して具体化します。",
+            message: title ? `${tagLabel}要素のtitle属性が汎用的です。` : `${tagLabel}要素にtitle属性がありません。`,
+            reason: `${tagLabel}要素は内容や目的が分かるtitle属性が必要です。リンク先や埋め込み内容を確認して具体化します。`,
             afterHtml: clone.outerHTML,
             patch: { type: "set-attribute", name: "title", value: suggestedTitle },
             confidence: "low",
@@ -1959,8 +2617,8 @@
         makeCandidate({
           ruleId: "iframe.cms-review",
           element: iframe,
-          message: "iframe埋め込みが含まれています。",
-          reason: "CMS登録用本文HTMLでiframeを利用できるか、代替リンクや埋め込み元の許可が必要かを確認します。",
+          message: `${tagLabel}埋め込みが含まれています。`,
+          reason: "CMS登録用本文HTMLでこの埋め込みを利用できるか、代替リンクや埋め込み元の許可が必要かを確認します。",
           afterHtml: iframe.outerHTML,
           confidence: "low",
           requiresHumanReview: true,
@@ -1991,27 +2649,125 @@
       collectTextReplacementCandidates(element, text, candidates, seen);
       collectForeignLanguageCandidate(element, text, candidates, seen);
       collectNoteSymbolCandidate(element, text, candidates, seen);
+      collectPositionalLanguageCandidate(element, text, candidates, seen);
     });
   }
 
-  function collectInlineStyleCandidate(element, candidates, seen) {
-    if (element.closest("table")) {
+  // miChecker C_83.0(text.sensory-characteristics): コンテンツの形・位置だけに依存した案内文言
+  // (「右の」「上記の」「下のボタン」等)をテキストノードから検出する。miChecker本体は形・位置・色を
+  // 総合的に扱う手動確認項目のため機械的な語彙リストを持たないが、過検出を避けるため単独の「右」
+  // 「左」ではなく、位置・方向を具体的に指す複合表現のみを対象にした低確信度の確認候補にする。
+  const POSITIONAL_LANGUAGE_PATTERN =
+    /右側の|右の|左側の|左の|上記の|下記の|上の図|下の図|上の画像|下の画像|上のボタン|下のボタン|上のリンク|下のリンク/;
+
+  function collectPositionalLanguageCandidate(element, text, candidates, seen) {
+    const match = text.match(POSITIONAL_LANGUAGE_PATTERN);
+    if (!match) {
       return;
     }
+    pushUniqueCandidate(
+      candidates,
+      seen,
+      makeCandidate({
+        ruleId: "text.sensory-characteristics",
+        element,
+        message: `形や位置だけに依存した案内表現(「${match[0]}」)が含まれています。`,
+        reason:
+          "ページの内容を理解・操作するために必要な情報を、コンテンツの形・位置だけに依存させないでください。形や位置を認識できない利用者にも伝わるよう、ボタン名や見出し名などテキストで特定できる情報を併記できないか確認します。",
+        afterHtml: element.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
 
-    if (hasInlineStyleProperty(element, ["background", "background-color"])) {
+  // miChecker C_16.1/C_16.2(text.list): 既存ul/ol/liの構造検査。
+  // C_16.1(item_16()): li要素を子孫に1つも持たないul・ol要素。
+  // C_16.2(item_16()): 祖先にul・ol(またはmenu)を持たないli要素。ブラウザのHTMLパーサ(DOMParser/
+  // template.innerHTML)はli要素の親にul/ol/menuを要求しないため、この種の不正な入れ子はパース後も
+  // 保持される(Playwright実機検証済み)。
+  // C_16.0(item_16()には対応する機械判定が無い): レイアウト目的で使われているリストの疑い。
+  // ユーザー承認済みの簡易ヒューリスティックとして「liが1件のみのul/ol」を低確信度でフラグする。
+  function collectListStructureCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("ul,ol").forEach((list) => {
+      if (!list.querySelector("li")) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "text.list",
+            element: list,
+            message: `${list.tagName.toLowerCase()}要素にli要素がありません。`,
+            reason: "箇条書きを表すul・ol要素には、項目を表すli要素が必要です。リスト構造を見直してください。",
+            afterHtml: list.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+        return;
+      }
+
+      const directItems = [...list.children].filter((child) => child.tagName === "LI");
+      if (directItems.length === 1) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "text.list",
+            element: list,
+            message: "項目が1件だけのリストです。",
+            reason:
+              "リスト要素はレイアウトのためではなく、本来のリストを表現する際にのみ利用します。項目が1件しかないリストは、レイアウト調整のためだけに使われている可能性があるため、本来のリストとして複数項目を列挙する内容か確認してください。",
+            afterHtml: list.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
+    });
+
+    fragment.content.querySelectorAll("li").forEach((li) => {
+      const parentTag = li.parentElement?.tagName;
+      if (["UL", "OL", "MENU"].includes(parentTag)) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "text.list",
+          element: li,
+          message: "このli要素には親となるul要素もしくはol要素が存在しません。",
+          reason: "li要素は必ずul・ol(またはmenu)要素の子として配置します。親要素を確認し、正しいリスト構造に修正してください。",
+          afterHtml: li.outerHTML,
+          confidence: "medium",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+  }
+
+  // miChecker C_500.17/C_500.18: テーブルセル内のcolor/background-color指定も検出対象にする。
+  // (以前はelement.closest("table")で早期returnしており、構造化経路で温存されるテーブルセル内の
+  //  色・背景色指定が一切候補化されなかった。miChecker本体のstyleCheck()もテーブル内外を区別せず
+  //  elementsWithStyleList全件を検査するため、テーブル内外の区別自体を廃止する。)
+  function collectInlineStyleCandidate(element, candidates, seen) {
+    // miChecker C_500.18: bgcolor属性(廃止された背景色指定属性)も背景色指定として扱う。
+    const hasBgColorAttr = element.hasAttribute("bgcolor");
+    if (hasInlineStyleProperty(element, ["background", "background-color"]) || hasBgColorAttr) {
       const clone = element.cloneNode(true);
       removeStyleProperties(clone, ["background", "background-color"]);
+      if (hasBgColorAttr) {
+        clone.removeAttribute("bgcolor");
+      }
       pushUniqueCandidate(
         candidates,
         seen,
         makeCandidate({
           ruleId: "text.background-color",
           element,
-          message: "背景色の指定が含まれています。",
-          reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。",
+          message: hasBgColorAttr ? "背景色の指定(廃止されたbgcolor属性を含む)が含まれています。" : "背景色の指定が含まれています。",
+          reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。bgcolor属性はHTML Living Standardでも廃止されています。",
           afterHtml: clone.outerHTML,
-          patch: { type: "remove-style-properties", names: ["background", "background-color"] },
+          patch: hasBgColorAttr ? undefined : { type: "remove-style-properties", names: ["background", "background-color"] },
           confidence: "high",
           requiresHumanReview: false,
         })
@@ -2077,10 +2833,75 @@
         })
       );
     }
+
+    // miChecker C_8.0(styleCheck()): 同一要素のstyle属性にcolorとbackground/background-color
+    // (またはbgcolor属性)が両方とも指定されている場合、「配色だけに情報を持たせていないか」の確認
+    // 対象になる(color/bgcolorのいずれか一方のみの指定ではC_500.17/C_500.18止まりで発火しない)。
+    // 上のtext.color/text.background-color候補とは独立して追加するため、除去提案(patch)は持たせない。
+    const hasColorForSensory = hasInlineStyleProperty(element, ["color"]);
+    const hasBgForSensory = hasInlineStyleProperty(element, ["background", "background-color"]) || hasBgColorAttr;
+    if (hasColorForSensory && hasBgForSensory) {
+      pushUniqueCandidate(
+        candidates,
+        seen,
+        makeCandidate({
+          ruleId: "text.sensory-characteristics",
+          element,
+          message: "文字色と背景色が同時に指定されています。",
+          reason: "配色だけで情報を伝えている場合、色を取り除いても内容が伝わるかを確認してください。伝わらない場合は、記号や文言で情報を補ってください。",
+          afterHtml: element.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    }
   }
 
+  // miChecker C_33.0/C_34.0: blink・marquee要素。廃止要素として除去(unwrap)し、テキストは保持する。
+  // blinkは中身のテキストが無ければ発火しない(miChecker本体のitem_33のhasTextDescendant相当の条件に合わせる)。
+  // marqueeは中身の有無を問わず常に候補化する(item_34は無条件)。
+  function collectDeprecatedMotionElementCandidate(element, candidates, seen) {
+    if (!["BLINK", "MARQUEE"].includes(element.tagName)) {
+      return false;
+    }
+    if (element.tagName === "BLINK" && !hasTextDescendant(element)) {
+      return true;
+    }
+
+    pushUniqueCandidate(
+      candidates,
+      seen,
+      makeCandidate({
+        ruleId: "html-structure.deprecated-elements",
+        element,
+        message: element.tagName === "BLINK" ? "blink要素が含まれています。" : "marquee要素が含まれています。",
+        reason: element.tagName === "BLINK"
+          ? "blinkによる5秒以上の明滅はWCAG違反となるため、要素を除去し通常のテキストとして表示します。"
+          : "marqueeによる自動スクロールはWCAG違反となるため、要素を除去し通常のテキストとして表示します。",
+        afterHtml: element.innerHTML,
+        patch: { type: "unwrap-element" },
+        confidence: "high",
+        requiresHumanReview: false,
+      })
+    );
+    return true;
+  }
+
+  // miChecker C_48.0/C_48.2: 廃止要素の対象拡大。item_48()で確認した実際に発火するタグのうち、
+  // 装飾目的で使われるもの(basefont/center/font/strike/u、HTML5判定時はさらにbig/tt)を対象にする。
+  // NOBRはitem_48()にチェックロジックが存在せず発火しないため対象外(デッドコード扱い)。
+  // menuitem/frame/frameset/noframes/acronym/dir/isindex/listing/plaintext/xmpはC_48.0/C_48.2以外の
+  // 別チェックID(C_48.1/48.3-48.5/48.7)であり、本タスクのB分類対象(C_48.0/C_48.2)ではないため対象外。
+  const FONT_LIKE_DEPRECATED_TAGS = ["FONT", "BASEFONT"];
+  const DECORATION_DEPRECATED_TAGS = ["U", "S", "STRIKE", "I", "CENTER", "BIG", "TT"];
+
   function collectDecorationElementCandidate(element, candidates, seen) {
-    if (!["U", "S", "STRIKE", "I", "FONT"].includes(element.tagName)) {
+    if (collectDeprecatedMotionElementCandidate(element, candidates, seen)) {
+      return;
+    }
+    const isFontLike = FONT_LIKE_DEPRECATED_TAGS.includes(element.tagName);
+    if (!isFontLike && !DECORATION_DEPRECATED_TAGS.includes(element.tagName)) {
       return;
     }
 
@@ -2088,18 +2909,42 @@
       candidates,
       seen,
       makeCandidate({
-        ruleId: element.tagName === "FONT" ? "text.font-size" : "text.decoration-lines",
+        ruleId: isFontLike ? "text.font-size" : "text.decoration-lines",
         element,
-        message: element.tagName === "FONT" ? "font要素が含まれています。" : "装飾用のHTML要素が含まれています。",
-        reason: element.tagName === "FONT"
+        message: isFontLike ? `${element.tagName.toLowerCase()}要素が含まれています。` : "装飾用のHTML要素が含まれています。",
+        reason: isFontLike
           ? "文字サイズやフォントはCMS側の標準表示に合わせ、本文HTMLでは指定しません。"
-          : "下線、打消し線、斜め文字は使用せず、必要な強調は文脈に合う方法で扱います。",
+          : "下線、打消し線、斜め文字、中央寄せ、拡大文字、等幅表示などの装飾用要素は使用せず、必要な強調は文脈に合う方法で扱います。",
         afterHtml: element.innerHTML,
         patch: { type: "unwrap-element" },
         confidence: "high",
         requiresHumanReview: false,
       })
     );
+
+    // miChecker C_8.0(item_8()): font要素のcolor/bgcolor属性は、どちらか一方でも値があれば
+    // 「配色だけに情報を持たせていないか」の確認対象になる(styleCheck()のcolor+background併用時
+    // のみ発火する条件とは異なり、font要素はcolor/bgcolorのいずれか一方の指定でも発火する)。
+    if (element.tagName === "FONT") {
+      const colorAttr = (element.getAttribute("color") || "").trim();
+      const bgColorAttr = (element.getAttribute("bgcolor") || "").trim();
+      if (colorAttr || bgColorAttr) {
+        pushUniqueCandidate(
+          candidates,
+          seen,
+          makeCandidate({
+            ruleId: "text.sensory-characteristics",
+            element,
+            message: "font要素にcolor/bgcolor属性による配色指定があります。",
+            reason: "配色だけで情報を伝えている場合、色を取り除いても内容が伝わるかを確認してください。伝わらない場合は、記号や文言で情報を補ってください。",
+            afterHtml: element.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
+    }
   }
 
   function collectBoldCandidate(element, candidates, seen) {
@@ -3372,6 +4217,12 @@
         processingClass: "escalation",
         wcag: [],
       },
+      "iframe.frame-unsupported": {
+        category: "iframe",
+        title: "frame要素の移行確認",
+        processingClass: "escalation",
+        wcag: ["4.1.2"],
+      },
     };
     const ruleInfo = rules[id];
     if (!ruleInfo) {
@@ -4560,8 +5411,16 @@
       items.push("複雑な画像は、本文説明と報告を分けて扱います。");
     } else if (ruleId === "link.link-text") {
       items.push("『こちら』のような曖昧なリンクを、行き先が分かる言い方にします。");
+    } else if (ruleId === "link.link-purpose-standalone") {
+      items.push("読み上げでもリンクの行き先が分かるようにします。");
     } else if (ruleId.startsWith("table.")) {
       items.push("表は、見出しやキャプションの役割が分かる形に整えます。");
+    } else if (ruleId === "html-structure.deprecated-elements") {
+      items.push("古い装飾用のタグを取り除き、通常のテキストとして表示します。");
+    } else if (ruleId === "html-structure.embedded-script-behavior") {
+      items.push("自動で動く仕組み（自動更新・自動移動）を取り除きます。");
+    } else if (ruleId === "html-structure.duplicate-id-accesskey") {
+      items.push("ページ内で重複しているid・accesskeyを一意になるよう直します。");
     } else if (ruleId.startsWith("html-structure.")) {
       items.push("見出しの順番や構造を、読み上げても追いやすい形に整えます。");
     } else if (ruleId.startsWith("text.")) {
@@ -4776,7 +5635,7 @@
   }
 
   function buildVisualPreviewCard(title, html, tone) {
-    const previewHtml = stripInternalFromHtml(html || "<p>（内容なし）</p>");
+    const previewHtml = sanitizeVisualPreviewHtml(stripInternalFromHtml(html || "<p>（内容なし）</p>"));
     return `
       <article class="compare-card compare-card-${tone}">
         <div class="compare-card-header">
@@ -4786,6 +5645,29 @@
         <div class="compare-visual" data-goal2-visual-preview="${escapeHtml(previewHtml)}"></div>
       </article>
     `;
+  }
+
+  // 見た目比較は候補のHTMLを親ページのDOMへ直接挿入するため、挿入時に実行・遷移を引き起こす
+  // 能動的コンテンツを除去する。特に<meta http-equiv="refresh">は動的挿入でもブラウザが処理し、
+  // アプリのページ自体を遷移させてしまう(miChecker C_36.x候補のプレビューで実際に発生)。
+  function sanitizeVisualPreviewHtml(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    template.content.querySelectorAll("meta, script, base, link").forEach((el) => el.remove());
+    template.content.querySelectorAll("*").forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        if (/^on/i.test(attr.name)) {
+          el.removeAttribute(attr.name);
+        } else if (["href", "src"].includes(attr.name.toLowerCase()) && /^\s*javascript:/i.test(attr.value)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    const sanitized = template.innerHTML.trim();
+    if (!sanitized && (html || "").trim()) {
+      return "<p>（画面には表示されない要素です）</p>";
+    }
+    return sanitized;
   }
 
   function renderAiImageNamePanel(candidate) {
@@ -5343,6 +6225,10 @@
     return Boolean(element.closest("script, style, noscript, textarea, select, option"));
   }
 
+  function hasTextDescendant(element) {
+    return textNodes(element).some((node) => normalizeText(node.nodeValue).length > 0);
+  }
+
   function replaceTextInElement(element, before, after) {
     const isRegex = before instanceof RegExp;
     const node = textNodes(element).find((textNode) => {
@@ -5565,8 +6451,8 @@
 
   function hasTableFormatting(table) {
     return Boolean(
-      table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing]") ||
-        table.querySelector("[style],[class],[align],[valign],[width],[height],font")
+      table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing],[bgcolor]") ||
+        table.querySelector("[style],[class],[align],[valign],[width],[height],[bgcolor],font")
     );
   }
 
@@ -5582,7 +6468,7 @@
     });
     const elements = [root, ...(root.querySelectorAll?.("*") || [])];
     elements.forEach((element) => {
-      ["style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing"].forEach((name) => {
+      ["style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing", "bgcolor"].forEach((name) => {
         element.removeAttribute?.(name);
       });
     });
@@ -5602,7 +6488,51 @@
     const src = img.getAttribute("src") || "";
     const alt = img.getAttribute("alt") || "";
     const text = `${src} ${alt} ${caption}`;
-    return /(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|map|chart|graph)/i.test(text);
+    if (/(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|map|chart|graph)/i.test(text)) {
+      return true;
+    }
+    // miChecker C_4.0(item_4()): キーワード非依存のシグナル。isNormalImage()相当(極端に小さい・
+    // 細長いアイコン等ではない)画像で、alt文字列が「3語以上、または(日本語想定の)20文字以上」かつ
+    // 「非ASCII文字を含む、またはASCIIのみで30文字超」の場合に発火する。地図・グラフ等のキーワードが
+    // 無くても、既にある程度詳しい代替テキストが書かれている画像は複雑な画像の可能性があるとみなし、
+    // aria-describedby等での補足説明を検討する確認対象にする。
+    if (!isNormalSizedImageForComplexCheck(img)) {
+      return false;
+    }
+    return isMicheckerComplexImageAltText(alt);
+  }
+
+  function isNormalSizedImageForComplexCheck(img) {
+    const parseDimension = (value) => {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : 100;
+    };
+    const width = img.hasAttribute("width") ? parseDimension(img.getAttribute("width")) : 100;
+    const height = img.hasAttribute("height") ? parseDimension(img.getAttribute("height")) : 100;
+    if (width >= 50 && height >= 50) {
+      return true;
+    }
+    const big = Math.max(width, height);
+    const small = Math.min(width, height);
+    if (big < 50) {
+      return false;
+    }
+    return small / big >= 0.2;
+  }
+
+  const MICHECKER_ALT_WORD_DELIMITER = /[ \t\n\r\f,.[\]()<>!?:/"、。「」・〈〉　]+/;
+
+  function isMicheckerComplexImageAltText(alt) {
+    if (!alt) {
+      return false;
+    }
+    const wordCount = alt.split(MICHECKER_ALT_WORD_DELIMITER).filter(Boolean).length;
+    // 自治体CMS本文はほぼ日本語(DBCS)前提のため、item_4()のvalidate_str_len(DBCS時20文字)を用いる。
+    if (wordCount < 3 && alt.length < 20) {
+      return false;
+    }
+    const isAsciiOnly = /^[\x00-\x7f]*$/.test(alt);
+    return !isAsciiOnly || alt.length > 30;
   }
 
   function inferTopPageLinkText() {
@@ -5699,6 +6629,12 @@
     return /^(画像|写真|イメージ|image|photo)$/.test(text) || /^(.*の)?写真$/.test(text);
   }
 
+  // miChecker C_25.3: 表の内容を特定しない汎用語のみで構成されたcaptionを検出する。
+  // 「対象者一覧」のように具体的な語を伴うcaptionは対象外にする(完全一致のみ)。
+  function isGenericTableCaptionText(text) {
+    return /^(?:表[0-9０-９]*|図表|一覧|表組|データ|テーブル|table)$/i.test(text);
+  }
+
   function isGenericIframeTitle(title) {
     return /^(iframe|埋め込み|埋め込みコンテンツ|動画|地図|map|movie)$/i.test(normalizeText(title));
   }
@@ -5712,6 +6648,34 @@
 
   function isGenericLinkText(text) {
     return /^(こちら|ここ|詳細はこちら|詳しくはこちら|クリック|click here)$/i.test(text);
+  }
+
+  // リンクの「読み上げ可能テキスト」= テキストノード + img[alt]の値 + aria-label/aria-labelledbyの参照先テキスト。
+  // miChecker C_57.2の算入範囲(CheckEngine.java item_57のgetNameByAriaフォールバック)を参考に、
+  // このいずれにも実質的な文字列が無ければリンクは読み上げ不能とみなす。
+  function computeLinkAccessibleText(link, root) {
+    const parts = [normalizeText(link.textContent || "")];
+    link.querySelectorAll("img[alt]").forEach((img) => {
+      const alt = img.getAttribute("alt") || "";
+      if (alt.trim()) {
+        parts.push(normalizeText(alt));
+      }
+    });
+    const ariaLabel = link.getAttribute("aria-label") || "";
+    if (ariaLabel.trim()) {
+      parts.push(normalizeText(ariaLabel));
+    }
+    const labelledBy = link.getAttribute("aria-labelledby") || "";
+    labelledBy
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((id) => {
+        const referenced = root?.querySelector?.(`#${cssEscape(id)}`);
+        if (referenced) {
+          parts.push(normalizeText(referenced.textContent || ""));
+        }
+      });
+    return normalizeText(parts.join(" "));
   }
 
   function buildGenericLinkGuidanceProposal(link) {

@@ -185,6 +185,232 @@ async function main() {
   assert.ok(appJs.includes("oldSiteTemplateHeadingProposal"), "old-site template headings should become removal candidates");
   assert.ok(appJs.includes("loadSagaSamples"), "Saga fixture samples should be loaded into the sample picker");
 
+  // miChecker error-type parity additions (C_33.0/34.0, C_36.0/36.1, C_422.0/423.0, C_51.0/51.4,
+  // C_57.2, C_331.0/331.1, C_332.1/332.2). See detector functions and their generated ruleIds/messages below.
+  assert.ok(appJs.includes("collectDeprecatedMotionElementCandidate"), "blink/marquee detection should be implemented");
+  assert.ok(appJs.includes('"BLINK", "MARQUEE"'), "blink/marquee tags should be recognized as deprecated motion elements");
+  assert.ok(appJs.includes("hasTextDescendant"), "blink detection should require a text descendant, matching miChecker item_33");
+  assert.ok(appJs.includes("blink要素が含まれています。"), "blink candidates should have a Japanese message");
+  assert.ok(appJs.includes("marquee要素が含まれています。"), "marquee candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.deprecated-elements"'),
+    "blink/marquee candidates should use the deprecated-elements KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectMetaRefreshCandidates"), "meta refresh detection should be implemented");
+  assert.ok(appJs.includes('meta[http-equiv]'), "meta refresh detection should scan http-equiv attributes");
+  assert.ok(appJs.includes("周期的にページを再読み込みするmeta refreshが含まれています。"), "meta refresh reload should have a Japanese message");
+  assert.ok(appJs.includes("自動的にページを切り替えるmeta refresh"), "meta refresh redirect should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.embedded-script-behavior"'),
+    "meta refresh candidates should use the embedded-script-behavior KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectDuplicateAttributeCandidates"), "duplicate id/accesskey detection should be implemented");
+  assert.ok(appJs.includes("collectDuplicateAttributeCandidatesFor"), "duplicate id/accesskey detection should share a per-attribute helper");
+  assert.ok(appJs.includes("が他の要素と重複しています"), "duplicate id/accesskey candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.duplicate-id-accesskey"'),
+    "duplicate id/accesskey candidates should use the duplicate-id-accesskey KB rule id"
+  );
+
+  assert.ok(appJs.includes('querySelectorAll("iframe,frame")'), "frame elements should be checked for title like iframe (C_51.0/51.4)");
+  assert.ok(
+    appJs.includes("collectFrameElementNotices"),
+    "frame elements dropped by the HTML parser should be detected from the raw source (C_51.0/51.4)"
+  );
+  assert.ok(appJs.includes('"iframe.frame-unsupported"'), "frame notices should use the iframe.frame-unsupported pseudo rule id");
+  assert.ok(
+    appJs.includes('"iframe.frame-unsupported": "html-structure.iframe-frame-title"'),
+    "iframe.frame-unsupported should map to the iframe-frame-title KB rule for miChecker mode"
+  );
+  assert.ok(
+    appJs.includes("sanitizeVisualPreviewHtml"),
+    "visual preview must sanitize active content (meta refresh navigated the app page before this fix)"
+  );
+
+  assert.ok(appJs.includes("computeLinkAccessibleText"), "empty-link-text detection should compute an accessible text value");
+  assert.ok(appJs.includes("リンク内に読み上げ可能なテキストがありません。"), "empty link candidates should have a Japanese message");
+  assert.ok(
+    appJs.includes('ruleId: "link.link-purpose-standalone"'),
+    "empty link candidates should use the link-purpose-standalone KB rule id"
+  );
+
+  assert.ok(appJs.includes("collectTableHeaderScopeCandidates"), "per-cell th scope/headers validation should be implemented");
+  assert.ok(appJs.includes("guessThScopeValue"), "th scope auto-fix should guess a scope value from cell position");
+  assert.ok(appJs.includes("th要素にscope属性がありません。"), "missing scope candidates should have a Japanese message");
+  assert.ok(appJs.includes("が不正です。"), "invalid scope value candidates should have a Japanese message");
+  assert.ok(appJs.includes("headers属性が参照するid"), "headers reference validation should check for a matching id in the table");
+  assert.ok(appJs.includes("がth・td要素ではありません"), "headers reference validation should check the referenced element's tag");
+  assert.ok(
+    appJs.includes('ruleId: "table.th-scope"'),
+    "th scope/headers candidates should use the table.th-scope KB rule id"
+  );
+
+  // miChecker warning/B-classification parity additions (Phase 2A: table layout heuristics + color/contrast).
+  // C_12.0/12.1/12.2 (naive table structure), C_23.0/23.2 (th/caption/summary on suspected layout tables),
+  // C_75.0 (th-less data table fallback), C_48.8 (longdesc/summary deprecated attributes),
+  // C_500.17/18 (color/background-color inside table cells + bgcolor attribute).
+  assert.ok(appJs.includes("classifyNaiveTableStructure"), "naive table structure classifier (C_12.0/12.1/12.2) should be implemented");
+  assert.ok(appJs.includes('return "nested"'), "naive table structure classifier should detect nested tables (C_12.0)");
+  assert.ok(appJs.includes('return "1row1col"'), "naive table structure classifier should detect 1-row/1-col tables (C_12.1)");
+  assert.ok(appJs.includes('return "notdata"'), "naive table structure classifier should detect non-data leaf tables (C_12.2)");
+  assert.ok(
+    appJs.includes("collectNaiveTableStructureCandidates"),
+    "naive layout-table notice generation (C_12.x/C_23.x) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("collectThlessDataTableFallbackCandidate"),
+    "th-less data table fallback (C_75.0) should be implemented"
+  );
+  assert.ok(appJs.includes("表にth要素(見出しセル)がありません。"), "th-less data table fallback should have a Japanese message");
+
+  assert.ok(
+    appJs.includes("collectDeprecatedAttributeCandidates"),
+    "deprecated longdesc/summary attribute detection (C_48.8) should be implemented"
+  );
+  assert.ok(appJs.includes('querySelectorAll("img[longdesc]")'), "C_48.8 should scan img longdesc attributes");
+  assert.ok(appJs.includes('querySelectorAll("table[summary]")'), "C_48.8 should scan table summary attributes");
+  assert.ok(appJs.includes("廃止されたlongdesc属性"), "longdesc candidates should have a Japanese message");
+  assert.ok(appJs.includes("廃止されたsummary属性"), "summary candidates should have a Japanese message");
+
+  assert.ok(
+    !appJs.includes('if (element.closest("table")) {\n      return;\n    }'),
+    "collectInlineStyleCandidate should no longer skip elements inside tables (C_500.17/18 parity fix)"
+  );
+  assert.ok(appJs.includes("hasBgColorAttr"), "bgcolor attribute should be treated as a background-color signal (C_500.18)");
+  assert.ok(
+    appJs.includes('table.matches("[style],[class],[align],[valign],[width],[height],[border],[cellpadding],[cellspacing],[bgcolor]")'),
+    "hasTableFormatting should recognize bgcolor as legacy table formatting"
+  );
+  assert.ok(
+    appJs.includes('"style", "class", "align", "valign", "width", "height", "border", "cellpadding", "cellspacing", "bgcolor"'),
+    "stripFormatting should remove the bgcolor attribute along with other legacy formatting attributes"
+  );
+  assert.ok(
+    appJs.includes('removeStyleProperties(clone, ["color", "background", "background-color"]);'),
+    "cloneTableCellAs should strip color/background styling so structural table rebuilds stay consistent with the color candidates"
+  );
+
+  // miChecker warning/B-classification parity additions (Phase 2B: deprecated elements,
+  // keyword-independent complex image signal, color-only-information confirmation, link relations).
+  // C_48.0/C_48.2 (center/big/tt/basefont deprecated elements), C_4.0 (alt length/word-count complex
+  // image signal), C_8.0 (color+background combo / font color+bgcolor), C_57.5 (adjacent same-href
+  // link merge suggestion), C_57.6 (structurally empty link), C_58.0 (same text, different hrefs).
+  assert.ok(
+    appJs.includes("DECORATION_DEPRECATED_TAGS") && appJs.includes('"CENTER", "BIG", "TT"'),
+    "deprecated decoration element detection (C_48.0/C_48.2) should include CENTER/BIG/TT"
+  );
+  assert.ok(
+    appJs.includes("FONT_LIKE_DEPRECATED_TAGS") && appJs.includes('"FONT", "BASEFONT"'),
+    "deprecated font-like element detection (C_48.2) should include BASEFONT alongside FONT"
+  );
+  assert.ok(!appJs.includes('"NOBR"'), "NOBR should not be treated as a deprecated element (miChecker item_48() has no matching logic)");
+  assert.ok(
+    appJs.includes('"text.decoration-lines": "html-structure.deprecated-elements"'),
+    "text.decoration-lines should be aliased to html-structure.deprecated-elements so miChecker mode surfaces U/S/STRIKE/CENTER/BIG/TT candidates"
+  );
+
+  assert.ok(
+    appJs.includes("isMicheckerComplexImageAltText"),
+    "keyword-independent complex image alt-length/word-count signal (C_4.0) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("isNormalSizedImageForComplexCheck"),
+    "complex image signal should exclude small/icon-sized images (item_4()'s isNormalImage())"
+  );
+
+  assert.ok(
+    appJs.includes("text.sensory-characteristics"),
+    "color-only-information confirmation (C_8.0) should use the text.sensory-characteristics KB rule id"
+  );
+  assert.ok(
+    appJs.includes("文字色と背景色が同時に指定されています。"),
+    "combined inline color+background-color should trigger a C_8.0 confirmation message"
+  );
+  assert.ok(
+    appJs.includes("font要素にcolor/bgcolor属性による配色指定があります。"),
+    "font[color]/font[bgcolor] should trigger a C_8.0 confirmation message"
+  );
+
+  assert.ok(
+    appJs.includes("collectEmptyLinkCandidates"),
+    "structurally empty link detection (C_57.6) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("collectDuplicateLinkTextCandidates"),
+    "duplicate link text with different hrefs detection (C_58.0) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("直前または直後に同じリンク先へのリンクがあります。"),
+    "adjacent same-href link merge suggestion (C_57.5) should have a Japanese message"
+  );
+
+  // miChecker Phase 3 parity additions (final phase, user-agreed minimal-noise subset of the
+  // remaining C-classification items): C_15.0/C_388.0/C_500.4 (heading content quality), C_25.3
+  // (generic table caption), C_80.0 (alt length > 150), C_16.0/C_16.1/C_16.2 (list structure),
+  // C_331.2 (th row/col-only layout pattern), C_83.0 (positional/shape language).
+  assert.ok(
+    appJs.includes("collectHeadingContentQualityCandidates"),
+    "heading content quality detection (C_15.0/C_388.0/C_500.4) should be implemented"
+  );
+  assert.ok(
+    appJs.includes('ruleId: "html-structure.heading-content-quality"'),
+    "heading content quality candidates should use the heading-content-quality KB rule id"
+  );
+  assert.ok(appJs.includes("見出しのテキストが極端に短くなっています。"), "short heading candidates should have a Japanese message");
+  assert.ok(appJs.includes("見出しのテキストが記号のみで構成されています。"), "symbol-only heading candidates should have a Japanese message");
+
+  assert.ok(
+    appJs.includes("isGenericTableCaptionText"),
+    "generic table caption detection (C_25.3) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("表のキャプションが汎用的で、この表の内容を特定できません。"),
+    "generic table caption candidates should have a Japanese message"
+  );
+
+  assert.ok(appJs.includes("alt.length > 150"), "alt-text length detection (C_80.0) should be implemented");
+  assert.ok(
+    appJs.includes("代替テキストが150文字を超えています。"),
+    "long alt-text candidates should have a Japanese message"
+  );
+
+  assert.ok(
+    appJs.includes("collectListStructureCandidates"),
+    "list structure detection (C_16.0/C_16.1/C_16.2) should be implemented"
+  );
+  assert.ok(appJs.includes("要素にli要素がありません。"), "list-without-li candidates should have a Japanese message (C_16.1)");
+  assert.ok(
+    appJs.includes("このli要素には親となるul要素もしくはol要素が存在しません。"),
+    "orphan li candidates should have a Japanese message (C_16.2)"
+  );
+  assert.ok(appJs.includes("項目が1件だけのリストです。"), "single-item list candidates should have a Japanese message (C_16.0)");
+  assert.ok(
+    appJs.includes('ruleId: "text.list"'),
+    "list structure candidates should use the text.list KB rule id"
+  );
+
+  assert.ok(
+    appJs.includes("collectThLayoutPatternCandidate"),
+    "th row/col-only layout pattern detection (C_331.2) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("th要素が1行目・1列目のみにある単純な表の左上のtd要素にテキストが存在しています。"),
+    "th layout pattern candidates should have a Japanese message matching the miChecker wording"
+  );
+
+  assert.ok(
+    appJs.includes("collectPositionalLanguageCandidate"),
+    "positional/shape-dependent language detection (C_83.0) should be implemented"
+  );
+  assert.ok(appJs.includes("POSITIONAL_LANGUAGE_PATTERN"), "positional language detection should use an explicit vocabulary pattern");
+  assert.ok(appJs.includes("下記の"), "positional language vocabulary should include 下記の");
+  assert.ok(
+    appJs.includes('ruleId: "text.sensory-characteristics"'),
+    "positional language candidates should use the text.sensory-characteristics KB rule id"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");
