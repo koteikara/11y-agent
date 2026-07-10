@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-10: table.layout-table系画像へのvision enrichment拡張
+
+- 背景・目的: PR#37までの4段階LLM統合で`image.alt-text`/`image.complex-image-report`という独立候補になった画像は`enrichImageAltWithLlm`でvision enrichmentされるが、`table.layout-table`/`table.cell-merge-layout`/`table.cell-merge-file`/`table.cell-merge-mark`の各候補が呼ぶ`decomposeLayoutTable()`は、表を解体・再構成する過程で画像のalt属性を`prepareLayoutTableImage()`の旧ヒューリスティック(`generateImageNameDraft`/`generateComplexImageNameDraft`)のみで直接`after_html`に焼き込んでおり、独立候補を一切作らないためLLM enrichmentの対象から漏れていた(直近のリプランニングでユーザーが選択した「2」に対応)。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `decomposeLayoutTable(table, imageContexts)`/`tableCellDraft(cell, imageContexts)`/`normalizeLayoutTableImages(root, imageContexts)`/`prepareLayoutTableImage(img, imageContexts)`に、任意の第2引数`imageContexts`(配列)を追加。渡された場合のみ、ヒューリスティックでalt文言を焼き込んだ画像ごとに`{src, caption}`を収集する。引数を渡さない既存呼び出しは完全に無変更(出力HTMLは一切変わらない)。
+  - `buildMergedCellProposal()`・`buildMarkSeparatedTableHtml()`・`planTableTreatment()`・`collectTableCandidates()`を通じて、`table.layout-table`/`table.cell-merge-layout`(分割不可時)/`table.cell-merge-file`/`table.cell-merge-mark`の各候補作成時に収集済み画像を`proposal.llm_context.images`(内部専用、UI非表示、既存の`llm_context`パターンを踏襲)として付与。
+  - 新規`enrichLayoutTableImagesWithLlm(items)`: `llm_context.images`を持つ候補を走査し、同一src重複除去後に既存`/api/llm/image-alt`エンドポイントへvision呼び出しし、`after_html`内の対応する`<img src>`のalt属性のみを書き換える(表全体は再構築しない)。失敗時は焼き込み済みのヒューリスティック案をそのまま残す。
+  - コスト最適化: 同一画像が独立した`image.alt-text`/`image.complex-image-report`候補としても存在する場合(実際によくある重複)、重複vision呼び出しを避けるため`enrichLayoutTableImagesWithLlm`は`enrichImageAltWithLlm`完了後に実行し、`findExistingAltForImageUrl()`で既に確定済みのalt文言があればそれを再利用して新規API呼び出しをスキップする。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより全6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致することを確認(回帰なし)。「表」サンプルの`table.layout-table`候補で新設フィールドが正しく収集されること、`/api/llm/image-alt`への重複呼び出しが1回に削減されることをネットワークインターセプトで確認。ライブAPIキーでの動作確認は、Stage3で同一エンドポイント・同一適用ロジックが実機検証済みであるためユーザー判断でスキップ。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: LLM確認中の処理状態をUIに明示
 
 - 背景・目的: ユーザーから「呼び出しから返答までに時間がかかったようですが処理中を示す表現がないと何度もボタンを押してしまいそうです」との指摘を受けた。LLM enrichment導入後は`analyze()`のうち`enrichWithLlm`/`enrichImageAltWithLlm`/`enrichHeadingReviewWithLlm`の並行実行部分が数十秒かかることがあるが、この間もボタン表示は最初の「生成中」のままで、ヒューリスティック生成(1秒未満)とAI確認(最大数十秒)の区別がつかなかった。
