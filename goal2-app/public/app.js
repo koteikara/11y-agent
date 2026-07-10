@@ -223,7 +223,7 @@
     pageAgentDrag: null,
     pageAgentDismissed: false,
     ruleScopeMode: "kb",
-    llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },
+    llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
   };
 
   const els = {
@@ -488,7 +488,7 @@
     setAnalyzeStatus("running");
     els.outputDrawer.open = false;
     state.pageAgentDismissed = false;
-    state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+    state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 };
     try {
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
@@ -1097,14 +1097,16 @@
     state.llmUsage.inputTokens += usage.inputTokens || 0;
     state.llmUsage.outputTokens += usage.outputTokens || 0;
     state.llmUsage.estimatedCostUsd += usage.estimatedCostUsd || 0;
+    state.llmUsage.estimatedCostJpy += usage.estimatedCostJpy || 0;
   }
 
   function llmUsageSummaryText() {
     if (!state.llmUsage || state.llmUsage.calls === 0) {
       return "";
     }
-    const cost = state.llmUsage.estimatedCostUsd.toFixed(4);
-    return ` LLM利用: 概算$${cost}（呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）※概算です。実際の請求額はGoogle Cloud側でご確認ください。`;
+    const costUsd = state.llmUsage.estimatedCostUsd.toFixed(4);
+    const costJpy = state.llmUsage.estimatedCostJpy.toFixed(2);
+    return ` LLM利用: 概算$${costUsd}（約${costJpy}円、呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）※概算です。実際の請求額はGoogle Cloud側でご確認ください。`;
   }
 
   function linkTitleLookupBase() {

@@ -21,6 +21,16 @@
 
 ## Entries
 
+## 2026-07-10: LLM利用コスト概算に円換算を併記
+
+- 背景・目的: ユーザーから「コストは円換算も併記しましょう」との要望を受けた。従来はUSDの概算のみ表示していた。
+- 主な変更内容:
+  - `goal2-app/lib/llm.js`: `USD_JPY_RATE`環境変数(既定値155、変動するためプレースホルダである旨をコメントで明記)を新設し、`estimateCostJpy()`を追加。`callGemini()`が返す`usage`に`estimatedCostJpy`を含めるようにした。
+  - `goal2-app/public/app.js`: `state.llmUsage`に`estimatedCostJpy`を追加し累積、候補一覧サマリーの表示を「概算$0.00XX（約Y円、呼び出しN回、トークン計M）」の形式に変更。
+- 検証: `node --check`・`node test/run-tests.js`成功。`estimateCostUsd`/`estimateCostJpy`の計算を単体で確認(`USD_JPY_RATE`環境変数の上書きも含め正しく計算されることを確認)。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。今回はテスト用APIキーが手元に無かったため、円換算表示の実際のUIでのライブ確認は未実施(計算ロジック自体は単体テスト済み、USD分はステージ2で実証済みのため技術的リスクは低い)。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: ステージ2のライブ動作確認、table.captionの適用範囲を拡大
 
 - 背景・目的: 直前のステージ2コミット(未プッシュ、追記内容参照)後、ユーザーからテスト用Gemini APIキーの再提供を受け、7タスク全てを実際のGemini呼び出しまで含めて検証した。

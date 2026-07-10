@@ -315,7 +315,9 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 単体テスト(sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)で全タスクが期待通りの高品質な出力を返すことを確認(具体例はCHANGELOG参照)。
   - UI経由の実データ検証で、`table.caption`のenrichment対象条件が狭すぎて最も一般的な「データテーブルとして構造的に保持する」経路(`planTableTreatment`の`kind: "structural"`)のキャプション生成に接続されていないバグを自己発見。原因を調査し、`table.caption`候補には実は3つの発生経路(単純patch/構造的書き換え/既存キャプションの確認専用フラグ)があることを突き止め、対象条件を拡大しつつ、確認専用フラグ候補(表全体ではなくcaption要素自体が対象)は誤って巻き込まないよう`before_html`が`<table`で始まるかで明確に除外する修正を行った(自己発見・自己修正)。
   - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプル全てで実際にGeminiを呼び出した状態のまま回帰確認を行い、候補・注意の総件数がベースラインと完全一致することを確認。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)、コスト懸念に対する具体的なデータを得られた。動作確認後、テスト用APIキーは削除済み。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。→ コミット`33a6710`としてPR #35を作成・送信済み。
+- ユーザーから「コストは円換算も併記しましょう」との要望を受けた。`lib/llm.js`に`USD_JPY_RATE`環境変数(既定値155、プレースホルダである旨を明記)を追加し`estimateCostJpy()`を新設、`usage`に`estimatedCostJpy`を含めるようにした。`app.js`の`state.llmUsage`・`llmUsageSummaryText()`を円換算併記に対応。検証時点でテスト用APIキーが手元になかったため、計算ロジック単体テスト(`USD_JPY_RATE`上書きも含む)と`GEMINI_API_KEY`未設定環境での既存6サンプル回帰確認(完全一致)のみ実施し、UIでの実ライブ確認は未実施。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
 
 ## Decisions
 
