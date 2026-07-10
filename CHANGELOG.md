@@ -21,6 +21,17 @@
 
 ## Entries
 
+## 2026-07-10: 寒色系ブルーグレーデザインをmichecker-compare.html/goal3.htmlへ展開+スクロール閉じ込めバグ修正
+
+- 背景・目的: 直前のindex.htmlデザイン刷新(下記エントリ)をユーザーが確認し、他画面への展開を指示。`michecker-compare.html`/`goal3.html`は`index.html`と同じ`styles.css`を共有しているため、`:root`トークンの変更は自動的に反映されるが、ページ固有のハードコード色が旧ミント系のまま残っていた箇所を修正。あわせて、展開時の実データ検証で発見した既存の潜在バグ(ページ全体のスクロール閉じ込め崩れ)、およびユーザーからの追加フィードバック(primaryボタンのホバー時視認性)も同時に修正した。
+- 主な変更内容(`goal2-app/public/styles.css`):
+  - `.goal3-source-preview`の背景色を旧ミント系`#f8fbfa`から新パレットの`#f6f9fc`(淡いブルーグレー)へ変更。`michecker-compare.html`側は元々中立トーンで使われており修正不要だった。
+  - バグ修正: `.michecker-shell`・`.goal3-shell`(いずれも`.app-shell`と同一要素に付与される追加クラス)に`contain: layout;`を追加。`.app-shell`は`display: grid; height: 100vh; overflow: auto;`で内部スクロールを想定しているが、実データ(59行の比較結果テーブル、高さ約8676px)を表示すると、ブラウザの座標計算上の癖(containment未指定によりグリッドコンテナ内の巨大な子要素のスクロール可能領域が祖先の`document.body`のscrollHeightに漏れ出す)により、`body`(`overflow: hidden`)のスクロール高が実際のビューポートを大幅に超えてしまい、フルページ表示(印刷・特定のスクロール計算等)でレイアウトが崩れる状態だった。`.app-shell`自体の内部スクロール(`overflow: auto`)は実際には機能しており、通常のマウス操作によるユーザー体験は壊れていなかったが、`document.body.scrollHeight`の異常な肥大化は他の計算(印刷レイアウト等)に影響しうるため修正した。`.app-shell`単体(index.html)には適用していない。理由: `index.html`は`.app-shell`直下に`position: fixed`の「次にやること」フローティングパネル(`.page-agent-panel`)を持ち、`contain: layout`を付与すると`fixed`の基準がビューポートから`.app-shell`に変わってしまい、パネルがビューポート右下に固定されなくなる回帰が生じるため、対象を`michecker-compare.html`/`goal3.html`(いずれも`.app-shell`内に`position: fixed`要素を持たない)に限定した。
+  - バグ修正: `button.primary:hover`の背景色を`var(--primary-strong)`(#17274d、ほぼ黒に近い紺)から`color-mix(in srgb, var(--primary), black 15%)`(元のブルーを保った濃紺)へ変更、外側グローのリングも`0 0 0 6px`(透過82%)から`0 0 0 4px`(透過68%)へ強化。ユーザーから「濃色のボタンにホバーした時の視認性が悪い」との指摘を受けたもの。全ページで共有される`button.primary`ルール(比較する・候補抽出・GOAL2へ渡す等の主要CTAボタン)に適用されるため、3画面すべてに影響する。コントラスト比自体は変更前後ともWCAG AA基準を大幅に上回っており(白文字に対し変更前14.6:1→変更後7.06:1、いずれも基準4.5:1をクリア)問題なかったが、ホバー時に元の色味(ブルー)を失い黒に近づきすぎることで「押せそう」という視覚的な手がかりが弱まっていた点を改善した。
+- 検証: `node --check`・`node test/run-tests.js`成功(機能面の変更なし)。Playwrightで実データ(CSVペア59行、goal3.htmlの候補抽出)を読み込んだ状態のスクリーンショットを撮影し両画面の配色を目視確認。修正前後で`document.body.scrollHeight`を計測し、修正前9923px→修正後1000px(ビューポート高と一致)を確認。`.app-shell`自体は`clientHeight: 1000`/`scrollHeight: 10120`のままで内部スクロールが引き続き機能すること、`index.html`の`.page-agent-panel`が修正後も`position: fixed`でビューポート右下に留まること(影響なし)を確認。primaryボタンのホバー状態をPlaywrightでクリップスクリーンショットし、ブルーの色味を保ったまま視認性が改善されたことを目視確認。
+- 関連ファイル: `goal2-app/public/styles.css`
+- 関連PR: (作成予定、PR #31は既にマージ済みのため新規PR)
+
 ## 2026-07-10: index.htmlのビジュアルデザインを寒色系ブルーグレーへ刷新
 
 - 背景・目的: ユーザーから、オペレーショナル・ダッシュボード調のデザイン仕様(レイヤード背景・ニューモーフィズム的な柔らかい影・寒色系ニュートラルパレット・抑制されたアクセントカラー・8px基準のスペーシング・スロー/コントロールドなモーション等を定めたデザインスペック)を採用したいとの依頼があった。既存デザインは単一ブランドアクセント(ティール)を採用していたが、これを寒色系ブルーグレーパレットへ置き換える。まずgoal2-appの全画面のうちindex.html(Goal 2修正候補レビュー画面)から適用する。

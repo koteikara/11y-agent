@@ -225,9 +225,9 @@ button.primary {
 }
 
 button.primary:hover:not(:disabled) {
-  background: var(--primary-strong);
-  border-color: var(--primary-strong);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary), transparent 82%), var(--shadow-hover);
+  background: color-mix(in srgb, var(--primary), black 15%);
+  border-color: color-mix(in srgb, var(--primary), black 15%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary), transparent 68%), var(--shadow-hover);
 }
 
 /* Decision buttons carry the meaning of the action itself, matching the same
@@ -1609,6 +1609,7 @@ label {
 
 .goal3-shell {
   gap: 16px;
+  contain: layout;
 }
 
 .goal3-workspace {
@@ -1658,7 +1659,7 @@ label {
   width: 100%;
   min-height: 760px;
   border: 0;
-  background: #f8fbfa;
+  background: #f6f9fc;
 }
 
 .goal3-preview h2,
@@ -1934,6 +1935,7 @@ label {
   max-width: 1100px;
   margin: 0 auto;
   padding: 24px 20px 60px;
+  contain: layout;
 }
 
 .michecker-upload-grid {
