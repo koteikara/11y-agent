@@ -531,9 +531,13 @@
 
   // 画面独自の擬似ルールIDを、miChecker関連判定に使うKBルールIDへ対応づける。
   // iframe.cms-reviewはCMS運用上の確認事項でmiCheckerのチェック項目ではないため、対応先なし。
+  // text.decoration-lines: KB上はmichecker_check_idsが空だが、実体はU/S/STRIKE要素やCENTER/BIG/TT等の
+  // 廃止要素(miChecker C_33.1/C_33.2/C_48.2)を検出しているため、html-structure.deprecated-elementsへ
+  // 対応づけてmiCheckerモードでも候補が表示されるようにする。
   const MICHECKER_RULE_ALIASES = {
     "iframe.title": "html-structure.iframe-frame-title",
     "iframe.frame-unsupported": "html-structure.iframe-frame-title",
+    "text.decoration-lines": "html-structure.deprecated-elements",
   };
 
   function isMicheckerRelevantRule(ruleId) {
@@ -610,7 +614,80 @@
     collectDuplicateAttributeCandidates(fragment, candidates);
     collectFrameElementNotices(candidates);
     collectDeprecatedAttributeCandidates(fragment, candidates);
+    collectEmptyLinkCandidates(fragment, candidates);
+    collectDuplicateLinkTextCandidates(fragment, candidates);
     return candidates;
+  }
+
+  // miChecker C_57.6(item_57()): リンク内に要素もテキストも存在しない完全に空のリンク
+  // (例: <a href="/x"></a>)。item_57()は子ノード・img子孫のいずれも持たないリンクをhrefごとに
+  // グループ化して報告するが、本実装では空リンク1件ごとに削除/内容追加の確認候補を出す。
+  // href="#"始まりのリンク(item_57()がerrorCountのみ加算し問題を出さない区分。link.link-brokenで
+  // 別途拾われる)は対象外にする。
+  function collectEmptyLinkCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("a[href]").forEach((link) => {
+      const href = (link.getAttribute("href") || "").trim();
+      if (!href || href.startsWith("#") || link.childNodes.length > 0) {
+        return;
+      }
+      candidates.push(
+        makeCandidate({
+          ruleId: "link.link-purpose-standalone",
+          element: link,
+          message: "リンク内に要素やテキストが存在しません。",
+          reason: "リンク内が完全に空のため、スクリーンリーダーでも視覚的にも内容が伝わりません。リンク内に読み上げ可能なテキストや画像(alt付き)を追加するか、不要であればリンク自体を削除してください。",
+          afterHtml: link.outerHTML,
+          confidence: "medium",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    });
+  }
+
+  // miChecker C_58.0(item_58()): 異なる複数のURLへのリンクに同一のリンクテキストを使っているケース。
+  // 読み上げ可能テキスト(computeLinkAccessibleText)ごとにグループ化し、hrefが2種類以上ある場合、
+  // 最初に現れたhref以外の(新しく現れた)hrefを持つリンクごとに確認候補を出す
+  // (collectDuplicateAttributeCandidatesFor()と同様、最初の出現は基準として残す)。
+  function collectDuplicateLinkTextCandidates(fragment, candidates) {
+    const groups = new Map();
+    fragment.content.querySelectorAll("a[href]").forEach((link) => {
+      const text = computeLinkAccessibleText(link, fragment.content);
+      const href = (link.getAttribute("href") || "").trim();
+      if (!text || !href) {
+        return;
+      }
+      if (!groups.has(text)) {
+        groups.set(text, []);
+      }
+      groups.get(text).push({ element: link, href });
+    });
+
+    groups.forEach((entries, text) => {
+      const uniqueHrefs = new Set(entries.map((entry) => entry.href));
+      if (uniqueHrefs.size < 2) {
+        return;
+      }
+      const seenHrefs = new Set([entries[0].href]);
+      entries.slice(1).forEach((entry) => {
+        if (seenHrefs.has(entry.href)) {
+          return;
+        }
+        seenHrefs.add(entry.href);
+        candidates.push(
+          makeCandidate({
+            ruleId: "link.link-purpose-standalone",
+            element: entry.element,
+            message: `同じリンクテキスト「${text}」で異なるリンク先が使われています。`,
+            reason: "同一テキストのリンクが異なる遷移先を指すと、利用者がリンク先を誤認する可能性があります。リンクテキストにリンク先固有の情報(年度・ファイル名等)を含めて区別できるようにしてください。",
+            afterHtml: entry.element.outerHTML,
+            confidence: "medium",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      });
+    });
   }
 
   // miChecker C_48.8: 廃止属性の除去。checkitem.xmlの説明文言は「古い属性全般」だが、CheckEngine.java
@@ -1182,26 +1259,61 @@
   }
 
   function collectLinkCandidates(fragment, candidates) {
+    // miChecker C_57.5: 隣接(直前・直後)のhref付きリンクが同一URLかつ読み上げ可能テキストを持つ場合、
+    // 「1つのリンクに統合できないか」の確認に振り分ける(item_57()のsequenceOk判定)。
+    // 文書順のhref付きリンク一覧をあらかじめ計算しておく。
+    const hrefLinkList = [...fragment.content.querySelectorAll("a[href]")];
+    const hrefLinkTexts = hrefLinkList.map((el) => computeLinkAccessibleText(el, fragment.content));
+    const hrefLinkHrefs = hrefLinkList.map((el) => (el.getAttribute("href") || "").trim());
+    const hrefLinkIndex = new Map(hrefLinkList.map((el, idx) => [el, idx]));
+
     fragment.content.querySelectorAll("a").forEach((link) => {
       const text = normalizeText(link.textContent);
       const href = link.getAttribute("href") || "";
       const hrefInfo = classifyHref(href);
 
-      // miChecker C_57.2: リンク内に読み上げ可能なテキストが無い(画像のみ・アイコンのみ等)。
+      // miChecker C_57.2/C_57.5: リンク内に読み上げ可能なテキストが無い(画像のみ・アイコンのみ等)。
       // テキストノード + img[alt] + aria-label/aria-labelledby を合成した「読み上げ可能テキスト」で判定する。
-      if (!computeLinkAccessibleText(link, fragment.content)) {
-        candidates.push(
-          makeCandidate({
-            ruleId: "link.link-purpose-standalone",
-            element: link,
-            message: "リンク内に読み上げ可能なテキストがありません。",
-            reason: "画像のみ・アイコンのみのリンクなど、読み上げ可能なテキストが無いリンクはスクリーンリーダーで内容が伝わりません。alt属性の追加やリンクテキストの追加で、リンク先が分かるようにしてください。",
-            afterHtml: link.outerHTML,
-            confidence: "medium",
-            requiresHumanReview: true,
-            patchMode: "none",
-          })
-        );
+      // 完全に要素・テキストが空のリンク(item_57()のC_57.6区分)はcollectEmptyLinkCandidates()で別途
+      // 扱うため、ここでは子ノードが1つ以上ある(画像等はあるがalt等の読み上げテキストが無い)場合のみ対象にする。
+      if (!computeLinkAccessibleText(link, fragment.content) && link.childNodes.length > 0) {
+        const idx = hrefLinkIndex.get(link);
+        let adjacentText = null;
+        if (idx !== undefined) {
+          const currentHref = hrefLinkHrefs[idx];
+          if (idx > 0 && hrefLinkHrefs[idx - 1] === currentHref && hrefLinkTexts[idx - 1]) {
+            adjacentText = hrefLinkTexts[idx - 1];
+          } else if (idx + 1 < hrefLinkList.length && hrefLinkHrefs[idx + 1] === currentHref && hrefLinkTexts[idx + 1]) {
+            adjacentText = hrefLinkTexts[idx + 1];
+          }
+        }
+        if (adjacentText) {
+          candidates.push(
+            makeCandidate({
+              ruleId: "link.link-purpose-standalone",
+              element: link,
+              message: "直前または直後に同じリンク先へのリンクがあります。",
+              reason: `読み上げ可能なテキストが無いリンクですが、直前または直後にある「${adjacentText}」への同一リンク先のリンクと1つに統合できないか検討してください。統合しない場合は、このリンクにも読み上げ可能なテキストを追加してください。`,
+              afterHtml: link.outerHTML,
+              confidence: "medium",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        } else {
+          candidates.push(
+            makeCandidate({
+              ruleId: "link.link-purpose-standalone",
+              element: link,
+              message: "リンク内に読み上げ可能なテキストがありません。",
+              reason: "画像のみ・アイコンのみのリンクなど、読み上げ可能なテキストが無いリンクはスクリーンリーダーで内容が伝わりません。alt属性の追加やリンクテキストの追加で、リンク先が分かるようにしてください。",
+              afterHtml: link.outerHTML,
+              confidence: "medium",
+              requiresHumanReview: true,
+              patchMode: "none",
+            })
+          );
+        }
       }
 
       const cleanedFileText = removeFileMeta(text);
@@ -2491,6 +2603,29 @@
         })
       );
     }
+
+    // miChecker C_8.0(styleCheck()): 同一要素のstyle属性にcolorとbackground/background-color
+    // (またはbgcolor属性)が両方とも指定されている場合、「配色だけに情報を持たせていないか」の確認
+    // 対象になる(color/bgcolorのいずれか一方のみの指定ではC_500.17/C_500.18止まりで発火しない)。
+    // 上のtext.color/text.background-color候補とは独立して追加するため、除去提案(patch)は持たせない。
+    const hasColorForSensory = hasInlineStyleProperty(element, ["color"]);
+    const hasBgForSensory = hasInlineStyleProperty(element, ["background", "background-color"]) || hasBgColorAttr;
+    if (hasColorForSensory && hasBgForSensory) {
+      pushUniqueCandidate(
+        candidates,
+        seen,
+        makeCandidate({
+          ruleId: "text.sensory-characteristics",
+          element,
+          message: "文字色と背景色が同時に指定されています。",
+          reason: "配色だけで情報を伝えている場合、色を取り除いても内容が伝わるかを確認してください。伝わらない場合は、記号や文言で情報を補ってください。",
+          afterHtml: element.outerHTML,
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
+        })
+      );
+    }
   }
 
   // miChecker C_33.0/C_34.0: blink・marquee要素。廃止要素として除去(unwrap)し、テキストは保持する。
@@ -2523,11 +2658,20 @@
     return true;
   }
 
+  // miChecker C_48.0/C_48.2: 廃止要素の対象拡大。item_48()で確認した実際に発火するタグのうち、
+  // 装飾目的で使われるもの(basefont/center/font/strike/u、HTML5判定時はさらにbig/tt)を対象にする。
+  // NOBRはitem_48()にチェックロジックが存在せず発火しないため対象外(デッドコード扱い)。
+  // menuitem/frame/frameset/noframes/acronym/dir/isindex/listing/plaintext/xmpはC_48.0/C_48.2以外の
+  // 別チェックID(C_48.1/48.3-48.5/48.7)であり、本タスクのB分類対象(C_48.0/C_48.2)ではないため対象外。
+  const FONT_LIKE_DEPRECATED_TAGS = ["FONT", "BASEFONT"];
+  const DECORATION_DEPRECATED_TAGS = ["U", "S", "STRIKE", "I", "CENTER", "BIG", "TT"];
+
   function collectDecorationElementCandidate(element, candidates, seen) {
     if (collectDeprecatedMotionElementCandidate(element, candidates, seen)) {
       return;
     }
-    if (!["U", "S", "STRIKE", "I", "FONT"].includes(element.tagName)) {
+    const isFontLike = FONT_LIKE_DEPRECATED_TAGS.includes(element.tagName);
+    if (!isFontLike && !DECORATION_DEPRECATED_TAGS.includes(element.tagName)) {
       return;
     }
 
@@ -2535,18 +2679,42 @@
       candidates,
       seen,
       makeCandidate({
-        ruleId: element.tagName === "FONT" ? "text.font-size" : "text.decoration-lines",
+        ruleId: isFontLike ? "text.font-size" : "text.decoration-lines",
         element,
-        message: element.tagName === "FONT" ? "font要素が含まれています。" : "装飾用のHTML要素が含まれています。",
-        reason: element.tagName === "FONT"
+        message: isFontLike ? `${element.tagName.toLowerCase()}要素が含まれています。` : "装飾用のHTML要素が含まれています。",
+        reason: isFontLike
           ? "文字サイズやフォントはCMS側の標準表示に合わせ、本文HTMLでは指定しません。"
-          : "下線、打消し線、斜め文字は使用せず、必要な強調は文脈に合う方法で扱います。",
+          : "下線、打消し線、斜め文字、中央寄せ、拡大文字、等幅表示などの装飾用要素は使用せず、必要な強調は文脈に合う方法で扱います。",
         afterHtml: element.innerHTML,
         patch: { type: "unwrap-element" },
         confidence: "high",
         requiresHumanReview: false,
       })
     );
+
+    // miChecker C_8.0(item_8()): font要素のcolor/bgcolor属性は、どちらか一方でも値があれば
+    // 「配色だけに情報を持たせていないか」の確認対象になる(styleCheck()のcolor+background併用時
+    // のみ発火する条件とは異なり、font要素はcolor/bgcolorのいずれか一方の指定でも発火する)。
+    if (element.tagName === "FONT") {
+      const colorAttr = (element.getAttribute("color") || "").trim();
+      const bgColorAttr = (element.getAttribute("bgcolor") || "").trim();
+      if (colorAttr || bgColorAttr) {
+        pushUniqueCandidate(
+          candidates,
+          seen,
+          makeCandidate({
+            ruleId: "text.sensory-characteristics",
+            element,
+            message: "font要素にcolor/bgcolor属性による配色指定があります。",
+            reason: "配色だけで情報を伝えている場合、色を取り除いても内容が伝わるかを確認してください。伝わらない場合は、記号や文言で情報を補ってください。",
+            afterHtml: element.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
+      }
+    }
   }
 
   function collectBoldCandidate(element, candidates, seen) {
@@ -6090,7 +6258,51 @@
     const src = img.getAttribute("src") || "";
     const alt = img.getAttribute("alt") || "";
     const text = `${src} ${alt} ${caption}`;
-    return /(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|map|chart|graph)/i.test(text);
+    if (/(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|map|chart|graph)/i.test(text)) {
+      return true;
+    }
+    // miChecker C_4.0(item_4()): キーワード非依存のシグナル。isNormalImage()相当(極端に小さい・
+    // 細長いアイコン等ではない)画像で、alt文字列が「3語以上、または(日本語想定の)20文字以上」かつ
+    // 「非ASCII文字を含む、またはASCIIのみで30文字超」の場合に発火する。地図・グラフ等のキーワードが
+    // 無くても、既にある程度詳しい代替テキストが書かれている画像は複雑な画像の可能性があるとみなし、
+    // aria-describedby等での補足説明を検討する確認対象にする。
+    if (!isNormalSizedImageForComplexCheck(img)) {
+      return false;
+    }
+    return isMicheckerComplexImageAltText(alt);
+  }
+
+  function isNormalSizedImageForComplexCheck(img) {
+    const parseDimension = (value) => {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : 100;
+    };
+    const width = img.hasAttribute("width") ? parseDimension(img.getAttribute("width")) : 100;
+    const height = img.hasAttribute("height") ? parseDimension(img.getAttribute("height")) : 100;
+    if (width >= 50 && height >= 50) {
+      return true;
+    }
+    const big = Math.max(width, height);
+    const small = Math.min(width, height);
+    if (big < 50) {
+      return false;
+    }
+    return small / big >= 0.2;
+  }
+
+  const MICHECKER_ALT_WORD_DELIMITER = /[ \t\n\r\f,.[\]()<>!?:/"、。「」・〈〉　]+/;
+
+  function isMicheckerComplexImageAltText(alt) {
+    if (!alt) {
+      return false;
+    }
+    const wordCount = alt.split(MICHECKER_ALT_WORD_DELIMITER).filter(Boolean).length;
+    // 自治体CMS本文はほぼ日本語(DBCS)前提のため、item_4()のvalidate_str_len(DBCS時20文字)を用いる。
+    if (wordCount < 3 && alt.length < 20) {
+      return false;
+    }
+    const isAsciiOnly = /^[\x00-\x7f]*$/.test(alt);
+    return !isAsciiOnly || alt.length > 30;
   }
 
   function inferTopPageLinkText() {

@@ -21,6 +21,21 @@
 
 ## Entries
 
+## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2B: 廃止要素拡大・リンク関連・配色確認、最終フェーズ)
+
+- 背景・目的: Phase 2A(テーブル層・色/コントラスト)に続き、B分類(部分カバー)の残り(廃止要素の対象拡大、リンク関連、複雑画像シグナル、配色のみの情報伝達確認)を実装した。Phase 2Aで「事前のギャップ分析レポート自体に誤りがある」ことが判明したため、本Phaseでは実装対象の全項目についてmiChecker本体のJavaソース(`CheckEngine.java`・`HtmlEvalUtil.java`)を先に取得して発火条件を裏取りしてから実装する方針を徹底した。
+- **裏取りにより判明した重要な事実**: レポートに残っていたC_19.0/C_500.6(外国語検出)・C_71.0/C_600.0(非テキストコンテンツ代替確認)・C_600.14(曖昧リンク文言)・C_500.11/C_500.12(コントラスト・拡大確認)の計6件は、対応する`item_NN()`ロジックが存在せず、`always()`という**要素条件を一切持たないページ単位の無条件リマインダー**(checkitem.xmlの`type="info"`と整合)であることが判明した。これらをmiChecker通りに実装すると内容に無関係な定型ノイズになるため、Phase 2AのC_23.1と同じ理由で**意図的に未実装**とした。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - C_48.0/C_48.2: 廃止要素の対象拡大。CENTER・BASEFONT・BIG・TTを`collectDecorationElementCandidate()`に追加(item_48()で実際に発火するタグのみ)。NOBRはitem_48()にチェックロジックが存在せず対象外と確認。
+  - C_4.0: 複雑画像のキーワード非依存シグナル。`item_4()`の実際の条件(alt文字列が3語以上または20文字以上、かつ非ASCII含むか30文字超、小さすぎる/細長すぎるアイコンは除外)を`isMicheckerComplexImageAltText()`/`isNormalSizedImageForComplexCheck()`として実装し、既存のキーワード一致判定に追加(いずれかを満たせば発火)。
+  - C_8.0: 配色のみでの情報伝達確認。style属性でcolorとbackground/background-colorが**両方**指定されている場合(`styleCheck()`相当)、およびfont要素のcolor/bgcolor属性が**いずれか一方でも**指定されている場合(`item_8()`相当、font要素は条件が異なる)に確認候補を追加。`text.sensory-characteristics`ルールへ対応づけ。
+  - C_57.5/C_57.6/C_58.0: リンク関連。隣接(直前・直後)する同一hrefのリンクへの統合検討(C_57.5)、要素・テキストが完全に空のリンク(C_57.6、`href="#"`始まりは既存の`link.link-broken`に委ねるため対象外)、同一リンクテキストで異なるhrefを指す場合の確認(C_58.0)を追加。
+  - **副次的なバグ修正**: `text.decoration-lines`ルールのfrontmatterに`michecker_check_ids`が未設定だったため、miCheckerモードでU/S/STRIKE/CENTER/BIG/TT候補が(実際にはC_33.1/33.2/48.2等のmiChecker項目を検出しているにもかかわらず)一切表示されなかった既存バグを発見。`MICHECKER_RULE_ALIASES`に`"text.decoration-lines" → "html-structure.deprecated-elements"`を追加して解消。
+- 検証: 陽性12+陰性含む独立検証全PASS(サブエージェント実装後、親セッションで別途Playwrightスクリプトを書いて再検証)、既存6サンプルは`links-text`のみ20→21件(C_8.0のcolor+background-color併用スタイルに該当する既存サンプル文言があり、意図した増加)、他5サンプルは完全一致。`node --check`・`node test/run-tests.js`成功。C_4.0の拡張により、既に丁寧に書かれた説明的なalt文(例:「市役所本庁舎の外観、青空の下で撮影した写真」)にも確認候補が出ることを確認したが、`confidence: low`・`patchMode: none`・人間確認前提の設計であり、miChecker本体自体がこの粒度で動作するため、ユーザーの「検出方法も完全に一致させたい」という要望に沿った意図的な挙動と判断した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/run-tests.js`
+- 関連PR: (作成予定)
+- 備考: これでmiChecker検出パリティのPhase 1・2A・2Bが完了。ギャップ分析88項目のうちA(上位互換、Phase 2A訂正後15件)はそのまま、B(部分カバー、当初32件)のうち実装したもの以外(dead code 6件・意図的ノイズ回避2件)は対象外と結論。残るC(未検出、42件)への対応(Phase 3、user/info型の確認通知)は未着手。
+
 ## 2026-07-10: miChecker warning型チェック項目の検出パリティ実装(Phase 2A: テーブル層・色/コントラスト)
 
 - 背景・目的: Phase 1(error型14件)に続き、ギャップ分析でB分類(部分カバー)とされたテーブル構造・色/コントラスト系の検出漏れを補強した。実装前にmiChecker本体のJavaソース(eclipse-actf `CheckEngine.java`・`HtmlEvalUtil.java`)を直接取得して発火条件を裏取りしたところ、事前のギャップ分析レポートには複数の誤りがあることが判明したため、Javaソースを正として実装範囲を再確定した。

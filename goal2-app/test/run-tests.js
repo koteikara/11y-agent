@@ -292,6 +292,60 @@ async function main() {
     "cloneTableCellAs should strip color/background styling so structural table rebuilds stay consistent with the color candidates"
   );
 
+  // miChecker warning/B-classification parity additions (Phase 2B: deprecated elements,
+  // keyword-independent complex image signal, color-only-information confirmation, link relations).
+  // C_48.0/C_48.2 (center/big/tt/basefont deprecated elements), C_4.0 (alt length/word-count complex
+  // image signal), C_8.0 (color+background combo / font color+bgcolor), C_57.5 (adjacent same-href
+  // link merge suggestion), C_57.6 (structurally empty link), C_58.0 (same text, different hrefs).
+  assert.ok(
+    appJs.includes("DECORATION_DEPRECATED_TAGS") && appJs.includes('"CENTER", "BIG", "TT"'),
+    "deprecated decoration element detection (C_48.0/C_48.2) should include CENTER/BIG/TT"
+  );
+  assert.ok(
+    appJs.includes("FONT_LIKE_DEPRECATED_TAGS") && appJs.includes('"FONT", "BASEFONT"'),
+    "deprecated font-like element detection (C_48.2) should include BASEFONT alongside FONT"
+  );
+  assert.ok(!appJs.includes('"NOBR"'), "NOBR should not be treated as a deprecated element (miChecker item_48() has no matching logic)");
+  assert.ok(
+    appJs.includes('"text.decoration-lines": "html-structure.deprecated-elements"'),
+    "text.decoration-lines should be aliased to html-structure.deprecated-elements so miChecker mode surfaces U/S/STRIKE/CENTER/BIG/TT candidates"
+  );
+
+  assert.ok(
+    appJs.includes("isMicheckerComplexImageAltText"),
+    "keyword-independent complex image alt-length/word-count signal (C_4.0) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("isNormalSizedImageForComplexCheck"),
+    "complex image signal should exclude small/icon-sized images (item_4()'s isNormalImage())"
+  );
+
+  assert.ok(
+    appJs.includes("text.sensory-characteristics"),
+    "color-only-information confirmation (C_8.0) should use the text.sensory-characteristics KB rule id"
+  );
+  assert.ok(
+    appJs.includes("文字色と背景色が同時に指定されています。"),
+    "combined inline color+background-color should trigger a C_8.0 confirmation message"
+  );
+  assert.ok(
+    appJs.includes("font要素にcolor/bgcolor属性による配色指定があります。"),
+    "font[color]/font[bgcolor] should trigger a C_8.0 confirmation message"
+  );
+
+  assert.ok(
+    appJs.includes("collectEmptyLinkCandidates"),
+    "structurally empty link detection (C_57.6) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("collectDuplicateLinkTextCandidates"),
+    "duplicate link text with different hrefs detection (C_58.0) should be implemented"
+  );
+  assert.ok(
+    appJs.includes("直前または直後に同じリンク先へのリンクがあります。"),
+    "adjacent same-href link merge suggestion (C_57.5) should have a Japanese message"
+  );
+
   const indexHtml = fs.readFileSync(path.join(rootDir, "public/index.html"), "utf8");
   assert.ok(indexHtml.includes("bulkSelectAll"), "bulk select-all checkbox should exist");
   assert.ok(indexHtml.includes('id="ruleScopeSelect"'), "rule scope selector should exist on the Goal 2 screen");
