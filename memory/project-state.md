@@ -303,7 +303,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - ユーザーがGemini APIキー(利用量上限付きのテスト用)をチャットで提供。会話ログへの残留を懸念し、環境変数設定(Claude Code on the web)やファイル添付の方法も検討したが、いずれも今動いているセッションを継続したまま完全に痕跡を残さずに渡す方法は無いと判断し、最終的にチャット貼り付け方式で提供を受けた。受け取ったキーはリポジトリ外のスクラッチパッド領域にのみ保存し、動作確認後に削除、リポジトリには一切含めていない。
   - ステージ1(実装順序4段階のうち1段階目)を実装: `goal2-app/lib/llm.js`(`callGemini()`、キャッシュ、`LLM_MAX_CALLS_PER_MINUTE`予算ガード、`usageMetadata`からのコスト概算)、`goal2-app/lib/llm-prompts.js`(タスク別プロンプト、`foreign-language`のみ実装)、`server.js`の`POST /api/llm/enrich`、`app.js`の`enrichWithLlm()`(`text.foreign-language`に接続)、候補一覧サマリーへのコスト表示。
   - 検証: `node --check`・`node test/run-tests.js`(`GEMINI_API_KEY`未設定)成功、既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。ユーザー提供の実キーで実際にGemini呼び出しまで確認し、(1)正規表現版のフォールバック(`inferLanguageCode`)では検出不能だったフランス語("Bienvenue à la mairie...")をLLMが正しく`lang="fr"`と判定できることを実証、(2)予算ガードが3件目で429を返すこと、(3)UIの「問題」「この候補で変わること」欄に`(AI判定)`表示、コスト概算(例: 1ページ$0.0001程度)が正しく反映されることをPlaywrightで確認。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ(PR #33への追加コミット、またはstage単位の別PR)。その後、残り3ステージ(テキスト系8ルール→image.alt-text→heading-required)を計画(`/root/.claude/plans/melodic-purring-karp.md`)に沿って進める。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ(PR #33への追加コミット、またはstage単位の別PR)。その後、残り3ステージ(テキスト系8ルール→image.alt-text→heading-required)を計画(`/root/.claude/plans/melodic-purring-karp.md`)に沿って進める。→ コミット`f2f0105`としてPR #34を作成・マージ済み。
+  - ユーザーから「承認したのでステージ２へ」との指示を受け、ステージ2(残り8ルールへのenrichment接続)に着手した。
+  - 実装前に各ルールの実装コードを詳細に読み、`before_html`/`target.snippet`だけでは足りないコンテキスト(リンク周辺のテキスト・直前見出し、対象thを含む表全体)が必要なルール(`link.link-text`・`link.mail-link`・`table.th-scope`)を特定し、`makeCandidate()`に`options.llmContext`(UIには出さない内部専用フィールド、`candidate.proposal.llm_context`として保存)を追加してから各コレクター呼び出し箇所に渡すよう実装した。
+  - `table.cell-merge-*`は構造再構成(`buildMergedCellProposal`)のロジックが複雑なDOM変換のため、LLMに構造自体を生成させるのは安全性の観点でリスクが高いと判断し、分類(ruleId)・patch・after_htmlは変更せず、実際の表内容に即した理由文(`reason`)のみをLLMで差し替える設計にした(安全側に倒した判断)。
+  - `html-structure.heading-content-quality`は、既存ヒューリスティックが「見出しが2文字以下または記号のみ」という狭いケースしか候補化しない構造上、LLMで本当に価値を出すには「既存候補の上書き」ではなく「全見出しをLLMが走査して新規候補を提案する」パスが必要と判断。これは`html-structure.heading-required`(ステージ4)と同じ「新規候補提案」パターンのため、ステージ4にまとめる方針にスコープ変更した(ユーザーには変更内容と理由をCHANGELOGで明示)。
+  - `enrichWithLlm()`を、共通バッチ処理ヘルパー`runLlmBatch(task, targets, buildItem, applyResult)`を軸にリファクタリングし、8タスク(foreign-language/sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)を統一的なパターンで接続。50件超過時は自動チャンク分割。
+  - 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がステージ1と完全に同じベースラインと一致(回帰なし)。追加した7タスク全てが`/api/llm/enrich`で正しく認識される(`unknown_task`にならない)ことを確認。今回はテスト用APIキーの再提供が無かったため、ステージ1のような実際のGemini呼び出しまでのライブ検証は未実施(技術的な仕組み自体はステージ1で実証済みのため、未検証でも「AI改善が発生しないだけ」で既存動作は壊れない設計)。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。
 
 ## Decisions
 
