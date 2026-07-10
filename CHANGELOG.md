@@ -21,6 +21,18 @@
 
 ## Entries
 
+## 2026-07-10: image.avoid-text-as-imageを実装(vision LLMによる画像内文字検出)
+
+- 背景・目的: 未実装5ルール(ascii-art/quotation/avoid-text-as-image/heritage-image/showcase-section)を調査した結果、`text.ascii-art`・`text.quotation`は`michecker-triage.md`で既に「自動検出コードを持たない、AI/人間判断でのレビュー時に参照するKB文書」と意図的にスコープ外化されていることが判明。`image.heritage-image`・`image.showcase-section`は他ルールのbefore/afterパターンと異なり、ページ種別の判断基準を記した文書(検出対象ではなくコンテキスト供給用)であることが判明。明確なbefore/afterパターンを持ち、vision LLMで実装可能な`image.avoid-text-as-image`のみを新規実装する方針をユーザーに確認・合意した。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`: 新規タスク`avoid-text-as-image`を追加(`image-alt`と同じ単一画像style)。バナー等に描き込まれた本文相当の文字情報の有無(`has_embedded_text`)と、あれば書き起こしテキスト(`extracted_text`)を判定するプロンプト。
+  - `goal2-app/server.js`: `POST /api/llm/image-alt`を汎用化し、リクエストボディに任意の`task`フィールド(既定`"image-alt"`、後方互換)を追加。`getTaskConfig(task)`で未対応taskは400を返す。画像取得・SSRF対策・base64変換ロジックは既存の`fetchImageAsBase64`をそのまま再利用(新規セキュリティロジックなし)。
+  - `goal2-app/public/app.js`: 新規`enrichAvoidTextAsImageWithLlm(fragment, items)`/`enrichOneAvoidTextAsImage(img, baseUrl, items)`。他の画像enrichmentと異なり既存候補の上書きではなく新規候補提案パターン(heading-reviewと同型)。旧ページURL未入力時は画像取得不能なため即return(候補0件・呼び出し0件)。`isNormalSizedImageForComplexCheck()`(既存の複雑画像判定で使われている閾値)を再利用し、極小アイコンを除外してコストを抑制。LLMが`has_embedded_text: true`を返した場合のみ、画像の直後に書き起こしテキストを`<p>`として追加する候補(`image.avoid-text-as-image`、confidence: low、要人間確認)を新規作成する。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致(回帰なし)。ライブ検証: (1) Canvas生成の「7月10日は休館日です」というバナー画像をローカルで作成し`callGemini()`を直接呼び出したところ、`has_embedded_text: true`・`extracted_text: "7月10日は休館日です"`と完全一致する結果を確認(SSRF対策がローカルホスト宛リクエストを正しくブロックしたため、画像取得自体はブラウザ経由でなく直接呼び出しで検証)。(2) 実在する外部画像(GitHubのJSロゴ)をブラウザ経由で解析させ、`task: "avoid-text-as-image"`のリクエストが正しく送信され、ロゴには文字情報が無いため`has_embedded_text: false`・候補0件となることを確認(誤検出なし)。(3) `/api/llm/image-alt`の`task`未指定時(既存呼び出し)が引き続き`image-alt`として動作することを確認(後方互換)。
+- 副産物として、PR #38(table.layout-table系画像のvision enrichment)の未実施だったライブ検証もあわせて実施: 実在する外部画像を使った独自HTML(レイアウト表内に汎用alt画像を配置)で、表候補の`after_html`内の画像altが`alt="写真"`→`alt="JSのロゴ"`へ実際に書き換わること、同じ画像の独立`image.alt-text`候補も同じ結果になっている(重複呼び出し回避ロジックが機能している)ことを確認した。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`、`goal2-app/server.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定)
+
 ## 2026-07-10: table.layout-table系画像へのvision enrichment拡張
 
 - 背景・目的: PR#37までの4段階LLM統合で`image.alt-text`/`image.complex-image-report`という独立候補になった画像は`enrichImageAltWithLlm`でvision enrichmentされるが、`table.layout-table`/`table.cell-merge-layout`/`table.cell-merge-file`/`table.cell-merge-mark`の各候補が呼ぶ`decomposeLayoutTable()`は、表を解体・再構成する過程で画像のalt属性を`prepareLayoutTableImage()`の旧ヒューリスティック(`generateImageNameDraft`/`generateComplexImageNameDraft`)のみで直接`after_html`に焼き込んでおり、独立候補を一切作らないためLLM enrichmentの対象から漏れていた(直近のリプランニングでユーザーが選択した「2」に対応)。

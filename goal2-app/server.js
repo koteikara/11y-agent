@@ -598,11 +598,16 @@ const server = http.createServer(async (request, response) => {
       const body = await readJsonBody(request);
       const imageUrl = typeof body?.imageUrl === "string" ? body.imageUrl : "";
       const caption = typeof body?.caption === "string" ? body.caption : "";
+      const task = typeof body?.task === "string" && body.task ? body.task : "image-alt";
       if (!imageUrl) {
         sendJson(response, 400, { ok: false, error: "missing_image_url", message: "imageUrlを指定してください。" });
         return;
       }
-      const config = getTaskConfig("image-alt");
+      const config = getTaskConfig(task);
+      if (!config) {
+        sendJson(response, 400, { ok: false, error: "unknown_task", message: `未対応のtaskです: ${task}` });
+        return;
+      }
       const { base64, mimeType } = await fetchImageAsBase64(imageUrl);
       const result = await callGemini({
         systemPrompt: config.systemPrompt,

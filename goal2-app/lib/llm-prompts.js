@@ -225,6 +225,29 @@ const TASKS = {
     },
   },
 
+  // Same single-item vision style as image-alt (see note above) — reused via the same
+  // /api/llm/image-alt endpoint by passing task: "avoid-text-as-image" in the request body.
+  "avoid-text-as-image": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "与えられた画像を見て、バナーや告知画像のように、本来は本文テキストとして提供すべき見出し・告知文・日付・案内文等の文字情報が、" +
+      "画像の中に描き込まれているかを判定してください。" +
+      "ロゴ・アイコンや、写真の中にたまたま写り込んでいる看板・商品パッケージ等の文字は対象外です。" +
+      "画像自体が文字情報を伝える目的で作られている場合のみhas_embedded_textをtrueにし、" +
+      "画像内の文字をそのまま日本語テキストとしてextracted_textに書き起こしてください(改行はスペースでつなげてよい)。",
+    responseSchema: {
+      type: "OBJECT",
+      properties: {
+        has_embedded_text: { type: "BOOLEAN" },
+        extracted_text: { type: "STRING" },
+      },
+      required: ["has_embedded_text"],
+    },
+    buildUserText(item) {
+      return JSON.stringify({ caption: item.caption || "" });
+    },
+  },
+
   // Unlike the other text tasks, heading-review reasons over the whole document's outline
   // at once rather than independent per-candidate items — it is called with a single
   // synthetic item ({ id: "outline", blocks: [...] }) so it can reuse the same batched
