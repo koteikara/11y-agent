@@ -22,6 +22,26 @@
       <p class="analyze-overlay-text">AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。</p>
     </div>
 
+    <div id="previewExpandOverlay" class="preview-expand-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="previewExpandTitle">
+      <div class="preview-expand-dialog">
+        <div class="preview-expand-header">
+          <h2 id="previewExpandTitle">プレビュー（拡大表示）</h2>
+          <button type="button" id="previewExpandCloseButton" aria-label="拡大表示を閉じる">閉じる</button>
+        </div>
+        <iframe id="previewFrameExpanded" title="本文HTMLのプレビュー（拡大表示）" sandbox="allow-same-origin"></iframe>
+      </div>
+    </div>
+
+    <div id="ruleLearnMoreOverlay" class="rule-learn-more-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ruleLearnMoreTitle">
+      <div class="rule-learn-more-dialog">
+        <div class="rule-learn-more-header">
+          <h2 id="ruleLearnMoreTitle">ルールについて</h2>
+          <button type="button" id="ruleLearnMoreCloseButton" aria-label="このルールについての説明を閉じる">閉じる</button>
+        </div>
+        <div id="ruleLearnMoreBody" class="rule-learn-more-body"></div>
+      </div>
+    </div>
+
     <main class="app-shell" id="appMain">
       <section class="input-body input-form-card" id="inputBody" aria-labelledby="inputTitle">
           <h2 id="inputTitle">入力HTML</h2>
@@ -165,11 +185,12 @@
         <section class="preview-pane" aria-labelledby="previewTitle">
           <div class="pane-heading">
             <div>
-              <h2 id="previewTitle">レンダリング</h2>
+              <h2 id="previewTitle">プレビュー</h2>
               <p>選択中の候補箇所をハイライトします。</p>
             </div>
+            <button type="button" id="previewExpandButton" class="secondary" aria-haspopup="dialog">拡大</button>
           </div>
-          <iframe id="previewFrame" title="レンダリングされた本文HTML" sandbox="allow-same-origin"></iframe>
+          <iframe id="previewFrame" title="本文HTMLのプレビュー" sandbox="allow-same-origin"></iframe>
         </section>
       </section>
 

@@ -250,6 +250,14 @@
     bulkActionStatus: document.getElementById("bulkActionStatus"),
     candidateList: document.getElementById("candidateList"),
     previewFrame: document.getElementById("previewFrame"),
+    previewExpandButton: document.getElementById("previewExpandButton"),
+    previewExpandOverlay: document.getElementById("previewExpandOverlay"),
+    previewExpandCloseButton: document.getElementById("previewExpandCloseButton"),
+    previewFrameExpanded: document.getElementById("previewFrameExpanded"),
+    ruleLearnMoreOverlay: document.getElementById("ruleLearnMoreOverlay"),
+    ruleLearnMoreTitle: document.getElementById("ruleLearnMoreTitle"),
+    ruleLearnMoreCloseButton: document.getElementById("ruleLearnMoreCloseButton"),
+    ruleLearnMoreBody: document.getElementById("ruleLearnMoreBody"),
     outputDrawer: document.querySelector(".output-drawer"),
     pageAgentPanel: document.getElementById("pageAgentPanel"),
     reviewPosition: document.getElementById("reviewPosition"),
@@ -309,11 +317,40 @@
     els.applyAiImageNameButton.addEventListener("click", applyAiImageNameToAfterHtml);
     els.prevCandidateButton.addEventListener("click", selectPreviousCandidate);
     els.nextCandidateButton.addEventListener("click", selectNextUnresolvedCandidate);
+    els.previewExpandButton?.addEventListener("click", openPreviewExpanded);
+    els.previewExpandCloseButton?.addEventListener("click", closePreviewExpanded);
+    els.previewExpandOverlay?.addEventListener("click", (event) => {
+      if (event.target === els.previewExpandOverlay) {
+        closePreviewExpanded();
+      }
+    });
+    els.candidateDetail?.addEventListener("click", (event) => {
+      if (event.target.closest(".rule-learn-more-trigger")) {
+        openRuleLearnMore(selectedCandidate());
+      }
+    });
+    els.ruleLearnMoreCloseButton?.addEventListener("click", closeRuleLearnMore);
+    els.ruleLearnMoreOverlay?.addEventListener("click", (event) => {
+      if (event.target === els.ruleLearnMoreOverlay) {
+        closeRuleLearnMore();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (els.ruleLearnMoreOverlay && !els.ruleLearnMoreOverlay.hidden) {
+        closeRuleLearnMore();
+        return;
+      }
+      if (els.previewExpandOverlay && !els.previewExpandOverlay.hidden) {
+        closePreviewExpanded();
+      }
+    });
     els.pageAgentPanel?.addEventListener("click", handlePageAgentAction);
     els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentDrag);
     els.pageAgentPanel?.addEventListener("keydown", handlePageAgentDragHandleKeydown);
     window.addEventListener("resize", ensurePageAgentInViewport);
-    els.previewFrame.addEventListener("load", scrollPreviewToSelectedCandidate);
+    els.previewFrame.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrame));
+    els.previewFrameExpanded?.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrameExpanded));
     els.copyHtmlButton.addEventListener("click", () => copyText(els.finalHtml.value));
     els.copyEvidenceButton.addEventListener("click", () => copyText(els.evidenceOutput.value));
     els.downloadCsvButton.addEventListener("click", downloadEvidenceCsv);
@@ -5195,6 +5232,8 @@
         title: kbRule.title || options.ruleId,
         source: kbRule.source || "",
         description: kbRule.description || "",
+        rule_text: kbRule.rule || "",
+        examples: Array.isArray(kbRule.examples) ? kbRule.examples : [],
       },
     };
   }
@@ -6360,6 +6399,7 @@
       <section class="detail-summary-card">
         <h3>この候補で変わること</h3>
         <ul class="change-summary">${changeSummary || "<li>修正前後の見え方を比べます。</li>"}</ul>
+        ${buildRuleLearnMoreTriggerHtml()}
       </section>
       <section class="detail-summary-card">
         <h3>修正方法</h3>
@@ -6693,6 +6733,58 @@
     return "候補";
   }
 
+  function buildRuleLearnMoreTriggerHtml() {
+    return `<button type="button" class="rule-learn-more-trigger">❓ このルールについて詳しく確認する</button>`;
+  }
+
+  function buildRuleLearnMoreBodyHtml(candidate) {
+    const rule = candidate.rule || {};
+    const wcagJis = [...new Set([...(candidate.issue?.wcag || []), ...(candidate.issue?.jis || [])])].filter(Boolean).join(" / ");
+    const examplesHtml = (rule.examples || [])
+      .slice(0, 3)
+      .map(
+        (example) => `
+          <div class="rule-learn-more-example">
+            ${example.case ? `<p class="rule-learn-more-example-case">${escapeHtml(example.case)}</p>` : ""}
+            <div class="rule-learn-more-example-pair">
+              <div><span class="rule-learn-more-example-label">修正前</span><code>${escapeHtml(example.before || "")}</code></div>
+              <div><span class="rule-learn-more-example-label">修正後</span><code>${escapeHtml(example.after || "")}</code></div>
+            </div>
+            ${example.point ? `<p class="rule-learn-more-example-point">${escapeHtml(example.point)}</p>` : ""}
+          </div>
+        `
+      )
+      .join("");
+    return `
+      ${wcagJis ? `<p class="rule-learn-more-wcag">WCAG/JIS: ${escapeHtml(wcagJis)}</p>` : ""}
+      ${rule.description ? `<p>${escapeHtml(rule.description)}</p>` : ""}
+      ${rule.rule_text ? `<p class="rule-learn-more-text">${escapeHtml(rule.rule_text)}</p>` : ""}
+      ${examplesHtml ? `<div class="rule-learn-more-examples">${examplesHtml}</div>` : ""}
+      ${rule.source ? `<p class="rule-learn-more-source">出典: ${escapeHtml(rule.source)}</p>` : ""}
+    `;
+  }
+
+  function openRuleLearnMore(candidate) {
+    if (!els.ruleLearnMoreOverlay || !candidate) return;
+    els.ruleLearnMoreTitle.textContent = candidate.rule?.title || candidate.rule_id;
+    els.ruleLearnMoreBody.innerHTML = buildRuleLearnMoreBodyHtml(candidate);
+    els.ruleLearnMoreOverlay.hidden = false;
+    if (els.appMain) {
+      els.appMain.inert = true;
+    }
+    els.ruleLearnMoreCloseButton?.focus();
+  }
+
+  function closeRuleLearnMore() {
+    if (!els.ruleLearnMoreOverlay || els.ruleLearnMoreOverlay.hidden) return;
+    els.ruleLearnMoreOverlay.hidden = true;
+    if (els.appMain) {
+      els.appMain.inert = false;
+    }
+    const trigger = els.candidateDetail?.querySelector(".rule-learn-more-trigger");
+    trigger?.focus();
+  }
+
   function buildVisualPreviewCard(title, html, tone, changeNote) {
     const previewHtml = sanitizeVisualPreviewHtml(stripInternalFromHtml(html || "<p>（内容なし）</p>"));
     return `
@@ -6811,7 +6903,7 @@
     return cleanHtml(template.innerHTML);
   }
 
-  function renderPreview() {
+  function buildPreviewHtml() {
     const html = state.workingHtml || cleanHtml(state.sourceHtml);
     const template = document.createElement("template");
     template.innerHTML = html;
@@ -6823,10 +6915,8 @@
         target.classList.add("goal2-highlight");
       }
     }
-    els.previewFrame.dataset.scrollStatus = candidate ? "pending" : "idle";
-    els.previewFrame.dataset.scrollCandidateId = candidate?.candidate_id || "";
     const previewHtml = stripInternalFromHtml(template.innerHTML);
-    els.previewFrame.srcdoc = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>
+    return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>
       body{font-family:"Segoe UI","Yu Gothic UI","Meiryo",sans-serif;line-height:1.7;color:#18212b;padding:18px;margin:0}
       h1,h2,h3,h4,h5,h6{display:flex;align-items:center;gap:.45rem;line-height:1.35;margin:1.15em 0 .45em}
       h1::before,h2::before,h3::before,h4::before,h5::before,h6::before{flex:0 0 auto;border:1px solid #bcc8d4;border-radius:4px;background:#eef3f8;color:#253242;font-size:12px;font-weight:700;line-height:1.4;padding:1px 6px}
@@ -6842,28 +6932,64 @@
     </style></head><body>${previewHtml || "<p>HTMLを入力してください。</p>"}</body></html>`;
   }
 
-  function scrollPreviewToSelectedCandidate() {
+  function renderPreview() {
+    const candidate = selectedCandidate();
+    const previewHtml = buildPreviewHtml();
+    els.previewFrame.dataset.scrollStatus = candidate ? "pending" : "idle";
+    els.previewFrame.dataset.scrollCandidateId = candidate?.candidate_id || "";
+    els.previewFrame.srcdoc = previewHtml;
+    if (els.previewFrameExpanded && els.previewExpandOverlay && !els.previewExpandOverlay.hidden) {
+      els.previewFrameExpanded.dataset.scrollStatus = candidate ? "pending" : "idle";
+      els.previewFrameExpanded.dataset.scrollCandidateId = candidate?.candidate_id || "";
+      els.previewFrameExpanded.srcdoc = previewHtml;
+    }
+  }
+
+  function scrollPreviewToSelectedCandidate(frame = els.previewFrame) {
+    if (!frame) return;
     const candidate = selectedCandidate();
     if (!candidate) {
-      els.previewFrame.dataset.scrollStatus = "idle";
+      frame.dataset.scrollStatus = "idle";
       return;
     }
     const candidateId = candidate.candidate_id;
     requestAnimationFrame(() => {
       try {
-        const target = els.previewFrame.contentDocument?.querySelector(".goal2-highlight");
+        const target = frame.contentDocument?.querySelector(".goal2-highlight");
         if (!target) {
-          els.previewFrame.dataset.scrollStatus = "target-missing";
+          frame.dataset.scrollStatus = "target-missing";
           return;
         }
         target.scrollIntoView({ block: "center", inline: "nearest" });
-        els.previewFrame.dataset.scrollStatus = "scrolled";
-        els.previewFrame.dataset.scrollCandidateId = candidateId;
+        frame.dataset.scrollStatus = "scrolled";
+        frame.dataset.scrollCandidateId = candidateId;
       } catch {
         // The preview is sandboxed; if browser access is denied, keep the highlight visible without auto-scroll.
-        els.previewFrame.dataset.scrollStatus = "blocked";
+        frame.dataset.scrollStatus = "blocked";
       }
     });
+  }
+
+  function openPreviewExpanded() {
+    if (!els.previewExpandOverlay || !els.previewFrameExpanded) return;
+    const candidate = selectedCandidate();
+    els.previewFrameExpanded.dataset.scrollStatus = candidate ? "pending" : "idle";
+    els.previewFrameExpanded.dataset.scrollCandidateId = candidate?.candidate_id || "";
+    els.previewFrameExpanded.srcdoc = buildPreviewHtml();
+    els.previewExpandOverlay.hidden = false;
+    if (els.appMain) {
+      els.appMain.inert = true;
+    }
+    els.previewExpandCloseButton?.focus();
+  }
+
+  function closePreviewExpanded() {
+    if (!els.previewExpandOverlay || els.previewExpandOverlay.hidden) return;
+    els.previewExpandOverlay.hidden = true;
+    if (els.appMain) {
+      els.appMain.inert = false;
+    }
+    els.previewExpandButton?.focus();
   }
 
   function renderOutputs() {

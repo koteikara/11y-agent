@@ -19,6 +19,27 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-13: 候補の詳細パネルに「このルールについて詳しく確認する」モーダルを追加
+
+- 背景・目的: ユーザーから「作業者がこの修正はどんな意味かと気になった際に確認して学習する仕組みがあると良い」との要望。KBのルールMarkdown(`a11y-migration-kb/rules/**/*.md`)には元々、短い説明(`description`)だけでなく、必須ルールの全文(`rule`)と修正前後の実例(`examples`)が含まれ、`data/rules.jsonl`ビルド経由でサーバーの`/api/rules`はすでにこれらのフィールドを返していたが、クライアント側(`makeCandidate()`)では`title`/`source`/`description`のみを`candidate.rule`へ転記しており、`rule`本文と`examples`は画面上どこにも表示されていなかった。既存データを活かす形で実装した。
+- 主な変更内容:
+  - `goal2-app/public/app.js`: `makeCandidate()`の`rule`オブジェクトに`rule_text`(KBの必須ルール全文)・`examples`(修正前後の実例配列、最大3件表示)を追加。当初は折りたたみ`<details>`で実装したが、ユーザーから「折りたたみではなくモーダル表示にしましょう。集中しやすいので」とのフィードバックを受け、`#analyzeOverlay`/`#previewExpandOverlay`と同じ`inert`+フォーカス管理パターンのモーダルダイアログ(`#ruleLearnMoreOverlay`)に変更した。`renderDetail()`の「この候補で変わること」カード内、要約リストの直後にトリガーボタン(`.rule-learn-more-trigger`)のみを配置し、クリック時に`openRuleLearnMore(candidate)`がルールタイトル・重複除去したWCAG/JIS番号・概要・ルール全文・実例(ケース名/修正前/修正後/ポイント)・出典をモーダル本文へ描画する。「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられ、閉じた後は元のトリガーボタンへフォーカスを戻す。
+  - `goal2-app/public/index.html`: `#analyzeOverlay`/`#previewExpandOverlay`と同じbody直下兄弟パターンで`#ruleLearnMoreOverlay`(タイトル・閉じるボタン・本文コンテナ)を新設。
+  - `goal2-app/public/styles.css`: `.rule-learn-more-trigger`(リンク調ボタン)と、`.preview-expand-overlay`と統一感のある暗幕+中央ダイアログスタイルの`.rule-learn-more-overlay`/`.rule-learn-more-dialog`/`.rule-learn-more-header`を新設。
+  - `goal2-app/WORKER_GUIDE.md`: 「候補を選んで詳細を確認する」節に、このモーダルの説明(開き方・閉じ方)を追記。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。Playwrightでモーダルを開き、`image.alt-text`候補の実例(公園の写真等)がKBのMarkdownと同じ内容で表示されること、`appMain.inert`の切り替え、「閉じる」ボタン・Escキー・背景クリックの3通りでの正しいクローズとトリガーボタンへのフォーカス復帰を確認。WCAG/JISの重複表示(既存の`各種情報`カードにあった`[...wcag, ...jis]`の連結による重複)は、この新セクションではSetで除去して表示。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/styles.css`、`goal2-app/WORKER_GUIDE.md`
+
+## 2026-07-13: レンダリングプレビュー欄に拡大表示ボタンを追加
+
+- 背景・目的: 3ペイン構成のうち右端のレンダリングプレビュー欄が狭く「印象が薄い」というユーザーからのUI/UXフィードバックを受け、3案(幅調整のみ/拡大表示ボタン追加/大規模レイアウト再構成)を提示し、中規模の「拡大表示ボタンを追加」案が採用された。
+- 主な変更内容:
+  - `goal2-app/public/index.html`: プレビュー欄の見出しに「拡大」ボタン(`#previewExpandButton`)を追加。`#analyzeOverlay`と同じ body直下の兄弟要素として、ほぼ全画面のダイアログ`#previewExpandOverlay`(タイトル・閉じるボタン・拡大用iframe`#previewFrameExpanded`)を新設。ユーザーから「レンダリングという言葉が作業者に理解しにくい」との指摘を受け、見出し・ダイアログタイトル・iframeのtitle属性を「レンダリング」→「プレビュー」表記に統一した。
+  - `goal2-app/public/styles.css`: `.workspace-grid`の`grid-template-columns`をプレビュー列に厚めに配分(`0.82fr`→`0.97fr`等)。`.preview-expand-overlay`系のスタイルを、既存の`.analyze-overlay`(PR#46)と同じ暗幕+中央ダイアログのパターンで新設。
+  - `goal2-app/public/app.js`: `renderPreview()`のsrcdoc生成ロジックを`buildPreviewHtml()`として切り出し、通常のプレビューiframeと拡大表示iframeの両方で共有。`scrollPreviewToSelectedCandidate()`を対象iframeを引数で受け取る形に一般化(既定値`els.previewFrame`)。`openPreviewExpanded()`/`closePreviewExpanded()`を新設し、`#analyzeOverlay`と同じ`inert`によるフォーカストラップ・フォーカス管理パターン(開く時は閉じるボタンへ、閉じる時はトリガーボタンへ)を踏襲。拡大表示は「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられる。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(procedure-overview 7 / images 10 / tables 14 / links-text 24 / iframe 5 / goal3-hirosaki-news2019 19)がベースラインと完全一致(回帰なし)。Playwrightで拡大ボタンのクリック→オーバーレイ表示・`appMain.inert=true`・拡大用iframeへの選択候補ハイライト反映を確認、その後「閉じる」ボタン・Escキー・背景クリックの3通りで正しく閉じることを確認。スクリーンショットで拡大表示の見た目(選択中候補のオレンジ枠ハイライト含む)を目視確認。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/styles.css`、`goal2-app/public/app.js`、`goal2-app/WORKER_GUIDE.md`
+
 ## 2026-07-13: text.ascii-art(顔文字・AA)の自動検出を実装、41件のテストで100%精度を確認
 
 - 背景・目的: 直前のUI/UXフィードバックで見送っていたAA(アスキーアート)区切り行の検出について、ユーザーから「AAと顔文字はできたら自動検出したいけどよい方向ないかな？」と再提案があった。正規表現単体では信頼性が低いという既存の判断を維持しつつ、「正規表現で緩く候補を拾い、Gemini APIで最終判定させる」という、`text.foreign-language`等で既に実績のある設計パターンを提案し合意を得た。「そもそもAIで最終判定できるものか」との質問に対し、顔文字は言語理解タスクとして得意、複数行AAはテキストパターン推論でやや不確実という誠実な評価を伝えた上で、`confidence: low`・`requires_human_review: true`・ライブ検証という既存の安全策で吸収する前提で実装した。
