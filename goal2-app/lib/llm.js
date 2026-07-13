@@ -2,7 +2,7 @@ const crypto = require("crypto");
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 45000;
 
 // ADC auth mode (Stage B): when GEMINI_AUTH_MODE=adc, calls go through Vertex AI using an
 // access token from the Cloud Run metadata server instead of GEMINI_API_KEY. This only works
