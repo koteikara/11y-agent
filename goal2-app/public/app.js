@@ -6604,6 +6604,22 @@
         <strong>${escapeHtml(config.title || "文言を調整")}</strong>
         <span>HTMLは表示しません</span>
       </div>
+      ${
+        config.mode === "heading"
+          ? `
+      <label>
+        見出しレベル
+        <select id="quickEditLevel">
+          ${[2, 3, 4, 5, 6]
+            .map(
+              (level) =>
+                `<option value="h${level}"${`h${level}` === config.level ? " selected" : ""}>レベル${level} (h${level})</option>`
+            )
+            .join("")}
+        </select>
+      </label>`
+          : ""
+      }
       <label>
         ${escapeHtml(config.label)}
         ${
@@ -6683,12 +6699,13 @@
     const heading = firstElementText(candidate.proposal.after_html, "h1,h2,h3,h4,h5,h6");
     if (heading !== null && /^html-structure\./.test(candidate.rule_id)) {
       return {
-        mode: "element-text",
+        mode: "heading",
         selector: "h1,h2,h3,h4,h5,h6",
-        title: "見出し文言を調整",
+        title: "見出しを調整",
         label: "見出し文言",
         value: heading,
-        help: "見出しとして自然で、本文の意味を変えない文言にします。",
+        level: firstElementTagName(candidate.proposal.after_html, "h1,h2,h3,h4,h5,h6") || "h2",
+        help: "見出しレベルと文言を、ページ構造に合わせて調整します。",
       };
     }
     return null;
@@ -6720,6 +6737,17 @@
       const target = template.content.querySelector(config.selector);
       if (!target) return "";
       target.textContent = value;
+    } else if (config.mode === "heading") {
+      const target = template.content.querySelector(config.selector);
+      if (!target) return "";
+      target.textContent = value;
+      const level = document.getElementById("quickEditLevel")?.value || config.level;
+      if (level && target.tagName.toLowerCase() !== level) {
+        const renamed = document.createElement(level);
+        [...target.attributes].forEach((attribute) => renamed.setAttribute(attribute.name, attribute.value));
+        renamed.innerHTML = target.innerHTML;
+        target.replaceWith(renamed);
+      }
     }
     return cleanHtml(template.innerHTML);
   }
@@ -6736,6 +6764,13 @@
     template.innerHTML = html || "";
     const element = template.content.querySelector(selector);
     return element ? normalizeText(element.textContent || "") : null;
+  }
+
+  function firstElementTagName(html, selector) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    const element = template.content.querySelector(selector);
+    return element ? element.tagName.toLowerCase() : null;
   }
 
   function candidatesForSameTarget(candidate) {
