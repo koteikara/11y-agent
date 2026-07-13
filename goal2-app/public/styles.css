@@ -414,6 +414,56 @@ select {
   padding: 34px 38px 28px 56px;
 }
 
+/* Full-screen block during LLM enrichment ("AIで確認中"): sits above everything (including
+   the sidebar) so the operator can't start another action (switching samples, editing input)
+   while candidates are still being upgraded by Gemini in the background. */
+.analyze-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(13, 20, 38, 0.6);
+  text-align: center;
+}
+
+.analyze-overlay[hidden] {
+  display: none;
+}
+
+.analyze-overlay-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 999px;
+  animation: analyze-overlay-spin 0.8s linear infinite;
+}
+
+.analyze-overlay-text {
+  max-width: 420px;
+  color: #ffffff;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+@keyframes analyze-overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analyze-overlay-spinner {
+    animation: none;
+  }
+}
+
 .input-band,
 .candidate-pane,
 .preview-pane,
@@ -1390,6 +1440,16 @@ label {
   font-size: 13px;
 }
 
+/* alt/lang/scope等、読み上げにのみ影響する属性変更は修正前後で見た目が同一になるため、
+   カード自体のtitle属性(ネイティブのホバーツールチップ)で実際の変更内容を伝える。
+   このヒント文はその補助として常に見える形で置いておく。 */
+.compare-invisible-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
 .compare-visual {
   width: 100%;
   height: auto;
@@ -1522,10 +1582,18 @@ label {
 .ai-image-name-panel {
   display: grid;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--link), transparent 46%);
+  border: 1.5px solid var(--link);
+  border-left-width: 5px;
   border-radius: var(--radius-sm);
   background: var(--link-container);
-  padding: 10px;
+  padding: 10px 12px;
+}
+
+.ai-image-name-lead {
+  margin: 0;
+  color: var(--on-primary-container);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .ai-image-name-actions {
@@ -1559,9 +1627,14 @@ label {
 }
 
 .decision-panel > label,
-.decision-panel > .ai-image-name-panel,
 .decision-panel > .html-details {
   order: 2;
+}
+
+/* Sits before the decision buttons (order -1) so the required "投入" step is seen and done
+   first, instead of only surfacing as a disabled 採用 button with an easy-to-miss tooltip. */
+.decision-panel > .ai-image-name-panel {
+  order: -2;
 }
 
 .decision-panel .button-grid {

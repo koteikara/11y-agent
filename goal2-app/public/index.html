@@ -17,7 +17,12 @@
       <p class="app-header-footer">Goal2 A11y Review<br />PoC</p>
     </header>
 
-    <main class="app-shell">
+    <div id="analyzeOverlay" class="analyze-overlay" hidden role="alert" aria-live="assertive" tabindex="-1">
+      <div class="analyze-overlay-spinner" aria-hidden="true"></div>
+      <p class="analyze-overlay-text">AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。</p>
+    </div>
+
+    <main class="app-shell" id="appMain">
       <section class="input-body input-form-card" id="inputBody" aria-labelledby="inputTitle">
           <h2 id="inputTitle">入力HTML</h2>
           <div class="meta-grid" aria-label="ページ情報">
@@ -108,6 +113,17 @@
           </div>
 
           <div class="decision-panel decision-panel-top" id="decisionPanel" hidden>
+            <div class="ai-image-name-panel" id="aiImageNamePanel" hidden>
+              <p class="ai-image-name-lead">画像の内容をAIが解析し、代替テキスト(alt)の候補を提案しています。内容を確認し、下のボタンで修正後HTMLへ反映してから採用してください。</p>
+              <label>
+                AI画像名候補（alt用）
+                <input id="aiImageNameInput" type="text" />
+              </label>
+              <div class="ai-image-name-actions">
+                <p id="aiImageNameStatus">未投入</p>
+                <button type="button" id="applyAiImageNameButton" class="primary">修正後HTMLへ投入</button>
+              </div>
+            </div>
             <div class="button-grid">
               <button type="button" id="acceptButton" class="decision-accept">採用</button>
               <button type="button" id="editAcceptButton" class="decision-edit">文言を調整</button>
@@ -127,16 +143,6 @@
                   修正前HTML
                   <textarea id="beforeHtml" readonly spellcheck="false"></textarea>
                 </label>
-                <div class="ai-image-name-panel" id="aiImageNamePanel" hidden>
-                  <label>
-                    AI画像名候補（alt用）
-                    <input id="aiImageNameInput" type="text" />
-                  </label>
-                  <div class="ai-image-name-actions">
-                    <p id="aiImageNameStatus">未投入</p>
-                    <button type="button" id="applyAiImageNameButton" class="secondary">修正後HTMLへ投入</button>
-                  </div>
-                </div>
                 <label>
                   修正後HTML
                   <textarea id="afterHtml" spellcheck="false"></textarea>

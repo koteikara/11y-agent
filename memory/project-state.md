@@ -390,7 +390,16 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 次のアクション: ユーザー確認の上コミット・プッシュ。→ ユーザー承認を得てローカルコミット`737ae4c`。この時点でGitHub MCPサーバーが未認証(セッション切断)となり、プッシュ・PR作成は保留中(GitHub連携自体は接続済みとユーザーから報告があったが、このセッションのMCPツール一覧には反映されず、新しいセッションが必要な可能性がある)。
 - ユーザーから「GOAL2を作業者向けの説明書を作成しましょうか」との提案を受け、実際に画面を操作する作業者向けの操作マニュアル作成に着手。
   - `index.html`/`app.js`のUI実装(ボタンラベル・パネル文言・ワークフロー分岐関数`pageAgentWorkflowState`/`pageAgentNextTask`/`acceptDisabledReason`等)を直接確認し、実際の画面表示と一致する内容で新規`goal2-app/WORKER_GUIDE.md`を作成。全体の流れ(入力→候補生成→候補レビュー→出力)、直近実装した「AIで確認中」状態や候補カード4色分けの意味も反映。`README.md`冒頭に本マニュアルへのリンクを追加。
-  - GitHub MCP未認証のためこの変更もプッシュ・PR作成は保留、ユーザー確認後にローカルコミットの上で待機する方針。
+  - GitHub MCP未認証のためこの変更もプッシュ・PR作成は保留、ユーザー確認後にローカルコミットの上で待機する方針。→ GitHub MCPがセッション中に復旧し、これまでの2件(候補カード背景色変更・作業者向けマニュアル)をまとめてPR #45として作成・マージ済み。
+- ユーザーからGOAL2画面のUI/UXに関する7件のフィードバックを受けた。「弘前市にある」は既存の`goal3-hirosaki-news2019`サンプル(実データベース)に実在するパターンを指す背景情報と判明。AskUserQuestionで曖昧な点(AA区切り行の実装要否、画像alt反映の何が分かりにくいか、オーバーレイ/ツールチップの仕様)を確認した上で5件を実装。
+  1. コスト概算の注記文言削除(`llmUsageSummaryText()`)。
+  2. AI確認中の全画面オーバーレイ(`#analyzeOverlay`、`<main id="appMain">`に`inert`付与で他操作もブロック、`prefers-reduced-motion`対応)。
+  3. 見た目が変わらない候補(alt/lang/scope/headers/title属性のみの変更)へのホバーツールチップ(`invisibleChangeNote()`、`title`属性のネイティブツールチップ+常時表示の補助ヒント文)。
+  4. AI画像名候補パネルの可視化改善: 折りたたまれた「詳細を見る」内に隠れていたことが根本原因と判明し、常に見える`decisionPanel`内・判断ボタンより前へ移動、primaryボタンスタイルへ変更。CSS flexの`order`が意図せず適用されていた点(`.decision-panel > .ai-image-name-panel`のorder:2)も修正(order:-2で最優先表示に)。
+  5. ラベル+生URLのリンク化検出を新規実装(`buildRawUrlLinkTextProposal()`)。「申し込みフォーム　`<a>URL</a>`」のようにリンクテキストがURLそのものになっているパターンを検出し、直前の短いラベルをリンクテキストへ畳み込む。既存の`isGenericLinkText`(こちら/ここ等)ではURL丸出しパターンは未検出だったギャップを埋めた。
+  - AA区切り行の自動検出は、ユーザーの明示的な選択(「実装しない」)により見送り、既存KBトリアージ判断を維持。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより5サンプル(procedure-overview/images/tables/links-text/iframe)がベースライン完全一致、`goal3-hirosaki-news2019`のみ実データ中の2件のラベル+生URLパターンが新規検出され17→19件に増加(想定通り)。実際の変換結果、オーバーレイのinert動作、AI画像名候補パネルの常時可視化と投入→採用フローの継続動作をPlaywrightで個別に確認。`WORKER_GUIDE.md`もこの変更に合わせて更新。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
 
 ## Decisions
 
