@@ -410,6 +410,11 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - プロンプトを修正: 区切り線を独立したkind(`separator`)として明示的に対象へ含め、「読み上げソフトが記号を1つずつ読み上げてしまう」という一次利用者観点の理由づけと、hr要素化・読み上げ除外等の対応方針提案を追加。`app.js`の`applyAsciiArtLlmResult()`にも`separator`分岐を追加。
   - 再検証の結果、**41/41件(100%)** の精度を達成。実際の弘前市サンプル(＊80個の区切り行)とKB例そのままの顔文字言い換え(`(・∇・)`→`（笑顔で）`)の両方をUI経由のPlaywrightでエンドツーエンド確認。`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル完全一致)も再実施。動作確認後、テスト用APIキーは削除済み。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「3ペイン構成のうちレンダリング欄が狭いためか印象が薄い」とのUI/UXフィードバック。幅調整のみ(小)/拡大表示ボタン追加(中)/大規模レイアウト再構成(大)の3案を提示し、ユーザーは中規模の「拡大表示ボタンを追加」を選択。
+  - `index.html`にプレビュー欄見出しの「拡大」ボタンと、`#analyzeOverlay`(PR#46)と同じbody直下兄弟パターンの全画面ダイアログ`#previewExpandOverlay`(タイトル・閉じるボタン・拡大用iframe`#previewFrameExpanded`)を追加。`styles.css`で`.workspace-grid`のプレビュー列幅を拡大しつつ、ダイアログのスタイルを`.analyze-overlay`と統一感のある暗幕+中央配置で新設。
+  - `app.js`の`renderPreview()`のsrcdoc生成を`buildPreviewHtml()`として切り出し通常/拡大の両iframeで共有、`scrollPreviewToSelectedCandidate()`を対象iframe引数で一般化、`openPreviewExpanded()`/`closePreviewExpanded()`で`inert`によるフォーカストラップとフォーカス管理(開:閉じるボタンへ、閉:トリガーボタンへ)を実装。閉じる操作は閉じるボタン・背景クリック・Escキーの3通りに対応。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。拡大ボタンクリック→オーバーレイ表示・`appMain.inert=true`・拡大用iframeへの選択候補ハイライト反映、3通りの閉じ方をPlaywrightで個別確認。スクリーンショットで見た目を目視確認。`WORKER_GUIDE.md`も更新。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

@@ -19,6 +19,16 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-13: レンダリングプレビュー欄に拡大表示ボタンを追加
+
+- 背景・目的: 3ペイン構成のうち右端のレンダリングプレビュー欄が狭く「印象が薄い」というユーザーからのUI/UXフィードバックを受け、3案(幅調整のみ/拡大表示ボタン追加/大規模レイアウト再構成)を提示し、中規模の「拡大表示ボタンを追加」案が採用された。
+- 主な変更内容:
+  - `goal2-app/public/index.html`: プレビュー欄の見出しに「拡大」ボタン(`#previewExpandButton`)を追加。`#analyzeOverlay`と同じ body直下の兄弟要素として、ほぼ全画面のダイアログ`#previewExpandOverlay`(タイトル・閉じるボタン・拡大用iframe`#previewFrameExpanded`)を新設。ユーザーから「レンダリングという言葉が作業者に理解しにくい」との指摘を受け、見出し・ダイアログタイトル・iframeのtitle属性を「レンダリング」→「プレビュー」表記に統一した。
+  - `goal2-app/public/styles.css`: `.workspace-grid`の`grid-template-columns`をプレビュー列に厚めに配分(`0.82fr`→`0.97fr`等)。`.preview-expand-overlay`系のスタイルを、既存の`.analyze-overlay`(PR#46)と同じ暗幕+中央ダイアログのパターンで新設。
+  - `goal2-app/public/app.js`: `renderPreview()`のsrcdoc生成ロジックを`buildPreviewHtml()`として切り出し、通常のプレビューiframeと拡大表示iframeの両方で共有。`scrollPreviewToSelectedCandidate()`を対象iframeを引数で受け取る形に一般化(既定値`els.previewFrame`)。`openPreviewExpanded()`/`closePreviewExpanded()`を新設し、`#analyzeOverlay`と同じ`inert`によるフォーカストラップ・フォーカス管理パターン(開く時は閉じるボタンへ、閉じる時はトリガーボタンへ)を踏襲。拡大表示は「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられる。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(procedure-overview 7 / images 10 / tables 14 / links-text 24 / iframe 5 / goal3-hirosaki-news2019 19)がベースラインと完全一致(回帰なし)。Playwrightで拡大ボタンのクリック→オーバーレイ表示・`appMain.inert=true`・拡大用iframeへの選択候補ハイライト反映を確認、その後「閉じる」ボタン・Escキー・背景クリックの3通りで正しく閉じることを確認。スクリーンショットで拡大表示の見た目(選択中候補のオレンジ枠ハイライト含む)を目視確認。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/styles.css`、`goal2-app/public/app.js`、`goal2-app/WORKER_GUIDE.md`
+
 ## 2026-07-13: text.ascii-art(顔文字・AA)の自動検出を実装、41件のテストで100%精度を確認
 
 - 背景・目的: 直前のUI/UXフィードバックで見送っていたAA(アスキーアート)区切り行の検出について、ユーザーから「AAと顔文字はできたら自動検出したいけどよい方向ないかな？」と再提案があった。正規表現単体では信頼性が低いという既存の判断を維持しつつ、「正規表現で緩く候補を拾い、Gemini APIで最終判定させる」という、`text.foreign-language`等で既に実績のある設計パターンを提案し合意を得た。「そもそもAIで最終判定できるものか」との質問に対し、顔文字は言語理解タスクとして得意、複数行AAはテキストパターン推論でやや不確実という誠実な評価を伝えた上で、`confidence: low`・`requires_human_review: true`・ライブ検証という既存の安全策で吸収する前提で実装した。
