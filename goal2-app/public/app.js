@@ -1547,9 +1547,18 @@
 
   // Matches a paragraph whose entire text is a short bracket-enclosed label (e.g. "【とき】",
   // "【ところ】", "[NOTE]"). These already function as an inline heading/key for the content
-  // that follows, so proposing a new <h*> heading directly before one just duplicates it
-  // (e.g. "<h4>開催日時</h4><p>【とき】</p>").
-  const SHORT_BRACKET_LABEL_PATTERN = /^[【\[［(（].{1,12}[】\]］)）]$/;
+  // that follows, so proposing a *new*, separate <h*> heading directly before one just
+  // duplicates it (e.g. "<h4>開催日時</h4><p>【とき】</p>"). Instead the label paragraph itself
+  // should be promoted into the heading, brackets stripped (e.g. "<h4>とき</h4>") — see
+  // extractBracketLabelText() below.
+  const SHORT_BRACKET_LABEL_PATTERN =
+    /^(?:【(.{1,12})】|\[(.{1,12})\]|［(.{1,12})］|\((.{1,12})\)|（(.{1,12})）)$/;
+
+  function extractBracketLabelText(text) {
+    const match = SHORT_BRACKET_LABEL_PATTERN.exec(text);
+    if (!match) return null;
+    return normalizeText(match[1] || match[2] || match[3] || match[4] || match[5] || "") || null;
+  }
 
   function buildHeadingReviewOutline(fragment) {
     const blocks = [];
@@ -1620,18 +1629,21 @@
       if (!element) {
         return;
       }
-      if (SHORT_BRACKET_LABEL_PATTERN.test(normalizeText(element.textContent))) {
-        // Already an inline label (e.g. "【とき】"); a new heading here would just repeat it.
-        return;
-      }
       const level = normalizeHeadingLevel(finding.level);
-      const afterHtml = `<h${level}>${escapeHtml(suggestedText)}</h${level}>${cleanHtml(element.outerHTML)}`;
+      const bracketLabel = extractBracketLabelText(normalizeText(element.textContent));
+      const afterHtml = bracketLabel
+        ? `<h${level}>${escapeHtml(bracketLabel)}</h${level}>`
+        : `<h${level}>${escapeHtml(suggestedText)}</h${level}>${cleanHtml(element.outerHTML)}`;
       items.push(
         makeCandidate({
           ruleId: "html-structure.heading-required",
           element,
-          message: "見出しの追加を検討できます。(AI提案)",
-          reason: `${reason}(AI提案)`,
+          message: bracketLabel
+            ? "ラベル段落を見出しに変換できます。(AI提案)"
+            : "見出しの追加を検討できます。(AI提案)",
+          reason: bracketLabel
+            ? "「【...】」のようなカッコ書きラベルは、内容の区切りを示す見出しとして使われています。カッコを外して見出し要素に変換すると、スクリーンリーダー利用者が見出しジャンプで移動できるようになります。(AI提案)"
+            : `${reason}(AI提案)`,
           afterHtml,
           confidence: "low",
           requiresHumanReview: true,
