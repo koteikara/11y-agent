@@ -1545,6 +1545,12 @@
     }
   }
 
+  // Matches a paragraph whose entire text is a short bracket-enclosed label (e.g. "【とき】",
+  // "【ところ】", "[NOTE]"). These already function as an inline heading/key for the content
+  // that follows, so proposing a new <h*> heading directly before one just duplicates it
+  // (e.g. "<h4>開催日時</h4><p>【とき】</p>").
+  const SHORT_BRACKET_LABEL_PATTERN = /^[【\[［(（].{1,12}[】\]］)）]$/;
+
   function buildHeadingReviewOutline(fragment) {
     const blocks = [];
     fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach((element) => {
@@ -1612,6 +1618,10 @@
       }
       const element = fragment.content.querySelector(`[data-goal2-node-id="${finding.before_block_id}"]`);
       if (!element) {
+        return;
+      }
+      if (SHORT_BRACKET_LABEL_PATTERN.test(normalizeText(element.textContent))) {
+        // Already an inline label (e.g. "【とき】"); a new heading here would just repeat it.
         return;
       }
       const level = normalizeHeadingLevel(finding.level);
