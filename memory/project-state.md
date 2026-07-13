@@ -443,6 +443,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `quickEditConfig()`の見出し系分岐を`mode: "element-text"`(文言のみ)から`mode: "heading"`(レベル+文言)へ変更。`firstElementTagName()`ヘルパーを新設。`renderQuickEditPanel()`に見出しレベル用`<select id="quickEditLevel">`を追加、`buildQuickEditedAfterHtml()`に選択レベルへのリネーム処理を追加。既存の`quickEditConfig()`の仕組みに乗せているため、対象箇所にすでに何らかの見出し候補(機械的またはAI提案)が存在する場合にのみ使える制約は合意済み。
   - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/20が完全一致、回帰なし)。機械的候補(デフォルト提案h4)を選択し、レベルをh5へ上書きして採用した結果、実際に`<h5>...</h5>`として採用されることを確認(デフォルト値の素通りではなく、作業者の上書きが機能することを確認)。`WORKER_GUIDE.md`も更新。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「サンプルをもう少し充実させましょうか。今の系統はよいのでその内容を充実させていきましょう」との依頼。既存6サンプルを実際に解析し、KB全59ルールのうち一度も候補化されていないものを調査したところ20ルール判明。うち5件(`image.heritage-image`/`image.showcase-section`/`text.abbreviation`/`text.quotation`/`text.spaced-characters`)は検出コード自体が未実装(別タスク、サンプル追加では埋められない)。ユーザーはこの後、GOAL3実データを増やす方向も選択(安城市・浦添市・弘前市・福山市・豊橋市のURLリストを提供、次のアクションとして着手予定)。
+  - まず既存3サンプル(procedure-overview/links-text/tables)へ、検出コードはあるがサンプルに該当パターンが無いだけの15ルールを自然な内容として追加。procedure-overviewにmeta refresh・id重複・「担当課」パターン・内部リンクを、links-textにmarquee・記号のみ見出し・ページ内外アンカー・重複リンクテキストを、tablesにth要素のscope欠落・書式付きテーブル・結合見出しセルのパターンをそれぞれ追加。
+  - 実装検証中に2件の既存バグを自己発見・修正(サンプル追加とは独立した、以前から存在していた不具合)。
+    1. `table.cell-merge-heading`/`table.cell-merge-summary`の重複候補バグ: `shouldPreserveAsDataTable(table)`がfalseの結合セル表について、`collectTableCandidates()`の直接プッシュと`planTableTreatment()`末尾のcatch-allが全く同一の候補を二重生成していた。後者を`return {kind:"data"}`に単純化して解消(既存のnote/summary等preserveAsDataTable=trueなケースは無関係、回帰なし)。
+    2. テーブル関連候補7箇所のメッセージ・理由に英語テキストが混入(`table.format-clear`、無キャプション表への簡易追加候補、データ表リビルド案内、`table.layout-table`判定、cell-merge系の補足文)。うち1箇所は実際に挿入される`<caption>`要素の中身自体が英語"Table details"になっていた(既存の`genericTableCaption`定数[="表の詳細"]を使うよう修正)。全て日本語へ修正。
+  - 検証: `node --check`成功。Playwright回帰確認の結果procedure-overview 7→11、tables 14→23、links-text 24→29に増加(いずれも新規追加分)、images/iframe/goal3-hirosaki-news2019は変化なし。ルールカバレッジは41/59→53/59に向上。各追加テーブルパターンが意図通りのルールを発火し重複候補が発生しないことを個別確認、修正後メッセージが全て日本語表示されることをスクリーンショットで確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。その後、ユーザー提供のURLリスト(安城市/浦添市/弘前市/福山市/豊橋市)から新規GOAL3実データサンプルを追加する作業に着手。
 
 ## Decisions
 

@@ -68,14 +68,19 @@
       pageTitle: "出生届の手続き",
       oldUrl: "https://www.example-city.jp/kurashi/koseki/birth.html",
       cmsTarget: "本体サイト > 手続き",
-      html: `<h1>出生届の手続き</h1>
+      html: `<meta http-equiv="refresh" content="10;url=/kurashi/koseki/birth.html">
+<p>このページは新しいURLに移動しました。10秒後に自動的に移動します。</p>
+<h1 id="section1">出生届の手続き</h1>
 <p>申請書は<a href="/files/birth-form.pdf">こちら（PDF：1,928kbyte）</a>からダウンロードできます。</p>
 <p><a href="/life/childcare/">詳細はこちら</a>をご確認ください。</p>
-<h3>受付窓口</h3>
+<p><a href="/kurashi/koseki/birth-notice.html">出生届の記載例</a>もあわせてご確認ください。</p>
+<h3 id="section1">受付窓口</h3>
 <table>
   <tr><td colspan="2">受付時間</td></tr>
   <tr><td>平日</td><td>午前8時30分から午後5時15分</td></tr>
-</table>`,
+</table>
+<p>担当課</p>
+<p>市民課 戸籍係</p>`,
     },
     {
       id: "images",
@@ -128,6 +133,16 @@
 <table>
   <tr><td>制度</td><td>説明</td></tr>
   <tr><td colspan="2">概要 対象者は年度ごとに変わる場合があります。</td></tr>
+</table>
+<table>
+  <tr><th>講座名</th><th>受講料</th><th>定員</th></tr>
+  <tr><td>親子で学ぶ防災講座</td><td>500円</td><td>20名</td></tr>
+  <tr><td>初めての救急講習</td><td>無料</td><td>15名</td></tr>
+</table>
+<table bgcolor="#eef6ff" cellspacing="4">
+  <tr><td colspan="2">対象となる施設</td></tr>
+  <tr><td>公共施設</td><td>市役所・公民館・図書館</td></tr>
+  <tr><td>民間施設</td><td>指定管理者が運営する会館</td></tr>
 </table>`,
     },
     {
@@ -136,7 +151,8 @@
       pageTitle: "健康相談のご案内",
       oldUrl: "https://www.example-city.jp/kenko/soudan/index.html",
       cmsTarget: "本体サイト > 健康",
-      html: `<h2>健康相談のご案内</h2>
+      html: `<marquee>健康相談は完全予約制です。事前にお電話でお申し込みください。</marquee>
+<h2>健康相談のご案内</h2>
 <p><a href="#">こちら</a>から予約してください。</p>
 <p><a href="javascript:openMap()">地図を開く</a></p>
 <p><a href="https://www.example-city.jp/">トップページ</a>へ戻る</p>
@@ -146,7 +162,14 @@
 <p>開催日: 2026/7/15（水） 13:00から、距離は2㎞、参加費は￥1,000です。受付番号はＡＢＣ１２３です。</p>
 <p style="font-size:18px;color:#777;background-color:#ffe08a"><u>重要</u>: ※当日は母子健康手帳を持参してください。</p>
 <p>・受付<br>・相談<br>・結果説明</p>
-<p>English guidance is available at the counter.</p>`,
+<p>English guidance is available at the counter.</p>
+<p><a href="#qa">よくある質問</a>へジャンプ</p>
+<p><a href="/kenko/facility.html#map">健康相談窓口の地図</a>も確認してください。</p>
+<p><a href="/files/kenko-flyer2024.pdf">案内チラシ</a></p>
+<p><a href="/files/kenko-flyer2025.pdf">案内チラシ</a></p>
+<h3 id="qa">よくある質問</h3>
+<p>Q. 予約は必要ですか？ A. はい、完全予約制です。</p>
+<h4>▲</h4>`,
     },
     {
       id: "iframe",
@@ -2614,7 +2637,7 @@
             ruleId: mergeRule.ruleId,
             element: table,
             message: mergeRule.message,
-            reason: `${mergeRule.reason} Merge-cell restructuring is provided as a separate candidate from caption fixes.`,
+            reason: `${mergeRule.reason} このセル結合の再構成は、キャプション修正とは別の候補として提示しています。`,
             afterHtml: mergeProposal.afterHtml,
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
@@ -2630,7 +2653,7 @@
             ruleId: mergeRule.ruleId,
             element: table,
             message: mergeRule.message,
-            reason: `${mergeRule.reason} Merge-cell restructuring is kept as a separate candidate from caption fixes.`,
+            reason: `${mergeRule.reason} このセル結合の再構成は、キャプション修正とは別の候補として提示しています。`,
             afterHtml: mergeProposal.afterHtml,
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
@@ -2675,8 +2698,8 @@
           makeCandidate({
             ruleId: "table.format-clear",
             element: table,
-            message: "Table formatting can be cleared.",
-            reason: "Formatting such as fonts, colors, and border decorations may be remnants from pasted tables. Removing the styling helps normalize the content.",
+            message: "表の書式設定を解除できます。",
+            reason: "フォント・色・罫線などの書式設定は、他アプリからの貼り付けの際に残った可能性があります。書式を解除して内容を整理してください。",
             afterHtml: clone.outerHTML,
             patch: { type: "strip-formatting" },
             confidence: "high",
@@ -2688,16 +2711,16 @@
       if (!table.querySelector("caption")) {
         const clone = table.cloneNode(true);
         const caption = document.createElement("caption");
-        caption.textContent = "Table details";
+        caption.textContent = genericTableCaption;
         clone.insertBefore(caption, clone.firstChild);
         candidates.push(
           makeCandidate({
             ruleId: "table.caption",
             element: table,
-            message: "Table has no caption.",
-            reason: "Add a caption so the table content can be understood more easily by users and assistive technologies.",
+            message: "表にキャプションがありません。",
+            reason: "キャプションを追加すると、利用者や支援技術がこの表の内容を理解しやすくなります。",
             afterHtml: clone.outerHTML,
-            patch: { type: "insert-caption", value: "Table details" },
+            patch: { type: "insert-caption", value: genericTableCaption },
             confidence: "low",
             requiresHumanReview: true,
           })
@@ -2733,8 +2756,8 @@
       return {
         kind: "structural",
         ruleId: "table.caption",
-        message: "Keep as a data table and add caption/thead/th/scope.",
-        reason: "Before decomposing a table as layout, determine whether it is a data table with row/column relationships. If it can be preserved as a data table, add caption, column headers, row headers, and scope together without breaking the table apart.",
+        message: "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+        reason: "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。",
         afterHtml: buildDataTableSemanticsHtml(table),
         patchMode: "replace",
         confidence: dataTableSemanticsConfidence(table),
@@ -2764,8 +2787,8 @@
       return {
         kind: "structural",
         ruleId: "table.layout-table",
-        message: "Table may be being used for layout.",
-        reason: `${layoutTableReason(table)} The table should be considered a layout candidate rather than a data table.`,
+        message: "この表はレイアウト目的で使われている可能性があります。",
+        reason: layoutTableReason(table),
         afterHtml,
         patchMode: "replace",
         confidence: layoutTableConfidence(table),
@@ -2774,21 +2797,11 @@
       };
     }
 
-    if (mergeRule) {
-      const mergeProposal = buildMergedCellProposal(table, mergeRule);
-      return {
-        kind: "structural",
-        ruleId: mergeRule.ruleId,
-        message: mergeRule.message,
-        reason: `${mergeRule.reason} This merge-cell candidate is shown separately from caption fixes.`,
-        afterHtml: mergeProposal.afterHtml,
-        patchMode: mergeProposal.patchMode,
-        confidence: mergeRule.confidence,
-        requiresHumanReview: true,
-        llmContext: mergeProposal.images?.length ? { images: mergeProposal.images } : null,
-      };
-    }
-
+    // Note: a non-decompose-set mergeRule (heading/note/summary/...) is NOT re-emitted here.
+    // collectTableCandidates() already pushes it unconditionally via its own direct check
+    // (the "mergeRule && !tableDecomposeMergeRuleIds.has(...)" branch); re-pushing the same
+    // candidate here as "structural" would duplicate it whenever shouldPreserveAsDataTable()
+    // is false (the only case execution reaches this point with such a mergeRule).
     return { kind: "data" };
   }
 

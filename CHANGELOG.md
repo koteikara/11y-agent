@@ -19,6 +19,21 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-13: サンプルデータの内容充実(未検出だった15ルールを追加)、テーブル判定ロジックの重複バグ・英語テキスト混入バグを修正
+
+- 背景・目的: ユーザーから「サンプルをもう少し充実させましょうか。今の系統はよいのでその内容を充実させていきましょう」との依頼。既存6サンプルを実際に解析し、KB全59ルールのうちどれが一度も候補化されていないか調査した結果、20ルールが未検出と判明。うち5件(`image.heritage-image`/`image.showcase-section`/`text.abbreviation`/`text.quotation`/`text.spaced-characters`)は検出コード自体が未実装(別タスク)、残り15件は検出コードは存在するがサンプルHTMLに該当パターンが含まれていないだけと判明したため、既存3サンプル(procedure-overview/links-text/tables)へ自然な内容として追加する方針とした。
+- 主な変更内容:
+  - `goal2-app/public/app.js`の`inputSamples`配列を拡張。
+    - `procedure-overview`: `html-structure.embedded-script-behavior`(meta refresh)、`html-structure.duplicate-id-accesskey`(id重複)、`html-structure.heading-required`(「担当課」パターン)、`link.internal-link`(通常の内部リンク)を追加。
+    - `links-text`: `html-structure.deprecated-elements`(marquee)、`html-structure.heading-content-quality`(記号のみの見出し「▲」)、`link.in-page-anchor`、`link.cross-page-anchor`、`link.link-purpose-standalone`(同一リンクテキストで異なるリンク先)を追加。
+    - `tables`: `table.th-scope`(th要素にscope属性なし)、`table.format-clear`(bgcolor/cellspacing付きテーブル)、`table.cell-merge-heading`(先頭の結合セルが見出し用途)を追加。
+  - 実装過程で2件の既存バグを自己発見・修正(サンプル追加とは独立した、以前から存在していた不具合):
+    1. **`table.cell-merge-heading`/`table.cell-merge-summary`の重複候補バグ**: `classifyMergedCellTable()`が「見出し用途」と判定した結合セルについて、`collectTableCandidates()`の直接プッシュと`planTableTreatment()`末尾のcatch-allの両方が、`shouldPreserveAsDataTable(table)`がfalseの場合に全く同一の候補を二重生成していた(実際に「対象となる施設」のような具体的な数字・キーワードを含まない結合セル表を投入すると再現)。`planTableTreatment()`末尾のcatch-all(`if (mergeRule) { return {kind: "structural", ...} }`)を`return { kind: "data" }`に単純化し、`collectTableCandidates()`側の直接プッシュだけで完結するよう修正(既存の`table.cell-merge-note`等、`shouldPreserveAsDataTable`がtrueになるケースは`planTableTreatment()`の別分岐で処理されるため無関係、回帰なし)。
+    2. **テーブル関連候補メッセージへの英語テキスト混入**: `table.format-clear`(message/reason)、表にキャプションが無い場合の簡易追加候補(`table.caption`、しかも実際に挿入される`<caption>`要素の中身も英語の"Table details"だった)、データ表として維持する構造的リビルド案内(`table.caption`)、`table.layout-table`の判定メッセージ、`table.cell-merge-*`系の理由末尾に付与される補足文、の計7箇所が日本語話者の作業者に英語のまま表示される状態だった。全て日本語へ修正(「Table details」は既存の`genericTableCaption`定数[="表の詳細"]を使うよう統一)。
+  - 検証: `node --check`成功。Playwright回帰確認の結果procedure-overview 7→11、tables 14→23、links-text 24→29に増加(いずれも新規追加分)、images/iframe/goal3-hirosaki-news2019は変化なし(10/5/20)。ルールカバレッジは41/59→53/59ルールに向上(残り8件は上記の理由でサンプル追加では埋められない/または既存の別名で実質カバー済み)。追加した各テーブルパターンが意図通りのルールを発火し、重複候補が発生しないことを個別に確認。修正後のメッセージが全て日本語で表示されることをスクリーンショットで確認。
+  - **回帰ベースライン更新**: procedure-overview **11**(旧7) / images 10 / tables **23**(旧14) / links-text **29**(旧24) / iframe 5 / goal3-hirosaki-news2019 20。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-13: 見出し候補の「文言を調整」に見出しレベル選択機能を追加
 
 - 背景・目的: 前回のheading-review拡張(見出しレベルのAI文脈判定)をマージした後も、ユーザーから「写真と言葉の展覧会 ～或る日の大鰐線で～ はレベル２になっていません。これ作業者が自分で修正できるようにできないですか？見出しに限らないですが」との指摘。前回の機能は「AIが正しいと判断すれば候補として提案する」だけで、AIの判定が違う・GEMINI_API_KEY未設定でAI候補自体が出ない、といったケースでは作業者に手段が無かった。「見出しに限らないですが」という補足を踏まえ、(1)見出しレベル選択機能(推奨・既存候補への機能追加として実装容易)、(2)修正後HTMLの自由編集、(3)手動での新規候補追加、の3案を提示し、(1)が選択された。
