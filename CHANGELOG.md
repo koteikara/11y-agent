@@ -19,7 +19,15 @@
 - 関連PR/コミット
 ```
 
-## Entries
+## 2026-07-13: text.ascii-art(顔文字・AA)の自動検出を実装(ライブ検証未了)
+
+- 背景・目的: 直前のUI/UXフィードバックで見送っていたAA(アスキーアート)区切り行の検出について、ユーザーから「AAと顔文字はできたら自動検出したいけどよい方向ないかな？」と再提案があった。正規表現単体では信頼性が低いという既存の判断を維持しつつ、「正規表現で緩く候補を拾い、Gemini APIで最終判定させる」という、`text.foreign-language`等で既に実績のある設計パターンを提案し合意を得た。「そもそもAIで最終判定できるものか」との質問に対し、顔文字は言語理解タスクとして得意、複数行AAはテキストパターン推論でやや不確実(罫線表等との誤判定リスク)という誠実な評価を伝えた上で、`confidence: low`・`requires_human_review: true`・ライブ検証という既存の安全策で吸収する前提で実装した。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`: 新規タスク`ascii-art`を追加(`foreign-language`等と同じ配列バッチ形式)。顔文字(kind: simple、言い換え案を`suggested_text`に)と複数行AA(kind: complex、alt候補の方向性を`suggested_text`に)を判定し、`matched_text`に該当箇所の原文をそのまま書き写させることで、後段での正確な文字列置換を可能にした。曜日・番号・ファイル情報等の通常の日本語括弧書きは対象外とする指示を明記。
+  - `goal2-app/public/app.js`: `text.ascii-art`には既存の機械的検出が一切無いため(新規候補提案パターン、heading-review型)、`collectAsciiArtPrefilterTargets()`が正規表現(`REPEATED_SYMBOL_LINE_PATTERN`=同一記号10回以上連続、`KAOMOJI_BRACKET_PATTERN`+`KAOMOJI_GLYPH_PATTERN`=顔文字特有記号を含む括弧書き、`<pre>`要素内の複数行記号密度チェック)で緩く候補を拾い、`enrichAsciiArtWithLlm()`が既存の`runLlmBatch()`ヘルパーをそのまま再利用してGemini判定にかける。`applyAsciiArtLlmResult()`は、simple(顔文字)の場合`matched_text`を`suggested_text`で置換した`afterHtml`を生成(置換対象が原文に見つからない場合は安全側でパッチなしのフラグのみに後退)、complex(AA)の場合は常にパッチなしで画像化検討を促すのみとした(この機能では新規画像を生成できないため)。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/19)がベースラインと完全一致(回帰なし、プレフィルタが候補ゼロなら`runLlmBatch`自体が呼び出しをスキップするため無駄な通信も発生しない)。**ライブ検証(実際のGemini呼び出しによる精度確認)は、テスト用APIキーの提供待ちのため未実施。** 陽性・陰性合わせて41種類のテストケース(顔文字15件、AA区切り線6件、誤検出しやすい日本語括弧書き等の陰性例20件)を準備済み。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`、`goal2-app/public/app.js`
+- 関連PR: (作成予定、ライブ検証完了後)
 
 ## 2026-07-13: UI/UX改善5件(AI確認中オーバーレイ、ツールチップ、リンク化検出等)
 

@@ -399,7 +399,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   5. ラベル+生URLのリンク化検出を新規実装(`buildRawUrlLinkTextProposal()`)。「申し込みフォーム　`<a>URL</a>`」のようにリンクテキストがURLそのものになっているパターンを検出し、直前の短いラベルをリンクテキストへ畳み込む。既存の`isGenericLinkText`(こちら/ここ等)ではURL丸出しパターンは未検出だったギャップを埋めた。
   - AA区切り行の自動検出は、ユーザーの明示的な選択(「実装しない」)により見送り、既存KBトリアージ判断を維持。
   - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより5サンプル(procedure-overview/images/tables/links-text/iframe)がベースライン完全一致、`goal3-hirosaki-news2019`のみ実データ中の2件のラベル+生URLパターンが新規検出され17→19件に増加(想定通り)。実際の変換結果、オーバーレイのinert動作、AI画像名候補パネルの常時可視化と投入→採用フローの継続動作をPlaywrightで個別に確認。`WORKER_GUIDE.md`もこの変更に合わせて更新。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ PR #46として作成・マージ済み。
+- ユーザーから「そもそもAAと顔文字は自動検出できないか」との再検討依頼。既存のKBトリアージ判断(text.ascii-artは正規表現単体では信頼性が低いため自動検出対象外)を尊重しつつ、「正規表現で緩く候補を拾い、Gemini APIで最終判定させる」設計(`text.foreign-language`等で既に実績あり)を提案し合意を得た。
+  - 「そもそもAIで最終判定できるものか」との質問に、顔文字は言語理解タスクとして信頼度が高い一方、複数行AAはテキストのみからの推論のため罫線表等との誤判定リスクがあると誠実に回答。`confidence: low`・`requires_human_review: true`・ライブ検証という既存の安全策で吸収する前提で実装に着手。
+  - miChecker(Eclipse ACTF)の実際のCheckEngine.javaソースを確認しようとしたが、GitHub Code Search認証・このセッションのGitHubスコープ制限(koteikara/11y-agent限定)・WebFetchでの動的ファイルツリー取得不可により入手できなかった。代わりにベンダリング済みcheckitem.xmlの記述パターン(`{0}`のような動的差し込みが無い定型文、`is_static: true`)から、miChecker自体にも確立された自動判定アルゴリズムは無い可能性が高いと推測し、その旨をユーザーに正直に共有した。
+  - `lib/llm-prompts.js`に新規タスク`ascii-art`を追加(simple=顔文字/complex=複数行AAを判定、`matched_text`で原文の該当箇所を返させ正確な文字列置換を可能にする設計)。`app.js`に`collectAsciiArtPrefilterTargets()`(正規表現プレフィルタ: 同一記号10連続、顔文字特有記号を含む括弧書き、`<pre>`内の複数行記号密度)・`enrichAsciiArtWithLlm()`(既存`runLlmBatch()`ヘルパーを再利用)・`applyAsciiArtLlmResult()`(新規候補提案パターン、heading-review型)を実装。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。陽性・陰性合わせて41種類のテストケース(顔文字15件・AA区切り線6件・誤検出しやすい日本語括弧書き等の陰性例20件)を用意し、ライブ検証用スクリプトも準備済み。
+  - ユーザーへテスト用APIキーの再提供を依頼し、回答待ちの状態でStop hookが発火したため、既存パターンに従いライブ検証未了のままコミットした。
+  - 次のアクション: テスト用APIキーを受け取り次第、41件のテストケースで精度をライブ検証する。誤判定が多い場合はプロンプトを調整する(heading-review等の前例と同様の反復改善を想定)。
 
 ## Decisions
 

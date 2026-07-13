@@ -506,6 +506,7 @@
         enrichImageAltWithLlm(reviewItems),
         enrichHeadingReviewWithLlm(fragment, reviewItems),
         enrichAvoidTextAsImageWithLlm(fragment, reviewItems),
+        enrichAsciiArtWithLlm(fragment, reviewItems),
       ]);
       // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
       // already-enriched standalone image.alt-text result instead of firing a duplicate vision
@@ -1323,6 +1324,135 @@
     } catch {
       // best-effort detection; skip silently on any failure (unreachable image, network error, etc.)
     }
+  }
+
+  // text.ascii-art: no mechanical detector exists at all — a regex alone can't reliably tell
+  // a real kaomoji/ASCII-art figure apart from ordinary Japanese text that happens to use
+  // similar brackets/symbols (see a11y-migration-kb/rules/text/ascii-art.md's triage note on
+  // why this was left unimplemented). isAsciiArtPrefilterMatch() is a cheap, over-inclusive
+  // net — it just needs to not miss real cases; Gemini makes the actual call, so false
+  // positives from the prefilter cost nothing but a wasted batch slot.
+  const ASCII_ART_TEXT_CONTAINER_SELECTOR = "p, li, td, th, dd, dt, blockquote, figcaption, pre";
+  const REPEATED_SYMBOL_LINE_PATTERN = /(\S)\1{9,}/;
+  const KAOMOJI_BRACKET_PATTERN = /[(（][^)）\n]{1,16}[)）]/g;
+  const KAOMOJI_GLYPH_PATTERN = /[´｀∇ω≧≦ＴДд゜°><^;;￣]/;
+  const JAPANESE_WORD_PATTERN = /[ぁ-んァ-ヶ一-龠]{3,}/;
+
+  function isSymbolHeavyLine(line) {
+    const chars = [...line];
+    if (chars.length < 4) {
+      return false;
+    }
+    const symbolCount = chars.filter((ch) => !/[ぁ-んァ-ヶ一-龠a-zA-Z0-9\s、。！？「」]/.test(ch)).length;
+    return symbolCount / chars.length >= 0.5;
+  }
+
+  function isAsciiArtPrefilterMatch(text, rawText) {
+    if (REPEATED_SYMBOL_LINE_PATTERN.test(text)) {
+      return true;
+    }
+    if (rawText) {
+      const lines = rawText
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (lines.length >= 2 && lines.filter(isSymbolHeavyLine).length >= 2) {
+        return true;
+      }
+    }
+    const brackets = text.match(KAOMOJI_BRACKET_PATTERN) || [];
+    return brackets.some((segment) => KAOMOJI_GLYPH_PATTERN.test(segment) && !JAPANESE_WORD_PATTERN.test(segment));
+  }
+
+  function collectAsciiArtPrefilterTargets(fragment) {
+    const targets = [];
+    fragment.content.querySelectorAll(ASCII_ART_TEXT_CONTAINER_SELECTOR).forEach((element) => {
+      if (element.querySelector(ASCII_ART_TEXT_CONTAINER_SELECTOR)) {
+        return; // only consider leaf-most text containers, avoid double-matching a parent+child
+      }
+      const rawText = element.tagName === "PRE" ? element.textContent || "" : "";
+      const text = normalizeText(element.textContent);
+      if (!text || text.length > 200) {
+        return;
+      }
+      if (!isAsciiArtPrefilterMatch(text, rawText)) {
+        return;
+      }
+      targets.push({ element, text });
+    });
+    return targets;
+  }
+
+  async function enrichAsciiArtWithLlm(fragment, items) {
+    const targets = collectAsciiArtPrefilterTargets(fragment);
+    await runLlmBatch(
+      "ascii-art",
+      targets,
+      (target) => ({ text: target.text }),
+      (target, result) => applyAsciiArtLlmResult(target, result, items)
+    );
+  }
+
+  function applyAsciiArtLlmResult(target, result, items) {
+    if (!result?.is_ascii_art) {
+      return;
+    }
+    const alreadyProposed = items.some(
+      (item) => item.rule_id === "text.ascii-art" && item.target.node_id === target.element.getAttribute("data-goal2-node-id")
+    );
+    if (alreadyProposed) {
+      return;
+    }
+    const kind = result.kind === "complex" ? "complex" : "simple";
+    const matchedText = normalizeText(result.matched_text || "");
+    const suggestedText = normalizeText(result.suggested_text || "");
+
+    if (kind === "simple") {
+      const replaced = buildAsciiArtReplacementAfterHtml(target.element, matchedText, suggestedText);
+      items.push(
+        makeCandidate({
+          ruleId: "text.ascii-art",
+          element: target.element,
+          message: "顔文字・記号による表現の可能性があります。(AI判定)",
+          reason: `AIが顔文字と判定しました。読み上げでは記号の羅列としてそのまま読まれ意味が伝わらないため、${
+            suggestedText ? `「${suggestedText}」のような言い換えへの` : "文字による言い換えへの"
+          }修正を検討してください。(AI判定、内容を確認してください)`,
+          afterHtml: replaced || cleanHtml(target.element.outerHTML),
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: replaced ? "replace" : "none",
+        })
+      );
+      return;
+    }
+
+    items.push(
+      makeCandidate({
+        ruleId: "text.ascii-art",
+        element: target.element,
+        message: "複数行にわたるアスキーアートの可能性があります。(AI判定)",
+        reason: `AIがアスキーアート(記号を組み合わせた図案)と判定しました。読み上げでは内容が伝わらないため、アクセシブルな画像への置き換えを検討してください。${
+          suggestedText ? `(alt候補の参考: ${suggestedText})` : ""
+        }(AI判定、内容を確認してください)`,
+        afterHtml: cleanHtml(target.element.outerHTML),
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
+  function buildAsciiArtReplacementAfterHtml(element, matchedText, suggestedText) {
+    if (!matchedText || !suggestedText) {
+      return null;
+    }
+    const clone = element.cloneNode(true);
+    const original = clone.textContent || "";
+    if (!original.includes(matchedText)) {
+      return null;
+    }
+    clone.textContent = original.replace(matchedText, suggestedText);
+    return cleanHtml(clone.outerHTML);
   }
 
   // html-structure.heading-required / html-structure.heading-content-quality: unlike every
