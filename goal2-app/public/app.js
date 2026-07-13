@@ -1403,7 +1403,7 @@
     if (alreadyProposed) {
       return;
     }
-    const kind = result.kind === "complex" ? "complex" : "simple";
+    const kind = ["separator", "complex"].includes(result.kind) ? result.kind : "simple";
     const matchedText = normalizeText(result.matched_text || "");
     const suggestedText = normalizeText(result.suggested_text || "");
 
@@ -1421,6 +1421,24 @@
           confidence: "low",
           requiresHumanReview: true,
           patchMode: replaced ? "replace" : "none",
+        })
+      );
+      return;
+    }
+
+    if (kind === "separator") {
+      items.push(
+        makeCandidate({
+          ruleId: "text.ascii-art",
+          element: target.element,
+          message: "記号の反復による装飾目的の区切り行の可能性があります。(AI判定)",
+          reason: `AIが装飾目的の区切り行(記号の反復)と判定しました。読み上げソフトが記号を1つずつ読み上げてしまい内容が伝わらないため、対応を検討してください。${
+            suggestedText ? `(対応方針の参考: ${suggestedText})` : ""
+          }(AI判定、内容を確認してください)`,
+          afterHtml: cleanHtml(target.element.outerHTML),
+          confidence: "low",
+          requiresHumanReview: true,
+          patchMode: "none",
         })
       );
       return;
