@@ -200,6 +200,46 @@ const TASKS = {
     },
   },
 
+  // Unlike the other batch tasks, no mechanical detector for this exists at all — a regex
+  // alone can't reliably tell a real kaomoji/ASCII-art figure apart from ordinary Japanese
+  // text that happens to use similar symbols/brackets, so this is the sole judge rather than
+  // an upgrade over an existing heuristic draft. items are a cheap, over-inclusive regex
+  // prefilter's matches (see isAsciiArtPrefilterMatch in app.js).
+  "ascii-art": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "与えられた複数のテキスト断片それぞれについて、次の3種類のいずれかが含まれているかを判定してください: " +
+      "(1) 記号を組み合わせた顔文字(例: (・∇・)、m(_ _)m、(^o^))。" +
+      "(2) 同じ記号(＊、※、=、-、～、♪等)が8回以上連続するような装飾目的の区切り行。これはスクリーンリーダーが記号を1つずつ読み上げてしまい内容が伝わらない問題があるため対象に含めてください。" +
+      "(3) 複数行にわたるアスキーアート(罫線や記号を組み合わせた図案)。" +
+      "次のものは対象外です: 曜日・番号・略称などの通常の日本語の丸括弧書き、記号のみで構成された罫線表(表組みの代用)。" +
+      "いずれかが含まれる場合はis_ascii_artをtrueにし、以下を判定してください。" +
+      "kindは、(1)の場合はsimple、(2)の場合はseparator、(3)の場合はcomplexとしてください。" +
+      "matched_textには、入力テキストに実際に含まれる該当箇所の文字列を一字一句変更せずそのまま書き写してください。" +
+      "kindがsimpleの場合、suggested_textにその表情・仕草を短い日本語の言い換え(例:「（笑顔で）」「（お辞儀）」)で提案してください。" +
+      "kindがseparatorの場合、suggested_textには「区切り線としてhr要素へ置き換える」「読み上げ対象から除外する」等の対応方針を短く提案してください。" +
+      "kindがcomplexの場合、suggested_textには画像化する場合のalt候補の方向性を短く提案してください(実際の画像は生成しません)。" +
+      "いずれにも該当しない場合は、is_ascii_artをfalseにしてください。" +
+      "各項目について必ず1件、入力と同じidを持つ結果オブジェクトを返してください。",
+    responseSchema: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          id: { type: "STRING" },
+          is_ascii_art: { type: "BOOLEAN" },
+          kind: { type: "STRING" },
+          matched_text: { type: "STRING" },
+          suggested_text: { type: "STRING" },
+        },
+        required: ["id", "is_ascii_art"],
+      },
+    },
+    buildUserText(items) {
+      return JSON.stringify(items.map((item) => ({ id: item.id, text: item.text })));
+    },
+  },
+
   // Unlike the other tasks, image-alt processes one image per request (vision calls need
   // the actual image bytes fetched server-side, so they can't be cheaply batched the same
   // way as text items) — buildUserText() here takes a single item, not an array.
