@@ -1874,6 +1874,7 @@ label {
 }
 
 .quick-edit-panel input,
+.quick-edit-panel select,
 .quick-edit-panel textarea {
   width: 100%;
   border: 1px solid var(--line-strong);
