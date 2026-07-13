@@ -1649,6 +1649,48 @@
         })
       );
     });
+
+    (result.heading_level_fixes || []).forEach((finding) => {
+      if (!validIds.has(finding.block_id)) {
+        return;
+      }
+      const reason = normalizeText(finding.reason || "");
+      if (!reason) {
+        return;
+      }
+      const element = fragment.content.querySelector(`[data-goal2-node-id="${finding.block_id}"]`);
+      if (!element || !/^H[1-6]$/.test(element.tagName)) {
+        return;
+      }
+      const level = normalizeHeadingLevel(finding.level);
+      if (String(headingLevel(element)) === level) {
+        return;
+      }
+      const afterHtml = renameElement(element, `h${level}`).outerHTML;
+      const existing = items.find(
+        (item) => item.rule_id === "html-structure.heading-order" && item.target.node_id === finding.block_id
+      );
+      if (existing) {
+        // A mechanical (or earlier LLM) pass already proposed a level for this heading;
+        // the content-aware judgment here takes precedence.
+        existing.proposal.after_html = cleanHtml(afterHtml);
+        existing.proposal.patch = { type: "rename-element", tag_name: `h${level}` };
+        existing.issue.reason = `${reason}(AI判定)`;
+        return;
+      }
+      items.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-order",
+          element,
+          message: `見出しレベルの見直しを提案します。(AI判定)`,
+          reason: `${reason}(AI判定)`,
+          afterHtml,
+          patch: { type: "rename-element", tag_name: `h${level}` },
+          confidence: "low",
+          requiresHumanReview: true,
+        })
+      );
+    });
   }
 
   function normalizeHeadingLevel(level) {
