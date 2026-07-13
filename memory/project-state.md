@@ -415,6 +415,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `app.js`の`renderPreview()`のsrcdoc生成を`buildPreviewHtml()`として切り出し通常/拡大の両iframeで共有、`scrollPreviewToSelectedCandidate()`を対象iframe引数で一般化、`openPreviewExpanded()`/`closePreviewExpanded()`で`inert`によるフォーカストラップとフォーカス管理(開:閉じるボタンへ、閉:トリガーボタンへ)を実装。閉じる操作は閉じるボタン・背景クリック・Escキーの3通りに対応。
   - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。拡大ボタンクリック→オーバーレイ表示・`appMain.inert=true`・拡大用iframeへの選択候補ハイライト反映、3通りの閉じ方をPlaywrightで個別確認。スクリーンショットで見た目を目視確認。`WORKER_GUIDE.md`も更新。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「作業者がこの修正はどんな意味かと気になった際に確認して学習する仕組みがあると良い」との要望。KBのルールMarkdownには元々必須ルール全文(`rule`)と修正前後の実例(`examples`)が含まれ`data/rules.jsonl`/`/api/rules`経由でサーバーからは返っていたが、クライアント側`makeCandidate()`が`title`/`source`/`description`しか`candidate.rule`へ転記しておらず、画面上どこにも表示されていなかったことが判明。既存データを活かす形で実装に着手。
+  - 当初は「この候補で変わること」カード内に既定で閉じた`<details>`折りたたみとして実装したが、ユーザーから「折りたたみではなくモーダル表示にしましょう。集中しやすいので」とのフィードバックを受け、既存の`#analyzeOverlay`/`#previewExpandOverlay`と同じ`inert`+フォーカス管理パターンのモーダルダイアログ(`#ruleLearnMoreOverlay`)に作り直した。トリガーボタン(`.rule-learn-more-trigger`)のクリックで、ルールタイトル・重複除去したWCAG/JIS番号・概要・ルール全文・実例(最大3件、修正前後の比較付き)・出典をモーダルへ描画。「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられ、閉じた後は元のトリガーボタンへフォーカスを戻す。`WORKER_GUIDE.md`にも説明を追記。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。Playwrightでモーダルの開閉(トリガー/閉じるボタン/Esc/背景クリック)、`appMain.inert`の切り替え、閉じた後のフォーカス復帰、`image.alt-text`候補の実例がKBのMarkdown内容と一致することを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

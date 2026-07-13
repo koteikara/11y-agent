@@ -19,6 +19,17 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-13: 候補の詳細パネルに「このルールについて詳しく確認する」モーダルを追加
+
+- 背景・目的: ユーザーから「作業者がこの修正はどんな意味かと気になった際に確認して学習する仕組みがあると良い」との要望。KBのルールMarkdown(`a11y-migration-kb/rules/**/*.md`)には元々、短い説明(`description`)だけでなく、必須ルールの全文(`rule`)と修正前後の実例(`examples`)が含まれ、`data/rules.jsonl`ビルド経由でサーバーの`/api/rules`はすでにこれらのフィールドを返していたが、クライアント側(`makeCandidate()`)では`title`/`source`/`description`のみを`candidate.rule`へ転記しており、`rule`本文と`examples`は画面上どこにも表示されていなかった。既存データを活かす形で実装した。
+- 主な変更内容:
+  - `goal2-app/public/app.js`: `makeCandidate()`の`rule`オブジェクトに`rule_text`(KBの必須ルール全文)・`examples`(修正前後の実例配列、最大3件表示)を追加。当初は折りたたみ`<details>`で実装したが、ユーザーから「折りたたみではなくモーダル表示にしましょう。集中しやすいので」とのフィードバックを受け、`#analyzeOverlay`/`#previewExpandOverlay`と同じ`inert`+フォーカス管理パターンのモーダルダイアログ(`#ruleLearnMoreOverlay`)に変更した。`renderDetail()`の「この候補で変わること」カード内、要約リストの直後にトリガーボタン(`.rule-learn-more-trigger`)のみを配置し、クリック時に`openRuleLearnMore(candidate)`がルールタイトル・重複除去したWCAG/JIS番号・概要・ルール全文・実例(ケース名/修正前/修正後/ポイント)・出典をモーダル本文へ描画する。「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられ、閉じた後は元のトリガーボタンへフォーカスを戻す。
+  - `goal2-app/public/index.html`: `#analyzeOverlay`/`#previewExpandOverlay`と同じbody直下兄弟パターンで`#ruleLearnMoreOverlay`(タイトル・閉じるボタン・本文コンテナ)を新設。
+  - `goal2-app/public/styles.css`: `.rule-learn-more-trigger`(リンク調ボタン)と、`.preview-expand-overlay`と統一感のある暗幕+中央ダイアログスタイルの`.rule-learn-more-overlay`/`.rule-learn-more-dialog`/`.rule-learn-more-header`を新設。
+  - `goal2-app/WORKER_GUIDE.md`: 「候補を選んで詳細を確認する」節に、このモーダルの説明(開き方・閉じ方)を追記。
+- 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。Playwrightでモーダルを開き、`image.alt-text`候補の実例(公園の写真等)がKBのMarkdownと同じ内容で表示されること、`appMain.inert`の切り替え、「閉じる」ボタン・Escキー・背景クリックの3通りでの正しいクローズとトリガーボタンへのフォーカス復帰を確認。WCAG/JISの重複表示(既存の`各種情報`カードにあった`[...wcag, ...jis]`の連結による重複)は、この新セクションではSetで除去して表示。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/styles.css`、`goal2-app/WORKER_GUIDE.md`
+
 ## 2026-07-13: レンダリングプレビュー欄に拡大表示ボタンを追加
 
 - 背景・目的: 3ペイン構成のうち右端のレンダリングプレビュー欄が狭く「印象が薄い」というユーザーからのUI/UXフィードバックを受け、3案(幅調整のみ/拡大表示ボタン追加/大規模レイアウト再構成)を提示し、中規模の「拡大表示ボタンを追加」案が採用された。

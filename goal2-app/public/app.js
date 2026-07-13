@@ -254,6 +254,10 @@
     previewExpandOverlay: document.getElementById("previewExpandOverlay"),
     previewExpandCloseButton: document.getElementById("previewExpandCloseButton"),
     previewFrameExpanded: document.getElementById("previewFrameExpanded"),
+    ruleLearnMoreOverlay: document.getElementById("ruleLearnMoreOverlay"),
+    ruleLearnMoreTitle: document.getElementById("ruleLearnMoreTitle"),
+    ruleLearnMoreCloseButton: document.getElementById("ruleLearnMoreCloseButton"),
+    ruleLearnMoreBody: document.getElementById("ruleLearnMoreBody"),
     outputDrawer: document.querySelector(".output-drawer"),
     pageAgentPanel: document.getElementById("pageAgentPanel"),
     reviewPosition: document.getElementById("reviewPosition"),
@@ -320,8 +324,24 @@
         closePreviewExpanded();
       }
     });
+    els.candidateDetail?.addEventListener("click", (event) => {
+      if (event.target.closest(".rule-learn-more-trigger")) {
+        openRuleLearnMore(selectedCandidate());
+      }
+    });
+    els.ruleLearnMoreCloseButton?.addEventListener("click", closeRuleLearnMore);
+    els.ruleLearnMoreOverlay?.addEventListener("click", (event) => {
+      if (event.target === els.ruleLearnMoreOverlay) {
+        closeRuleLearnMore();
+      }
+    });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && els.previewExpandOverlay && !els.previewExpandOverlay.hidden) {
+      if (event.key !== "Escape") return;
+      if (els.ruleLearnMoreOverlay && !els.ruleLearnMoreOverlay.hidden) {
+        closeRuleLearnMore();
+        return;
+      }
+      if (els.previewExpandOverlay && !els.previewExpandOverlay.hidden) {
         closePreviewExpanded();
       }
     });
@@ -5212,6 +5232,8 @@
         title: kbRule.title || options.ruleId,
         source: kbRule.source || "",
         description: kbRule.description || "",
+        rule_text: kbRule.rule || "",
+        examples: Array.isArray(kbRule.examples) ? kbRule.examples : [],
       },
     };
   }
@@ -6377,6 +6399,7 @@
       <section class="detail-summary-card">
         <h3>この候補で変わること</h3>
         <ul class="change-summary">${changeSummary || "<li>修正前後の見え方を比べます。</li>"}</ul>
+        ${buildRuleLearnMoreTriggerHtml()}
       </section>
       <section class="detail-summary-card">
         <h3>修正方法</h3>
@@ -6708,6 +6731,58 @@
       return "推奨";
     }
     return "候補";
+  }
+
+  function buildRuleLearnMoreTriggerHtml() {
+    return `<button type="button" class="rule-learn-more-trigger">❓ このルールについて詳しく確認する</button>`;
+  }
+
+  function buildRuleLearnMoreBodyHtml(candidate) {
+    const rule = candidate.rule || {};
+    const wcagJis = [...new Set([...(candidate.issue?.wcag || []), ...(candidate.issue?.jis || [])])].filter(Boolean).join(" / ");
+    const examplesHtml = (rule.examples || [])
+      .slice(0, 3)
+      .map(
+        (example) => `
+          <div class="rule-learn-more-example">
+            ${example.case ? `<p class="rule-learn-more-example-case">${escapeHtml(example.case)}</p>` : ""}
+            <div class="rule-learn-more-example-pair">
+              <div><span class="rule-learn-more-example-label">修正前</span><code>${escapeHtml(example.before || "")}</code></div>
+              <div><span class="rule-learn-more-example-label">修正後</span><code>${escapeHtml(example.after || "")}</code></div>
+            </div>
+            ${example.point ? `<p class="rule-learn-more-example-point">${escapeHtml(example.point)}</p>` : ""}
+          </div>
+        `
+      )
+      .join("");
+    return `
+      ${wcagJis ? `<p class="rule-learn-more-wcag">WCAG/JIS: ${escapeHtml(wcagJis)}</p>` : ""}
+      ${rule.description ? `<p>${escapeHtml(rule.description)}</p>` : ""}
+      ${rule.rule_text ? `<p class="rule-learn-more-text">${escapeHtml(rule.rule_text)}</p>` : ""}
+      ${examplesHtml ? `<div class="rule-learn-more-examples">${examplesHtml}</div>` : ""}
+      ${rule.source ? `<p class="rule-learn-more-source">出典: ${escapeHtml(rule.source)}</p>` : ""}
+    `;
+  }
+
+  function openRuleLearnMore(candidate) {
+    if (!els.ruleLearnMoreOverlay || !candidate) return;
+    els.ruleLearnMoreTitle.textContent = candidate.rule?.title || candidate.rule_id;
+    els.ruleLearnMoreBody.innerHTML = buildRuleLearnMoreBodyHtml(candidate);
+    els.ruleLearnMoreOverlay.hidden = false;
+    if (els.appMain) {
+      els.appMain.inert = true;
+    }
+    els.ruleLearnMoreCloseButton?.focus();
+  }
+
+  function closeRuleLearnMore() {
+    if (!els.ruleLearnMoreOverlay || els.ruleLearnMoreOverlay.hidden) return;
+    els.ruleLearnMoreOverlay.hidden = true;
+    if (els.appMain) {
+      els.appMain.inert = false;
+    }
+    const trigger = els.candidateDetail?.querySelector(".rule-learn-more-trigger");
+    trigger?.focus();
   }
 
   function buildVisualPreviewCard(title, html, tone, changeNote) {
