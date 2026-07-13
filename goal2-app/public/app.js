@@ -243,6 +243,8 @@
     ruleScopeSelect: document.getElementById("ruleScopeSelect"),
     candidateSummary: document.getElementById("candidateSummary"),
     completionPill: document.getElementById("completionPill"),
+    analyzeOverlay: document.getElementById("analyzeOverlay"),
+    appMain: document.getElementById("appMain"),
     bulkSelectAll: document.getElementById("bulkSelectAll"),
     bulkAcceptButton: document.getElementById("bulkAcceptButton"),
     bulkActionStatus: document.getElementById("bulkActionStatus"),
@@ -570,6 +572,9 @@
     if (!els.analyzeButton || !els.candidateSummary || !els.completionPill) {
       return;
     }
+    if (status !== "enriching") {
+      hideAnalyzeOverlay();
+    }
     if (status === "running") {
       els.analyzeButton.disabled = true;
       els.analyzeButton.textContent = "生成中";
@@ -582,6 +587,7 @@
       els.analyzeButton.textContent = "AIで確認中";
       els.candidateSummary.textContent = "AIによる内容確認を行っています。ページの内容によっては数十秒かかる場合があります。";
       els.completionPill.textContent = "AI確認中";
+      showAnalyzeOverlay();
       return;
     }
     els.analyzeButton.disabled = false;
@@ -597,6 +603,35 @@
         ? `修正候補はありません。注意 ${state.notices.length}件は出力欄に表示しています。`
         : "修正候補はありません。";
       els.completionPill.textContent = "0件";
+    }
+  }
+
+  // Blocks every other action (sample switching, input editing, etc.) while LLM enrichment
+  // is in flight in the background, per the "AI確認中は他の操作もブロックしてほしい" request:
+  // the overlay's own stacking/click-catching handles pointer input, and `inert` on the main
+  // content area additionally keeps keyboard/assistive-tech navigation out of it.
+  function showAnalyzeOverlay() {
+    if (!els.analyzeOverlay || !els.analyzeOverlay.hidden) {
+      return;
+    }
+    els.analyzeOverlay.hidden = false;
+    if (els.appMain) {
+      els.appMain.inert = true;
+    }
+    els.analyzeOverlay.focus();
+  }
+
+  function hideAnalyzeOverlay() {
+    if (!els.analyzeOverlay || els.analyzeOverlay.hidden) {
+      return;
+    }
+    const hadFocus = els.analyzeOverlay.contains(document.activeElement);
+    els.analyzeOverlay.hidden = true;
+    if (els.appMain) {
+      els.appMain.inert = false;
+    }
+    if (hadFocus) {
+      els.analyzeButton?.focus();
     }
   }
 
@@ -1528,7 +1563,7 @@
     }
     const costUsd = state.llmUsage.estimatedCostUsd.toFixed(4);
     const costJpy = state.llmUsage.estimatedCostJpy.toFixed(2);
-    return ` LLM利用: 概算$${costUsd}（約${costJpy}円、呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）※概算です。実際の請求額はGoogle Cloud側でご確認ください。`;
+    return ` LLM利用: 概算$${costUsd}（約${costJpy}円、呼び出し${state.llmUsage.calls}回、トークン計${state.llmUsage.inputTokens + state.llmUsage.outputTokens}）`;
   }
 
   function linkTitleLookupBase() {
@@ -2125,6 +2160,37 @@
                   precedingHeading: closestPreviousHeadingText(link),
                   nearbyText: normalizeText(link.parentElement?.textContent || ""),
                 },
+              })
+        );
+      }
+
+      // miChecker resource pages often write "申し込みフォーム　<a href="URL">URL</a>" — a
+      // plain-text label followed by a link whose own visible text just repeats the raw URL.
+      // A screen reader spells a URL out character by character, so when a short label
+      // directly precedes the link, fold it into the link text and drop the now-redundant
+      // leading label instead of just flagging the URL text as vague.
+      if (/^https?:\/\//i.test(effectiveLinkText)) {
+        const rawUrlProposal = buildRawUrlLinkTextProposal(link);
+        candidates.push(
+          rawUrlProposal
+            ? makeCandidate({
+                ruleId: "link.link-text",
+                element: rawUrlProposal.element,
+                message: "リンクテキストがURLそのものになっています。",
+                reason: "URLをそのまま読み上げても内容が伝わりません。直前にある説明文をリンクテキストとして使い、重複するURL表記を削除します。",
+                afterHtml: rawUrlProposal.afterHtml,
+                confidence: "medium",
+                requiresHumanReview: true,
+              })
+            : makeCandidate({
+                ruleId: "link.link-text",
+                element: link,
+                message: "リンクテキストがURLそのものになっています。",
+                reason: "URLをそのまま読み上げても内容が伝わりません。リンク先が分かる具体的な文言に修正してください。",
+                afterHtml: link.outerHTML,
+                confidence: "low",
+                requiresHumanReview: true,
+                patchMode: "none",
               })
         );
       }
@@ -6129,15 +6195,18 @@
     const changeSummary = buildChangeSummary(candidate)
       .map((item) => `<li>${escapeHtml(item)}</li>`)
       .join("");
+    const changeNote = invisibleChangeNote(chosenMethodCandidate);
     const beforeVisual = buildVisualPreviewCard(
       "修正前",
       candidate.proposal.before_html || currentTargetHtml(candidate) || candidate.target.snippet,
-      "before"
+      "before",
+      changeNote
     );
     const afterVisual = buildVisualPreviewCard(
       "修正後",
       chosenMethodCandidate.decision.after_html || currentCandidateAfterHtml(chosenMethodCandidate) || chosenMethodCandidate.proposal.after_html,
-      "after"
+      "after",
+      changeNote
     );
     els.candidateDetail.innerHTML = `
       <section class="detail-summary-card">
@@ -6476,17 +6545,39 @@
     return "候補";
   }
 
-  function buildVisualPreviewCard(title, html, tone) {
+  function buildVisualPreviewCard(title, html, tone, changeNote) {
     const previewHtml = sanitizeVisualPreviewHtml(stripInternalFromHtml(html || "<p>（内容なし）</p>"));
     return `
-      <article class="compare-card compare-card-${tone}">
+      <article class="compare-card compare-card-${tone}"${changeNote ? ` title="${escapeHtml(changeNote)}"` : ""}>
         <div class="compare-card-header">
           <strong>${escapeHtml(title)}</strong>
           <span>${tone === "before" ? "元の状態" : "修正後の状態"}</span>
         </div>
         <div class="compare-visual" data-goal2-visual-preview="${escapeHtml(previewHtml)}"></div>
+        ${changeNote ? `<p class="compare-invisible-hint">見た目は変わりません。ホバーで変更内容を表示</p>` : ""}
       </article>
     `;
+  }
+
+  // Some rules only change an attribute that assistive tech reads but that never renders
+  // visibly (alt/lang/scope/headers/title) — the before/after preview cards above look
+  // identical, which used to leave "did this actually do anything?" unanswered. When the
+  // active patch touches one of those attributes, this builds a plain-language before→after
+  // description shown as a hover tooltip on both compare cards instead.
+  const INVISIBLE_RENDER_ATTRIBUTES = new Set(["alt", "lang", "scope", "headers", "title", "xml:lang"]);
+
+  function invisibleChangeNote(candidate) {
+    const patch = candidate?.proposal?.patch;
+    if (!patch || patch.type !== "set-attribute") {
+      return "";
+    }
+    const attrName = (patch.name || "").toLowerCase();
+    if (!INVISIBLE_RENDER_ATTRIBUTES.has(attrName)) {
+      return "";
+    }
+    const beforeValue = normalizeText(extractAttributeFromHtml(candidate.proposal.before_html, patch.name) || "");
+    const afterValue = normalizeText(patch.value || "");
+    return `${patch.name}属性: ${beforeValue || "(未設定)"} → ${afterValue || "(空)"}`;
   }
 
   // 見た目比較は候補のHTMLを親ページのDOMへ直接挿入するため、挿入時に実行・遷移を引き起こす
@@ -7545,6 +7636,44 @@
       element: parent,
       afterHtml: `${guide.outerHTML}${linkParagraph.outerHTML}`,
     };
+  }
+
+  // For "ラベル　<a href=URL>URL</a>" patterns: pulls the plain-text label that immediately
+  // precedes the link (within the same parent) into the link text itself, and removes the
+  // now-redundant label text. Returns null when there's no usable short label directly before
+  // the link, so the caller can fall back to a patchless flag-only candidate.
+  function buildRawUrlLinkTextProposal(link) {
+    const parent = link.parentElement;
+    if (!parent) {
+      return null;
+    }
+    let precedingText = "";
+    let node = link.previousSibling;
+    while (node && node.nodeType === Node.TEXT_NODE) {
+      precedingText = node.textContent + precedingText;
+      node = node.previousSibling;
+    }
+    const label = normalizeText(precedingText);
+    if (!label || label.length > 24 || /https?:\/\//i.test(label)) {
+      return null;
+    }
+    const linkIndex = [...parent.childNodes].indexOf(link);
+    if (linkIndex < 0) {
+      return null;
+    }
+    const clone = parent.cloneNode(true);
+    const clonedLink = clone.childNodes[linkIndex];
+    if (!clonedLink || clonedLink.nodeType !== Node.ELEMENT_NODE || clonedLink.tagName !== "A") {
+      return null;
+    }
+    let cur = clonedLink.previousSibling;
+    while (cur && cur.nodeType === Node.TEXT_NODE) {
+      const prev = cur.previousSibling;
+      cur.remove();
+      cur = prev;
+    }
+    clonedLink.textContent = label;
+    return { element: parent, afterHtml: cleanHtml(clone.outerHTML) };
   }
 
   function inferLinkText(link, href) {
