@@ -24,7 +24,6 @@
     "iframe.cms-review",
     "iframe.frame-unsupported",
     "text.bold",
-    "text.note-symbol",
   ]);
 
   const tableRelatedRuleIds = new Set([
@@ -1795,9 +1794,6 @@
   }
 
   function isNoticeItem(item) {
-    if (item.rule_id === "text.note-symbol" && item.proposal?.patch_mode !== "none") {
-      return false;
-    }
     return noticeRuleIds.has(item.rule_id);
   }
 
@@ -4150,6 +4146,13 @@
           .map((item) => item.replace(/^・\s*/, "").trim())
           .filter(Boolean);
         return items.length >= 2 ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+      }
+      // A standalone paragraph whose entire content starts with a single "・" (no sibling
+      // bullet lines to group with). Still convert it to a genuine single-item list rather
+      // than leaving the "・" as unstructured plain text.
+      if (bulletParts.length === 1 && parts.length === 1) {
+        const item = removeLeadingBulletFromHtml(parts[0]);
+        return item ? `<ul><li>${item}</li></ul>` : "";
       }
       return "";
     }
