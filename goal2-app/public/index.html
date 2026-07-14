@@ -3,18 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Goal2 A11y Review PoC</title>
+    <title>アクセシビリティ候補レビュー</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Goal 2</p>
+        <p class="eyebrow">候補レビュー</p>
         <h1 id="pageHeading" tabindex="-1">アクセシビリティ候補レビュー</h1>
       </div>
       <div class="header-status" id="ruleStatus">KB読み込み中</div>
+      <nav class="app-nav" aria-label="画面切り替え">
+        <a class="app-nav-link" href="/goal1.html">一括最適化</a>
+        <a class="app-nav-link" href="/" aria-current="page">候補レビュー</a>
+        <a class="app-nav-link" href="/goal3.html">本文抽出</a>
+        <a class="app-nav-link" href="/michecker-compare.html">miChecker結果比較</a>
+      </nav>
       <div class="app-header-spacer"></div>
-      <p class="app-header-footer">Goal2 A11y Review<br />PoC</p>
+      <p class="app-header-footer">候補レビュー<br />PoC</p>
     </header>
 
     <div id="analyzeOverlay" class="analyze-overlay" hidden role="alert" aria-live="assertive" tabindex="-1">
