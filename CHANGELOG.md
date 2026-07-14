@@ -19,6 +19,15 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker公式判定エンジン(CheckEngine.java)移植の実行計画書を作成(実装は未着手)
+
+- 背景・目的: ユーザーから「miCheckerと同じチェックはこのブラウザ上で可能か」という一連の質問があり、現状の「miChecker指摘対応のみ」モードは公式チェック項目のメタデータ(WCAG番号・メッセージ文言)との突き合わせに基づく独自ヒューリスティックであって、公式の判定アルゴリズムそのものではないことを根拠付きで説明した。判定ロジックの実体が`eclipse-actf/org.eclipse.actf`リポジトリの`CheckEngine.java`(約4,900行、EPL-1.0)として公開されていることを実ソース取得で確認し、ユーザーから「本文編集で対応可能な項目のみから着手。Fable 5が移植実行計画を立て、Sonnetが実装する」との指示を受けて計画書のみを作成した(コードは未着手)。
+- 事前分析(計画の根拠として実施):
+  - 公式チェック項目268件のうち、`michecker-out-of-content-scope.json`登録済みの152件を除いた**116件**(error 24 / warning 18 / info 30 / user 44)を移植対象と確定。
+  - `CheckEngine.java`の全`addCheckerProblem`呼び出し箇所を約90メソッドへマッピングし、CSS描画(CSSOM)依存は9件のみ、`C_16.0`/`C_332.0`の2件はエンジン内に発火箇所なし(本体未発火)、約24件は`always()`による無条件の手動確認リマインダーであることを確認。大半は純粋なDOM解析で移植可能と判断。
+- 計画書の主な内容: EPL-1.0コードの二次的著作物として`michecker-engine.js`1ファイルへのライセンス隔離、CheckEngine.javaと1:1対応の構造(忠実移植・独自改変禁止)、既存ヒューリスティック実装は変更せず別レイヤーとして追加、PR-M0(インベントリ+骨格)〜PR-M5(ユーザーのWindows環境のhtmlchecker.exe出力をゴールデンとした実機パリティ検証)の6段階、PR-M5完了までUI上「miChecker相当(移植版)」と表記し「同一」と言わないこと等。
+- 関連ファイル: `goal2-app/MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`(新規)
+
 ## 2026-07-14: GOAL1/GOAL2/GOAL3/miChecker比較の4画面間に相互ナビゲーションを追加
 
 - 背景・目的: ユーザーから「GOAL2やGOAL1それぞれを行き来できるようにしましょう」との依頼。これまで4画面(`index.html`=GOAL2、`goal3.html`=GOAL3、`michecker-compare.html`=miChecker結果比較、`goal1.html`=GOAL1)は互いへのリンクが一切無く、URLを直接書き換えないと移動できなかった。
