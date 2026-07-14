@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goal1 一括アクセシビリティ最適化</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Goal 1</p>
+        <h1 id="pageHeading" tabindex="-1">CMS登録前の一括アクセシビリティ最適化</h1>
+      </div>
+      <div class="header-status" id="engineStatus" aria-live="polite">エンジン読み込み中</div>
+      <div class="app-header-spacer"></div>
+      <p class="app-header-footer">Goal1 Batch<br />Optimizer PoC</p>
+    </header>
+
+    <main class="app-shell goal1-shell">
+      <section class="input-form-card" aria-labelledby="goal1InputTitle">
+        <h2 id="goal1InputTitle">① ページ一覧の入力</h2>
+        <p class="michecker-note">
+          いずれか1つ、または複数を組み合わせて入力できます。同じURLが複数回指定された場合は除去せず、
+          一覧に重複として警告表示します。
+        </p>
+        <div class="goal1-input-grid">
+          <label>
+            移行管理CSV(Shift_JIS)
+            <input type="file" id="csvFileInput" accept=".csv" />
+          </label>
+          <label>
+            旧ページURL一覧
+            <textarea id="urlListInput" rows="6" placeholder="1行に1URL、または「URL,カテゴリ」の形式で入力してください。&#10;例:&#10;https://www.example-city.jp/a.html&#10;https://www.example-city.jp/b.html,くらし"></textarea>
+          </label>
+          <label>
+            旧ページHTMLファイル(複数選択可)
+            <input type="file" id="htmlFilesInput" accept=".html,.htm" multiple />
+          </label>
+        </div>
+        <div class="button-row">
+          <button type="button" id="buildQueueButton" class="secondary">ページ一覧を読み込む</button>
+        </div>
+        <p class="michecker-error" id="inputErrorMessage" role="alert" hidden></p>
+        <p class="michecker-settings-status" id="queueStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="goal1SettingsTitle">
+        <h2 id="goal1SettingsTitle">② 実行設定</h2>
+        <div class="goal1-settings-grid">
+          <label>
+            修正基準
+            <select id="ruleScopeSelect">
+              <option value="kb">KB全ルール</option>
+              <option value="michecker">miChecker指摘対応のみ</option>
+            </select>
+          </label>
+          <label>
+            LLM利用
+            <span id="llmAvailability" class="michecker-status-badge">確認中</span>
+          </label>
+        </div>
+        <p class="michecker-note">
+          抽出候補はスコア最上位の1件を自動的に採用します。修正候補のうち、機械的処理・確信度十分・人間確認不要な候補のみを自動採用し、
+          それ以外は「要確認」として一覧に残します(GOAL2画面の一括採用と同じ基準)。
+        </p>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="goal1RunTitle">
+        <h2 id="goal1RunTitle">③ 一括実行</h2>
+        <div class="button-row">
+          <button type="button" id="runBatchButton" class="primary" disabled>一括実行</button>
+          <button type="button" id="pauseBatchButton" class="secondary" disabled>一時停止</button>
+          <button type="button" id="resumeBatchButton" class="secondary" hidden>再開</button>
+        </div>
+        <div id="batchProgress" class="goal1-progress" hidden aria-live="polite">
+          <div class="goal1-progress-bar"><div id="batchProgressFill" class="goal1-progress-fill"></div></div>
+          <p id="batchProgressText"></p>
+        </div>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="goal1ListTitle">
+        <div class="pane-heading">
+          <div>
+            <h2 id="goal1ListTitle">④ 作業一覧</h2>
+            <p id="batchSummary">ページ一覧を読み込むと、ここに一覧が表示されます。</p>
+          </div>
+          <div class="michecker-summary" id="batchSummaryGrid"></div>
+        </div>
+        <div class="michecker-table-wrap">
+          <table class="michecker-table" id="pageTable">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">ページ名</th>
+                <th scope="col">カテゴリ</th>
+                <th scope="col">状態</th>
+                <th scope="col">候補総数</th>
+                <th scope="col">自動採用</th>
+                <th scope="col">要確認残数</th>
+                <th scope="col">LLM概算</th>
+                <th scope="col">操作</th>
+              </tr>
+            </thead>
+            <tbody id="pageTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="goal1OutputTitle">
+        <h2 id="goal1OutputTitle">⑤ バッチ出力</h2>
+        <div class="button-row">
+          <button type="button" id="downloadEvidenceCsvButton" class="secondary" disabled>証跡CSV一括DL</button>
+          <button type="button" id="downloadSummaryCsvButton" class="secondary" disabled>ページサマリーCSV DL</button>
+          <button type="button" id="downloadBatchJsonButton" class="secondary" disabled>バッチJSON DL</button>
+          <label class="goal1-file-button secondary">
+            バッチJSON読み込み
+            <input type="file" id="loadBatchJsonInput" accept=".json" hidden />
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <script src="/goal3.js"></script>
+    <script src="/app.js"></script>
+    <script src="/goal1.js"></script>
+  </body>
+</html>

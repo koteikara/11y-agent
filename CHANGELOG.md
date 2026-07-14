@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: GOAL1 PR-B: goal1.html骨格+バッチ実行+IndexedDB
+
+- 背景・目的: `goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`§6 PR-Bの実施。PR-Aで公開した`window.goal3Engine`/`window.goal2Engine`を使い、複数ページを一括処理するGOAL1のバッチ画面を新設した。
+- 主な変更内容:
+  - `goal2-app/public/goal1.html`(新規): ①ページ一覧入力(CSV/URL一覧/HTMLファイル複数選択)、②実行設定(修正基準・LLM利用状況表示)、③一括実行(進捗バー・一時停止/再開)、④作業一覧(状態・候補総数・自動採用数・要確認残数・LLM概算・操作)、⑤バッチ出力の5区画構成。
+  - `goal2-app/public/goal1.js`(新規): CSV(CP932/UTF-8自動判定、簡易RFC4180パーサ自前実装、移行管理CSVの列名解決+1行1URL/`URL,カテゴリ`形式へのフォールバック)・URL一覧・HTMLファイル複数の3入力系統からページキューを構築。同一URLの重複は除去せず一覧に警告バッジ表示。バッチは直列実行(`/api/fetch-html`→`goal3Engine.extract`→`goal2Engine.analyze`→`autoAcceptSafe`→最終HTML/証跡構築)し、1ページの失敗(取得失敗/抽出失敗/実行時エラー)でバッチ全体を止めない。IndexedDB(db=`goal1`, store=`batches`)へページごとに保存(元ページの全体HTMLは保存せず、抽出後HTML・最終HTML・証跡のみ永続化)、再読み込み時に最新バッチを自動復元。
+  - `goal2-app/server.js`: `GET /api/llm/status`を新設(`lib/llm.js`の既存`isConfigured()`をそのまま利用、呼び出しは一切発生させない)。GOAL1画面がLLM設定状態(コスト発生の有無)を実行前に表示するために使用。
+  - `goal2-app/public/app.js`: GOAL1→GOAL2の個別引き継ぎ(`localStorage["goal3.toGoal2"]`)に`autoAcceptSafe`フラグを追加。フラグ付きで引き継がれた場合、作業者が「候補生成」を実行した直後に1回だけ、既存の一括採用と同じ`applyCandidateDecision`経路(競合解決含む)で自動採用相当を適用する新関数`applyPendingAutoAcceptSafe()`を追加(ヘッドレス版`autoAcceptSafe`の単純な決定状態コピーではなく、画面の通常経路を再実行する設計)。
+  - `goal2-app/public/styles.css`: `.goal1-*`系クラスを追加。既存の`.michecker-shell`パターン(`margin: 0 auto`)を検証中に発見した潜在バグ(固定左サイドバーnav`.app-header`と、ビューポート幅によっては重なり클릭を奪う)を避けるため、`.goal1-shell`は`.goal3-shell`と同じ「margin/max-width上書きなし」パターンを採用。
+- 検証: `node --check`全ファイル成功。goal2既存回帰(全6サンプル×ルール別内訳、変更前後で完全一致)は影響なし。ローカルHTMLファイル3件(通常記事×2、空ページ×1)+移行管理CSV(CP932実データ形式)+URL一覧(重複URL含む)の混在入力でE2E検証: キュー構築(7件、重複バッジ2件)、バッチ完走(この環境では外部URL取得不可のため取得失敗4件・完了2件・抽出失敗1件、想定どおりバッチは停止せず継続)、証跡CSV/バッチJSONダウンロード(UTF-8 BOM付き、Excelで文字化けしない内容を確認)、リロード後のIndexedDB復元、GOAL2への引き継ぎ+`autoAcceptSafe`適用(候補生成後に1件が自動採用されることを確認)まで一通り確認。JSエラーはゼロ。
+- 関連ファイル: `goal2-app/public/goal1.html`(新規)、`goal2-app/public/goal1.js`(新規)、`goal2-app/public/styles.css`、`goal2-app/server.js`、`goal2-app/public/app.js`
+
 ## 2026-07-14: GOAL1 PR-A: 解析・抽出エンジンのヘッドレス化(挙動変更なし)
 
 - 背景・目的: GOAL1構築指示書(`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`)§6 PR-Aの実施。GOAL1バッチ画面(後続PR-B)がgoal2/goal3のエンジンをUI無しで呼び出せるよう、両エンジンをヘッドレス関数として公開した。**画面の見た目・候補の内容・件数の変更は一切ない。**
