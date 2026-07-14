@@ -3102,13 +3102,23 @@
   }
 
   function isTableDataValueText(text) {
-    return /[0-9０-９]|電話|TEL|FAX|メール|住所|所在地|円|％|%/.test(normalizeText(text));
+    // "クリック！（JPG：629KB）"のようなファイルサイズ注記は、municipal pageのリンク文言として
+    // 極めて頻出するが、あくまでリンク先ファイルの付随情報であり、表データ(電話番号・金額・
+    // 数量など)ではない。ここでの数字判定より先に除去しないと、写真キャプションだけの表が
+    // 「データ値を含む行がある」と誤判定され、データ表として温存されてしまう(実例: 単なる
+    // 写真キャプション+ダウンロードリンクの2x2表が、実在しない列見出し付きの表へ再構築された)。
+    const withoutFileSizeAnnotations = normalizeText(text).replace(/[0-9０-９,，.．]+\s*[KMGkmg][Bb]/g, "");
+    return /[0-9０-９]|電話|TEL|FAX|メール|住所|所在地|円|％|%/.test(withoutFileSizeAnnotations);
   }
 
   function isHeaderLikeTableCell(cell) {
     const text = normalizeText(cell.textContent || "");
     if (!text) return false;
-    if (text.length <= 28 && !/[。.!?！？]$/.test(text)) return true;
+    // 閉じ括弧類(）)】」』])で終わる文字列も、文末の句読点(。.!?！？)と同様に「見出しらしい
+    // 短い体言」ではなく通常の文の一部である可能性が高い。この除外が無いと、「クリック！
+    // （JPG：629KB）」のようなファイル情報付きリンクだけのセルが、閉じ括弧で終わるにも
+    // かかわらず文末記号にマッチしないため誤って見出し扱いされていた。
+    if (text.length <= 28 && !/[。.!?！？）)】」』\]]$/.test(text)) return true;
     return /項目|内容|区分|種別|車種|対象|税率|金額|所得|診療|時間|電話|所在地|名称|日程|会場|結果|勝敗/.test(text);
   }
 
