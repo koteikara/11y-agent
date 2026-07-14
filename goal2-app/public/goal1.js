@@ -599,7 +599,7 @@
     const openButton = document.createElement("button");
     openButton.type = "button";
     openButton.className = "secondary";
-    openButton.textContent = "GOAL2で開く";
+    openButton.textContent = "候補レビューで開く";
     openButton.addEventListener("click", () => openInGoal2(page));
     cell.appendChild(openButton);
 

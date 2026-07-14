@@ -3,18 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Goal1 一括アクセシビリティ最適化</title>
+    <title>一括アクセシビリティ最適化</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Goal 1</p>
+        <p class="eyebrow">一括最適化</p>
         <h1 id="pageHeading" tabindex="-1">CMS登録前の一括アクセシビリティ最適化</h1>
       </div>
       <div class="header-status" id="engineStatus" aria-live="polite">エンジン読み込み中</div>
+      <nav class="app-nav" aria-label="画面切り替え">
+        <a class="app-nav-link" href="/goal1.html" aria-current="page">一括最適化</a>
+        <a class="app-nav-link" href="/">候補レビュー</a>
+        <a class="app-nav-link" href="/goal3.html">本文抽出</a>
+        <a class="app-nav-link" href="/michecker-compare.html">miChecker結果比較</a>
+      </nav>
       <div class="app-header-spacer"></div>
-      <p class="app-header-footer">Goal1 Batch<br />Optimizer PoC</p>
+      <p class="app-header-footer">一括最適化<br />PoC</p>
     </header>
 
     <main class="app-shell goal1-shell">
@@ -62,7 +68,7 @@
         </div>
         <p class="michecker-note">
           抽出候補はスコア最上位の1件を自動的に採用します。修正候補のうち、機械的処理・確信度十分・人間確認不要な候補のみを自動採用し、
-          それ以外は「要確認」として一覧に残します(GOAL2画面の一括採用と同じ基準)。
+          それ以外は「要確認」として一覧に残します(候補レビュー画面の一括採用と同じ基準)。
         </p>
       </section>
 

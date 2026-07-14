@@ -3,18 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Goal3 Content Extractor</title>
+    <title>コンテンツ部分の抽出</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Goal 3</p>
+        <p class="eyebrow">本文抽出</p>
         <h1 id="pageHeading" tabindex="-1">コンテンツ部分の抽出</h1>
       </div>
       <div class="header-status">旧ページ全体HTML<br />→ CMS本文候補</div>
+      <nav class="app-nav" aria-label="画面切り替え">
+        <a class="app-nav-link" href="/goal1.html">一括最適化</a>
+        <a class="app-nav-link" href="/">候補レビュー</a>
+        <a class="app-nav-link" href="/goal3.html" aria-current="page">本文抽出</a>
+        <a class="app-nav-link" href="/michecker-compare.html">miChecker結果比較</a>
+      </nav>
       <div class="app-header-spacer"></div>
-      <p class="app-header-footer">Goal3 Content<br />Extractor PoC</p>
+      <p class="app-header-footer">本文抽出<br />PoC</p>
     </header>
 
     <main class="app-shell goal3-shell">
@@ -62,7 +68,7 @@
               <p id="detailSummary">本文候補を選択すると、抽出根拠とプレビューを確認できます。</p>
             </div>
             <div class="button-row">
-              <button type="button" id="sendGoal2Button" class="primary" disabled>GOAL2へ渡す</button>
+              <button type="button" id="sendGoal2Button" class="primary" disabled>候補レビューへ渡す</button>
               <button type="button" id="copyHtmlButton" disabled>HTMLコピー</button>
             </div>
           </div>
