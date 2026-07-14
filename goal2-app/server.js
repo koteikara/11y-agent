@@ -11,7 +11,7 @@ const { loadCheckitems } = require("./lib/michecker-checkitems");
 const { defaultSagaFixtureRoot } = require("./lib/sagaAutoFix");
 const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
-const { callGemini } = require("./lib/llm");
+const { callGemini, isConfigured: isLlmConfigured } = require("./lib/llm");
 const { getTaskConfig } = require("./lib/llm-prompts");
 
 const execFileAsync = promisify(execFile);
@@ -548,6 +548,13 @@ const server = http.createServer(async (request, response) => {
         message: error.message,
       });
     }
+    return;
+  }
+
+  // GOAL1バッチ画面が、実行前にLLM呼び出しが発生するかどうか(=コストが発生し得るか)を
+  // 表示するための軽量な状態確認。呼び出しは一切発生させない(env変数の有無を見るだけ)。
+  if (request.method === "GET" && url.pathname === "/api/llm/status") {
+    sendJson(response, 200, { configured: isLlmConfigured() });
     return;
   }
 

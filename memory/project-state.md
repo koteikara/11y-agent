@@ -486,6 +486,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - ライブ検証でヘッドレス時の唯一のクラッシュ箇所(`loadRules()`内の`els.ruleStatus`書き込み)を発見しnullガード。
   - 検証: 変更前(git stash)と変更後の回帰JSON(全サンプル×ルール別内訳)をdiffし完全一致。UI要素なしページでの全経路ヘッドレス実行、goal2/goal3両画面のスモークともpageerrorゼロ。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-B(goal1.html骨格)へ。
+  - ユーザー確認の上、PR #60として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- PR-B(goal1.html骨格+バッチ実行+IndexedDB)に着手。
+  - `goal1.html`/`goal1.js`新設。CSV(CP932/UTF-8自動判定、簡易CSVパーサ自前実装、移行管理CSVの列名解決+フォールバック形式)・URL一覧・HTMLファイル複数の3入力からページキューを構築し、同一URL重複は警告バッジで表示。バッチは直列実行(fetch→goal3Engine.extract→goal2Engine.analyze→autoAcceptSafe→最終HTML/証跡)、1ページ失敗でも継続。IndexedDB(db=goal1)へページごと保存(元HTMLは保存しない)、リロード時に最新バッチを自動復元。証跡CSV一括・ページサマリーCSV(UTF-8 BOM付き)・バッチJSON DL/読み込みも同PRで実装(指示書ではPR-C相当だがバッチオブジェクト設計と密結合のため前倒し)。
+  - `server.js`に`GET /api/llm/status`を新設(既存`lib/llm.js`の`isConfigured()`をそのまま利用、呼び出し発生なし)。
+  - `app.js`: GOAL1→GOAL2引き継ぎに`autoAcceptSafe`フラグを追加。フラグ付きの場合、作業者の「候補生成」完了直後に1回だけ、既存の一括採用と同じ`applyCandidateDecision`経路(競合解決含む)で自動採用相当を適用する`applyPendingAutoAcceptSafe()`を追加(ヘッドレス版の単純な決定状態コピーではなく画面の通常経路を再実行)。
+  - 検証中に2件のバグを自己発見・修正: (1) `.michecker-shell`と同じ`margin: 0 auto`パターンを最初`.goal1-shell`にも適用したところ、固定左サイドバー`.app-header`とビューポート幅によって重なりクリックを奪う潜在バグを発見。`.goal3-shell`と同じ「margin上書きなし」パターンに変更して回避(この潜在バグ自体はmichecker-compare.html側にも存在する可能性があるが、今回はスコープ外として触れていない)。(2) ヘッダーの`engineStatus`表示要素をHTMLに用意したもののJS側で一度も更新しておらず「エンジン読み込み中」のまま固定される表示バグをスクリーンショット確認中に発見、準備完了/実行中/実行完了の各状態で更新するよう修正。
+  - 検証: `node --check`全ファイル成功。goal2既存回帰(全6サンプル×ルール別内訳)は変更前後で完全一致(1回だけ無関係な原因でタイムアウトし差分が出たが、再実行で完全一致を再現確認、既知のサーバー負荷起因の一過性フレークと判断)。ローカルHTMLファイル+実データ形式CSV+重複URL入りURL一覧の混在入力でE2E(キュー構築・バッチ完走・エラー継続・CSV/JSON出力・IndexedDB復元・GOAL2引き継ぎ+autoAcceptSafe適用)を一通り確認、JSエラーゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-C(残り: GOAL2引き継ぎ以外の出力系は完了済みのため、PR-Cの残タスクを確認の上着手)へ。
 
 ## Decisions
 

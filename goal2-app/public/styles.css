@@ -2550,3 +2550,138 @@ label {
     grid-template-columns: 1fr;
   }
 }
+
+/* GOAL1 batch page */
+
+/* Deliberately does not set margin/max-width like .michecker-shell does — that shorthand
+   `margin: 0 auto` overrides .app-shell's `margin-left: 176px` (fixed left sidebar nav) at
+   viewport widths close to the content's max-width, letting the sidebar overlap the page
+   and swallow clicks. Following .goal3-shell's pattern instead (gap/contain only) keeps
+   .app-shell's own sidebar offset in effect at every viewport width. */
+.goal1-shell {
+  gap: 20px;
+  contain: layout;
+}
+
+.goal1-input-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.goal1-input-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.goal1-input-grid textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  resize: vertical;
+}
+
+.goal1-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: end;
+}
+
+.goal1-settings-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.goal1-llm-on {
+  background: var(--success-container);
+  color: var(--success);
+}
+
+.goal1-llm-off {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.goal1-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.goal1-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.goal1-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  transition: width var(--motion-base) var(--ease-standard);
+}
+
+.goal1-progress p {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.goal1-file-button {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.goal1-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.goal1-status-pending {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.goal1-status-running {
+  background: var(--primary-container);
+  color: var(--primary-strong);
+}
+
+.goal1-status-done {
+  background: var(--success-container);
+  color: var(--success);
+}
+
+.goal1-status-error {
+  background: var(--error-container);
+  color: var(--error);
+}
+
+.goal1-duplicate-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  background: var(--warning-container);
+  color: var(--warning);
+}
+
+@media (max-width: 900px) {
+  .goal1-input-grid,
+  .goal1-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}

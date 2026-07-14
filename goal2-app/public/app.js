@@ -246,6 +246,7 @@
     pageAgentDismissed: false,
     ruleScopeMode: "kb",
     llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
+    pendingAutoAcceptSafe: false,
   };
 
   // GOAL1 batch mode runs the analysis pipeline without the goal2 screen, so the
@@ -468,6 +469,10 @@
       els.workerInput.value = "";
       els.htmlInput.value = payload.html || "";
       setInputCollapsed(false);
+      // Set by the GOAL1 batch screen when this page's candidates already passed the
+      // same "safe to auto-accept" bar there. Applied once, right after the worker's
+      // first 候補生成 completes (see analyze()) — not on every re-run.
+      state.pendingAutoAcceptSafe = Boolean(payload.autoAcceptSafe);
       return Boolean(payload.html);
     } catch {
       return false;
@@ -629,6 +634,9 @@
       state.notices = notices;
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
+      if (state.pendingAutoAcceptSafe) {
+        applyPendingAutoAcceptSafe();
+      }
       state.workingHtml = rebuildWorkingHtml();
       setInputCollapsed(true);
       renderAll();
@@ -5784,6 +5792,21 @@
 
   function canBulkAcceptCandidate(candidate) {
     return Boolean(candidate && !candidate.decision.status && !acceptDisabledReason(candidate));
+  }
+
+  // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
+  // autoAcceptSafe flag (see loadGoal3Transfer). Goes through the same applyCandidateDecision
+  // path as bulkAcceptSelected/decide() — not a raw decision-state import — so conflict
+  // resolution between same-target candidates (resolveSupersededTableCandidates) still runs.
+  // Applied once per hand-off: analyze() clears the flag right after calling this.
+  function applyPendingAutoAcceptSafe() {
+    state.pendingAutoAcceptSafe = false;
+    state.candidates.forEach((candidate) => {
+      if (!canBulkAcceptCandidate(candidate)) {
+        return;
+      }
+      applyCandidateDecision(candidate, "accepted", "一括自動採用（機械的・確認不要）", candidate.proposal.after_html);
+    });
   }
 
   function unresolvedCandidates() {
