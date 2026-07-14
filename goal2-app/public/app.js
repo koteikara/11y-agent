@@ -121,10 +121,10 @@
   <tr><td>参加申込書</td><td><a href="/files/course-entry.pdf">参加申込書（PDF：120KB）</a></td><td>提出期限 7/15</td></tr>
 </table>
 <table>
-  <caption>対象者一覧</caption>
-  <tr><td rowspan="3">対象区分</td><td>乳幼児の保護者</td><td>午前</td><td>●</td></tr>
-  <tr><td>小学生の保護者</td><td>午後</td><td>●</td></tr>
-  <tr><td>一般</td><td>午前・午後</td><td></td></tr>
+  <caption>講座の実施日程</caption>
+  <tr><td rowspan="3">火曜日</td><td>親子で学ぶ防災講座</td><td>午前</td><td>要予約</td></tr>
+  <tr><td>初めての救急講習</td><td>午後</td><td>予約不要</td></tr>
+  <tr><td>読み聞かせボランティア説明会</td><td>午後</td><td>要予約</td></tr>
 </table>
 <table>
   <tr><td>項目</td><td>内容</td></tr>
@@ -3039,7 +3039,15 @@
         rowIndex > 0 && row.some((cell) => isTableDataValueText(cell.textContent || ""))
       ),
       hasAnyDataValues: nonEmptyRows.some((row) => row.some((cell) => isTableDataValueText(cell.textContent || ""))),
-      firstRowHeaderLike: firstRow.length >= 2 && firstRow.every((cell) => isHeaderLikeTableCell(cell)),
+      // A rowspan cell in the first row means that cell (and likely the whole row) is a
+      // row-group label spanning several body rows, not a one-row column header — a genuine
+      // header row doesn't reach down into the body. isHeaderLikeTableCell() alone can't tell
+      // "対象区分"(a row-group label) apart from "受講料"(a real header) since both are short
+      // plain text, so rowspan is used as the deciding signal to keep such rows out of thead.
+      firstRowHeaderLike:
+        firstRow.length >= 2 &&
+        !firstRow.some((cell) => (Number(cell.getAttribute("rowspan")) || 1) > 1) &&
+        firstRow.every((cell) => isHeaderLikeTableCell(cell)),
       firstColumnHeaderRatio,
     };
   }
@@ -3143,7 +3151,10 @@
       const row = document.createElement("tr");
       cells.forEach((cell, index) => {
         const isRowHeaderCell = index === 0 || cell.tagName === "TH";
-        const clone = cloneTableCellAs(cell, isRowHeaderCell ? "th" : "td", isRowHeaderCell ? "row" : "");
+        // A row-header cell that spans multiple rows via rowspan is labelling a group of
+        // rows, not one row, so scope="rowgroup" describes it more accurately than "row".
+        const rowHeaderScope = (Number(cell.getAttribute("rowspan")) || 1) > 1 ? "rowgroup" : "row";
+        const clone = cloneTableCellAs(cell, isRowHeaderCell ? "th" : "td", isRowHeaderCell ? rowHeaderScope : "");
         if (isRowHeaderCell) {
           const note = extractEmbeddedTableCellNote(clone);
           if (note) noteEntries.push({ label: normalizeText(clone.textContent || ""), note });
@@ -3152,7 +3163,13 @@
         }
         row.appendChild(clone);
       });
-      for (let index = cells.length; index < columnCount; index += 1) {
+      // Pad short rows out to columnCount so every row has the same number of cells —
+      // but a colspan cell already occupies multiple columns, so counting DOM children
+      // (cells.length) instead of columns actually covered used to add extra empty <td>
+      // after a colspan row (e.g. a colspan="3" title row got 2 bogus empty cells tacked
+      // on even though it already spans all 3 columns).
+      const occupiedColumns = cells.reduce((sum, cell) => sum + (Number(cell.getAttribute("colspan")) || 1), 0);
+      for (let index = occupiedColumns; index < columnCount; index += 1) {
         row.appendChild(document.createElement("td"));
       }
       tbody.appendChild(row);
@@ -4569,22 +4586,20 @@
         return;
       }
 
-      if (drafts.length === 2 && canCombineLayoutCells(drafts[0], drafts[1])) {
+      // A row whose first cell is a short plain label followed by one or more plain
+      // value cells reads as a single record ("参加申込書: 添付ファイル、提出期限 7/15"),
+      // not as a sub-heading introducing a separate list. Earlier this promoted the label
+      // to its own <h4>/<h5> whenever 2+ simple cells followed it, which duplicated heading
+      // levels for ordinary multi-column data rows (a 3-column row-header/value/value row
+      // read identically to a genuine section title row). Folding every such row into one
+      // inline paragraph keeps table.cell-merge-layout/-file candidates from inventing
+      // headings that don't exist in the source content.
+      if (drafts.length >= 2 && isLayoutRecordLabelDraft(drafts[0]) && drafts.slice(1).every(isSimpleLayoutValueDraft)) {
         const paragraph = document.createElement("p");
         const label = document.createElement("strong");
         appendInlineHtml(label, drafts[0].html);
         paragraph.appendChild(label);
         paragraph.append(" ");
-        appendInlineHtml(paragraph, drafts[1].html);
-        template.content.appendChild(paragraph);
-        return;
-      }
-
-      if (drafts.length >= 2 && isLayoutTableSectionHeadingDraft(drafts[0]) && drafts.slice(1).every((draft) => draft.simple)) {
-        const heading = document.createElement(layoutTableChildHeadingTag(parentHeadingTag));
-        heading.textContent = drafts[0].text;
-        template.content.appendChild(heading);
-        const paragraph = document.createElement("p");
         drafts.slice(1).forEach((draft, index) => {
           if (index > 0) paragraph.append("、");
           appendInlineHtml(paragraph, draft.html);
@@ -5224,14 +5239,12 @@
     recordImageContext();
   }
 
-  function canCombineLayoutCells(labelDraft, valueDraft) {
-    return Boolean(
-      labelDraft?.simple &&
-        valueDraft?.simple &&
-        labelDraft.text.length > 0 &&
-        labelDraft.text.length <= 24 &&
-        valueDraft.text.length > 0
-    );
+  function isLayoutRecordLabelDraft(draft) {
+    return Boolean(draft?.simple && draft.text.length > 0 && draft.text.length <= 24);
+  }
+
+  function isSimpleLayoutValueDraft(draft) {
+    return Boolean(draft?.simple && draft.text.length > 0);
   }
 
   function appendLayoutDraft(root, draft) {
