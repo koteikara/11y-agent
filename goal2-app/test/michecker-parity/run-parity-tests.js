@@ -714,7 +714,635 @@ async function main() {
     },
   ];
 
-  for (const testCase of [...M1_CASES, ...M2_CASES]) {
+  // --- PR-M3: info/user-type check cases (positive + negative) ---
+  // Part 1: "always" checks. Most are unconditional page-level reminders
+  // (any HTML at all triggers them); C_56.1/C_81.0 additionally require at
+  // least one <a href> to be present (hasAwithHref).
+  const ALWAYS_UNCONDITIONAL_IDS = [
+    "C_19.0", "C_20.0", "C_55.0", "C_67.0", "C_71.0", "C_83.0",
+    "C_500.2", "C_500.6", "C_500.11", "C_500.12", "C_600.0",
+    "C_600.8", "C_600.9", "C_600.10", "C_600.14", "C_600.17", "C_600.19",
+  ];
+  const M3_ALWAYS_CASES = ALWAYS_UNCONDITIONAL_IDS.map((id) => ({
+    name: `${id} positive: unconditional page-level reminder`,
+    checkIds: [id],
+    html: "<p>x</p>",
+    expected: { [id]: 1 },
+  }));
+  for (const id of ["C_56.1", "C_81.0"]) {
+    M3_ALWAYS_CASES.push(
+      {
+        name: `${id} positive: page has an <a href>`,
+        checkIds: [id],
+        html: '<a href="/a">link</a>',
+        expected: { [id]: 1 },
+      },
+      {
+        name: `${id} negative: page has no <a href>`,
+        checkIds: [id],
+        html: "<p>x</p>",
+        expected: {},
+      }
+    );
+  }
+  // The 5 "always"-classified ids that are commented out in the Java
+  // source (see michecker-engine.js's "IMPORTANT CORRECTION" comment) and
+  // C_76.0 (also dead code) are deliberately NOT registered and therefore
+  // have no check ids at all — verified here by confirming run() ignores
+  // them silently even when explicitly requested via checkIds.
+  const DEAD_CHECK_IDS = ["C_500.4", "C_500.13", "C_500.14", "C_500.15", "C_500.16", "C_76.0"];
+  for (const id of DEAD_CHECK_IDS) {
+    M3_ALWAYS_CASES.push({
+      name: `${id} negative (dead code in upstream, not registered): never fires`,
+      checkIds: [id],
+      html: "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>",
+      expected: {},
+    });
+  }
+
+  // Part 2: individual (non-"always") info/user checks.
+  const M3_INDIVIDUAL_CASES = [
+    {
+      name: "C_3.1 positive: img longdesc present (any value) in a non-HTML5 document",
+      checkIds: ["C_3.1"],
+      html: '<img src="a.jpg" longdesc="d.html">',
+      expected: { "C_3.1": 1 },
+    },
+    {
+      name: "C_3.1 negative: no longdesc attribute",
+      checkIds: ["C_3.1"],
+      html: '<img src="a.jpg">',
+      expected: {},
+    },
+    {
+      name: "C_4.0 positive: normal-size image with a long, non-ASCII alt",
+      checkIds: ["C_4.0"],
+      html: '<img src="a.jpg" width="100" height="100" alt="公園で遊ぶ子どもたちのとても詳しい説明文です">',
+      expected: { "C_4.0": 1 },
+    },
+    {
+      name: "C_4.0 negative: short alt",
+      checkIds: ["C_4.0"],
+      html: '<img src="a.jpg" width="100" height="100" alt="短い">',
+      expected: {},
+    },
+    {
+      name: "C_7.0 positive: area href with no matching <a href> elsewhere",
+      checkIds: ["C_7.0"],
+      html: '<map name="m"><area href="/nomatch" alt="x"></map><img src="i.jpg" usemap="#m">',
+      expected: { "C_7.0": 1 },
+    },
+    {
+      name: "C_7.0 negative: area href matches an existing <a href>",
+      checkIds: ["C_7.0"],
+      html: '<a href="/match">text</a><map name="m"><area href="/match" alt="x"></map><img src="i.jpg" usemap="#m">',
+      expected: {},
+    },
+    {
+      name: "C_8.0 positive: <font color> with a non-empty value",
+      checkIds: ["C_8.0"],
+      html: '<font color="red">x</font>',
+      expected: { "C_8.0": 1 },
+    },
+    {
+      name: "C_8.0 negative: <font> with no color/bgcolor",
+      checkIds: ["C_8.0"],
+      html: "<font>x</font>",
+      expected: {},
+    },
+    {
+      name: "C_12.0 positive: a table containing a nested table",
+      checkIds: ["C_12.0"],
+      html: "<table><tr><td><table><tr><td>inner</td></tr></table></td></tr></table>",
+      expected: { "C_12.0": 1 },
+    },
+    {
+      name: "C_12.0 negative: no nested tables",
+      checkIds: ["C_12.0"],
+      html: "<table><tr><td>1</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_12.1 positive: a 1-row table (bottom 1-row/1-col)",
+      checkIds: ["C_12.1"],
+      html: "<table><tr><td>1</td></tr></table>",
+      expected: { "C_12.1": 1 },
+    },
+    {
+      name: "C_12.1 negative: a multi-row data table",
+      checkIds: ["C_12.1"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_12.2 positive: a bottom non-data table (form control inside)",
+      checkIds: ["C_12.2"],
+      html: '<table><tr><td>1</td><td>2</td></tr><tr><td><input></td><td>4</td></tr></table>',
+      expected: { "C_12.2": 1 },
+    },
+    {
+      name: "C_12.2 negative: a genuine data table",
+      checkIds: ["C_12.2"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_15.0 positive: page has a heading",
+      checkIds: ["C_15.0"],
+      html: "<h2>見出し</h2>",
+      expected: { "C_15.0": 1 },
+    },
+    {
+      name: "C_15.0 negative: page has no headings",
+      checkIds: ["C_15.0"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_16.1 positive: empty <ul>",
+      checkIds: ["C_16.1"],
+      html: "<ul></ul>",
+      expected: { "C_16.1": 1 },
+    },
+    {
+      name: "C_16.1 negative: <ul> with an <li>",
+      checkIds: ["C_16.1"],
+      html: "<ul><li>x</li></ul>",
+      expected: {},
+    },
+    {
+      name: "C_16.2 positive: orphaned <li> with no <ul>/<ol> ancestor",
+      checkIds: ["C_16.2"],
+      html: "<li>orphan</li>",
+      expected: { "C_16.2": 1 },
+    },
+    {
+      name: "C_16.2 negative: <li> properly inside a <ul>",
+      checkIds: ["C_16.2"],
+      html: "<ul><li>x</li></ul>",
+      expected: {},
+    },
+    {
+      name: "C_17.0 positive: <blockquote> with no text descendant",
+      checkIds: ["C_17.0"],
+      html: "<blockquote></blockquote>",
+      expected: { "C_17.0": 1 },
+    },
+    {
+      name: "C_17.0 negative: <blockquote> with text",
+      checkIds: ["C_17.0"],
+      html: "<blockquote>quote</blockquote>",
+      expected: {},
+    },
+    {
+      name: "C_17.1 positive: page has a <blockquote>",
+      checkIds: ["C_17.1"],
+      html: "<blockquote>quote</blockquote>",
+      expected: { "C_17.1": 1 },
+    },
+    {
+      name: "C_17.1 negative: no <blockquote>",
+      checkIds: ["C_17.1"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_18.0 positive: <q> longer than QUOTATION_SHORT_NUM",
+      checkIds: ["C_18.0"],
+      html: "<q>これは十分に長い引用文です</q>",
+      expected: { "C_18.0": 1 },
+    },
+    {
+      name: "C_18.0 negative: short <q>",
+      checkIds: ["C_18.0"],
+      html: "<q>短い</q>",
+      expected: {},
+    },
+    {
+      name: "C_18.1 positive: <blockquote> QUOTATION_SHORT_NUM or shorter",
+      checkIds: ["C_18.1"],
+      html: "<blockquote>短い</blockquote>",
+      expected: { "C_18.1": 1 },
+    },
+    {
+      name: "C_18.1 negative: long <blockquote>",
+      checkIds: ["C_18.1"],
+      html: "<blockquote>これは十分に長い引用文です</blockquote>",
+      expected: {},
+    },
+    {
+      name: "C_23.0 positive: parent table (has nested table) with a direct <th>",
+      checkIds: ["C_23.0"],
+      html: "<table><tr><th>A</th></tr><tr><td><table><tr><td>inner</td></tr></table></td></tr></table>",
+      expected: { "C_23.0": 1 },
+    },
+    {
+      name: "C_23.0 negative: parent table with no th/caption/summary",
+      checkIds: ["C_23.0"],
+      html: "<table><tr><td><table><tr><td>inner</td></tr></table></td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_23.1 positive: data table with a direct <th>",
+      checkIds: ["C_23.1"],
+      html: "<table><tr><th>A</th><td>1</td></tr><tr><td>2</td><td>3</td></tr></table>",
+      expected: { "C_23.1": 1 },
+    },
+    {
+      name: "C_23.1 negative: data table with no th/caption",
+      checkIds: ["C_23.1"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_25.1 positive: data table with no caption and no accessible name",
+      checkIds: ["C_25.1"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: { "C_25.1": 1 },
+    },
+    {
+      name: "C_25.1 negative: data table with a caption",
+      checkIds: ["C_25.1"],
+      html: "<table><caption>表</caption><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_25.2 positive: data table with no summary attribute",
+      checkIds: ["C_25.2"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: { "C_25.2": 1 },
+    },
+    {
+      name: "C_25.2 negative: data table with a non-empty summary",
+      checkIds: ["C_25.2"],
+      html: '<table summary="説明"><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>',
+      expected: {},
+    },
+    {
+      name: "C_25.3 positive: data table with a caption",
+      checkIds: ["C_25.3"],
+      html: "<table><caption>表</caption><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: { "C_25.3": 1 },
+    },
+    {
+      name: "C_25.3 negative: data table with no caption",
+      checkIds: ["C_25.3"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_25.4 positive: data table with a non-empty summary",
+      checkIds: ["C_25.4"],
+      html: '<table summary="説明"><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>',
+      expected: { "C_25.4": 1 },
+    },
+    {
+      name: "C_25.4 negative: data table with no summary",
+      checkIds: ["C_25.4"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_26.0 positive: <th> text longer than TABLE_CELL_ABBR_CHARS (30, DBCS)",
+      checkIds: ["C_26.0"],
+      html: `<table><tr><th>${"あ".repeat(31)}</th></tr></table>`,
+      expected: { "C_26.0": 1 },
+    },
+    {
+      name: "C_26.0 negative: short <th> text",
+      checkIds: ["C_26.0"],
+      html: "<table><tr><th>短い</th></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_30.0 positive: page has an <object>",
+      checkIds: ["C_30.0"],
+      html: '<object data="a.swf"></object>',
+      expected: { "C_30.0": 1 },
+    },
+    {
+      name: "C_30.0 negative: no object/embed/applet",
+      checkIds: ["C_30.0"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_30.1 positive: page has an <embed>",
+      checkIds: ["C_30.1"],
+      html: '<embed src="a.swf">',
+      expected: { "C_30.1": 1 },
+    },
+    {
+      name: "C_30.1 negative: no object/embed/applet",
+      checkIds: ["C_30.1"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_32.0 positive: page has an <object>",
+      checkIds: ["C_32.0"],
+      html: '<object data="a.swf"></object>',
+      expected: { "C_32.0": 1 },
+    },
+    {
+      name: "C_32.0 negative: no object/applet",
+      checkIds: ["C_32.0"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_35.0 positive: normal-size <img src=*.gif>",
+      checkIds: ["C_35.0"],
+      html: '<img src="a.gif" width="100" height="100">',
+      expected: { "C_35.0": 1 },
+    },
+    {
+      name: "C_35.0 negative: non-gif image",
+      checkIds: ["C_35.0"],
+      html: '<img src="a.jpg" width="100" height="100">',
+      expected: {},
+    },
+    {
+      name: "C_48.6 positive: <b> in a non-HTML5 document",
+      checkIds: ["C_48.6"],
+      html: "<b>bold</b>",
+      expected: { "C_48.6": 1 },
+    },
+    {
+      name: "C_48.6 negative: no b/i",
+      checkIds: ["C_48.6"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_51.2 positive: <frame> with a non-blank title",
+      checkIds: ["C_51.2"],
+      html: '<frameset><frame src="a.html" title="説明"></frameset>',
+      expected: { "C_51.2": 1 },
+    },
+    {
+      name: "C_51.2 negative: <frame> with no title",
+      checkIds: ["C_51.2"],
+      html: '<frameset><frame src="a.html"></frameset>',
+      expected: {},
+    },
+    {
+      name: "C_51.3 positive: <iframe> with a non-blank title",
+      checkIds: ["C_51.3"],
+      html: '<iframe src="a.html" title="説明"></iframe>',
+      expected: { "C_51.3": 1 },
+    },
+    {
+      name: "C_51.3 negative: <iframe> with no title",
+      checkIds: ["C_51.3"],
+      html: '<iframe src="a.html"></iframe>',
+      expected: {},
+    },
+    {
+      name: "C_52.0 positive: <frame> with a title but no longdesc",
+      checkIds: ["C_52.0"],
+      html: '<frameset><frame src="a.html" title="説明"></frameset>',
+      expected: { "C_52.0": 1 },
+    },
+    {
+      name: "C_52.0 negative: <frame> with a title AND a longdesc",
+      checkIds: ["C_52.0"],
+      html: '<frameset><frame src="a.html" title="説明" longdesc="d.html"></frameset>',
+      expected: {},
+    },
+    {
+      name: "C_52.1 positive: <iframe> with a title but no longdesc",
+      checkIds: ["C_52.1"],
+      html: '<iframe src="a.html" title="説明"></iframe>',
+      expected: { "C_52.1": 1 },
+    },
+    {
+      name: "C_52.1 negative: <iframe> with a title AND a longdesc",
+      checkIds: ["C_52.1"],
+      html: '<iframe src="a.html" title="説明" longdesc="d.html"></iframe>',
+      expected: {},
+    },
+    {
+      name: "C_57.0 positive: link with short non-empty untitled text",
+      checkIds: ["C_57.0"],
+      html: '<a href="/a">A</a>',
+      expected: { "C_57.0": 1 },
+    },
+    {
+      name: "C_57.0 negative: link with descriptive text",
+      checkIds: ["C_57.0"],
+      html: '<a href="/a">十分に長くて説明的なリンクテキストがここに存在しています</a>',
+      expected: {},
+    },
+    {
+      name: "C_57.1 positive: link with a short title",
+      checkIds: ["C_57.1"],
+      html: '<a href="/a" title="短い">A</a>',
+      expected: { "C_57.1": 1 },
+    },
+    {
+      name: "C_57.1 negative: link with a descriptive title",
+      checkIds: ["C_57.1"],
+      html: '<a href="/a" title="十分に説明的で長いタイトルがここに存在しています">A</a>',
+      expected: {},
+    },
+    {
+      name: "C_57.4 positive: link with a non-blank title",
+      checkIds: ["C_57.4"],
+      html: '<a href="/a" title="説明">A</a>',
+      expected: { "C_57.4": 1 },
+    },
+    {
+      name: "C_57.4 negative: link with no title",
+      checkIds: ["C_57.4"],
+      html: '<a href="/a">A</a>',
+      expected: {},
+    },
+    {
+      name: "C_57.5 positive: empty-text link adjacent to a same-href link with text",
+      checkIds: ["C_57.5"],
+      html: '<a href="/a">写真</a><a href="/a"><span></span></a>',
+      expected: { "C_57.5": 1 },
+    },
+    {
+      name: "C_57.5 negative: empty-text link with no adjacent same-href link",
+      checkIds: ["C_57.5"],
+      html: '<a href="/a"><span></span></a>',
+      expected: {},
+    },
+    {
+      name: "C_57.6 positive: truly empty link (no children, no img)",
+      checkIds: ["C_57.6"],
+      html: '<a href="/a"></a>',
+      expected: { "C_57.6": 1 },
+    },
+    {
+      name: "C_57.6 negative: link with a child element (span)",
+      checkIds: ["C_57.6"],
+      html: '<a href="/a"><span></span></a>',
+      expected: {},
+    },
+    {
+      name: "C_58.0 positive: same link text, same length bucket, different targets",
+      checkIds: ["C_58.0"],
+      html: '<a href="/a">ここ</a><a href="/b">ここ</a>',
+      expected: { "C_58.0": 1 },
+    },
+    {
+      name: "C_58.0 negative: same link text, same target",
+      checkIds: ["C_58.0"],
+      html: '<a href="/a">ここ</a><a href="/a">ここ</a>',
+      expected: {},
+    },
+    {
+      name: "C_69.0 positive: leaf block with ASCII-art-like content (3rd reminder id)",
+      checkIds: ["C_69.0"],
+      html: "<p>o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o</p>",
+      expected: { "C_69.0": 1 },
+    },
+    {
+      name: "C_69.0 negative: ordinary Japanese text",
+      checkIds: ["C_69.0"],
+      html: "<p>通常のお知らせ本文です。</p>",
+      expected: {},
+    },
+    {
+      name: "C_75.0 positive: data table with no <th> at all",
+      checkIds: ["C_75.0"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: { "C_75.0": 1 },
+    },
+    {
+      name: "C_75.0 negative: data table with a <th>",
+      checkIds: ["C_75.0"],
+      html: "<table><tr><th>A</th><td>1</td></tr><tr><td>2</td><td>3</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_76.1 positive: data table using rowspan",
+      checkIds: ["C_76.1"],
+      html: '<table><tr><td rowspan="2">1</td><td>2</td></tr><tr><td>3</td></tr></table>',
+      expected: { "C_76.1": 1 },
+    },
+    {
+      name: "C_76.1 negative: data table with no rowspan/colspan",
+      checkIds: ["C_76.1"],
+      html: "<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: "C_86.0 positive: link to an audio file by extension",
+      checkIds: ["C_86.0"],
+      html: '<a href="/sound.mp3">音声</a>',
+      expected: { "C_86.0": 1 },
+    },
+    {
+      name: "C_86.0 negative: no audio/multimedia file references",
+      checkIds: ["C_86.0"],
+      html: '<a href="/page.html">page</a>',
+      expected: {},
+    },
+    {
+      name: "C_89.1 positive: some body text and at least one image",
+      checkIds: ["C_89.1"],
+      html: '<p>短い文</p><img src="a.jpg" alt="x">',
+      expected: { "C_89.1": 1 },
+    },
+    {
+      name: "C_89.1 negative: some body text but no images",
+      checkIds: ["C_89.1"],
+      html: "<p>短い文</p>",
+      expected: {},
+    },
+    {
+      name: "C_300.5 positive: page has a <canvas>",
+      checkIds: ["C_300.5"],
+      html: "<canvas></canvas>",
+      expected: { "C_300.5": 1 },
+    },
+    {
+      name: "C_300.5 negative: no canvas",
+      checkIds: ["C_300.5"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_388.0 positive: page has a <form>",
+      checkIds: ["C_388.0"],
+      html: "<form></form>",
+      expected: { "C_388.0": 1 },
+    },
+    {
+      name: "C_388.0 negative: no form",
+      checkIds: ["C_388.0"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_500.17 positive: style attribute declares a foreground color only",
+      checkIds: ["C_500.17"],
+      html: '<p style="color: red;">x</p>',
+      expected: { "C_500.17": 1 },
+    },
+    {
+      name: "C_500.17 negative: style attribute declares only background-color",
+      checkIds: ["C_500.17"],
+      html: '<p style="background-color: red;">x</p>',
+      expected: {},
+    },
+    {
+      name: "C_500.18 positive: style attribute declares background-color only",
+      checkIds: ["C_500.18"],
+      html: '<p style="background-color: red;">x</p>',
+      expected: { "C_500.18": 1 },
+    },
+    {
+      name: "C_500.18 negative: style attribute declares only a foreground color",
+      checkIds: ["C_500.18"],
+      html: '<p style="color: red;">x</p>',
+      expected: {},
+    },
+    {
+      name: "C_500.19 positive: <style> element with a fixed-unit (px) font-size",
+      checkIds: ["C_500.19"],
+      html: "<style>p { font-size: 12px; }</style>",
+      expected: { "C_500.19": 1 },
+    },
+    {
+      name: "C_500.19 negative: <style> element with a relative font-size",
+      checkIds: ["C_500.19"],
+      html: "<style>p { font-size: 1.2em; }</style>",
+      expected: {},
+    },
+    {
+      name: "C_500.20 positive: style ATTRIBUTE with a fixed-unit (px) font-size",
+      checkIds: ["C_500.20"],
+      html: '<p style="font-size: 12px;">x</p>',
+      expected: { "C_500.20": 1 },
+    },
+    {
+      name: "C_500.20 negative: style attribute with a relative font-size",
+      checkIds: ["C_500.20"],
+      html: '<p style="font-size: 1.2em;">x</p>',
+      expected: {},
+    },
+    {
+      name: "C_500.21 positive: style attribute with a viewport-unit (vw) font-size",
+      checkIds: ["C_500.21"],
+      html: '<p style="font-size: 5vw;">x</p>',
+      expected: { "C_500.21": 1 },
+    },
+    {
+      name: "C_500.21 negative: style attribute with a relative font-size",
+      checkIds: ["C_500.21"],
+      html: '<p style="font-size: 1.2em;">x</p>',
+      expected: {},
+    },
+  ];
+
+  const M3_CASES = [...M3_ALWAYS_CASES, ...M3_INDIVIDUAL_CASES];
+
+  for (const testCase of [...M1_CASES, ...M2_CASES, ...M3_CASES]) {
     const result = await page.evaluate(
       ({ html, checkIds, checkitems }) => {
         const doc = new DOMParser().parseFromString(html, "text/html");
@@ -723,7 +1351,12 @@ async function main() {
       { html: testCase.html, checkIds: testCase.checkIds, checkitems }
     );
     const counts = {};
+    // "always"-method checks (page-level reminders) are routed to
+    // result.checklist instead of result.problems (see run()'s method ===
+    // "always" branch in michecker-engine.js) — merge both so a single
+    // counts map works regardless of which bucket a given check uses.
     for (const p of result.problems) counts[p.checkId] = (counts[p.checkId] || 0) + 1;
+    for (const c of result.checklist) counts[c.checkId] = (counts[c.checkId] || 0) + 1;
     const expectedKeys = Object.keys(testCase.expected);
     const actualKeys = Object.keys(counts);
     const sameKeys =
