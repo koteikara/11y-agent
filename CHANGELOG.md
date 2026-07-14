@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker公式判定エンジン移植 PR-M0: インベントリ+michecker-engine.js骨格
+
+- 背景・目的: `goal2-app/MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`(前PRで作成した実行計画書)のPR-M0を実装。移植対象116件のインベントリ表と、判定ロジック本体(`michecker-engine.js`)の骨格(チェック本体は未実装、0件発火)を構築した。
+- 主な変更内容:
+  - `a11y-migration-kb/tools/gen_michecker_inventory.py`(新規): `goal2-app/data/michecker-checkitems.json`・`a11y-migration-kb/reference/michecker-out-of-content-scope.json`・`goal2-app/data/rules.jsonl`と、eclipse-actf公式ソースの`CheckEngine.java`を突き合わせ、対象116件それぞれのCheckEngine.java担当メソッド・行番号・移植可否分類(pure-DOM 79 / テキストCSS解析 9 / 手動確認(always) 24 / TextChecker依存 2 / 本体未発火 2)・対応KBルールを一覧化する`goal2-app/MICHECKER_PORT_INVENTORY.md`を生成するワンショットスクリプト。
+  - `goal2-app/public/michecker-engine.js`(新規): EPL-1.0ヘッダー(移植元・参照コミット`703e34f0...`・Copyright表記)、`window.micheckerEngine.run(document, options)`の公開API、`addCheckerProblem`相当の内部収集器、`desc_ja`テンプレートの`{0}`置換(`MessageFormat`相当)、CSSセレクタパス生成(行番号の代替)、`TextChecker.java`+`altText.properties`(NGワード一覧)の完全移植(`checkAlt`/`isSeparatedJapaneseChars`/`isAsciiArtString`等)。C_x.yチェック本体(PR-M1以降)は未登録。
+  - `a11y-migration-kb/vendor/eclipse-actf/NOTICE.md`: `michecker-engine.js`の移植元・ライセンス(EPL-1.0)・ライセンス隔離方針を追記。
+  - `goal2-app/test/michecker-parity/`(新規): パリティテストランナー(`run-parity-tests.js`、`npm run test:michecker-parity`)。`npm test`本体(`test/run-tests.js`)はゼロ依存方針のため、Playwright実ブラウザで`michecker-engine.js`を実行するこのランナーは独立コマンドとした(既存の全E2E検証と同じPlaywright実行環境を利用。新規npm依存は追加していない)。PR-M0時点ではCHECKS未登録のためチェック本体のパリティ検証は無く、収集器・メッセージ整形・セレクタ生成・TextChecker移植の17ケースを検証(全PASS)。TextChecker移植では、Java側の`\b`(ASCII単語境界)が純粋な日本語テキストでは実質発火しないという原典の癖を発見し、「修正」せず忠実に再現した上でテストにも明記した。
+  - 副次的な修正: `goal2-app/test/run-tests.js`の`goal3Html.includes("Goal 3")`アサーションが、前PR(#66、GOAL番号表記の除去)で`goal3.html`から「Goal 3」という文字列自体が無くなったことにより既に失格していたことを発見。`"本文抽出"`(現在のeyebrowラベル)を見る形に更新し、`npm test`を再び通るようにした(miChecker移植とは無関係の、前PRで見落とされていた既存バグの修正)。
+- 検証: `node --check`(michecker-engine.js/app.js/goal1.js/goal3.js/server.js)成功。`npm test`成功(前述の副次修正を含む)。`npm run test:michecker-parity`17/17 PASS。既存6サンプルの回帰完全一致(procedure-overview 11 / images 10 / tables 23 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20)。インベントリ表の合計116件(本体未発火2件を「対象外」と明記)を確認。`michecker-engine.js`はどのHTML画面からも未読み込みのため既存UI・既存機能への影響なし(GOAL2統合はPR-M4)。
+- 関連ファイル: `goal2-app/MICHECKER_PORT_INVENTORY.md`(新規)、`goal2-app/public/michecker-engine.js`(新規)、`goal2-app/test/michecker-parity/`(新規)、`goal2-app/test/run-tests.js`、`goal2-app/package.json`、`a11y-migration-kb/tools/gen_michecker_inventory.py`(新規)、`a11y-migration-kb/vendor/eclipse-actf/NOTICE.md`
+
 ## 2026-07-14: miChecker公式判定エンジン(CheckEngine.java)移植の実行計画書を作成(実装は未着手)
 
 - 背景・目的: ユーザーから「miCheckerと同じチェックはこのブラウザ上で可能か」という一連の質問があり、現状の「miChecker指摘対応のみ」モードは公式チェック項目のメタデータ(WCAG番号・メッセージ文言)との突き合わせに基づく独自ヒューリスティックであって、公式の判定アルゴリズムそのものではないことを根拠付きで説明した。判定ロジックの実体が`eclipse-actf/org.eclipse.actf`リポジトリの`CheckEngine.java`(約4,900行、EPL-1.0)として公開されていることを実ソース取得で確認し、ユーザーから「本文編集で対応可能な項目のみから着手。Fable 5が移植実行計画を立て、Sonnetが実装する」との指示を受けて計画書のみを作成した(コードは未着手)。

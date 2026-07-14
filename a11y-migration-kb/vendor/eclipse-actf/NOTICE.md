@@ -25,3 +25,21 @@
 miChecker/HTML Checkerの新しいバージョンがリリースされた場合、上記出典から最新の2ファイルを
 取得し直し、このディレクトリに上書きした上で`python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json`
 を再実行する。
+
+## 判定ロジックの移植(goal2-app/public/michecker-engine.js)
+
+上記2ファイル(メタデータのみ)とは別に、`goal2-app/public/michecker-engine.js`は、同じ
+`eclipse-actf/org.eclipse.actf`リポジトリに含まれる**判定ロジックのJavaソース**(評価エンジン
+本体)をJavaScriptへ移植した二次的著作物である。移植元・スコープ・移植方針は
+`goal2-app/MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`(計画書)と
+`goal2-app/MICHECKER_PORT_INVENTORY.md`(対象116件のインベントリ)を参照。
+
+- 移植元ファイル:
+  - `org.eclipse.actf.validation.html/src/org/eclipse/actf/validation/html/internal/CheckEngine.java`
+  - `org.eclipse.actf.visualization.engines.blind/src/org/eclipse/actf/visualization/engines/blind/TextChecker.java`
+  - `org.eclipse.actf.visualization.engines.blind/config/altText.properties`
+- 参照コミット: `703e34f0af7b7c4882a7adbd4fa6305f114cd548`(上記2ファイルと同一時点)
+- ライセンス: EPL-1.0、Copyright (c) 2004, 2025 IBM Corporation and Others。
+  `michecker-engine.js`冒頭に同ライセンス表記を保持している。
+- 移植コードは`michecker-engine.js`1ファイルに閉じ込め、他のファイル(`app.js`等)へは
+  混在させない(ライセンス隔離。詳細は移植計画書§4.2)。

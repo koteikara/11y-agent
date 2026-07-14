@@ -477,7 +477,7 @@ async function main() {
   assert.ok(serverJs.includes("/api/link-title"), "server should expose a link title lookup endpoint");
   assert.ok(serverJs.includes("assertFetchUrlAllowed"), "link title lookup should block local/private fetch targets");
   assert.ok(serverJs.includes("/api/fetch-html"), "server should expose a guarded HTML fetch endpoint for Goal3");
-  assert.ok(goal3Html.includes("Goal 3"), "Goal3 should have a separate screen");
+  assert.ok(goal3Html.includes("本文抽出"), "Goal3 should have a separate screen");
   assert.ok(goal3Html.includes("sourcePreviewFrame"), "Goal3 should include a source preview frame for visual extraction confirmation");
   assert.ok(goal3Html.includes("goal3Loading"), "Goal3 should include a visible loading state while extracting or fetching");
   assert.ok(goal3Js.includes("scoreCandidate"), "Goal3 should rank content candidates by content-like signals");
