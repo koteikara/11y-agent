@@ -13,11 +13,12 @@
 // environment; install locally with `npx playwright install chromium` if
 // running elsewhere). Run with: `node test/michecker-parity/run-parity-tests.js`
 //
-// PR-M0 has no C_x.y checks registered yet (see michecker-engine.js CHECKS),
-// so this file validates the PR-M0 infrastructure itself (collector,
-// message templating, selector paths, the ported TextChecker helper) plus a
-// harness sanity check. PR-M1+ will add fixtures/cases exercising real
-// checks and wire this runner's "compare check-id counts" path for those.
+// Structure: a harness-sanity block (collector/message-templating/selector-
+// path/TextChecker plumbing, isolated from real checks via checkIds: []),
+// followed by one M<N>_CASES array per PR (M1_CASES, M2_CASES, ...) with a
+// positive+negative fixture per check id, run through the same
+// run-and-compare-counts loop. Add new PR's cases as a new M<N>_CASES array
+// and fold it into the loop's spread below.
 const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
@@ -44,7 +45,10 @@ async function main() {
   await page.goto("about:blank");
   await page.addScriptTag({ content: engineSource });
 
-  // --- Harness sanity: with zero checks registered, run() must be a no-op ---
+  // --- Harness sanity: options.checkIds: [] must be a hard no-op, isolating
+  // the collector/message-building plumbing from whichever real checks
+  // PR-M1+ has since registered (checkIds: [] rather than omitted, so this
+  // stays true regardless of how many checks CHECKS accumulates over time).
   const fixtureHtml = fs.readFileSync(
     path.join(__dirname, "fixtures/generic-page.html"),
     "utf8"
@@ -52,22 +56,22 @@ async function main() {
   const runResult = await page.evaluate(
     ({ html, checkitems }) => {
       const doc = new DOMParser().parseFromString(html, "text/html");
-      return window.micheckerEngine.run(doc, { checkitems });
+      return window.micheckerEngine.run(doc, { checkitems, checkIds: [] });
     },
     { html: fixtureHtml, checkitems }
   );
   check(
-    "PR-M0 harness: run() with no registered checks returns 0 problems",
+    "harness: run() with checkIds: [] returns 0 problems",
     Array.isArray(runResult.problems) && runResult.problems.length === 0,
     JSON.stringify(runResult.problems)
   );
   check(
-    "PR-M0 harness: run() with no registered checks returns 0 checklist items",
+    "harness: run() with checkIds: [] returns 0 checklist items",
     Array.isArray(runResult.checklist) && runResult.checklist.length === 0,
     JSON.stringify(runResult.checklist)
   );
   check(
-    "PR-M0 harness: run() reports an engineVersion",
+    "harness: run() reports an engineVersion",
     typeof runResult.engineVersion === "string" && runResult.engineVersion.length > 0,
     runResult.engineVersion
   );
@@ -479,7 +483,238 @@ async function main() {
     },
   ];
 
-  for (const testCase of M1_CASES) {
+  // --- PR-M2: warning-type check cases (positive + negative per check id) ---
+  const M2_CASES = [
+    {
+      // Same underlying detection as C_6.0 (PR-M1) — companion reminder ID.
+      name: "C_6.1 positive: leaf block with ASCII-art-like content",
+      checkIds: ["C_6.1"],
+      html: "<p>o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o_o</p>",
+      expected: { "C_6.1": 1 },
+    },
+    {
+      name: "C_6.1 negative: leaf block with ordinary Japanese text",
+      checkIds: ["C_6.1"],
+      html: "<p>通常のお知らせ本文です。特に問題はありません。</p>",
+      expected: {},
+    },
+    {
+      name: "C_13.0 positive: <font size> with an absolute value",
+      checkIds: ["C_13.0"],
+      html: '<font size="3">x</font>',
+      expected: { "C_13.0": 1 },
+    },
+    {
+      name: "C_13.0 negative: <font size> with a relative value",
+      checkIds: ["C_13.0"],
+      html: '<font size="+1">x</font>',
+      expected: {},
+    },
+    {
+      // A 1-row table is unconditionally "layout" (is1Row1ColTable), and a
+      // direct <th> inside a layout table is suspicious.
+      name: "C_23.2 positive: layout (1-row) table with a direct <th>",
+      checkIds: ["C_23.2"],
+      html: "<table><tr><th>X</th></tr></table>",
+      expected: { "C_23.2": 1 },
+    },
+    {
+      name: "C_23.2 negative: layout table with no th/caption/summary",
+      checkIds: ["C_23.2"],
+      html: "<table><tr><td>1</td></tr></table>",
+      expected: {},
+    },
+    {
+      name: 'C_33.2 positive: <style> text containing "text-decoration: blink"',
+      checkIds: ["C_33.2"],
+      html: "<style>p { text-decoration: blink; }</style>",
+      expected: { "C_33.2": 1 },
+    },
+    {
+      name: "C_33.2 negative: <style> text with unrelated declarations",
+      checkIds: ["C_33.2"],
+      html: "<style>p { color: red; }</style>",
+      expected: {},
+    },
+    {
+      name: "C_38.0 positive: onclick handler with no keyboard equivalent",
+      checkIds: ["C_38.0"],
+      html: '<div onclick="foo()">x</div>',
+      expected: { "C_38.0": 1 },
+    },
+    {
+      name: "C_38.0 negative: onclick handler with a keyboard equivalent",
+      checkIds: ["C_38.0"],
+      html: '<div onclick="foo()" onkeydown="bar()">x</div>',
+      expected: {},
+    },
+    {
+      name: "C_46.0 positive: adjacent links with different targets and no separator",
+      checkIds: ["C_46.0"],
+      html: '<a href="/a">A</a> <a href="/b">B</a>',
+      expected: { "C_46.0": 1 },
+    },
+    {
+      name: "C_46.0 negative: adjacent links with the same target",
+      checkIds: ["C_46.0"],
+      html: '<a href="/a">A</a> <a href="/a">A again</a>',
+      expected: {},
+    },
+    {
+      name: "C_48.0 positive: <menuitem>",
+      checkIds: ["C_48.0"],
+      html: "<menuitem>x</menuitem>",
+      expected: { "C_48.0": 1 },
+    },
+    {
+      name: "C_48.0 negative: no deprecated element",
+      checkIds: ["C_48.0"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_48.1 positive: <applet>",
+      checkIds: ["C_48.1"],
+      html: "<applet>x</applet>",
+      expected: { "C_48.1": 1 },
+    },
+    {
+      name: "C_48.1 negative: no <applet>",
+      checkIds: ["C_48.1"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_48.2 positive: <center>",
+      checkIds: ["C_48.2"],
+      html: "<center>x</center>",
+      expected: { "C_48.2": 1 },
+    },
+    {
+      name: "C_48.2 negative: no deprecated presentational element",
+      checkIds: ["C_48.2"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_48.3 positive: <dir>",
+      checkIds: ["C_48.3"],
+      html: "<dir><li>x</li></dir>",
+      expected: { "C_48.3": 1 },
+    },
+    {
+      name: "C_48.3 negative: no <dir>/<menu>",
+      checkIds: ["C_48.3"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_48.4 positive: <isindex>",
+      checkIds: ["C_48.4"],
+      html: "<isindex>",
+      expected: { "C_48.4": 1 },
+    },
+    {
+      name: "C_48.4 negative: no <isindex>",
+      checkIds: ["C_48.4"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      name: "C_48.5 positive: <xmp>",
+      checkIds: ["C_48.5"],
+      html: "<xmp>code</xmp>",
+      expected: { "C_48.5": 1 },
+    },
+    {
+      name: "C_48.5 negative: no listing/plaintext/xmp",
+      checkIds: ["C_48.5"],
+      html: "<p>x</p>",
+      expected: {},
+    },
+    {
+      // C_48.7 (acronym) only fires when isHTML5 is true, which requires an
+      // actual <!DOCTYPE html> — normal GOAL2 fragment analysis never has
+      // one (see michecker-engine.js isHTML5() comment), so this positive
+      // fixture uses a full document with a doctype to exercise that path.
+      name: "C_48.7 positive: <acronym> in an HTML5 document",
+      checkIds: ["C_48.7"],
+      html: "<!DOCTYPE html><html><body><acronym>x</acronym></body></html>",
+      expected: { "C_48.7": 1 },
+    },
+    {
+      name: "C_48.7 negative: fragment with no doctype never triggers (isHTML5 is always false)",
+      checkIds: ["C_48.7"],
+      html: "<acronym>x</acronym>",
+      expected: {},
+    },
+    {
+      // Same isHTML5 gating as C_48.7 — see note above.
+      name: "C_48.8 positive: longdesc attribute in an HTML5 document",
+      checkIds: ["C_48.8"],
+      html: '<!DOCTYPE html><html><body><img src="a.jpg" longdesc="d.html"></body></html>',
+      expected: { "C_48.8": 1 },
+    },
+    {
+      name: "C_48.8 negative: fragment with no doctype never triggers (isHTML5 is always false)",
+      checkIds: ["C_48.8"],
+      html: '<img src="a.jpg" longdesc="d.html">',
+      expected: {},
+    },
+    {
+      name: "C_80.0 positive: alt attribute longer than 150 characters",
+      checkIds: ["C_80.0"],
+      html: `<img src="a.jpg" alt="${"あ".repeat(151)}">`,
+      expected: { "C_80.0": 1 },
+    },
+    {
+      name: "C_80.0 negative: short alt attribute",
+      checkIds: ["C_80.0"],
+      html: '<img src="a.jpg" alt="短い説明">',
+      expected: {},
+    },
+    {
+      name: "C_89.2 positive: some body text but no images at all",
+      checkIds: ["C_89.2"],
+      html: "<p>短い文</p>",
+      expected: { "C_89.2": 1 },
+    },
+    {
+      name: "C_89.2 negative: page has an image (falls to C_89.1, not this PR)",
+      checkIds: ["C_89.2"],
+      html: '<p>短い文</p><img src="a.jpg" alt="x">',
+      expected: {},
+    },
+    {
+      name: "C_300.1 positive: area alt text matches the extra NG word",
+      checkIds: ["C_300.1"],
+      html: '<map name="m"><area alt="area" href="/a"></map><img src="i.jpg" usemap="#m">',
+      expected: { "C_300.1": 1 },
+    },
+    {
+      name: "C_300.1 negative: area alt text is descriptive",
+      checkIds: ["C_300.1"],
+      html: '<map name="m"><area alt="通常の目的地の説明" href="/a"></map><img src="i.jpg" usemap="#m">',
+      expected: {},
+    },
+    {
+      // Same table shape used to validate isSimpleTable2 in PR-M1's
+      // C_331.0 negative test — here the top-left <td> has visible text,
+      // which C_331.2 flags (the cell "should be empty" in this pattern).
+      name: "C_331.2 positive: simple row/col-header table with top-left text",
+      checkIds: ["C_331.2"],
+      html: "<table><tr><td>X</td><th>A</th></tr><tr><th>B</th><td>1</td></tr></table>",
+      expected: { "C_331.2": 1 },
+    },
+    {
+      name: "C_331.2 negative: same shape with an empty top-left cell",
+      checkIds: ["C_331.2"],
+      html: "<table><tr><td></td><th>A</th></tr><tr><th>B</th><td>1</td></tr></table>",
+      expected: {},
+    },
+  ];
+
+  for (const testCase of [...M1_CASES, ...M2_CASES]) {
     const result = await page.evaluate(
       ({ html, checkIds, checkitems }) => {
         const doc = new DOMParser().parseFromString(html, "text/html");
