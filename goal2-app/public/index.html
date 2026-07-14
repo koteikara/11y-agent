@@ -200,6 +200,33 @@
         </section>
       </section>
 
+      <section class="input-form-card michecker-engine-panel" id="micheckerEnginePanel" aria-labelledby="micheckerEngineTitle" hidden>
+        <h2 id="micheckerEngineTitle">miChecker相当チェック結果</h2>
+        <p class="michecker-note">
+          miChecker公式判定エンジン(CheckEngine.javaの移植)による検出結果です。上の修正候補一覧とは統合・重複排除せず、参考情報として独立して表示しています。
+        </p>
+        <p id="micheckerEngineSummary" class="michecker-note"></p>
+        <div class="michecker-table-wrap">
+          <table class="michecker-table" id="micheckerEngineTable">
+            <thead>
+              <tr>
+                <th scope="col">種別</th>
+                <th scope="col">チェックID</th>
+                <th scope="col">該当箇所</th>
+                <th scope="col">公式メッセージ</th>
+                <th scope="col">対応KBルール</th>
+              </tr>
+            </thead>
+            <tbody id="micheckerEngineTableBody"></tbody>
+          </table>
+        </div>
+        <p class="michecker-empty-note" id="micheckerEngineEmptyNote" hidden>検出結果はありません。</p>
+        <details class="michecker-checklist-fold">
+          <summary>手動確認チェックリスト(<span id="micheckerChecklistCount">0</span>件)</summary>
+          <ul id="micheckerChecklistList"></ul>
+        </details>
+      </section>
+
       <details class="output-drawer">
         <summary>
           <span>出力</span>
@@ -242,6 +269,7 @@
       </details>
     </main>
 
+    <script src="/michecker-engine.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

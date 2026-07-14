@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker公式判定エンジン移植 PR-M4: GOAL2/GOAL1統合+UI
+
+- 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §4.3/§5 PR-M4を実装。PR-M0〜M3で移植した`michecker-engine.js`(108件の判定ロジック)を、実際にGOAL2画面・GOAL1バッチのパイプラインへ接続した。エンジン自体のロジックは無変更(呼び出し側の配線のみ)。
+- 主な変更内容:
+  - `runAnalysis()`(app.js)に`runMicheckerEngine(html)`を追加し、「miChecker指摘対応のみ」モード選択時のみ`window.micheckerEngine.run()`を実行するようにした。既存のKB全ルールモードでは一切呼び出されず、既定モードの挙動・性能を完全に現状維持している。
+  - **重要な設計判断**: 既存の候補生成が使う`parseFragment()`は`<template>`要素の`DocumentFragment`(body/doctypeを持たない)を返すが、`michecker-engine.js`はC_69.0/C_89.x/C_80.0/C_23.0等`page.bodyElements`に依存するチェックを含む完全な`Document`を前提とする。そのため既存フラグメントは流用せず、`goal3Engine.extract()`やパリティテストと同じく`new DOMParser().parseFromString(html, "text/html")`で独立に再パースしてエンジンへ渡すようにした。
+  - `state.micheckerCheckitems`(新規`loadMicheckerCheckitems()`、`/api/michecker-checkitems`を取得)と`state.ruleByCheckId`(`buildRuleByCheckIdIndex()`、KBルールの`michecker_check_ids`から構築する逆引きMap)を追加し、エンジンのメッセージテンプレート適用と「対応KBルール」列の表示に利用した。
+  - 結果は既存候補一覧とマージ・重複排除せず、独立表示にした: `index.html`に新セクション「miChecker相当チェック結果」(`#micheckerEnginePanel`、既存の`workspace-grid`と`output-drawer`の間に配置、KB全ルールモードでは常に非表示)を追加。表(種別/チェックID/該当箇所セレクタ/公式メッセージ/対応KBルール)+折りたたみ「手動確認チェックリスト」+「既存ヒューリスティック候補との突き合わせサマリー」(チェックID単位の集合演算で両方検出/エンジンのみ/ヒューリスティックのみの件数を1行表示、詳細な要素単位マッチングはmiChecker比較画面の役割としてスコープ外)。
+  - 証跡JSON(`buildEvidenceFor`)に、miCheckerモード時のみ`michecker_engine: { problems, checklist, engine_version }`を追加した。
+  - `goal1.html`にも`michecker-engine.js`のスクリプトタグを追加し、`window.goal2Engine.init()`/`analyze()`がヘッドレスでもチェックアイテムをロードしてエンジンを実行できるようにした。GOAL1のページ一覧テーブルに「miChecker検出」列を1本追加(計画書の「UI集計は最小限」指示どおり、件数を1列足すのみで詳細集計は追加していない)。
+- 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため影響なし)。既存6サンプルの回帰完全一致(procedure-overview 11 / images 10 / tables 23 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20)。Playwright E2Eで、KB全ルールモード(解析前後とも)ではパネル非表示・証跡に`michecker_engine`なしを確認、miCheckerモードに切り替えて解析するとパネル表示・表とチェックリストが描画され証跡に`michecker_engine`が含まれることを確認、KBモードへ再度切り替えると非表示・証跡フィールドも消えることを確認。GOAL1側も`window.goal2Engine.analyze()`を直接呼び出し、KBモードでは`micheckerEngineResult`が`null`、miCheckerモードでは実データが返り証跡へ反映されること、ページ一覧の列見出しが10列(新規列含む)になることを確認。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/goal1.js`、`goal2-app/public/index.html`、`goal2-app/public/goal1.html`、`goal2-app/public/styles.css`
+
 ## 2026-07-14: miChecker公式判定エンジン移植 PR-M3: info/user型67件の移植(移植フェーズ完了)
 
 - 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §5 PR-M3を実装。インベントリでtype=info/userの74件(C_16.0は本体未発火のため対象外の73件が対象)のうち、実装中に新たに判明した本体未発火6件を除く**67件**を移植した。これで対象116件中108件の移植が完了(PR-M1〜M3合計)。
