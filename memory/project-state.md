@@ -480,8 +480,12 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - ユーザー確認の上、PR #58として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
 - ユーザーから「GOAL1に取り掛かりたいのでまずは設計を」との依頼(構築着手はしない指示)。既存コードの結合度を調査した上で設計案を提示: (1)バッチ処理はブラウザ側で実行(エンジンがDOM全面依存・依存追加禁止方針のため)、(2)app.js/goal3.jsのエンジンをヘッドレス関数として公開する小リファクタを先行(els依存はpageTitle/oldUrl読み取り4〜5箇所のみと確認済み)、(3)自動採用は既存`canBulkAcceptCandidate`基準を単一ソースとして再利用、(4)バッチ状態はIndexedDB保存(Cloud Run揮発性のためサーバー保存は不採用)、(5)GOAL2引き継ぎは`goal3.toGoal2`拡張。
   - ユーザー回答: 自動採用範囲は「機械的・確信度十分・人間確認不要のみ」で承認。入力はURL一覧+ローカルHTMLファイル複数アップロード+**ユーザー提供の移行管理CSV**(安城市50行の実物で形式確認: CP932、22列、キー列=移行管理ID/ページタイトル/テンプレートNo/移行元URL/移行先カテゴリ/ステータス、同一URLの重複行が実在)の3系統。
-  - 実装は別AGENT(Sonnet)が担当するため、`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`として構築指示書を作成。確定済み設計判断、既存コード構造の必要事実、CSV仕様、PR-A〜Dのステージングと合格条件、回帰チェック手順(基準値+スクリプト全文)、環境制約(外部URL取得不可→HTMLファイル経路でE2E)、リポジトリ運用ルールを収録。
-  - 実装着手はユーザー指示待ち。
+  - 実装は別AGENT(Sonnet)が担当するため、`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`として構築指示書を作成。確定済み設計判断、既存コード構造の必要事実、CSV仕様、PR-A〜Dのステージングと合格条件、回帰チェック手順(基準値+スクリプト全文)、環境制約(外部URL取得不可→HTMLファイル経路でE2E)、リポジトリ運用ルールを収録。PR #59としてマージ済み。
+- ユーザーから指示書URLを参照して実装を進めるよう指示があり、このセッションでGOAL1実装を開始。PR-A(エンジンのヘッドレス化、挙動変更なし)を実施。
+  - goal3.js/app.js両方のUI初期化を要素存在チェックでゲートし、goal3.jsに`window.goal3Engine.extract()`、app.jsに`window.goal2Engine`(init/analyze/autoAcceptSafe/buildFinalHtml/buildEvidence/sessionIdFor)を公開。解析コンテキスト(`analysisContext`+ヘルパー)導入で入力欄直読み5箇所+`currentSessionId()`を置換。`analyze()`の中核を`runAnalysis()`として抽出。`rebuildWorkingHtml`/`isProcessingComplete`/`buildEvidence`をパラメータ化版へ委譲する形に整理。
+  - ライブ検証でヘッドレス時の唯一のクラッシュ箇所(`loadRules()`内の`els.ruleStatus`書き込み)を発見しnullガード。
+  - 検証: 変更前(git stash)と変更後の回帰JSON(全サンプル×ルール別内訳)をdiffし完全一致。UI要素なしページでの全経路ヘッドレス実行、goal2/goal3両画面のスモークともpageerrorゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-B(goal1.html骨格)へ。
 
 ## Decisions
 

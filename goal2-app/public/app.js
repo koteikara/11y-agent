@@ -248,6 +248,22 @@
     llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
   };
 
+  // GOAL1 batch mode runs the analysis pipeline without the goal2 screen, so the
+  // pipeline can't read page title / old URL from the input fields. While a headless
+  // analysis is in flight this holds {pageTitle, oldUrl}; when null (the normal
+  // on-screen path) the helpers below read the input fields exactly as before.
+  let analysisContext = null;
+
+  function currentPageTitle() {
+    if (analysisContext) return analysisContext.pageTitle || "";
+    return els.pageTitleInput?.value || "";
+  }
+
+  function currentOldUrl() {
+    if (analysisContext) return analysisContext.oldUrl || "";
+    return els.oldUrlInput?.value || "";
+  }
+
   const els = {
     inputBand: document.querySelector(".input-band"),
     inputBody: document.getElementById("inputBody"),
@@ -308,7 +324,14 @@
     downloadCsvButton: document.getElementById("downloadCsvButton"),
   };
 
-  init();
+  // goal1.html loads this file for its analysis engine only — the goal2 screen's
+  // elements don't exist there, so running the UI init would throw on the first
+  // addEventListener. The engine surface (window.goal2Engine, defined near the end
+  // of this file) works either way.
+  const uiReady = Boolean(els.analyzeButton && els.candidateList && els.htmlInput);
+  if (uiReady) {
+    init();
+  }
 
   async function init() {
     bindEvents();
@@ -461,11 +484,15 @@
       state.rules = payload.rules || [];
       state.ruleMap = new Map(state.rules.map((rule) => [rule.id, rule]));
       const summary = payload.summary || {};
-      els.ruleStatus.textContent = `KB ${summary.total || state.rules.length}件 / ${payload.source || "rules.jsonl"}`;
+      if (els.ruleStatus) {
+        els.ruleStatus.textContent = `KB ${summary.total || state.rules.length}件 / ${payload.source || "rules.jsonl"}`;
+      }
     } catch (error) {
       state.rules = fallbackRules();
       state.ruleMap = new Map(state.rules.map((rule) => [rule.id, rule]));
-      els.ruleStatus.textContent = `KBの読み込みに失敗したため、画面内の最小ルールで起動しています。`;
+      if (els.ruleStatus) {
+        els.ruleStatus.textContent = `KBの読み込みに失敗したため、画面内の最小ルールで起動しています。`;
+      }
     }
   }
 
@@ -545,6 +572,47 @@
     renderAll();
   }
 
+  // Core analysis pipeline, shared by the goal2 screen (analyze below) and the GOAL1
+  // batch engine (window.goal2Engine). Pure with respect to UI state except for
+  // state.llmUsage, which the LLM helpers accumulate into (callers reset it first).
+  async function runAnalysis(html, options = {}) {
+    const ruleScopeMode = options.ruleScopeMode || state.ruleScopeMode;
+    const fragment = parseFragment(html);
+    let reviewItems = generateCandidates(fragment);
+    if (ruleScopeMode === "michecker") {
+      reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
+    }
+    await enrichLinkTitleCandidates(reviewItems);
+    options.onEnrichmentStart?.();
+    await Promise.all([
+      enrichWithLlm(reviewItems),
+      enrichImageAltWithLlm(reviewItems),
+      enrichHeadingReviewWithLlm(fragment, reviewItems),
+      enrichAvoidTextAsImageWithLlm(fragment, reviewItems),
+      enrichAsciiArtWithLlm(fragment, reviewItems),
+    ]);
+    // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
+    // already-enriched standalone image.alt-text result instead of firing a duplicate vision
+    // call when the same image also appears inside a decomposed layout table.
+    await enrichLayoutTableImagesWithLlm(reviewItems);
+    const candidates = reviewItems
+      .filter((item) => !isNoticeItem(item))
+      .map((candidate, index) => ({
+        ...candidate,
+        candidate_id: `cand_${String(index + 1).padStart(3, "0")}`,
+        review_type: "fix",
+      }));
+    const notices = reviewItems
+      .filter(isNoticeItem)
+      .map((notice, index) => ({
+        ...notice,
+        candidate_id: `notice_${String(index + 1).padStart(3, "0")}`,
+        notice_id: `notice_${String(index + 1).padStart(3, "0")}`,
+        review_type: "notice",
+      }));
+    return { candidates, notices };
+  }
+
   async function analyze() {
     setAnalyzeStatus("running");
     els.outputDrawer.open = false;
@@ -553,39 +621,12 @@
     try {
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
-      const fragment = parseFragment(state.sourceHtml);
-      let reviewItems = generateCandidates(fragment);
-      if (state.ruleScopeMode === "michecker") {
-        reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
-      }
-      await enrichLinkTitleCandidates(reviewItems);
-      setAnalyzeStatus("enriching");
-      await Promise.all([
-        enrichWithLlm(reviewItems),
-        enrichImageAltWithLlm(reviewItems),
-        enrichHeadingReviewWithLlm(fragment, reviewItems),
-        enrichAvoidTextAsImageWithLlm(fragment, reviewItems),
-        enrichAsciiArtWithLlm(fragment, reviewItems),
-      ]);
-      // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
-      // already-enriched standalone image.alt-text result instead of firing a duplicate vision
-      // call when the same image also appears inside a decomposed layout table.
-      await enrichLayoutTableImagesWithLlm(reviewItems);
-      state.candidates = reviewItems
-        .filter((item) => !isNoticeItem(item))
-        .map((candidate, index) => ({
-          ...candidate,
-          candidate_id: `cand_${String(index + 1).padStart(3, "0")}`,
-          review_type: "fix",
-        }));
-      state.notices = reviewItems
-        .filter(isNoticeItem)
-        .map((notice, index) => ({
-          ...notice,
-          candidate_id: `notice_${String(index + 1).padStart(3, "0")}`,
-          notice_id: `notice_${String(index + 1).padStart(3, "0")}`,
-          review_type: "notice",
-        }));
+      const { candidates, notices } = await runAnalysis(state.sourceHtml, {
+        ruleScopeMode: state.ruleScopeMode,
+        onEnrichmentStart: () => setAnalyzeStatus("enriching"),
+      });
+      state.candidates = candidates;
+      state.notices = notices;
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
       state.workingHtml = rebuildWorkingHtml();
@@ -1026,7 +1067,7 @@
       runLlmBatch(
         "toppage-link",
         items.filter((item) => item.rule_id === "link.toppage-link"),
-        () => ({ pageTitle: els.pageTitleInput?.value || "" }),
+        () => ({ pageTitle: currentPageTitle() }),
         applyLinkTextLlmResult
       ),
       runLlmBatch(
@@ -1120,7 +1161,7 @@
     if (!targets.length) {
       return;
     }
-    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    const baseUrl = currentOldUrl().trim();
     const groups = new Map();
     targets.forEach((candidate) => {
       const nodeId = candidate.target.node_id;
@@ -1231,7 +1272,7 @@
     if (!targets.length) {
       return;
     }
-    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    const baseUrl = currentOldUrl().trim();
     const jobs = [];
     targets.forEach((candidate) => {
       const uniqueBySrc = new Map();
@@ -1325,7 +1366,7 @@
   // actually finds embedded text. Requires a resolvable source page URL like the other vision
   // enrichments; produces zero candidates (and zero calls) without one.
   async function enrichAvoidTextAsImageWithLlm(fragment, items) {
-    const baseUrl = els.oldUrlInput?.value?.trim() || "";
+    const baseUrl = currentOldUrl().trim();
     if (!/^https?:\/\//i.test(baseUrl)) {
       return;
     }
@@ -1838,7 +1879,7 @@
   }
 
   function linkTitleLookupBase() {
-    const oldUrl = els.oldUrlInput?.value?.trim();
+    const oldUrl = currentOldUrl().trim();
     if (/^https?:\/\//i.test(oldUrl)) {
       return oldUrl;
     }
@@ -5390,8 +5431,12 @@
   }
 
   function rebuildWorkingHtml() {
-    const fragment = parseFragment(state.sourceHtml);
-    const decided = state.candidates.filter((candidate) =>
+    return rebuildWorkingHtmlFor(state.sourceHtml, state.candidates);
+  }
+
+  function rebuildWorkingHtmlFor(sourceHtml, candidates) {
+    const fragment = parseFragment(sourceHtml);
+    const decided = candidates.filter((candidate) =>
       ["accepted", "edited"].includes(candidate.decision.status)
     );
 
@@ -7161,33 +7206,57 @@
   }
 
   function isProcessingComplete() {
-    if (!state.generatedAt) {
+    return isProcessingCompleteFor(state.candidates, state.notices, state.generatedAt, state.sourceHtml);
+  }
+
+  function isProcessingCompleteFor(candidates, notices, generatedAt, sourceHtml) {
+    if (!generatedAt) {
       return false;
     }
-    if (state.candidates.length === 0) {
-      return state.notices.length > 0 || Boolean(state.sourceHtml);
+    if (candidates.length === 0) {
+      return notices.length > 0 || Boolean(sourceHtml);
     }
-    return state.candidates.every((candidate) => candidate.decision.status);
+    return candidates.every((candidate) => candidate.decision.status);
   }
 
   function buildEvidence(finalHtml) {
+    return buildEvidenceFor(
+      {
+        sessionId: currentSessionId(),
+        pageTitle: els.pageTitleInput.value.trim(),
+        oldUrl: els.oldUrlInput.value.trim(),
+        cmsTarget: els.cmsTargetInput.value.trim(),
+        worker: els.workerInput.value.trim(),
+        generatedAt: state.generatedAt,
+        ruleScopeMode: state.ruleScopeMode,
+        sourceHtml: state.sourceHtml,
+        candidates: state.candidates,
+        notices: state.notices,
+      },
+      finalHtml
+    );
+  }
+
+  // Context-parameterized evidence builder shared by the goal2 screen (via buildEvidence
+  // above) and the GOAL1 batch engine, which has no input fields to read from.
+  function buildEvidenceFor(context, finalHtml) {
     return {
-      page_session_id: currentSessionId(),
-      page_title: els.pageTitleInput.value.trim(),
-      old_url: els.oldUrlInput.value.trim(),
-      cms_target: els.cmsTargetInput.value.trim(),
-      worker: els.workerInput.value.trim(),
-      generated_at: state.generatedAt,
-      rule_scope_mode: state.ruleScopeMode,
-      input_hash: hashText(state.sourceHtml),
+      page_session_id: context.sessionId,
+      page_title: context.pageTitle,
+      old_url: context.oldUrl,
+      cms_target: context.cmsTarget || "",
+      worker: context.worker || "",
+      generated_at: context.generatedAt,
+      rule_scope_mode: context.ruleScopeMode,
+      input_hash: hashText(context.sourceHtml),
       final_hash: hashText(finalHtml),
       completion: {
-        total: state.candidates.length,
-        unresolved: state.candidates.filter((candidate) => !candidate.decision.status).length,
-        complete: isProcessingComplete(),
-        notices: state.notices.length,
+        total: context.candidates.length,
+        unresolved: context.candidates.filter((candidate) => !candidate.decision.status).length,
+        complete: isProcessingCompleteFor(context.candidates, context.notices, context.generatedAt, context.sourceHtml),
+        notices: context.notices.length,
       },
-      candidates: state.candidates.map((candidate) => ({
+      candidates: context.candidates.map((candidate) => ({
         candidate_id: candidate.candidate_id,
         rule_id: candidate.rule_id,
         category: candidate.category,
@@ -7213,7 +7282,7 @@
         miChecker_classification: null,
         unresolved_reason: candidate.decision.status ? null : "未処理",
       })),
-      notices: state.notices.map((notice) => ({
+      notices: context.notices.map((notice) => ({
         notice_id: notice.notice_id,
         rule_id: notice.rule_id,
         category: notice.category,
@@ -7351,7 +7420,7 @@
   }
 
   function currentSessionId() {
-    return `goal2_${hashText(els.oldUrlInput.value + "|" + els.pageTitleInput.value).slice(0, 10)}`;
+    return `goal2_${hashText(currentOldUrl() + "|" + currentPageTitle()).slice(0, 10)}`;
   }
 
   function procedureParentHeadingProposal(fragment) {
@@ -8355,4 +8424,64 @@
     }
     return (hash >>> 0).toString(16).padStart(8, "0");
   }
+
+  // Headless engine surface for GOAL1 batch processing (goal1.html). Runs the exact
+  // same pipeline as the on-screen 候補生成, with the page-scoped inputs supplied as
+  // arguments instead of read from the goal2 screen's fields. Sequential use only —
+  // analysisContext and state.llmUsage are module-level, so concurrent analyze()
+  // calls would interleave; GOAL1 processes pages one at a time by design.
+  window.goal2Engine = {
+    async init() {
+      if (!state.rules.length) {
+        await loadRules();
+      }
+    },
+
+    // → { candidates, notices, generatedAt, llmUsage }
+    async analyze({ html, pageTitle = "", oldUrl = "", ruleScopeMode = "kb" }) {
+      await this.init();
+      analysisContext = { pageTitle, oldUrl };
+      state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 };
+      try {
+        const generatedAt = new Date().toISOString();
+        const { candidates, notices } = await runAnalysis(html, { ruleScopeMode });
+        return { candidates, notices, generatedAt, llmUsage: { ...state.llmUsage } };
+      } finally {
+        analysisContext = null;
+      }
+    },
+
+    // Applies the same safety bar as the goal2 screen's 一括採用 (canBulkAcceptCandidate):
+    // mechanical, sufficiently confident, and not flagged for human review. Mutates the
+    // passed candidates' decision in place and returns how many were accepted.
+    autoAcceptSafe(candidates) {
+      let accepted = 0;
+      candidates.forEach((candidate) => {
+        if (!canBulkAcceptCandidate(candidate)) {
+          return;
+        }
+        candidate.decision = {
+          status: "accepted",
+          reason: "一括自動採用（機械的・確認不要）",
+          actor: "goal1-batch",
+          decided_at: new Date().toISOString(),
+          after_html: null,
+        };
+        accepted += 1;
+      });
+      return accepted;
+    },
+
+    buildFinalHtml(sourceHtml, candidates) {
+      return rebuildWorkingHtmlFor(sourceHtml, candidates);
+    },
+
+    buildEvidence(context, finalHtml) {
+      return buildEvidenceFor(context, finalHtml);
+    },
+
+    sessionIdFor(oldUrl, pageTitle) {
+      return `goal2_${hashText((oldUrl || "") + "|" + (pageTitle || "")).slice(0, 10)}`;
+    },
+  };
 })();
