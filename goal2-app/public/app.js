@@ -3147,13 +3147,30 @@
     const columnCount = headerTexts.length || profile.maxCells;
     const noteEntries = [];
     const tbody = document.createElement("tbody");
+    // A rowspan on a row's first cell shifts that row's own identifying cell one column to
+    // the right (index 1, not 0) — the rowspan cell is a *group* header for several rows,
+    // not that particular row's header. Rows "under" the span keep their real column 0 cell
+    // (the rowspan already fills their missing column 0), so only the row that *originates*
+    // the span needs the shifted index. rowSpanCarry tracks how many more rows still fall
+    // under a rowspan that started earlier, so only the originating row gets shifted.
+    let rowSpanCarry = 0;
     profile.rows.slice(headerPlan.bodyStartIndex).forEach((cells) => {
       const row = document.createElement("tr");
+      const firstCellRowSpan = Number(cells[0]?.getAttribute("rowspan")) || 1;
+      const rowOriginatesSpan = rowSpanCarry === 0 && firstCellRowSpan > 1;
+      if (rowOriginatesSpan) {
+        rowSpanCarry = firstCellRowSpan - 1;
+      } else if (rowSpanCarry > 0) {
+        rowSpanCarry -= 1;
+      }
+      const rowHeaderIndex = rowOriginatesSpan ? 1 : 0;
+
       cells.forEach((cell, index) => {
-        const isRowHeaderCell = index === 0 || cell.tagName === "TH";
+        const isGroupHeaderCell = index === 0 && (Number(cell.getAttribute("rowspan")) || 1) > 1;
+        const isRowHeaderCell = isGroupHeaderCell || index === rowHeaderIndex || cell.tagName === "TH";
         // A row-header cell that spans multiple rows via rowspan is labelling a group of
         // rows, not one row, so scope="rowgroup" describes it more accurately than "row".
-        const rowHeaderScope = (Number(cell.getAttribute("rowspan")) || 1) > 1 ? "rowgroup" : "row";
+        const rowHeaderScope = isGroupHeaderCell ? "rowgroup" : "row";
         const clone = cloneTableCellAs(cell, isRowHeaderCell ? "th" : "td", isRowHeaderCell ? rowHeaderScope : "");
         if (isRowHeaderCell) {
           const note = extractEmbeddedTableCellNote(clone);
