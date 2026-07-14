@@ -87,6 +87,14 @@
           </div>
           <div class="michecker-summary" id="batchSummaryGrid"></div>
         </div>
+        <label class="michecker-filter" for="groupBySelect">
+          グループ化
+          <select id="groupBySelect">
+            <option value="none">なし</option>
+            <option value="category">カテゴリ別</option>
+            <option value="templateNo">テンプレートNo別</option>
+          </select>
+        </label>
         <div class="michecker-table-wrap">
           <table class="michecker-table" id="pageTable">
             <thead>
@@ -105,6 +113,28 @@
             <tbody id="pageTableBody"></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="input-form-card" aria-labelledby="goal1RuleSummaryTitle">
+        <h2 id="goal1RuleSummaryTitle">ルール別集計</h2>
+        <p class="michecker-note">
+          バッチ全体で、どのルールがどれだけ出現し、そのうち何件を自動採用できたかを集計します。
+          出現頻度が高いルールは、同種修正を一括で確認・適用しやすい候補です。
+        </p>
+        <div class="michecker-table-wrap">
+          <table class="michecker-table" id="ruleSummaryTable">
+            <thead>
+              <tr>
+                <th scope="col">rule_id</th>
+                <th scope="col">候補数</th>
+                <th scope="col">自動採用</th>
+                <th scope="col">要確認</th>
+              </tr>
+            </thead>
+            <tbody id="ruleSummaryTableBody"></tbody>
+          </table>
+        </div>
+        <p class="michecker-empty-note" id="ruleSummaryEmptyNote">バッチを実行すると、ここにルール別の集計が表示されます。</p>
       </section>
 
       <section class="input-form-card" aria-labelledby="goal1OutputTitle">

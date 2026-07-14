@@ -2679,6 +2679,14 @@ label {
   color: var(--warning);
 }
 
+.goal1-group-row td {
+  padding: 6px 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
 @media (max-width: 900px) {
   .goal1-input-grid,
   .goal1-settings-grid {

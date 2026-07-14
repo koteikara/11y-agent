@@ -19,7 +19,10 @@
     batchProgressText: document.getElementById("batchProgressText"),
     batchSummary: document.getElementById("batchSummary"),
     batchSummaryGrid: document.getElementById("batchSummaryGrid"),
+    groupBySelect: document.getElementById("groupBySelect"),
     pageTableBody: document.getElementById("pageTableBody"),
+    ruleSummaryTableBody: document.getElementById("ruleSummaryTableBody"),
+    ruleSummaryEmptyNote: document.getElementById("ruleSummaryEmptyNote"),
     downloadEvidenceCsvButton: document.getElementById("downloadEvidenceCsvButton"),
     downloadSummaryCsvButton: document.getElementById("downloadSummaryCsvButton"),
     downloadBatchJsonButton: document.getElementById("downloadBatchJsonButton"),
@@ -67,6 +70,7 @@
     els.downloadSummaryCsvButton.addEventListener("click", downloadSummaryCsv);
     els.downloadBatchJsonButton.addEventListener("click", downloadBatchJson);
     els.loadBatchJsonInput.addEventListener("change", loadBatchJsonFile);
+    els.groupBySelect.addEventListener("change", () => renderTable());
   }
 
   async function checkLlmStatus() {
@@ -461,6 +465,7 @@
   function render() {
     renderSummary();
     renderTable();
+    renderRuleSummary();
   }
 
   function renderSummary() {
@@ -488,33 +493,105 @@
   function renderTable() {
     els.pageTableBody.innerHTML = "";
     if (!state.batch) return;
+
+    const groupBy = els.groupBySelect?.value || "none";
+    if (groupBy === "none") {
+      state.batch.pages.forEach((page) => appendPageRow(page));
+      return;
+    }
+
+    const groups = new Map();
     state.batch.pages.forEach((page) => {
-      const row = document.createElement("tr");
-      const statusClass = STATUS_CLASSES[page.status] || "goal1-status-pending";
-      const statusLabel = STATUS_LABELS[page.status] || page.status;
-      // page.evidence existing is the "this page finished analysis" signal — once it
-      // exists, autoAcceptedCount/remainingCount are meaningful even when they're 0, so
-      // `|| ""` (which treats 0 as falsy) would wrongly blank out a genuine zero.
-      const candidateTotal = page.evidence ? String(page.evidence.candidates.length) : "";
-      const autoAcceptedText = page.evidence ? String(page.autoAcceptedCount || 0) : "";
-      const remainingText = page.evidence ? String(page.remainingCount || 0) : "";
-      row.innerHTML = `
-        <td>${escapeHtml(page.id)}${page.duplicateUrl ? '<span class="goal1-duplicate-badge">重複URL</span>' : ""}</td>
-        <td>${escapeHtml(page.pageTitle || "(未取得)")}</td>
-        <td>${escapeHtml(page.category || "")}</td>
-        <td><span class="goal1-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>${
-        page.errorMessage ? `<div class="michecker-rule-note">${escapeHtml(page.errorMessage)}</div>` : ""
-      }</td>
-        <td class="michecker-count">${candidateTotal}</td>
-        <td class="michecker-count">${autoAcceptedText}</td>
-        <td class="michecker-count">${remainingText}</td>
-        <td class="michecker-count">${page.llmUsage ? `$${page.llmUsage.estimatedCostUsd.toFixed(4)}` : ""}</td>
-        <td class="goal1-row-actions"></td>
-      `;
-      const actionsCell = row.querySelector(".goal1-row-actions");
-      appendRowActions(actionsCell, page);
-      els.pageTableBody.appendChild(row);
+      const key = (groupBy === "templateNo" ? page.templateNo : page.category) || "(未分類)";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(page);
     });
+    // "(未分類)" sorts last regardless of locale, so pages that actually have a
+    // category/templateNo are always easier to scan than the catch-all bucket.
+    const sortedKeys = [...groups.keys()].sort((a, b) => {
+      if (a === "(未分類)") return 1;
+      if (b === "(未分類)") return -1;
+      return a.localeCompare(b, "ja");
+    });
+    sortedKeys.forEach((key) => {
+      const groupRow = document.createElement("tr");
+      groupRow.className = "goal1-group-row";
+      groupRow.innerHTML = `<td colspan="9">${escapeHtml(key)}（${groups.get(key).length}件）</td>`;
+      els.pageTableBody.appendChild(groupRow);
+      groups.get(key).forEach((page) => appendPageRow(page));
+    });
+  }
+
+  function appendPageRow(page) {
+    const row = document.createElement("tr");
+    const statusClass = STATUS_CLASSES[page.status] || "goal1-status-pending";
+    const statusLabel = STATUS_LABELS[page.status] || page.status;
+    // page.evidence existing is the "this page finished analysis" signal — once it
+    // exists, autoAcceptedCount/remainingCount are meaningful even when they're 0, so
+    // `|| ""` (which treats 0 as falsy) would wrongly blank out a genuine zero.
+    const candidateTotal = page.evidence ? String(page.evidence.candidates.length) : "";
+    const autoAcceptedText = page.evidence ? String(page.autoAcceptedCount || 0) : "";
+    const remainingText = page.evidence ? String(page.remainingCount || 0) : "";
+    row.innerHTML = `
+      <td>${escapeHtml(page.id)}${page.duplicateUrl ? '<span class="goal1-duplicate-badge">重複URL</span>' : ""}</td>
+      <td>${escapeHtml(page.pageTitle || "(未取得)")}</td>
+      <td>${escapeHtml(page.category || "")}</td>
+      <td><span class="goal1-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>${
+      page.errorMessage ? `<div class="michecker-rule-note">${escapeHtml(page.errorMessage)}</div>` : ""
+    }</td>
+      <td class="michecker-count">${candidateTotal}</td>
+      <td class="michecker-count">${autoAcceptedText}</td>
+      <td class="michecker-count">${remainingText}</td>
+      <td class="michecker-count">${page.llmUsage ? `$${page.llmUsage.estimatedCostUsd.toFixed(4)}` : ""}</td>
+      <td class="goal1-row-actions"></td>
+    `;
+    const actionsCell = row.querySelector(".goal1-row-actions");
+    appendRowActions(actionsCell, page);
+    els.pageTableBody.appendChild(row);
+  }
+
+  // Aggregates candidate counts by rule_id across every page's evidence, so a worker can
+  // see at a glance which rules dominate the batch (good targets for a same-rule sweep)
+  // without opening each page individually.
+  function renderRuleSummary() {
+    if (!els.ruleSummaryTableBody) return;
+    els.ruleSummaryTableBody.innerHTML = "";
+    if (!state.batch) {
+      els.ruleSummaryEmptyNote.hidden = false;
+      return;
+    }
+
+    const byRule = new Map();
+    state.batch.pages.forEach((page) => {
+      (page.evidence?.candidates || []).forEach((candidate) => {
+        if (!byRule.has(candidate.rule_id)) {
+          byRule.set(candidate.rule_id, { total: 0, accepted: 0, remaining: 0 });
+        }
+        const entry = byRule.get(candidate.rule_id);
+        entry.total += 1;
+        if (candidate.status === "accepted") entry.accepted += 1;
+        if (candidate.status === "unresolved") entry.remaining += 1;
+      });
+    });
+
+    if (!byRule.size) {
+      els.ruleSummaryEmptyNote.hidden = false;
+      return;
+    }
+    els.ruleSummaryEmptyNote.hidden = true;
+
+    [...byRule.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .forEach(([ruleId, counts]) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${escapeHtml(ruleId)}</td>
+          <td class="michecker-count">${counts.total}</td>
+          <td class="michecker-count">${counts.accepted}</td>
+          <td class="michecker-count">${counts.remaining}</td>
+        `;
+        els.ruleSummaryTableBody.appendChild(row);
+      });
   }
 
   function appendRowActions(cell, page) {
