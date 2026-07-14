@@ -27,6 +27,18 @@
   --sun: #0f6e86;
   --sun-container: #d6f1f7;
 
+  /* Selection accent — deliberately gold, not a shade of --primary. The rest of the UI
+     (brand accent, links, focus ring, group containers) is saturated with blue, so a
+     "selected" state built from blue never reads as clearly different at a glance. Chosen
+     to sit ~120-150 degrees from --primary on the hue wheel (a "split/triadic" contrast
+     scheme) while staying far enough from --warning/--tag-h3 (both also gold-ish, hue ~39-43)
+     that a selected card is never confused with a "needs review" badge (hue distance ~16
+     degrees, plus much darker/more saturated than --warning so the two read as visually
+     distinct even before considering hue). */
+  --selected: #938915;
+  --selected-container: #f7f4d4;
+  --on-selected-container: #4e490e;
+
   /* Heading-depth tags (H1–H4 markers) — categorical, kept separate from brand/semantic */
   --tag-h1: #2f5fdb;
   --tag-h2: #0f6e86;
@@ -945,12 +957,27 @@ label {
 }
 
 /* Currently-selected card: highest visual priority, overrides the processing-state
-   background above regardless of decision status (source order wins at equal specificity). */
+   background above regardless of decision status (source order wins at equal specificity).
+   The inset ring + outer glow make it read as clearly "lifted" without changing
+   border-width (which would shift layout on selection). Uses --selected (gold) rather than
+   --primary (blue) — --primary is already used for the group container border, links,
+   focus ring, etc., so a blue "selected" state blended into that noise; gold sits far
+   enough around the hue wheel from blue, and far enough from --warning's gold to avoid
+   being read as a "needs review" badge. .candidate-meta switches to --on-selected-container
+   to keep the secondary text >=4.5:1 against the darker fill (checked: ~4.8:1 at this mix
+   ratio; --text stays ~9.1:1). */
 .candidate-item[aria-selected="true"] {
-  border-color: var(--primary);
-  border-left-color: var(--primary);
-  background: var(--primary-container);
-  box-shadow: var(--shadow-1);
+  border-color: var(--selected);
+  border-left-color: var(--selected);
+  background: color-mix(in srgb, var(--selected-container), var(--selected) 50%);
+  box-shadow:
+    inset 0 0 0 1px var(--selected),
+    0 0 0 3px color-mix(in srgb, var(--selected), transparent 65%),
+    var(--shadow-2);
+}
+
+.candidate-item[aria-selected="true"] .candidate-meta {
+  color: var(--on-selected-container);
 }
 
 .candidate-main {
