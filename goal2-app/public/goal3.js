@@ -28,8 +28,27 @@
     selectedId: null,
   };
 
-  bindEvents();
-  render();
+  // GOAL1 (goal1.html) loads this file for its extraction engine only — none of the
+  // goal3 screen's elements exist there, so wiring the UI would throw on the first
+  // addEventListener. The engine surface below (window.goal3Engine) works either way.
+  const uiReady = Boolean(els.extractButton && els.candidateList);
+  if (uiReady) {
+    bindEvents();
+    render();
+  }
+
+  // Headless entry point for GOAL1 batch processing: same sanitize/scan/scoring logic
+  // as the on-screen 候補抽出, without touching the DOM of the hosting page.
+  window.goal3Engine = {
+    extract(html, pageTitle) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      const resolvedTitle = (pageTitle || "").trim() || pageTitleFromDocument(parsed);
+      return {
+        pageTitle: resolvedTitle,
+        candidates: buildContentCandidates(parsed, resolvedTitle),
+      };
+    },
+  };
 
   function bindEvents() {
     els.fetchUrlButton.addEventListener("click", fetchSourceUrl);

@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: GOAL1 PR-A: 解析・抽出エンジンのヘッドレス化(挙動変更なし)
+
+- 背景・目的: GOAL1構築指示書(`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`)§6 PR-Aの実施。GOAL1バッチ画面(後続PR-B)がgoal2/goal3のエンジンをUI無しで呼び出せるよう、両エンジンをヘッドレス関数として公開した。**画面の見た目・候補の内容・件数の変更は一切ない。**
+- 主な変更内容(`goal2-app/public/goal3.js` / `goal2-app/public/app.js`):
+  - 両ファイルのUI初期化(els束縛後のイベント登録・初期描画)を「必要な要素が存在する場合のみ」実行するようゲート。goal1.html(将来)から読み込んでもTypeErrorにならない。
+  - goal3.js: `window.goal3Engine.extract(html, pageTitle)` を公開。DOMParser+既存`buildContentCandidates()`の薄いラッパーで、`{pageTitle, candidates}`を返す。
+  - app.js: 解析コンテキスト(`analysisContext`+`currentPageTitle()`/`currentOldUrl()`ヘルパー)を導入し、解析パイプライン内の入力欄直読み5箇所(toppage-linkのpageTitle、vision系3箇所+linkTitleLookupBaseのoldUrl)と`currentSessionId()`をヘルパー経由に置換。ヘッドレス実行時は引数の値、画面実行時は従来どおり入力欄の値を読む。
+  - app.js: `analyze()`の中核を`runAnalysis(html, options)`として抽出(候補生成→enrichment→candidates/notices分離まで)。既存`analyze()`はこれを呼ぶだけの形にし、ステータス表示のタイミング(`onEnrichmentStart`コールバック)も従来と同一。
+  - app.js: `rebuildWorkingHtml()`→`rebuildWorkingHtmlFor(sourceHtml, candidates)`、`isProcessingComplete()`→`isProcessingCompleteFor(...)`、`buildEvidence()`→`buildEvidenceFor(context, finalHtml)`にパラメータ化(既存関数は従来値を渡すだけの委譲に変更)。
+  - app.js: `window.goal2Engine`を公開: `init()`(ルール読込)、`analyze({html, pageTitle, oldUrl, ruleScopeMode})`、`autoAcceptSafe(candidates)`(既存`canBulkAcceptCandidate`基準で自動採用、actor="goal1-batch")、`buildFinalHtml()`、`buildEvidence()`、`sessionIdFor()`。直列実行前提(analysisContext/llmUsageがモジュールレベルのため)とコメントに明記。
+  - `loadRules()`内の`els.ruleStatus.textContent`書き込み2箇所をnullガード(ヘッドレスページで唯一クラッシュした箇所。ライブ検証で発見)。
+- 検証: `node --check`成功。**回帰チェックは件数だけでなく、変更前(git stash)と変更後の全サンプル×ルール別内訳のJSONをdiffし完全一致(byte-identical)を確認**(11/10/23/29/5/20)。ヘッドレス動作はUI要素の無いページに両スクリプトを注入し、抽出→候補生成→自動採用→最終HTML→証跡構築の全経路がpageerrorゼロで完走することを確認。goal2画面(サンプル読込→候補生成→採用→出力)・goal3画面(貼り付け→抽出)のスモークもpageerrorゼロ。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/goal3.js`
+
 ## 2026-07-14: GOAL1構築指示書を作成(実装は未着手)
 
 - 背景・目的: ユーザーから「GOAL1に取り掛かりたいのでまずは設計を」との依頼。設計案(ブラウザ側バッチ実行・エンジンのヘッドレス化先行・自動採用は既存の一括採用基準を単一ソースとして再利用・IndexedDB保存・入力はCSV/URL一覧/ローカルHTMLファイルの3系統)を提示し、ユーザーが承認。実装は別のAGENT(Sonnet)が行うため、指示書として文書化した。
