@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: GOAL1 PR-D(後半): LLM有効環境での実地検証(コード変更なし)
+
+- 背景・目的: `goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`§6 PR-D項目3「LLM有効環境での実地検証」を、ユーザー提供のテスト用Gemini APIキーで実施した。
+- 実施内容: `GEMINI_API_KEY`を設定した状態でサーバーを起動し、GOAL1画面から実際にGeminiを呼び出すバッチ処理を検証した。
+  - ヘッダーの「LLM利用」バッジが正しく「有効(コストが発生します)」に切り替わることを確認。
+  - ローカルHTMLファイル2件のバッチで、LLM enrichmentが実際に候補を追加すること(例: `html-structure.heading-required`がAI判定で新規追加)、LLM由来の候補は`processing_class: "ai"`・`requires_human_review: true`のため`autoAcceptSafe`で自動採用されず正しく「要確認」に残ること、機械的候補(`table.caption`)は従来どおり自動採用されることを確認。
+  - ページごとのLLM概算コストが実際の課金額(ゼロではない実測値)として記録され、作業一覧の合計値・証跡CSVの双方に正しく反映されることを確認。
+  - JSエラーゼロ、証跡CSVの内容も正常(rule_id/status/confidence/requires_human_reviewが実データと一致)。
+- 結果: バグは発見されず、コード変更は不要だった。GOAL1_BUILD_INSTRUCTIONS.mdのPR-D全項目(グルーピング表示・ルール別サマリー・LLM実地検証)が完了。
+- APIキーの取り扱い: リポジトリ外のスクラッチパッドにのみ`chmod 600`で保存し、検証完了後に`rm -f`で削除、削除済みであることを確認した。リポジトリ管理下のファイルには一切書き込んでいない。
+- 関連ファイル: なし(検証のみ、コード変更なし)
+
 ## 2026-07-14: GOAL1 PR-D(前半): 作業一覧のグルーピング表示・ルール別出現頻度サマリー
 
 - 背景・目的: `goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`§6 PR-Dの実施。バッチ全体の傾向を把握しやすくするため、作業一覧のグルーピング表示とルール別集計を追加した。
