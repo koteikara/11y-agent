@@ -2522,6 +2522,28 @@ label {
   gap: 4px;
 }
 
+.michecker-engine-panel .michecker-checklist-fold {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.michecker-engine-panel .michecker-checklist-fold summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.michecker-engine-panel .michecker-checklist-fold ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--text-small);
+}
+
+.michecker-engine-panel .michecker-checklist-fold li {
+  margin-bottom: 4px;
+}
+
 .michecker-classification-select {
   min-height: 32px;
   padding: 2px 6px;

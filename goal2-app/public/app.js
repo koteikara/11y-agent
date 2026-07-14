@@ -247,6 +247,9 @@
     ruleScopeMode: "kb",
     llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
     pendingAutoAcceptSafe: false,
+    micheckerCheckitems: [],
+    ruleByCheckId: new Map(),
+    micheckerEngineResult: null,
   };
 
   // GOAL1 batch mode runs the analysis pipeline without the goal2 screen, so the
@@ -323,6 +326,12 @@
     copyHtmlButton: document.getElementById("copyHtmlButton"),
     copyEvidenceButton: document.getElementById("copyEvidenceButton"),
     downloadCsvButton: document.getElementById("downloadCsvButton"),
+    micheckerEnginePanel: document.getElementById("micheckerEnginePanel"),
+    micheckerEngineSummary: document.getElementById("micheckerEngineSummary"),
+    micheckerEngineTableBody: document.getElementById("micheckerEngineTableBody"),
+    micheckerEngineEmptyNote: document.getElementById("micheckerEngineEmptyNote"),
+    micheckerChecklistCount: document.getElementById("micheckerChecklistCount"),
+    micheckerChecklistList: document.getElementById("micheckerChecklistList"),
   };
 
   // goal1.html loads this file for its analysis engine only — the goal2 screen's
@@ -340,6 +349,7 @@
     await loadSagaSamples();
     populateSampleSelect();
     await loadRules();
+    await loadMicheckerCheckitems();
     if (!loadGoal3Transfer()) {
       clearInputFields();
     }
@@ -488,6 +498,7 @@
       const payload = await response.json();
       state.rules = payload.rules || [];
       state.ruleMap = new Map(state.rules.map((rule) => [rule.id, rule]));
+      state.ruleByCheckId = buildRuleByCheckIdIndex(state.rules);
       const summary = payload.summary || {};
       if (els.ruleStatus) {
         els.ruleStatus.textContent = `KB ${summary.total || state.rules.length}件 / ${payload.source || "rules.jsonl"}`;
@@ -495,9 +506,37 @@
     } catch (error) {
       state.rules = fallbackRules();
       state.ruleMap = new Map(state.rules.map((rule) => [rule.id, rule]));
+      state.ruleByCheckId = buildRuleByCheckIdIndex(state.rules);
       if (els.ruleStatus) {
         els.ruleStatus.textContent = `KBの読み込みに失敗したため、画面内の最小ルールで起動しています。`;
       }
+    }
+  }
+
+  // 「対応KBルール」列用の逆引きインデックス(miChecker-compare.jsのbuildLookupIndexesと
+  // 同じ考え方だが、michecker-engine.jsは正確なチェックIDを直接返すため、テキストマッチング
+  // 機構は不要でmichecker_check_idsのMap化のみで足りる)。
+  function buildRuleByCheckIdIndex(rules) {
+    const index = new Map();
+    rules.forEach((rule) => {
+      (rule.michecker_check_ids || []).forEach((checkId) => {
+        if (!index.has(checkId)) index.set(checkId, []);
+        index.get(checkId).push(rule);
+      });
+    });
+    return index;
+  }
+
+  async function loadMicheckerCheckitems() {
+    try {
+      const response = await fetch("/api/michecker-checkitems", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      state.micheckerCheckitems = payload.checkitems || [];
+    } catch (error) {
+      state.micheckerCheckitems = [];
     }
   }
 
@@ -615,7 +654,28 @@
         notice_id: `notice_${String(index + 1).padStart(3, "0")}`,
         review_type: "notice",
       }));
-    return { candidates, notices };
+    // 計画書§4.3: エンジンは「miChecker指摘対応のみ」モードのときだけ実行し、既定の
+    // KB全ルールモードの挙動・性能には一切影響させない。既存候補生成には影響を与えず、
+    // 結果はマージ・重複排除もしない(呼び出し元が独立表示する)。
+    const micheckerEngineResult = ruleScopeMode === "michecker" ? runMicheckerEngine(html) : null;
+    return { candidates, notices, micheckerEngineResult };
+  }
+
+  // michecker-engine.jsはCheckEngine.javaの判定ロジックの忠実な移植で、doctype/body等を
+  // 備えた完全なDocumentを前提とする(C_69.0やC_89.x等、page.bodyElementsに依存するチェックが
+  // 複数ある)。parseFragment()が使う<template>のDocumentFragmentはbody/doctypeを持たないため
+  // 流用できず、goal3Engine.extract()やパリティテストと同じくDOMParserで独立にパースする。
+  function runMicheckerEngine(html) {
+    if (!window.micheckerEngine) {
+      return null;
+    }
+    try {
+      const doc = new DOMParser().parseFromString(html || "", "text/html");
+      return window.micheckerEngine.run(doc, { checkitems: state.micheckerCheckitems });
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
   }
 
   async function analyze() {
@@ -626,12 +686,13 @@
     try {
       state.sourceHtml = els.htmlInput.value.trim();
       state.generatedAt = new Date().toISOString();
-      const { candidates, notices } = await runAnalysis(state.sourceHtml, {
+      const { candidates, notices, micheckerEngineResult } = await runAnalysis(state.sourceHtml, {
         ruleScopeMode: state.ruleScopeMode,
         onEnrichmentStart: () => setAnalyzeStatus("enriching"),
       });
       state.candidates = candidates;
       state.notices = notices;
+      state.micheckerEngineResult = micheckerEngineResult;
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
       if (state.pendingAutoAcceptSafe) {
@@ -645,6 +706,7 @@
       console.error(error);
       state.candidates = [];
       state.notices = [];
+      state.micheckerEngineResult = null;
       state.selectedCandidateId = null;
       clearBulkSelection();
       state.workingHtml = state.sourceHtml || els.htmlInput.value.trim();
@@ -5935,6 +5997,82 @@
     renderReviewNavigation();
     renderPreview();
     renderOutputs();
+    renderMicheckerEnginePanel();
+  }
+
+  const MICHECKER_ENGINE_TYPE_LABEL = {
+    error: "エラー",
+    warning: "警告",
+    info: "情報",
+    user: "要確認",
+  };
+
+  // 計画書§4.3: 「miChecker指摘対応のみ」モードでの解析結果のみ表示し、既存候補一覧とは
+  // 統合・重複排除しない独立表示。KB全ルールモードでは常に非表示(既定モードの挙動を維持)。
+  function renderMicheckerEnginePanel() {
+    if (!els.micheckerEnginePanel) return;
+    const result = state.micheckerEngineResult;
+    if (state.ruleScopeMode !== "michecker" || !result) {
+      els.micheckerEnginePanel.hidden = true;
+      els.micheckerEngineTableBody.innerHTML = "";
+      els.micheckerChecklistList.innerHTML = "";
+      return;
+    }
+    els.micheckerEnginePanel.hidden = false;
+
+    const problems = result.problems || [];
+    const checklist = result.checklist || [];
+
+    els.micheckerEngineEmptyNote.hidden = problems.length > 0;
+    els.micheckerEngineTableBody.innerHTML = problems
+      .map((problem) => {
+        const rules = state.ruleByCheckId.get(problem.checkId) || [];
+        const ruleText = rules.length
+          ? rules.map((rule) => escapeHtml(rule.title || rule.id)).join("、")
+          : "(対応ルールなし)";
+        const selectorText = (problem.nodes || []).join(", ") || "(ページ全体)";
+        return `
+          <tr>
+            <td>${escapeHtml(MICHECKER_ENGINE_TYPE_LABEL[problem.type] || problem.type || "")}</td>
+            <td>${escapeHtml(problem.checkId)}</td>
+            <td>${escapeHtml(selectorText)}</td>
+            <td>${escapeHtml(problem.message || "")}</td>
+            <td>${ruleText}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    els.micheckerChecklistCount.textContent = String(checklist.length);
+    els.micheckerChecklistList.innerHTML = checklist
+      .map((item) => `<li>[${escapeHtml(item.checkId)}] ${escapeHtml(item.message || "")}</li>`)
+      .join("");
+
+    els.micheckerEngineSummary.textContent = buildMicheckerCompareSummaryText(problems);
+  }
+
+  // 既存ヒューリスティック候補(state.candidates/notices)とエンジン検出結果を、チェックID
+  // 単位の集合演算で突き合わせる参考サマリー。個々の要素同士の厳密な対応付けはmiChecker比較
+  // 画面(michecker-compare.js)の役割であり、ここでは「1行の参考情報」に留める(計画書§4.3)。
+  function buildMicheckerCompareSummaryText(problems) {
+    const engineCheckIds = new Set(problems.map((p) => p.checkId));
+    const heuristicCheckIds = new Set();
+    [...state.candidates, ...state.notices].forEach((item) => {
+      const resolvedRuleId = MICHECKER_RULE_ALIASES[item.rule_id] || item.rule_id;
+      const rule = state.ruleMap.get(resolvedRuleId);
+      (rule?.michecker_check_ids || []).forEach((id) => heuristicCheckIds.add(id));
+    });
+    let both = 0;
+    let engineOnly = 0;
+    engineCheckIds.forEach((id) => {
+      if (heuristicCheckIds.has(id)) both += 1;
+      else engineOnly += 1;
+    });
+    let heuristicOnly = 0;
+    heuristicCheckIds.forEach((id) => {
+      if (!engineCheckIds.has(id)) heuristicOnly += 1;
+    });
+    return `既存ヒューリスティック候補との突き合わせ(チェックID単位、参考値): 両方で検出 ${both}件 / エンジンのみ ${engineOnly}件 / ヒューリスティックのみ ${heuristicOnly}件`;
   }
 
   function renderPageAgent() {
@@ -7265,6 +7403,7 @@
         sourceHtml: state.sourceHtml,
         candidates: state.candidates,
         notices: state.notices,
+        micheckerEngineResult: state.micheckerEngineResult,
       },
       finalHtml
     );
@@ -7275,6 +7414,15 @@
   function buildEvidenceFor(context, finalHtml) {
     return {
       page_session_id: context.sessionId,
+      ...(context.ruleScopeMode === "michecker" && context.micheckerEngineResult
+        ? {
+            michecker_engine: {
+              problems: context.micheckerEngineResult.problems,
+              checklist: context.micheckerEngineResult.checklist,
+              engine_version: context.micheckerEngineResult.engineVersion,
+            },
+          }
+        : {}),
       page_title: context.pageTitle,
       old_url: context.oldUrl,
       cms_target: context.cmsTarget || "",
@@ -8468,17 +8616,20 @@
       if (!state.rules.length) {
         await loadRules();
       }
+      if (!state.micheckerCheckitems.length) {
+        await loadMicheckerCheckitems();
+      }
     },
 
-    // → { candidates, notices, generatedAt, llmUsage }
+    // → { candidates, notices, generatedAt, llmUsage, micheckerEngineResult }
     async analyze({ html, pageTitle = "", oldUrl = "", ruleScopeMode = "kb" }) {
       await this.init();
       analysisContext = { pageTitle, oldUrl };
       state.llmUsage = { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 };
       try {
         const generatedAt = new Date().toISOString();
-        const { candidates, notices } = await runAnalysis(html, { ruleScopeMode });
-        return { candidates, notices, generatedAt, llmUsage: { ...state.llmUsage } };
+        const { candidates, notices, micheckerEngineResult } = await runAnalysis(html, { ruleScopeMode });
+        return { candidates, notices, generatedAt, llmUsage: { ...state.llmUsage }, micheckerEngineResult };
       } finally {
         analysisContext = null;
       }

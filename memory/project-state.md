@@ -572,6 +572,17 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
   - これでPR-M1(error 23件)+PR-M2(warning 18件)+PR-M3(info/user 67件)の合計108件、対象116件のうち本体未発火8件(C_16.0/C_332.0/C_500.4/C_500.13/C_500.14/C_500.15/C_500.16/C_76.0)を除く全件の移植が完了した。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M4(GOAL2統合+UI)へ進む。
+  - ユーザー確認の上、PR #71として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M4(GOAL2統合+UI、計画書§4.3/§5)に着手。PR-M0〜M3で完成した`michecker-engine.js`(108件)を、初めて実際のGOAL2画面・GOAL1バッチパイプラインへ接続した。エンジン自体のロジックは一切変更していない(呼び出し配線のみ)。
+  - まず既存コードを調査し、`runAnalysis()`(app.js)が既存候補生成に使う`parseFragment()`は`<template>`要素の`DocumentFragment`(body/doctypeなし)を返すことを確認した。`michecker-engine.js`はC_69.0/C_89.x/C_80.0/C_23.0等`page.bodyElements`に依存するチェックを複数含み、完全な`Document`を前提とするため、既存フラグメントをそのまま渡すと該当チェックが常に空振りするサイレントな不具合になることが分かった。このため、エンジン呼び出し用に`new DOMParser().parseFromString(html, "text/html")`で独立に再パースする設計にした(`goal3Engine.extract()`やパリティテストと同じ手法)。
+  - `runAnalysis()`に`runMicheckerEngine(html)`を追加し、`ruleScopeMode === "michecker"`のときだけ`window.micheckerEngine.run(doc, { checkitems: state.micheckerCheckitems })`を呼ぶようにした。返り値は`{ candidates, notices, micheckerEngineResult }`に拡張し、`analyze()`(画面側)と`window.goal2Engine.analyze()`(GOAL1ヘッドレス側)の両方に穴埋めした。
+  - `/api/michecker-checkitems`を新たにfetchする`loadMicheckerCheckitems()`を追加し(既存の`loadRules()`と同じパターン)、`init()`と`goal2Engine.init()`の両方から呼ぶようにした。「対応KBルール」列表示用に、`state.rules`の`michecker_check_ids`から`checkId → rule[]`の逆引きMapを作る`buildRuleByCheckIdIndex()`も追加した(`michecker-compare.js`の`buildLookupIndexes`とは異なり、エンジンが正確なチェックIDを返すためテキストマッチング機構は不要と判断し、簡略化した)。
+  - UIは既存候補一覧とマージ・重複排除せず独立表示する設計にした(計画書§4.3の明記どおり)。`index.html`の`workspace-grid`と`output-drawer`の間に新セクション`#micheckerEnginePanel`(KB全ルールモードでは常に`hidden`)を追加。表(種別/チェックID/該当箇所セレクタ/公式メッセージ/対応KBルール)、折りたたみ「手動確認チェックリスト」(`checklist`配列、「always」型チェックの出力先)、「既存ヒューリスティック候補との突き合わせサマリー」の1行(`buildMicheckerCompareSummaryText()`、チェックID単位の集合演算で両方検出/エンジンのみ/ヒューリスティックのみの件数を出す簡易版、要素単位の厳密マッチングはmiChecker比較画面の役割としてスコープ外とした)。
+  - 証跡JSON(`buildEvidenceFor`)には、`context.ruleScopeMode === "michecker"`かつ結果が存在するときのみ`michecker_engine: { problems, checklist, engine_version }`を追加した(スプレッド構文での条件付きキー追加)。
+  - GOAL1側は`goal1.html`に`<script src="/michecker-engine.js">`を追加し(`goal3.js`と`app.js`の間、engine定義がapp.jsのグローバル参照より先に読み込まれるように配置)、`goal1.js`の`processPage()`が`analysis.micheckerEngineResult`を`buildEvidence`のcontextへ渡すよう変更、ページ一覧テーブルに「miChecker検出」列を1本追加した(`page.micheckerEngineCount`、KBモードや未実行時は空欄表示。計画書の「UI集計は最小限、凝った集計はスコープ外」という明示的な指示どおり、件数を1列足すだけに留めた)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため当然の結果)。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwright E2Eで、(1) KB全ルールモードでは解析前後ともパネル非表示・証跡に`michecker_engine`フィールドなしを確認、(2) miCheckerモードに切り替えて解析すると、パネルが表示され表とチェックリストが描画され、証跡に`michecker_engine`が実データ付きで含まれることを確認、(3) 再度KBモードへ切り替えると非表示・証跡フィールドも消えることを確認(モード切替の可逆性を確認)、(4) GOAL1側は`window.goal2Engine.analyze()`をブラウザ内で直接呼び出し、KBモードでは`micheckerEngineResult: null`、miCheckerモードでは実データが返り証跡へ正しく反映されること、ページ一覧のヘッダーが新規列を含む10列になることを確認。
+  - これでPR-M0〜M4の全てが完了し、miChecker公式判定エンジン移植プロジェクトの実装フェーズが完了した。残るPR-M5(実機ゴールデン検証)はユーザー自身のWindows環境での`htmlchecker.exe`実行と証跡CSV提供が必要なため、別途ユーザーへ依頼する。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

@@ -124,6 +124,7 @@
         evidence: null,
         autoAcceptedCount: 0,
         remainingCount: 0,
+        micheckerEngineCount: null,
       })),
     };
 
@@ -400,6 +401,7 @@
           sourceHtml: topCandidate.html,
           candidates: analysis.candidates,
           notices: analysis.notices,
+          micheckerEngineResult: analysis.micheckerEngineResult,
         },
         finalHtml
       );
@@ -409,6 +411,9 @@
       page.autoAcceptedCount = autoAccepted;
       page.remainingCount = analysis.candidates.filter((c) => !c.decision.status).length;
       page.llmUsage = { ...analysis.llmUsage };
+      page.micheckerEngineCount = analysis.micheckerEngineResult
+        ? analysis.micheckerEngineResult.problems.length
+        : null;
       page.status = "done";
     } catch (error) {
       page.status = "error";
@@ -516,7 +521,7 @@
     sortedKeys.forEach((key) => {
       const groupRow = document.createElement("tr");
       groupRow.className = "goal1-group-row";
-      groupRow.innerHTML = `<td colspan="9">${escapeHtml(key)}（${groups.get(key).length}件）</td>`;
+      groupRow.innerHTML = `<td colspan="10">${escapeHtml(key)}（${groups.get(key).length}件）</td>`;
       els.pageTableBody.appendChild(groupRow);
       groups.get(key).forEach((page) => appendPageRow(page));
     });
@@ -532,6 +537,9 @@
     const candidateTotal = page.evidence ? String(page.evidence.candidates.length) : "";
     const autoAcceptedText = page.evidence ? String(page.autoAcceptedCount || 0) : "";
     const remainingText = page.evidence ? String(page.remainingCount || 0) : "";
+    // KB全ルールモードやエンジン未実行時はnullのまま(空欄表示)。miCheckerモードで実際に
+    // 実行された場合のみ数値(0件を含む)を表示する — 「UI集計は最小限」の方針どおり列を1本足すのみ。
+    const micheckerEngineText = page.micheckerEngineCount == null ? "" : String(page.micheckerEngineCount);
     row.innerHTML = `
       <td>${escapeHtml(page.id)}${page.duplicateUrl ? '<span class="goal1-duplicate-badge">重複URL</span>' : ""}</td>
       <td>${escapeHtml(page.pageTitle || "(未取得)")}</td>
@@ -543,6 +551,7 @@
       <td class="michecker-count">${autoAcceptedText}</td>
       <td class="michecker-count">${remainingText}</td>
       <td class="michecker-count">${page.llmUsage ? `$${page.llmUsage.estimatedCostUsd.toFixed(4)}` : ""}</td>
+      <td class="michecker-count">${micheckerEngineText}</td>
       <td class="goal1-row-actions"></td>
     `;
     const actionsCell = row.querySelector(".goal1-row-actions");
