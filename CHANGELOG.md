@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker公式判定エンジン移植 PR-M1: error型23件の移植
+
+- 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §5 PR-M1を実装。インベントリでtype=errorの24件のうち、本体未発火のC_332.0を除く23件(C_3.0, C_6.0, C_14.0, C_18.2, C_33.0, C_33.1, C_34.0, C_36.0, C_36.1, C_51.0, C_51.1, C_51.4, C_51.5, C_57.2, C_57.3, C_85.0, C_89.0, C_331.0, C_331.1, C_332.1, C_332.2, C_422.0, C_423.0)を`CheckEngine.java`から`michecker-engine.js`へ忠実に移植した。
+- 主な変更内容:
+  - `goal2-app/public/michecker-engine.js`: ページ単位の共有コンテキスト構築(`buildPageContext`。img/a[href]/frame/iframe/見出し/データテーブル一覧を1回だけ計算し全チェックへ渡す、Java側の事前計算パターンを踏襲)と、`HtmlTagUtil`/`HtmlEvalUtil`の主要ヘルパー移植(`getTextAltDescendant`/`getTextDescendant`/`hasTextDescendant`/`getNoScriptText`/`getNameByAria`/`getWordCount`/データテーブル判定(`isDataTable`/`isDataCell`/`hasFormControl`/`is1Row1ColTable`)/`isHTML5`)を追加した上で、23件のチェック本体を登録。
+  - 忠実性を優先し、実装中に判明した原典の癖はコード内コメント+CHANGELOGの両方に明記し、修正せずそのまま移植した。特に重要なもの:
+    - `item_331`(C_331.0/331.1、th要素のscope検査)が`tr.getFirstChild()`/`tr.getChildNodes().getLength()`という**生の子ノード数(空白テキストノード込み)**に依存しており、見た目上のセル数とは一致しない場合がある。
+    - `item_332`(C_332.1/332.2、headers属性検査)がデータテーブル1件ごとに文書全体のth/td再走査を繰り返す設計になっており、複数のデータテーブルがあると同一の不正参照が重複報告される。
+    - `item_423`(C_423.0、id重複)の対象がXPath`//body/*[@id]`により**bodyの直接の子要素のみ**に限定されており、ネストした要素同士のid重複は検出しない。
+    - `TextChecker`の`isSeparatedJapaneseChars`(PR-M0で移植済み)と同様、`\b`のASCII限定セマンティクスに起因する挙動はC_331系のロジックには影響しないが、他の文字列判定にも共通する注意点として実装時に再確認した。
+  - `goal2-app/test/michecker-parity/run-parity-tests.js`: 23件それぞれに陽性・陰性ケース(計46件)+`item_332`の重複報告の癖を示す追加ケース1件、計47件の新規ケースを追加(既存17件と合わせて64/64件PASS)。`<frame>`要素はHTML5パーサーが`<frameset>`外では破棄するため、C_51.0/C_51.4のfixtureのみ`<frameset>`で囲む対応が必要だった(実ブラウザのHTML5パース仕様であり、実装側の問題ではないことをテスト内コメントで明記)。
+- 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 64/64 PASS。既存6サンプルの回帰完全一致(procedure-overview 11 / images 10 / tables 23 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20)。`michecker-engine.js`はまだどの画面からも読み込まれていないため(GOAL2統合はPR-M4)、既存機能への影響は原理的にゼロ。
+- 関連ファイル: `goal2-app/public/michecker-engine.js`、`goal2-app/test/michecker-parity/run-parity-tests.js`
+
 ## 2026-07-14: miChecker公式判定エンジン移植 PR-M0: インベントリ+michecker-engine.js骨格
 
 - 背景・目的: `goal2-app/MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`(前PRで作成した実行計画書)のPR-M0を実装。移植対象116件のインベントリ表と、判定ロジック本体(`michecker-engine.js`)の骨格(チェック本体は未実装、0件発火)を構築した。

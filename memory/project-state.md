@@ -545,6 +545,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 副次的な発見: `npm test`を実行したところ、`test/run-tests.js`の`goal3Html.includes("Goal 3")`というアサーションが失敗した。原因を調べると、直前のPR #66(GOAL番号表記の除去)で`goal3.html`から「Goal 3」という文字列自体を消していたため、このテストは今回の変更と無関係にPR #66の時点で既に壊れていた(当時は`npm test`を実行せず、独自の回帰スクリプト・Playwrightスモークのみで検証していたため見落とされていた)。miChecker移植のスコープ外だが、`npm test`が壊れたままなのは望ましくないため、アサーションを現在の表記(`"本文抽出"`)に合わせて修正し、`npm test`を再び通るようにした。
   - 検証: `node --check`成功。`npm test`成功(副次修正込み)。`npm run test:michecker-parity` 17/17 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`はまだどの画面からも読み込まれていないため(GOAL2統合はPR-M4)、既存機能への影響は原理的にゼロ。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M1(error型24件の移植)へ進む。
+  - ユーザー確認の上、PR #68として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M1(error型23件の移植)に着手。インベントリからtype=error 24件(C_332.0は本体未発火のため対象外)を抽出し、`CheckEngine.java`の該当23メソッド(item_3/6/14/18/33/34/36/51/57/331/332/422/423、mediaCheck)をスクラッチパッドのソースから1件ずつ実際に読み、`michecker-engine.js`へ移植した。
+  - ページ単位の共有コンテキスト`buildPageContext`(img/a[href]配列/frame/iframe/見出し/データテーブル一覧を1回だけ計算)を新設し、Java側のHtmlEvalUtilコンストラクタの事前計算パターンを踏襲。`HtmlTagUtil`/`HtmlEvalUtil`の主要ヘルパー(`getTextAltDescendant`/`getTextDescendant`/`hasTextDescendant`/`getNoScriptText`/`getNameByAria`/`getWordCount`/データテーブル判定一式/`isHTML5`)も移植。
+  - 実装中に、当初の下書きでは把握しきれていなかった重大な癖を複数発見し、都度Javaソースを読み直して修正した。最も影響が大きかったのは`item_331`(th要素のscope検査、C_331.0/331.1)で、テーブル分類ロジックが`tr.getFirstChild()`(tr要素の**生の最初の子ノード**、pretty-printされたHTMLでは空白テキストノードのことが多い)と`tr.getChildNodes().getLength()`(**生の子ノード数**、colspan計算後のセル数ではない)に依存していることが分かった。当初はセル配列ベース(`cellList[0]`・`cellList.length`)で実装しており、これは一見同等に見えるが実際には異なる挙動になる箇所だったため、Javaソースを再度全文読み直して書き直した。同様に`isTHwoRowspan`のrowspan属性パース失敗時(属性なし・非数値)にJavaの`catch`節が何もせず直前の値を保持する(=trueのまま)という挙動も、当初の実装では誤って`false`にリセットしてしまっていたため修正した。`item_332`(C_332.1/332.2)がデータテーブル1件ごとに文書全体のth/td再走査を繰り返す(=同一の不正参照がテーブル数だけ重複報告される)という原典の非効率な設計も発見し、「修正せず忠実に移植」の原則どおりそのまま実装した上でコメントと専用テストケースで明記した。`item_423`(C_423.0、id重複検査)がXPath`//body/*[@id]`により**bodyの直接の子要素のみ**を対象としており、ネストした要素同士の重複idは検出しないという意図的なスコープの狭さも確認し、そのまま移植した。
+  - テスト: `test/michecker-parity/run-parity-tests.js`に23件それぞれの陽性・陰性ケース(46件)+`item_332`の重複報告癖を示す専用ケース1件を追加(既存17件と合わせ計64件、全PASS)。`<frame>`要素はHTML5パーサーの仕様で`<frameset>`外だと解析時に破棄されてしまうため、Playwrightで実際に検証してこの挙動を確認した上でC_51.0/C_51.4のfixtureのみ`<frameset>`で囲む対応が必要だった。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 64/64 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M2(warning型18件の移植)へ進む。
 
 ## Decisions
 
