@@ -552,6 +552,16 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - テスト: `test/michecker-parity/run-parity-tests.js`に23件それぞれの陽性・陰性ケース(46件)+`item_332`の重複報告癖を示す専用ケース1件を追加(既存17件と合わせ計64件、全PASS)。`<frame>`要素はHTML5パーサーの仕様で`<frameset>`外だと解析時に破棄されてしまうため、Playwrightで実際に検証してこの挙動を確認した上でC_51.0/C_51.4のfixtureのみ`<frameset>`で囲む対応が必要だった。
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 64/64 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M2(warning型18件の移植)へ進む。
+  - ユーザー確認の上、PR #69として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M2(warning型18件の移植)に着手。インベントリからtype=warning 18件全てを抽出し、`CheckEngine.java`の該当メソッド(item_6/13/23/33/38/46/48/80/89/300/331)を読み、`michecker-engine.js`へ移植した。
+  - `buildPageContext`を拡張し、`layoutTableList`(1行1列テーブル・非データテーブル・入れ子テーブルの合算、Java側の`layoutTableList.addAll(parent/1row1col/notdata)`と同じ組み立て)、マウスイベントハンドラ要素(`getEventMouseButtonElements`/`getEventOnMouseElements`相当)、`<style>`要素本文マップを追加した。
+  - `item_331`の共通テーブル分類ロジックを`analyzeScopeTable()`という1関数へ切り出し、PR-M1で実装済みのC_331.0と、本PR新規のC_331.2が同一ロジックを共有するようリファクタリング。同様に`item_89`のbody走査も`accumulateBodyText()`として切り出し、C_89.0(M1)とC_89.2(本PR)で共有した。ロジックの重複コピーによる将来的な乖離リスクを避ける狙い。
+  - C_48.7(acronym)・C_48.8(longdesc/summary属性)がJavaの`isHTML5`分岐内でのみ発火する箇所であることを確認し、本エンジンのフラグメント解析(`DOMParser`が`<!DOCTYPE>`の無い断片を解析するため`document.doctype`が常にnull)では`isHTML5`が常にfalseとなり、これら2件は**通常のGOAL2利用では構造的に到達不能**であることを突き止めた。それでも将来完全な文書を解析する可能性に備え、忠実に実装(テストは`<!DOCTYPE html>`付きの完全な文書fixtureを使い、実際に発火することを個別に確認)。
+  - C_300.1(area要素のalt品質、TextChecker依存)は、1つのareaが複数画像の`usemap`から参照されている場合に画像ごとに重複報告するという原典の挙動も保持。
+  - 副次的な発見: PR-M0で追加したハーネス健全性テストが、PR-M1/M2で実チェックが登録されたことにより既存fixture(1行テーブルを含む汎用HTML)に対してC_23.2を誤って検出し、意図しない失敗を起こしていた。`run()`呼び出しに明示的に`checkIds: []`を渡す形に修正し、登録済みチェック数の変化に依存しない安定したテストにした。
+  - テスト: `run-parity-tests.js`に18件分の陽性・陰性ケース(36件)を追加し、既存64件と合わせ計100件、全PASS。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 100/100 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M3(info/user型74件の移植)へ進む。
 
 ## Decisions
 

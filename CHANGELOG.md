@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker公式判定エンジン移植 PR-M2: warning型18件の移植
+
+- 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §5 PR-M2を実装。インベントリでtype=warningの18件全て(C_6.1, C_13.0, C_23.2, C_33.2, C_38.0, C_46.0, C_48.0, C_48.1, C_48.2, C_48.3, C_48.4, C_48.5, C_48.7, C_48.8, C_80.0, C_89.2, C_300.1, C_331.2)を移植した。
+- 主な変更内容:
+  - `buildPageContext`を拡張し、`layoutTableList`(データテーブルに分類されなかった全テーブル: 1行1列テーブル・非データテーブル・入れ子テーブル)、マウスイベントハンドラ要素、`<style>`要素本文マップを追加。
+  - `item_331`(C_331.0/331.1/331.2)の共通のテーブル分類ロジックを`analyzeScopeTable()`として1関数に切り出し、C_331.0(PR-M1で実装済み)とC_331.2(本PRの新規)が同一ロジックを共有するようリファクタリング(重複実装によるロジック乖離を防止)。
+  - `item_89`のbody走査ロジックも`accumulateBodyText()`として切り出し、C_89.0(PR-M1)とC_89.2(本PR)で共有。
+  - C_33.2は`<style>`要素本文(インラインCSSテキスト)のみを対象とし、外部スタイルシートの解決は計画書§3.2-2の方針どおり対象外。
+  - C_48.7(acronym)・C_48.8(longdesc/summary属性)は原典でJavaの`isHTML5`分岐内でのみ発火するが、本エンジンのフラグメント解析では`document.doctype`が常に無いため`isHTML5`は常にfalseとなり、**通常利用では構造的に到達不能**であることを確認した上でそのまま実装(完全なdoctype付き文書を将来解析する可能性に備えて忠実に移植)。
+  - C_300.1(area要素のalt品質)はTextChecker移植(PR-M0)を再利用し、`getImgElementsFromMap`相当のロジックで対応img要素ごとに個別報告する原典の重複挙動も保持。
+  - パリティテストのハーネス健全性チェック(PR-M0で追加)が、PR-M1/M2でチェックが実際に登録されたことで既存fixture(1行テーブル入りの汎用HTML)に対して意図せずC_23.2を検出するようになり偽陽性の失敗が発生。`run()`呼び出しに明示的に`checkIds: []`を指定する形に修正し、登録済みチェック数に依存しない安定したテストに改善した。
+- 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 100/100 PASS(18件×陽性・陰性36件を追加)。既存6サンプルの回帰完全一致(procedure-overview 11 / images 10 / tables 23 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20)。`michecker-engine.js`は未統合のため既存機能への影響なし(GOAL2統合はPR-M4)。
+- 関連ファイル: `goal2-app/public/michecker-engine.js`、`goal2-app/test/michecker-parity/run-parity-tests.js`
+
 ## 2026-07-14: miChecker公式判定エンジン移植 PR-M1: error型23件の移植
 
 - 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §5 PR-M1を実装。インベントリでtype=errorの24件のうち、本体未発火のC_332.0を除く23件(C_3.0, C_6.0, C_14.0, C_18.2, C_33.0, C_33.1, C_34.0, C_36.0, C_36.1, C_51.0, C_51.1, C_51.4, C_51.5, C_57.2, C_57.3, C_85.0, C_89.0, C_331.0, C_331.1, C_332.1, C_332.2, C_422.0, C_423.0)を`CheckEngine.java`から`michecker-engine.js`へ忠実に移植した。

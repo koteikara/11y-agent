@@ -421,26 +421,51 @@
   }
 
   // HtmlEvalUtil's table-classification pass (constructor of HtmlEvalUtil):
-  // tables containing a nested <table> are set aside as "parent" tables and
-  // excluded from further classification here (matches the Java source,
-  // which only classifies leaf/"bottom" tables into 1x1 / data / non-data).
-  // Returns { dataTables } — only bottom_data_tables is needed by the
-  // ported checks so far (table.th-scope / headers-attribute checks).
+  // tables containing a nested <table> are set aside as "parent" tables.
+  // layoutTableList = parent + bottom_1row1col + bottom_notdata (everything
+  // that ISN'T a bottom data table) — mirrors the Java source's field
+  // initializer (layoutTableList.addAll(parent/1row1col/notdata)).
   function classifyTables(document) {
     const tables = Array.from(document.getElementsByTagName("table"));
     const dataTables = [];
+    const layoutTables = [];
     for (const table of tables) {
       if (table.getElementsByTagName("table").length === 0) {
         if (is1Row1ColTable(table)) {
-          // bottom_1row1col_tables — not used by ported checks yet
+          layoutTables.push(table);
         } else if (isDataTable(table)) {
           dataTables.push(table);
+        } else {
+          layoutTables.push(table);
         }
-        // else: bottom_notdata_tables — not used by ported checks yet
+      } else {
+        layoutTables.push(table); // parent_table_elements
       }
-      // else: has a nested table -> parent_table_elements, not classified
     }
-    return { dataTables };
+    return { dataTables, layoutTables };
+  }
+
+  // HtmlEvalUtil#getDirectDescendantElements(Element, tagName): finds
+  // descendant elements matching tagName, WITHOUT recursing into a nested
+  // element whose own tag matches the starting element's tag (e.g. a
+  // nested <table> when called on a <table>) — so th/caption belonging to
+  // an inner nested table are not counted for the outer table.
+  function getDirectDescendantElements(element, tagName, excludedTag) {
+    const excluded = excludedTag || element.tagName.toLowerCase();
+    const result = [];
+    for (const child of Array.from(element.children)) {
+      const childTag = child.tagName.toLowerCase();
+      if (childTag === tagName) {
+        result.push(child);
+      } else if (childTag !== excluded) {
+        result.push(...getDirectDescendantElements(child, tagName, excluded));
+      }
+    }
+    return result;
+  }
+
+  function isEmptyString(s) {
+    return s == null || s.length === 0;
   }
 
   // DocumentTypeUtil#isOriginalHTML5(DocumentType): true only if a doctype
@@ -468,7 +493,25 @@
     const iframeElements = Array.from(document.getElementsByTagName("iframe"));
     const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"));
     const bodyElements = Array.from(document.getElementsByTagName("body"));
-    const { dataTables } = classifyTables(document);
+    const { dataTables, layoutTables } = classifyTables(document);
+    // HtmlEvalUtil#getEventMouseButtonElements / getEventOnMouseElements:
+    // elements with any mouse-button / mouse-focus event handler attribute
+    // (EVENT_MOUSE_BUTTON / EVENT_MOUSE_FOCUS constants).
+    const eventMouseButtonElements = Array.from(
+      document.querySelectorAll("[onclick],[ondblclick],[onmouseup],[onmousedown]")
+    );
+    const eventMouseFocusElements = Array.from(
+      document.querySelectorAll("[onmouseover],[onmouseout],[onmousemove]")
+    );
+    // HtmlEvalUtil#getElementsWithStyle: elements with a style="" attribute
+    // (used for text-decoration:blink text-analysis checks). styleElementMap
+    // covers inline <style> element text content; the Java source also has
+    // a styleSheetsMap for *external* stylesheet text, which this engine
+    // does not resolve (no network fetch — see MICHECKER_ENGINE_PORT_INSTRUCTIONS.md §3.2-2).
+    const elementsWithStyle = Array.from(document.querySelectorAll("[style]"));
+    const styleElementMap = new Map(
+      Array.from(document.getElementsByTagName("style")).map((el) => [el, el.textContent || ""])
+    );
     return {
       imgElements,
       aWithHrefElements,
@@ -479,6 +522,11 @@
       headings,
       bodyElements,
       dataTableList: dataTables,
+      layoutTableList: layoutTables,
+      elementsWithStyle,
+      styleElementMap,
+      eventMouseButtonElements,
+      eventMouseFocusElements,
       isHTML5: isHTML5(document),
     };
   }
@@ -825,12 +873,13 @@
     if (autoplayEls.length > 0) report("C_85.0", { nodes: autoplayEls });
   });
 
-  // C_89.0 (item_89, L3293): a single-<body> page (no <frameset>) whose
-  // accumulated body text/alt/title content (walked in document order,
-  // stopping once VALID_TOTAL_TEXT_LEN chars are collected) is empty.
-  registerCheck("C_89.0", "error", "item_89", ({ document, page, report }) => {
-    if (page.bodyElements.length !== 1) return;
-    if (document.getElementsByTagName("frameset").length > 0) return;
+  // Shared body-text accumulation for item_89 (C_89.0/C_89.1/C_89.2).
+  // Returns null if the page doesn't qualify (not exactly one <body>, or a
+  // <frameset> is present); otherwise the accumulated text length capped at
+  // VALID_TOTAL_TEXT_LEN chars, matching the Java source's early-exit walk.
+  function accumulateBodyText(document, page) {
+    if (page.bodyElements.length !== 1) return null;
+    if (document.getElementsByTagName("frameset").length > 0) return null;
     const body = page.bodyElements[0];
     let text = "";
     const stack = [];
@@ -854,9 +903,120 @@
         while (!cur && stack.length > 0) cur = stack.pop().nextSibling;
       }
     }
-    if (text.length === 0) report("C_89.0");
-    // text.length > 0 && < VALID_TOTAL_TEXT_LEN -> C_89.1/C_89.2 (info/warning, not this PR)
+    return text;
+  }
+
+  // C_89.0 (item_89, L3293): a single-<body> page (no <frameset>) whose
+  // accumulated body text/alt/title content (walked in document order,
+  // stopping once VALID_TOTAL_TEXT_LEN chars are collected) is empty.
+  registerCheck("C_89.0", "error", "item_89", ({ document, page, report }) => {
+    const text = accumulateBodyText(document, page);
+    if (text != null && text.length === 0) report("C_89.0");
   });
+
+  // C_89.2 (item_89, L3298, warning): same page-level scan as C_89.0, but
+  // for the case where SOME text was found (0 < length < threshold) and
+  // there are no <img> elements on the page at all (if there are images,
+  // C_89.1 — "user"-type, PR-M3 — fires instead; mutually exclusive).
+  registerCheck("C_89.2", "warning", "item_89", ({ document, page, report }) => {
+    const text = accumulateBodyText(document, page);
+    if (text != null && text.length > 0 && text.length < VALID_TOTAL_TEXT_LEN && page.imgElements.length === 0) {
+      report("C_89.2");
+    }
+  });
+
+  // Shared per-table analysis for item_331 (C_331.0/C_331.1/C_331.2). See
+  // MICHECKER_ENGINE_PORT_INSTRUCTIONS.md §3.2-... — extracted into one
+  // function so C_331.0 and C_331.2 (which both depend on the same
+  // isSimpleTable2/topLeftElement/withoutScope computation) can't drift
+  // apart from each other or from the original single Java loop.
+  function analyzeScopeTable(table) {
+    const withoutScope = [];
+    const thCount = elementsList(table, "th").length;
+    let isHeaderRow = false;
+    let isHeaderColumn = true;
+    let isRowAndCol = false;
+    let isSimpleTable2 = false;
+    let firstRowLength = 0;
+    let trCount = 0;
+    let maxColCount = 0;
+    let topLeftElement = null;
+
+    const rows = elementsList(table, "tr");
+    for (const tr of rows) {
+      const thList = elementsList(tr, "th");
+      const cellList = elementsList(tr, "th", "td");
+      const thSize = thList.length;
+
+      let colCount = 0;
+      for (const el of cellList) {
+        let col = 1;
+        if (el.hasAttribute("colspan")) {
+          const parsed = parseInt(el.getAttribute("colspan"), 10);
+          if (!Number.isNaN(parsed)) col = parsed; // parse failure -> keeps default 1, matching the Java catch-and-ignore
+        }
+        colCount += col;
+      }
+      if (colCount > maxColCount) maxColCount = colCount;
+
+      // NOTE: Java uses tr.getFirstChild() (the tr's literal first CHILD
+      // NODE, which is frequently a whitespace Text node in
+      // pretty-printed HTML source, not necessarily the first <td>/<th>)
+      // and tr.getChildNodes().getLength() (raw child-node count,
+      // including such whitespace text nodes) — not the cell-only counts
+      // one might expect. This is preserved exactly rather than "fixed"
+      // to use cellList, since it measurably changes which tables get
+      // classified as header rows in real (whitespace-formatted) HTML.
+      const firstCellNode = tr.firstChild;
+      const firstCellName = firstCellNode ? (firstCellNode.nodeName || "").toLowerCase() : "";
+      const isTH = firstCellName === "th";
+
+      if (trCount === 0) {
+        firstRowLength = tr.childNodes.length;
+        if (thSize === firstRowLength) {
+          isHeaderRow = true;
+        } else if (thSize + 1 === firstRowLength && firstCellName === "td") {
+          isSimpleTable2 = true;
+        }
+        if (firstCellNode && firstCellNode.nodeType === 1) {
+          topLeftElement = firstCellNode;
+        }
+      }
+
+      let isTHwoRowspan = isTH;
+      if (isTHwoRowspan) {
+        const rowspanAttr = firstCellNode.getAttribute("rowspan");
+        const parsed = parseInt(rowspanAttr, 10);
+        if (!Number.isNaN(parsed)) isTHwoRowspan = parsed < 2;
+        // else: no/non-numeric rowspan attribute -> isTHwoRowspan stays
+        // true (unchanged), matching the Java catch-and-ignore.
+      }
+
+      if (isHeaderColumn) isHeaderColumn = isTHwoRowspan;
+      if (isSimpleTable2 && trCount !== 0) isSimpleTable2 = isTHwoRowspan;
+      trCount++;
+    }
+
+    isHeaderRow = isHeaderRow && firstRowLength === maxColCount;
+    isSimpleTable2 = isSimpleTable2 && firstRowLength === maxColCount && firstRowLength + trCount - 2 === thCount;
+
+    if (isHeaderRow && isHeaderColumn && trCount + firstRowLength - 1 === thCount) {
+      isRowAndCol = true;
+    }
+
+    const isSimpleTable = (isHeaderRow && firstRowLength === thCount) || (isHeaderColumn && trCount === thCount);
+
+    for (const th of elementsList(table, "th")) {
+      if (!th.hasAttribute("scope")) {
+        if (!isSimpleTable && !isSimpleTable2 && !isRowAndCol) withoutScope.push(th);
+      }
+    }
+    if (isRowAndCol && topLeftElement && !topLeftElement.hasAttribute("scope")) {
+      withoutScope.push(topLeftElement);
+    }
+
+    return { withoutScope, isSimpleTable2, topLeftElement };
+  }
 
   // C_331.0/C_331.1 (item_331, L3552/L3557): missing/invalid scope
   // attribute on <th> within a data table, using the same
@@ -866,92 +1026,7 @@
   // source exactly (withoutScope is reset per table, invalidScope is not).
   registerCheck("C_331.0", "error", "item_331", ({ page, report }) => {
     for (const table of page.dataTableList) {
-      const withoutScope = [];
-      const thCount = elementsList(table, "th").length;
-      let isHeaderRow = false;
-      let isHeaderColumn = true;
-      let isRowAndCol = false;
-      let isSimpleTable2 = false;
-      let firstRowLength = 0;
-      let trCount = 0;
-      let maxColCount = 0;
-      let topLeftElement = null;
-
-      const rows = elementsList(table, "tr");
-      for (const tr of rows) {
-        const thList = elementsList(tr, "th");
-        const cellList = elementsList(tr, "th", "td");
-        const thSize = thList.length;
-
-        let colCount = 0;
-        for (const el of cellList) {
-          let col = 1;
-          if (el.hasAttribute("colspan")) {
-            const parsed = parseInt(el.getAttribute("colspan"), 10);
-            if (!Number.isNaN(parsed)) col = parsed; // parse failure -> keeps default 1, matching the Java catch-and-ignore
-          }
-          colCount += col;
-        }
-        if (colCount > maxColCount) maxColCount = colCount;
-
-        // NOTE: Java uses tr.getFirstChild() (the tr's literal first CHILD
-        // NODE, which is frequently a whitespace Text node in
-        // pretty-printed HTML source, not necessarily the first <td>/<th>)
-        // and tr.getChildNodes().getLength() (raw child-node count,
-        // including such whitespace text nodes) — not the cell-only counts
-        // one might expect. This is preserved exactly rather than "fixed"
-        // to use cellList, since it measurably changes which tables get
-        // classified as header rows in real (whitespace-formatted) HTML.
-        const firstCellNode = tr.firstChild;
-        const firstCellName = firstCellNode ? (firstCellNode.nodeName || "").toLowerCase() : "";
-        const isTH = firstCellName === "th";
-
-        if (trCount === 0) {
-          firstRowLength = tr.childNodes.length;
-          if (thSize === firstRowLength) {
-            isHeaderRow = true;
-          } else if (thSize + 1 === firstRowLength && firstCellName === "td") {
-            isSimpleTable2 = true;
-          }
-          if (firstCellNode && firstCellNode.nodeType === 1) {
-            topLeftElement = firstCellNode;
-          }
-        }
-
-        let isTHwoRowspan = isTH;
-        if (isTHwoRowspan) {
-          const rowspanAttr = firstCellNode.getAttribute("rowspan");
-          const parsed = parseInt(rowspanAttr, 10);
-          if (!Number.isNaN(parsed)) isTHwoRowspan = parsed < 2;
-          // else: no/non-numeric rowspan attribute -> isTHwoRowspan stays
-          // true (unchanged), matching the Java catch-and-ignore.
-        }
-
-        if (isHeaderColumn) isHeaderColumn = isTHwoRowspan;
-        if (isSimpleTable2 && trCount !== 0) isSimpleTable2 = isTHwoRowspan;
-        trCount++;
-      }
-
-      isHeaderRow = isHeaderRow && firstRowLength === maxColCount;
-      isSimpleTable2 = isSimpleTable2 && firstRowLength === maxColCount && firstRowLength + trCount - 2 === thCount;
-
-      if (isHeaderRow && isHeaderColumn && trCount + firstRowLength - 1 === thCount) {
-        isRowAndCol = true;
-      }
-
-      const isSimpleTable = (isHeaderRow && firstRowLength === thCount) || (isHeaderColumn && trCount === thCount);
-
-      for (const th of elementsList(table, "th")) {
-        if (!th.hasAttribute("scope")) {
-          if (!isSimpleTable && !isSimpleTable2 && !isRowAndCol) withoutScope.push(th);
-        }
-      }
-      if (isRowAndCol && topLeftElement && !topLeftElement.hasAttribute("scope")) {
-        withoutScope.push(topLeftElement);
-      }
-      // isSimpleTable2 && topLeftElement has non-empty text -> C_331.2
-      // (warning type, PR-M2 — not reported here).
-
+      const { withoutScope } = analyzeScopeTable(table);
       if (withoutScope.length > 0) {
         const tds = elementsList(table, "td");
         const tdWithHeaders = tds.filter((td) => td.hasAttribute("headers"));
@@ -974,6 +1049,295 @@
       }
     }
     if (invalidScope.length > 0) report("C_331.1", { nodes: invalidScope });
+  });
+
+  // C_331.2 (item_331, L3540, warning): a "simple table with row/col
+  // headers" (isSimpleTable2 — top-left cell should be empty) whose actual
+  // top-left <td> has non-empty text.
+  registerCheck("C_331.2", "warning", "item_331", ({ page, report }) => {
+    for (const table of page.dataTableList) {
+      const { isSimpleTable2, topLeftElement } = analyzeScopeTable(table);
+      if (isSimpleTable2 && topLeftElement) {
+        const text = getTextAltDescendant(topLeftElement).trim();
+        if (text.length > 0) report("C_331.2", { nodes: topLeftElement });
+      }
+    }
+  });
+
+  // C_6.1 (item_6, L743, warning): companion to C_6.0 — reported for the
+  // exact same leaf-block/ASCII-art matches, as a second (differently
+  // worded) reminder about providing alternative text near the art.
+  registerCheck("C_6.1", "warning", "item_6", ({ page, report }) => {
+    for (const body of page.bodyElements) {
+      const stack = [];
+      let cur = body;
+      while (cur) {
+        let isArt = false;
+        if (isLeafBlockEle(cur) && checkEngineIsAsciiArtString(getTextAltDescendant(cur))) {
+          report("C_6.1", { nodes: cur });
+          isArt = true;
+        }
+        if (!isArt && cur.hasChildNodes()) {
+          stack.push(cur);
+          cur = cur.firstChild;
+        } else if (cur.nextSibling) {
+          cur = cur.nextSibling;
+        } else {
+          cur = null;
+          while (!cur && stack.length > 0) cur = stack.pop().nextSibling;
+        }
+      }
+    }
+  });
+
+  // C_13.0 (item_13, L908, warning): absolute (non-%, no +/-) size
+  // specifications — <font size="N">, and width/height on
+  // table/tr/td/col. Each element/tag group is a separate grouped problem
+  // (matches checkAbsoluteSize's per-tag addCheckerProblem calls).
+  function checkAbsoluteSizeTag(document, report, tagName) {
+    const nodes = Array.from(document.getElementsByTagName(tagName)).filter((el) => {
+      const width = el.getAttribute("width");
+      const height = el.getAttribute("height");
+      const widthAbsolute = width != null && width !== "" && width.indexOf("%") === -1;
+      const heightAbsolute = height != null && height !== "" && height.indexOf("%") === -1;
+      return widthAbsolute || heightAbsolute;
+    });
+    if (nodes.length > 0) report("C_13.0", { nodes });
+  }
+  registerCheck("C_13.0", "warning", "item_13", ({ document, report }) => {
+    const fontNodes = Array.from(document.getElementsByTagName("font")).filter((el) => {
+      if (!el.hasAttribute("size")) return false;
+      const size = el.getAttribute("size") || "";
+      return size.length > 0 && size.indexOf("+") === -1 && size.indexOf("-") === -1;
+    });
+    if (fontNodes.length > 0) report("C_13.0", { nodes: fontNodes });
+    for (const tag of ["table", "tr", "td", "col"]) {
+      checkAbsoluteSizeTag(document, report, tag);
+    }
+  });
+
+  // C_23.2 (item_23, L1244, warning): a layout table (see layoutTableList)
+  // that has a direct-descendant <th>/<caption>, or a non-empty "summary"
+  // attribute in a non-HTML5 document — i.e. a table that LOOKS like it
+  // might be a data table despite being classified as layout.
+  registerCheck("C_23.2", "warning", "item_23", ({ page, report }) => {
+    const tables = [];
+    for (const table of page.layoutTableList) {
+      if (getDirectDescendantElements(table, "th").length > 0) {
+        tables.push(table);
+      } else if (getDirectDescendantElements(table, "caption").length > 0) {
+        tables.push(table);
+      } else {
+        // isHTML5 && has summary -> C_48.8 (registered separately, warning, this PR)
+        if (table.hasAttribute("summary") && !isEmptyString(table.getAttribute("summary"))) {
+          tables.push(table);
+        }
+      }
+    }
+    if (tables.length > 0) report("C_23.2", { nodes: tables });
+  });
+
+  // C_33.2 (item_33, L1481, warning): text-decoration:blink inside a
+  // <style> element's text content or (unresolved — see
+  // MICHECKER_ENGINE_PORT_INSTRUCTIONS.md §3.2-2) an external stylesheet.
+  const BLINK_PATTERN = /\{[^}]*text-decoration(\s)*:[^;]*blink[\s\S]*\}/is;
+  registerCheck("C_33.2", "warning", "item_33", ({ page, report }) => {
+    for (const [el, style] of page.styleElementMap) {
+      if (style && BLINK_PATTERN.test(style)) {
+        report("C_33.2", { nodes: el });
+      }
+    }
+    // External stylesheet text (styleSheetsMap in the Java source) is not
+    // resolved by this engine — see scope note above.
+  });
+
+  // C_38.0 (item_38, L1576, warning): elements with a mouse-button event
+  // handler (onclick/ondblclick/onmouseup/onmousedown) but no matching
+  // keyboard equivalent, and (separately) elements with a mouse-focus
+  // handler (onmouseover/onmouseout/onmousemove) but no keyboard-focus
+  // equivalent. Two separate grouped reports, matching the two
+  // addCheckerProblem("C_38.0", ...) call sites in item_38.
+  registerCheck("C_38.0", "warning", "item_38", ({ page, report }) => {
+    const seen = new Set();
+    const withoutKeyboard = [];
+    for (const el of page.eventMouseButtonElements) {
+      seen.add(el);
+      const hasKeyEquivalent = el.hasAttribute("onkeydown") || el.hasAttribute("onkeypress") || el.hasAttribute("onkeyup");
+      if (!hasKeyEquivalent) withoutKeyboard.push(el);
+    }
+    if (withoutKeyboard.length > 0) report("C_38.0", { nodes: withoutKeyboard });
+
+    const withoutFocus = [];
+    for (const el of page.eventMouseFocusElements) {
+      if (seen.has(el)) continue; // Java's HashSet#add returns false for duplicates -> skipped
+      seen.add(el);
+      const hasFocusEquivalent = el.hasAttribute("onfocus") || el.hasAttribute("onblur") || el.hasAttribute("onselect");
+      if (!hasFocusEquivalent) withoutFocus.push(el);
+    }
+    if (withoutFocus.length > 0) report("C_38.0", { nodes: withoutFocus });
+  });
+
+  // C_46.0 (item_46, L1980, warning): two adjacent <a href> links with
+  // DIFFERENT targets, separated only by whitespace text / <br> / <p>
+  // (no visible separator between them).
+  function resolveUrl(href, document) {
+    try {
+      return new URL(href, document.baseURI).toString();
+    } catch (e) {
+      return href;
+    }
+  }
+  registerCheck("C_46.0", "warning", "item_46", ({ document, page, report }) => {
+    const seen = [];
+    for (let i = 0; i < page.aWithHrefElements.length; i++) {
+      const el = page.aWithHrefElements[i];
+      if (seen.includes(el)) continue;
+      let endEl = null;
+      let next = el.nextSibling;
+      const url1 = resolveUrl(page.aWithHrefHrefs[i], document);
+      let adjacent = false;
+      while (next) {
+        if (next.nodeType === 1) {
+          const name = (next.nodeName || "").toLowerCase();
+          if (name === "br" || name === "p") {
+            next = next.nextSibling;
+            continue;
+          } else if (name === "a") {
+            const url2 = resolveUrl(next.getAttribute("href") || "", document);
+            if (url1 !== url2) {
+              endEl = next;
+              if (!seen.includes(el)) seen.push(el);
+              if (!seen.includes(endEl)) seen.push(endEl);
+              adjacent = true;
+            } else {
+              break;
+            }
+          } else {
+            break;
+          }
+        } else if (next.nodeType === 3) {
+          const text = next.nodeValue || "";
+          if (text.trim() !== "") break;
+        }
+        next = next.nextSibling;
+      }
+      if (adjacent) report("C_46.0", { nodes: [el, endEl] });
+    }
+  });
+
+  // C_48.0-C_48.5/C_48.7/C_48.8 (item_48 + item_3's summary/longdesc
+  // branches, warning): deprecated elements and attributes. Grouped by
+  // element name per checkObsoluteEle. C_48.6 (b/i without HTML5 —
+  // "use strong/em instead") is "user"-type (PR-M3), not reported here.
+  // C_48.7 (acronym) and C_48.8 (deprecated attributes) only fire in the
+  // Java source's `if (isHTML5)` branches; since this engine's fragment
+  // parsing always yields isHTML5===false (see isHTML5() above), these two
+  // are structurally unreachable in this engine's normal usage — they are
+  // still registered faithfully for completeness (and in case a full,
+  // doctype-bearing document is ever analyzed).
+  function checkObsoluteEle(document, report, id, tag) {
+    const nodes = Array.from(document.getElementsByTagName(tag));
+    if (nodes.length > 0) report(id, { nodes, extraText: tag });
+  }
+  registerCheck("C_48.0", "warning", "item_48", ({ document, page, report }) => {
+    checkObsoluteEle(document, report, "C_48.0", "menuitem");
+    if (page.isHTML5) {
+      checkObsoluteEle(document, report, "C_48.0", "frame");
+      checkObsoluteEle(document, report, "C_48.0", "frameset");
+      checkObsoluteEle(document, report, "C_48.0", "noframes");
+      // isXML (XHTML) is not evaluated by this engine (no XML mode); the
+      // Java source's `if (isXML) checkObsoluteEle("C_48.0", "noscript")`
+      // is therefore not reproduced here.
+    }
+  });
+  registerCheck("C_48.1", "warning", "item_48", ({ document, report }) => {
+    checkObsoluteEle(document, report, "C_48.1", "applet");
+  });
+  registerCheck("C_48.2", "warning", "item_48", ({ document, page, report }) => {
+    for (const tag of ["basefont", "center", "font", "strike", "u"]) {
+      checkObsoluteEle(document, report, "C_48.2", tag);
+    }
+    if (!page.isHTML5) {
+      checkObsoluteEle(document, report, "C_48.2", "s");
+    } else {
+      checkObsoluteEle(document, report, "C_48.2", "big");
+      checkObsoluteEle(document, report, "C_48.2", "tt");
+    }
+  });
+  registerCheck("C_48.3", "warning", "item_48", ({ document, page, report }) => {
+    checkObsoluteEle(document, report, "C_48.3", "dir");
+    if (!page.isHTML5) {
+      checkObsoluteEle(document, report, "C_48.3", "menu");
+    }
+  });
+  registerCheck("C_48.4", "warning", "item_48", ({ document, report }) => {
+    checkObsoluteEle(document, report, "C_48.4", "isindex");
+  });
+  registerCheck("C_48.5", "warning", "item_48", ({ document, report }) => {
+    for (const tag of ["listing", "plaintext", "xmp"]) {
+      checkObsoluteEle(document, report, "C_48.5", tag);
+    }
+  });
+  registerCheck("C_48.7", "warning", "item_48", ({ document, page, report }) => {
+    if (page.isHTML5) checkObsoluteEle(document, report, "C_48.7", "acronym");
+  });
+  registerCheck("C_48.8", "warning", "item_3/item_23", ({ page, report }) => {
+    if (!page.isHTML5) return;
+    for (const img of page.imgElements) {
+      if (img.hasAttribute("longdesc")) report("C_48.8", { nodes: img, extraText: "longdesc" });
+    }
+    for (const table of [...page.dataTableList, ...page.layoutTableList]) {
+      if (table.hasAttribute("summary")) report("C_48.8", { nodes: table, extraText: "summary" });
+    }
+  });
+
+  // C_80.0 (item_80, L3124, warning): any element with an "alt" attribute
+  // longer than 150 characters.
+  registerCheck("C_80.0", "warning", "item_80", ({ page, report }) => {
+    for (const body of page.bodyElements) {
+      const stack = [];
+      let cur = body;
+      while (cur) {
+        if (cur.nodeType === 1 && cur.hasAttribute("alt")) {
+          const alt = cur.getAttribute("alt") || "";
+          if (alt.length > 150) report("C_80.0", { nodes: cur });
+        }
+        if (cur.hasChildNodes()) {
+          stack.push(cur);
+          cur = cur.firstChild;
+        } else if (cur.nextSibling) {
+          cur = cur.nextSibling;
+        } else {
+          cur = null;
+          while (!cur && stack.length > 0) cur = stack.pop().nextSibling;
+        }
+      }
+    }
+  });
+
+  // C_300.1 (item_300, L3380, warning): an <area alt="..."> whose alt text
+  // (checked with "area" as an extra NG word) is problematic — and is
+  // either not BLANK, or is BLANK but the area also has an href. Reported
+  // once per <img usemap> that references the area's parent <map> (a
+  // single area can be reported multiple times if several images share the
+  // same map — matches the Java source's nested loop exactly).
+  registerCheck("C_300.1", "warning", "item_300", ({ document, report }) => {
+    for (const area of Array.from(document.getElementsByTagName("area"))) {
+      const alt = area.getAttribute("alt");
+      if (alt == null) continue;
+      const ngWords = new Set(["area"]);
+      const result = TextChecker.checkAlt(alt, null, ngWords);
+      if (result === "OK") continue;
+      if (result === "SPACE_SEPARATED" || result === "SPACE_SEPARATED_JP") continue;
+      if (result === "BLANK" && !area.hasAttribute("href")) continue;
+      const map = area.parentElement;
+      if (!map || map.tagName.toLowerCase() !== "map") continue;
+      const mapName = map.getAttribute("name") || "";
+      const images = Array.from(document.querySelectorAll(`img[usemap="#${mapName}"]`));
+      for (const _image of images) {
+        report("C_300.1", { nodes: area, extraText: alt });
+      }
+    }
   });
 
   // C_332.1/C_332.2 (item_332, L3569/L3571): a "headers" attribute value
