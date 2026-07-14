@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: GOAL1 PR-C: 出力系の合格条件検証+要確認残数の表示バグ修正
+
+- 背景・目的: PR-Bの時点で`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`§6 PR-C(証跡CSV一括・バッチJSON・GOAL2引き継ぎ)のコード自体は前倒し実装済みだったため、PR-Cとしては指示書記載の合格条件「GOAL2引き継ぎ後の要確認残数がgoal1一覧の値と一致する」を明示的に検証する回として実施した。
+- 検証中に発見したバグ: GOAL1の作業一覧テーブルで、`自動採用`列・`要確認残数`列が`page.autoAcceptedCount || ""` / `page.remainingCount || ""`という書き方になっており、値が`0`(自動採用0件、または要確認残数0件)のとき`0`が偽値として扱われ空欄表示になっていた。実データは正しいが、表示上「まだ集計されていない」ように見えてしまう紛らわしい不具合。`page.evidence`の有無(=解析完了済みかどうか)を判定に使い、解析完了後は`0`も`"0"`として明示表示するよう修正。
+- 検証: `node --check`成功。goal2既存回帰は変更前後で完全一致。GOAL1でページ1件をバッチ処理→「GOAL2で開く」→候補生成、という一連の流れで、GOAL1一覧の要確認残数(`0`)とGOAL2側の`evidence.completion.unresolved`(`0`)が一致することを確認(修正前は空欄`""` vs `"0"`で不一致していた)。PR-Bの全E2Eシナリオ(混在入力・重複検出・エラー継続・CSV/JSON出力・IndexedDB復元)も再実行し変化がないことを確認。
+- 関連ファイル: `goal2-app/public/goal1.js`
+
 ## 2026-07-14: GOAL1 PR-B: goal1.html骨格+バッチ実行+IndexedDB
 
 - 背景・目的: `goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`§6 PR-Bの実施。PR-Aで公開した`window.goal3Engine`/`window.goal2Engine`を使い、複数ページを一括処理するGOAL1のバッチ画面を新設した。

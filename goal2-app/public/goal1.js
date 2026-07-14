@@ -492,7 +492,12 @@
       const row = document.createElement("tr");
       const statusClass = STATUS_CLASSES[page.status] || "goal1-status-pending";
       const statusLabel = STATUS_LABELS[page.status] || page.status;
-      const candidateTotal = page.evidence ? page.evidence.candidates.length : "";
+      // page.evidence existing is the "this page finished analysis" signal — once it
+      // exists, autoAcceptedCount/remainingCount are meaningful even when they're 0, so
+      // `|| ""` (which treats 0 as falsy) would wrongly blank out a genuine zero.
+      const candidateTotal = page.evidence ? String(page.evidence.candidates.length) : "";
+      const autoAcceptedText = page.evidence ? String(page.autoAcceptedCount || 0) : "";
+      const remainingText = page.evidence ? String(page.remainingCount || 0) : "";
       row.innerHTML = `
         <td>${escapeHtml(page.id)}${page.duplicateUrl ? '<span class="goal1-duplicate-badge">重複URL</span>' : ""}</td>
         <td>${escapeHtml(page.pageTitle || "(未取得)")}</td>
@@ -501,8 +506,8 @@
         page.errorMessage ? `<div class="michecker-rule-note">${escapeHtml(page.errorMessage)}</div>` : ""
       }</td>
         <td class="michecker-count">${candidateTotal}</td>
-        <td class="michecker-count">${page.autoAcceptedCount || ""}</td>
-        <td class="michecker-count">${page.remainingCount || ""}</td>
+        <td class="michecker-count">${autoAcceptedText}</td>
+        <td class="michecker-count">${remainingText}</td>
         <td class="michecker-count">${page.llmUsage ? `$${page.llmUsage.estimatedCostUsd.toFixed(4)}` : ""}</td>
         <td class="goal1-row-actions"></td>
       `;
