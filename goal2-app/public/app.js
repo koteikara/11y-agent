@@ -6364,6 +6364,19 @@
     }
   }
 
+  // table.cell-merge-* candidates share a KB rule.title using a "セル結合①〜⑥" numbering
+  // scheme (matching the source manual's own page layout, kept as-is in the KB for that
+  // reason). That numbering means nothing to a worker skimming the candidate list, so the
+  // list/selection UI shows the situational message (already written in plain language by
+  // classifyMergedCellTable()) instead. The KB rule.title is still used for the KB browser,
+  // aria/decision exports, etc. — this only affects what's shown while picking a candidate.
+  function candidateDisplayTitle(candidate) {
+    if (candidate.rule_id && candidate.rule_id.startsWith("table.cell-merge-") && candidate.issue?.message) {
+      return candidate.issue.message.replace(/[。.]+$/, "");
+    }
+    return candidate.rule.title;
+  }
+
   function buildCandidateRow(candidate) {
     const row = document.createElement("div");
     const button = document.createElement("button");
@@ -6376,7 +6389,7 @@
     checkbox.value = candidate.candidate_id;
     checkbox.checked = state.bulkSelectedCandidateIds.has(candidate.candidate_id);
     checkbox.disabled = !isUnresolved;
-    checkbox.setAttribute("aria-label", `${candidate.rule.title}を一括採用対象に含める`);
+    checkbox.setAttribute("aria-label", `${candidateDisplayTitle(candidate)}を一括採用対象に含める`);
     checkbox.addEventListener("change", () => {
       state.bulkActionMessage = "";
       if (checkbox.checked) {
@@ -6392,7 +6405,7 @@
     button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
     button.setAttribute(
       "aria-label",
-      `${candidate.rule.title}、${statusLabels[status] || status}、${candidate.candidate_id}` +
+      `${candidateDisplayTitle(candidate)}、${statusLabels[status] || status}、${candidate.candidate_id}` +
         (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
     );
     button.addEventListener("click", () => {
@@ -6403,7 +6416,7 @@
     });
 
     button.innerHTML = `
-      <div class="candidate-title">${escapeHtml(candidate.rule.title)}</div>
+      <div class="candidate-title">${escapeHtml(candidateDisplayTitle(candidate))}</div>
       ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
     `;
     row.append(checkbox, button);
@@ -6497,7 +6510,7 @@
                 method.candidate_id === chosenMethodId ? "checked" : ""
               }>
                   <span class="fix-method-card-main">
-                    <span class="fix-method-card-title">${escapeHtml(index === 0 ? `おすすめ: ${method.rule.title}` : method.rule.title)}</span>
+                    <span class="fix-method-card-title">${escapeHtml(index === 0 ? `おすすめ: ${candidateDisplayTitle(method)}` : candidateDisplayTitle(method))}</span>
                     <span class="fix-method-card-copy">${escapeHtml(fixMethodDescription(method))}</span>
                   </span>
                   <span class="fix-method-card-meta">${escapeHtml(fixMethodBadge(method))}</span>
