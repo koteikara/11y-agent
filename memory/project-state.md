@@ -639,6 +639,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - コミット・プッシュ完了。プロセス:
   - コミット: `abfeeee` "Add GOAL3 sample: Anjo City emergency evacuation shelter list"
   - ブランチ: `claude/goal-overview-rxgrf2`
+  - PR #83として作成。
+- ユーザーからPR#83のレビューで、投入したサンプルHTML中の`align`/`border`/`cellpadding`/`cellspacing`/`summary`/`width`等の非推奨テーブル属性がそのまま残っている(サンプルデータ自体の問題)との指摘。該当2テーブルから該当属性を削除しコミット・プッシュ・PR本文更新(コミット`9c2cd61`)。
+- 続けてユーザーから、GOAL3の候補生成ロジック側で該当属性が実際には除去されず、`data-removed-attrs="align, border, cellpadding, cellspacing, width"`というマーカー属性が付与されるだけの誤った挙動になっているとの指摘(スクリーンショット付き)。調査の結果、既存バグと判明:
+  - 直近のコミット`42a1b53`(「テーブルの非推奨属性(align, border等)削除ルール実装」)で`html-structure.deprecated-elements`ルールに追加されたブロックが、`patch: { type: "set-attribute", name: "data-removed-attrs", value: removedAttrs }`という誤ったパッチを生成していた。`set-attribute`パッチは`applyCandidatePatch`で属性を**追加**するだけの処理のため、候補を「採用」しても非推奨属性は削除されず、無意味なマーカー属性が追加されるだけだった。
+  - さらにこの処理は、同じ属性群(`align`/`valign`/`width`/`height`/`border`/`cellpadding`/`cellspacing`/`bgcolor`、テーブル本体だけでなく子孫要素も含む)をすでに正しく検出・除去している既存の`table.format-clear`ルール(`hasTableFormatting`/`stripFormatting`、`strip-formatting`パッチで正常動作)と完全に重複していた。追加されたブロックの直上のコメント自体が「テーブル書式属性は`stripFormatting()`側で別途、無条件に検出・除去しており対象外」と明記しており、自己矛盾した実装だった。
+  - 修正: 重複・不具合のあるブロック(`collectDeprecatedAttributeCandidates`内の`deprecatedTableAttrs`検出処理、約26行)を削除し、`table.format-clear`ルールへ一本化。
+  - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存サンプルの検出結果に影響なし)。
+  - コミット`3ffc215`「Remove broken duplicate deprecated table attribute detector」。ブランチ`claude/goal-overview-rxgrf2`へプッシュ、PR#83本文を更新。
   - 次のステップ: 弘前市・豊橋市などの追加サンプルをユーザーから順次提供してもらい、GOAL3の汎用性・頑健性を検証。
 
 ## Decisions
