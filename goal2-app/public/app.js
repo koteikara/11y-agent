@@ -5058,6 +5058,13 @@
     return decomposeLayoutTable(table, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
   }
 
+  // WHATWG HTML自体がcolspan属性を最大1000にクランプする仕様になっている(rowspanは
+  // 仕様上65534)。ここではrowspan/colspan共通の安全上限として同じ1000を採用する。実際の
+  // 表でこの値を超えることはまず無いが、Excel等からの貼り付けで生じる壊れたcolspan値
+  // (数万〜天文学的な数字になることがある)が下の展開ループを実質無限ループ化させる
+  // 実害が確認されたため、上限クランプを追加した(下限クランプは既存のまま維持)。
+  const MAX_TABLE_SPAN = 1000;
+
   function buildExpandedTableGrid(table) {
     const grid = [];
     [...table.querySelectorAll("tr")].forEach((row, rowIndex) => {
@@ -5069,8 +5076,14 @@
           while (grid[rowIndex][columnIndex]) {
             columnIndex += 1;
           }
-          const rowspan = Math.max(1, Number.parseInt(cell.getAttribute("rowspan") || "1", 10) || 1);
-          const colspan = Math.max(1, Number.parseInt(cell.getAttribute("colspan") || "1", 10) || 1);
+          const rowspan = Math.min(
+            MAX_TABLE_SPAN,
+            Math.max(1, Number.parseInt(cell.getAttribute("rowspan") || "1", 10) || 1)
+          );
+          const colspan = Math.min(
+            MAX_TABLE_SPAN,
+            Math.max(1, Number.parseInt(cell.getAttribute("colspan") || "1", 10) || 1)
+          );
           const item = {
             cell,
             text: normalizeText(cell.textContent),

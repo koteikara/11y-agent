@@ -606,6 +606,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - **(3) id/class一括削除**: `stripMigrationUnneededAttributes`/`stripMigrationUnneededAttributesFromHtml`を新設し、`renderOutputs()`のfinalHtml計算とGOAL1の`window.goal2Engine.buildFinalHtml()`という「最終HTML構築の最終段階」にのみ適用(候補生成・検出ロジックには一切適用しない)。class属性は無条件削除。id属性は`collectReferencedIds`でページ内アンカー(`href="#foo"`)・ARIA関連付け属性(`aria-describedby`等7種)・`label[for]`から実際に参照されているものを収集し、それ以外だけ削除する設計にした。実装中に、GOAL1の`window.goal2Engine.buildFinalHtml()`がこれまで`rebuildWorkingHtmlFor()`の生の出力(内部管理用の`data-goal2-node-id`属性が残ったまま)を返す既存の抜け漏れに気づき、同じ経路で`stripInternalFromHtml`も通すよう修正して併せて解消した(今回のid/class削除機能をGOAL1側にも正しく適用するために必要な修正であり、範囲内の対応と判断)。
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため影響なし)。既存6サンプル回帰完全一致(11/10/23/29/5/20、id/class削除は検出後にのみ適用されるため件数に影響なし)。Playwrightで、該当箇所セルにHTML抜粋の`<code>`要素が表示されること、「プレビューで確認」ボタン押下で行に`is-selected`が付きプレビュー内に`.goal2-highlight`が現れること、画面上の「KB」表記が「移行ルール」に統一されていること、最終HTMLに`class`/`id`属性が含まれないことを確認。別途、`window.goal2Engine`を直接呼び出す専用テストで、`href="#target"`で参照されるidは最終HTMLに残り、未参照のidと全classは削除されること、GOAL1の`buildFinalHtml()`から`data-goal2-node-id`の漏れが無くなったことを確認した。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #75として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーからGOAL1の一括最適化が特定ページ(「「市民の声」の公表(令和4年1月〜6月分)」、大きな表を含む自治体公開ページ)で数時間ハングしたままになっているとスクリーンショット付きで報告された。他のページは正常に完了・一部は「処理失敗」として正しくエラー処理されている一方、それ以降の全ページが「処理待ち」のまま進んでいなかった。
+  - まずコードを精査し、サーバー側の外部通信(`/api/fetch-html`のページ取得、Gemini API呼び出し、画像取得)は全て`AbortController`ベースのタイムアウト(8〜45秒)で保護済みであることを確認。ユーザーへの追加ヒアリング(数時間経過・止まったページ名・コンソールエラー不明・バックグラウンド化は記憶にない)を踏まえ、ネットワーク起因ではなくブラウザ内の同期処理起因である可能性が高いと判断した。
+  - `Explore`エージェントに`generateCandidates()`とその下流関数全体のO(n²)以上のループ・破局的バックトラッキングの恐れがある正規表現・無限ループの可能性を精査させたところ、`buildExpandedTableGrid()`(テーブルセルのcolspan/rowspan展開処理、`collectTableCandidates`系の共通経路)が、セルのcolspan/rowspan属性値を下限クランプ(`Math.max(1, ...)`)のみで上限クランプ無しにネストループの反復回数として直接使っていることが判明した。Excel等からの貼り付けで生じがちな壊れたcolspan値(例: 数億単位の数値)が1セルでもあると、このループが事実上終わらなくなる。「市民の声」のような大きな表を含むページでまさに起こりうる不具合であり、根本原因として高い確度で特定できた。
+  - `buildExpandedTableGrid()`のrowspan/colspan計算に上限クランプ(`MAX_TABLE_SPAN = 1000`、WHATWG HTML仕様のcolspan上限と同じ値をrowspanにも適用)を追加。下限クランプは維持。
+  - 精査の副産物として、サーバー側`assertFetchUrlAllowed()`内の`dns.promises.lookup()`にタイムアウトが一切設定されておらず、`fetch()`用の`AbortController`の効果も及ばない(DNS解決とfetch本体は別物のため)ことも発見し、`dnsLookupWithTimeout()`(3秒)でラップして併せて修正した。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、`colspan="999999999"`という壊れたセルを含むテーブルを`window.goal2Engine.analyze()`で解析させ、修正前なら極めて長時間かかっていたはずの処理が40msで完了し正しく候補が生成されることを確認した。DNSタイムアウト側は正常ドメイン・ブロック対象ホスト・存在しないドメインで既存の応答が変わらないことを確認(実際のDNSハング再現はサンドボックス環境の制約上未検証)。
+  - ユーザーには、IndexedDBへページ単位で保存する既存の永続化設計により、ハング中のページより前に完了済みの分はブラウザタブの再読み込みで失われないはずである旨を案内した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 
