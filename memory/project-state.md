@@ -591,6 +591,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 「既存ヒューリスティック候補との突き合わせサマリー」は再実行後も元の候補生成時点のヒューリスティック検出セットと比較する簡易版のまま(採用済み候補を除いた差分比較などへの拡張は行っていない、スコープ外として明記)。
   - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、miCheckerモードで解析→ラベルが「元のHTML」→再実行ボタン押下→ラベルが「最終HTML」に切り替わり証跡にも反映されること、KBモードへ切り替えるとパネルが再び非表示に戻り既存挙動へ影響がないことを確認。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #73として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「miChecker相当チェック結果の種別はどの種類がありどの内容を示すような仕様ですか」と質問された。`MICHECKER_ENGINE_TYPE_LABEL`(error→エラー/warning→警告/info→情報/user→要確認)の内容で回答した。続けて「この表示の文言はmiChecker公式と同一ですか」と問われ、`michecker-compare.js`の`TYPE_SEVERITY`マップ(実CSVから読み取った公式表示文言: 問題あり/問題の可能性大/要判断箇所/手動確認)と照らし合わせたところ、独自の直訳的な文言(エラー/警告/情報/要確認)を使っており、公式文言とは異なることが判明した。
+  - 対応関係を確定させるため、スクラッチパッドの`actf-src`クローンでeclipse-actf公式ソースを調査した。`IEvaluationItem.java`で`checkitem.xml`の`type`属性文字列(`SEV_ERROR_STR`="error"等)がビットフラグ`SEV_ERROR`(1)/`SEV_WARNING`(2)/`SEV_USER`(4)/`SEV_INFO`(8)に対応し、`IProblemConst.java`でこれらが`ESSENTIAL`/`WARNING`/`USER_CHECK`/`INFO`という定数(それぞれ`messages_ja.properties`の`ProblemConst_Essential_2`="問題あり"/`ProblemConst_Warning`="問題の可能性大"/`ProblemConst_User_Check_5`="要判断箇所"/`ProblemConst_Info`="手動確認")に対応することを確認。決定打として`ReportMessageDialog.java`の`switch (curItem.getSeverity())`(問題詳細ダイアログのタイトル決定ロジック)を発見し、`SEV_INFO`→`IProblemConst.INFO`(手動確認)、`SEV_USER`→`IProblemConst.USER_CHECK`(要判断箇所)という対応を最終確認した。
+  - **重要な訂正**: 当初「info→要判断箇所、user→手動確認」だろうと推測で回答したが、実際は逆(**info→手動確認、user→要判断箇所**)だった。この訂正は、PR-M3で発見していた「常に発火する手動確認事項(always型)が全て`type=\"info\"`だった」という既知の事実とも整合する(infoが手動確認に対応するなら当然の結果であり、独立した裏付けになった)。
+  - `app.js`の`MICHECKER_ENGINE_TYPE_LABEL`を`{ error: "問題あり", warning: "問題の可能性大", info: "手動確認", user: "要判断箇所" }`に修正。
+  - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20、なお検証中に一度`tables=0`という異常値が出たが、これは`pkill`でサーバーを停止する処理と検証スクリプトの実行を同じコマンドチェーンに入れてしまいレースコンディションが起きた一時的なもので、サーバーを再起動して単独で再実行したところ`tables=23`で正しく一致することを確認済み)。Playwrightで、実際に解析した際の表示種別が「問題あり」「要判断箇所」「手動確認」という公式文言になっていることを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 
