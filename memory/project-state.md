@@ -615,6 +615,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、`colspan="999999999"`という壊れたセルを含むテーブルを`window.goal2Engine.analyze()`で解析させ、修正前なら極めて長時間かかっていたはずの処理が40msで完了し正しく候補が生成されることを確認した。DNSタイムアウト側は正常ドメイン・ブロック対象ホスト・存在しないドメインで既存の応答が変わらないことを確認(実際のDNSハング再現はサンドボックス環境の制約上未検証)。
   - ユーザーには、IndexedDBへページ単位で保存する既存の永続化設計により、ハング中のページより前に完了済みの分はブラウザタブの再読み込みで失われないはずである旨を案内した。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #76として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから、実際の自治体ページ(安城市の避難場所一覧、185行の表を含む)で候補生成結果が「おかしい」と、元HTML全文と生成後HTML全文の両方を提示された。表示された生成後HTMLを精査したところ、3件の重大な不具合を発見した。いずれも「セル結合(colspan/rowspan)の分解・再構成」ロジック(`table.cell-merge-*`、`classifyMergedCellTable`/`buildMergedCellProposal`/`splitMergedRowsIntoTablesHtml`/`isLeadingTitleRowDataTableProfile`まわり)の過剰発火・誤判定が原因だった。
+  - **バグ1(最も深刻)**: `classifyMergedCellTable`は表のどこかに`colspan`/`rowspan`が1つでもあれば無条件に呼ばれる設計だった。「使用できる災害種別」のように複数の真偽値列を1つの見出しでグループ化するだけの正当なヘッダーcolspanを持つ185行のデータ表が、他のどのパターン(見出し/注記/添付ファイル/概要/案内リンク)にも一致せず汎用の`table.cell-merge-layout`に分類され、`canSplitMergedRowsIntoTables`が(データ行に結合が無いため)falseを返してレイアウト専用の`decomposeLayoutTable`にフォールバックした結果、表全体が構造の無い1800個以上の`<p>`タグの羅列に変換されていた。
+  - **バグ2**: `splitMergedRowsIntoTablesHtml`が、`buildExpandedTableGrid`が結合セルを同一参照で複数グリッド枠に埋める実装のせいで、colspanヘッダー(例: `colspan="2"`の「連絡先」)のラベルをそのセルが占める列数ぶん単純に複製していた。結果、施設のサブ名称を表す列にまで誤って「連絡先」という見出しが付いていた。
+  - **バグ3**: `isLeadingTitleRowDataTableProfile`(「先頭行はタイトルバナーで実際のヘッダーは2行目」パターンの検出)が、複数セルの合計colspanが表の列数とたまたま一致するだけの、ごく普通のヘッダー行(colspanで複数列をグループ化しただけ)まで誤って「タイトル行」と判定し、本来のヘッダー行を捨てて次の行(実際には最初のデータ行)をヘッダーとして扱ってしまっていた。
+  - `classifyMergedCellTable`に、結合セルが表の最初の行に限られ、かつ`shouldPreserveAsDataTable`が既にこの表を正当なデータ表と判定している場合は候補を出さないガードを追加(この場合`planTableTreatment`経由の安全な`table.caption`候補が既にカバーするため)。`splitMergedRowsIntoTablesHtml`のヘッダーラベル抽出を、結合セルが占める連続グリッド枠を1単位として検出し2列以上にまたがる場合はラベルを複製しないよう修正。`isLeadingTitleRowDataTableProfile`を単一セルで完結するタイトルバナーの場合のみに限定するよう厳格化(未使用になった`tableRowColspanCount`/`tableCellSpanValue`は削除)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。ユーザー提供の実データ3表をPlaywrightで`window.goal2Engine.analyze()`に通し、いずれも構造を保持したまま正しい候補が生成されることを確認。既存6サンプルの固定回帰基準を procedure-overview 11→10 / images 10 / tables 23→22 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20 に更新。両方の-1は同一理由(冗長で表構造をより壊す`table.cell-merge-*`候補が抑制され、既に並行生成されていた安全な`table.caption`候補のみが残った)による意図した挙動であることを、procedure-overview/tables両サンプルそれぞれの候補一覧を個別確認して裏付けた。検証中、既存の回帰確認スクリプト自体に無関係な1サンプルが偶発的に0件を返す既知のflakiness(本改修と無関係)があることも確認し、疑わしいサンプルは単独再現確認で裏付けた。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

@@ -3388,8 +3388,14 @@
     const bodyRows = profile.rows.slice(2);
     const titleText = leadingTitleRowCaptionText(profile);
     if (!titleText || !bodyRows.length) return false;
-    const titleSpansAllColumns = tableRowColspanCount(titleRow) >= profile.maxCells;
-    if (!(titleRow.length === 1 || (titleSpansAllColumns && titleRow.length < profile.maxCells))) return false;
+    // 「先頭行はタイトルバナーで、実際のヘッダーは2行目」というパターンは、1セルだけで
+    // タイトルが完結している場合(<tr><th colspan="N">タイトル</th></tr>)に限定する。以前は
+    // 複数セルの合計colspanがたまたま列数と一致するケースも許容していたが、これは単に
+    // colspanで複数列をグループ化しただけの、ごく普通のヘッダー行(例: 5列中2列を
+    // 「連絡先」というcolspan="2"の見出しでまとめた表)も誤って「タイトル行」と判定して
+    // しまい、本来のヘッダー行を捨てて次の行(実際にはデータ行)をヘッダーとして扱って
+    // しまう実害が確認されたため、単一セルのタイトル行のみを対象とするよう厳格化した。
+    if (titleRow.length !== 1) return false;
     if (headerRow.length !== profile.maxCells) return false;
     if (!headerRow.every((cell) => cell.tagName === "TH" || isHeaderLikeTableCell(cell))) return false;
     return bodyRows.some((row) => row.some((cell) => isTableDataValueText(cell.textContent || "") || !isHeaderLikeTableCell(cell)));
@@ -3397,14 +3403,6 @@
 
   function leadingTitleRowCaptionText(profile) {
     return normalizeText((profile.rows[0] || []).map((cell) => cell.textContent || "").join(" "));
-  }
-
-  function tableRowColspanCount(row) {
-    return (row || []).reduce((sum, cell) => sum + tableCellSpanValue(cell, "colspan"), 0);
-  }
-
-  function tableCellSpanValue(cell, attrName) {
-    return Number(cell?.getAttribute?.(attrName) || 1) || 1;
   }
 
   function averageTableColumnTextLength(rows, index) {
@@ -4960,7 +4958,29 @@
       output.content.appendChild(heading);
     }
 
-    const headerLabels = (grid[0] || []).map((item) => normalizeText(item?.text || ""));
+    // buildExpandedTableGrid()はcolspanで結合されたヘッダーセルを、そのセルが占める
+    // グリッド列数ぶん同じ参照で埋める。そのため単純にgrid[0]を.map()するとヘッダー文言が
+    // 列数ぶん重複してしまう(例: colspan="2"の「連絡先」が2列とも「連絡先」になり、実際には
+    // 異なる内容の列に誤ったラベルが付く)。同一セル参照が連続する区間(=1つの結合ヘッダーが
+    // 占める範囲)を1つの単位として検出し、その区間が2列以上にまたがる場合は元のテキストを
+    // 繰り返さず空文字にする(呼び出し側で`内容${index+1}`という汎用ラベルにフォールバックする)。
+    const headerLabels = [];
+    {
+      const headerRow = grid[0] || [];
+      let index = 0;
+      while (index < headerRow.length) {
+        const cell = headerRow[index]?.cell;
+        let span = 1;
+        while (index + span < headerRow.length && headerRow[index + span]?.cell === cell) {
+          span += 1;
+        }
+        const label = span > 1 ? "" : normalizeText(headerRow[index]?.text || "");
+        for (let i = 0; i < span; i += 1) {
+          headerLabels.push(label);
+        }
+        index += span;
+      }
+    }
     const groups = [];
     let currentGroup = null;
     grid.slice(1).forEach((row) => {
@@ -8610,6 +8630,22 @@
         reason: "総合評価方式の案件など、複数列の情報が1つのページにまとめられている行は、colspanを解除して各列に同じ案内リンクを繰り返し配置できるか確認します。",
         confidence: "medium",
       };
+    }
+
+    // 見出し・注記・添付ファイル・概要・案内リンクいずれのパターンにも当てはまらず、かつ
+    // 結合セルが表の最初の行(rowIndex 0、ヘッダー行の場合も、行見出しを兼ねる先頭データ行の
+    // 場合もある)に限られていて、既にデータ表として保持すべきと判定されている場合、この表は
+    // 上のplanTableTreatment()が呼ぶshouldPreserveAsDataTable+tableNeedsDataTableSemantics
+    // 経由で「table.caption」候補(buildDataTableSemanticsHtml、キャプション/thead/scope
+    // 属性を追加しつつ表構造は保持する安全な変換)としてカバーされる。table.cell-merge-layout
+    // の分解ロジック(decomposeLayoutTable/splitMergedRowsIntoTablesHtml)は本文セル同士の
+    // 結合(例: 注意書き行がcolspanで挿入されている)を想定しており、複数の関連する列を
+    // グループ化する正当なヘッダー結合(例:「使用できる災害種別」が6個の真偽値列をまとめて
+    // 見出す)や、先頭データ行自体が行見出しを兼ねるrowspanパターンに機械的に適用すると、
+    // 表構造そのものを破壊してしまう(実データで確認済み: 185行の表が構造の無い段落の
+    // 羅列に変換された)。同じ表に対して安全な候補が既に出るため、ここでは候補を出さない。
+    if (preserveAsDataTable && firstMergedCell?.parentElement?.rowIndex === 0) {
+      return null;
     }
 
     return {
