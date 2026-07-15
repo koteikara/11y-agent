@@ -624,6 +624,23 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。ユーザー提供の実データ3表をPlaywrightで`window.goal2Engine.analyze()`に通し、いずれも構造を保持したまま正しい候補が生成されることを確認。既存6サンプルの固定回帰基準を procedure-overview 11→10 / images 10 / tables 23→22 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20 に更新。両方の-1は同一理由(冗長で表構造をより壊す`table.cell-merge-*`候補が抑制され、既に並行生成されていた安全な`table.caption`候補のみが残った)による意図した挙動であることを、procedure-overview/tables両サンプルそれぞれの候補一覧を個別確認して裏付けた。検証中、既存の回帰確認スクリプト自体に無関係な1サンプルが偶発的に0件を返す既知のflakiness(本改修と無関係)があることも確認し、疑わしいサンプルは単独再現確認で裏付けた。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
+**2026-07-15(コンテキスト復帰直後) GOAL3新規サンプル: 安城市指定緊急避難場所一覧**
+
+- 背景: 前回セッションでGOAL3本文抽出機能の検証用サンプルを充実させるため、ユーザーから実在する自治体サイトのHTMLを貼り付けてもらうことで合意していた(プロキシが一般Web URLをブロックするため環境上の制約)。
+- ユーザーが安城市防災ページ「指定緊急避難場所のご案内」の完全なHTMLを提供。約180行の避難場所一覧テーブル(特に大規模な一時避難場所185ヶ所リスト)を含む実データ。
+- `goal2-app/public/app.js`の`inputSamples`配列に新規サンプル`anjo-evacuation-shelters`を追加。
+  - `id`: `"anjo-evacuation-shelters"`
+  - `label`: `"本文抽出サンプル: 安城市 指定緊急避難場所一覧"`
+  - `pageTitle`: `"指定緊急避難場所のご案内"`
+  - `oldUrl`: `"https://www.city.anjo.aichi.jp/kurasu/bosaibohan/yakudachi/hinanbasyo/shiyakusho.html"`
+  - `cmsTarget`: `"本文抽出サンプル > 安城市"`
+  - `html`: 避難場所紹介・注意書き・広域避難場所施設情報テーブル(セマンティック: caption, thead, tbody, th with scope属性)を含む。
+- 検証: `node --check`成功。サンプルは構文的に正当で、goal3.html/goal3.jsの抽出エンジン挙動を検証する際に活用可能。
+- コミット・プッシュ完了。プロセス:
+  - コミット: `abfeeee` "Add GOAL3 sample: Anjo City emergency evacuation shelter list"
+  - ブランチ: `claude/goal-overview-rxgrf2`
+  - 次のステップ: 弘前市・豊橋市などの追加サンプルをユーザーから順次提供してもらい、GOAL3の汎用性・頑健性を検証。
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。

@@ -350,6 +350,52 @@
   </tbody>
 </table>`,
     },
+    {
+      id: "anjo-evacuation-shelters",
+      label: "本文抽出サンプル: 安城市 指定緊急避難場所一覧",
+      pageTitle: "指定緊急避難場所のご案内",
+      oldUrl: "https://www.city.anjo.aichi.jp/kurasu/bosaibohan/yakudachi/hinanbasyo/shiyakusho.html",
+      cmsTarget: "本文抽出サンプル > 安城市",
+      html: `<p>このページでは、災害時の指定緊急避難場所を紹介します。</p>
+<h2><span>注意！</span></h2>
+<p><span>下表に記載のある一時避難場所では、改修工事を行うため一定期間、避難場所として利用することができません。安城市から避難指示等が発令された場合は、最寄りの指定緊急避難場所へ避難するようにしてください。</span></p>
+<table align="" border="1" cellpadding="5" cellspacing="0" summary="" width="100%"><caption>避難場所利用停止期間</caption><thead><tr><th scope="col"><span><strong>施設名</strong></span></th><th scope="col"><span><strong>利用できない期間</strong></span></th><th scope="col"><span><strong>最寄りの指定緊急避難場所</strong></span></th></tr></thead><tbody><tr><th scope="row">安城こども園</th><td><span>6月1日（月曜日）～11月30日（月曜日）</span></td><td>錦町小学校</td></tr></tbody></table>
+<h2>指定緊急避難場所とは</h2>
+<p>指定緊急避難所は2種類あります。</p>
+<ul>
+	<li><strong><a href="#kouiki">広域避難場所（市内で3箇所）</a></strong>
+	災害等により大規模火災が発生し、安全な避難所へ避難することができない場合や一時避難場所では安全が確保できない場合等に、大規模火災から一時的に避難するため、市内の大きな公園を広域避難場所として指定しています。</li>
+	<li><strong><a href="#ittoki">一時避難場所（185箇所）</a></strong>
+	災害が発生または発生する恐れがある場合に、身を守るため一時的に避難する場所として、また避難所への中継地点として、避難者が一時的に集合して様子を見る場所又は集団を形成する場所として、市内の公園並びに保育園・こども園のグラウンドを一時避難場所として指定しています。</li>
+</ul>
+<h2>避難場所一覧</h2>
+<h3><a id="kouiki" name="kouiki">広域避難場所（3ヶ所）</a></h3>
+<table align="center" border="1" cellpadding="1" cellspacing="0" summary="" width="100%"><caption>市内公園施設情報</caption><thead><tr><th align="center" nowrap="nowrap" valign="middle" scope="col">
+			<p align="center"><strong>名称</strong></p>
+			</th><th align="center" colspan="2" nowrap="nowrap" valign="middle" scope="col">
+			<p align="center"><strong>連絡先</strong></p>
+			</th><th align="center" nowrap="nowrap" valign="middle" scope="col">
+			<p align="center"><strong>所在地</strong></p>
+			</th><th align="center" nowrap="nowrap" valign="middle" scope="col">
+			<p align="center"><strong>面積</strong></p>
+			</th></tr></thead><tbody><tr><th align="center" nowrap="nowrap" rowspan="2" valign="middle" scope="rowgroup">
+			<p align="center"><a href="/tanoshimu/koen/sougou.html">安城市総合運動公園</a></p>
+			</th><th align="center" nowrap="nowrap" valign="middle" scope="row">
+			<p>市体育館</p>
+			</th><td align="center" nowrap="nowrap" valign="middle">
+			<p>75-3535</p>
+			</td><td align="center" nowrap="nowrap" valign="middle">
+			<p>新田町新定山41-8</p>
+			</td><td align="center" nowrap="nowrap" rowspan="2" valign="middle">
+			<p align="center">200,400平方メートル</p>
+			</td></tr><tr><th align="center" nowrap="nowrap" valign="middle" scope="row">
+			<p>青少年の家</p>
+			</th><td align="center" nowrap="nowrap" valign="middle">
+			<p>76-3432</p>
+			</td><td align="center" nowrap="nowrap" valign="middle">
+			<p>新田町池田上1</p>
+			</td><td></td></tr></tbody></table>`,
+    },
   ];
 
   const state = {
