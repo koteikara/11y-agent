@@ -168,6 +168,24 @@ function isBlockedHostLiteral(hostname) {
   return !host || host === "localhost" || host.endsWith(".localhost") || host === "metadata.google.internal";
 }
 
+const DNS_LOOKUP_TIMEOUT_MS = 3000;
+
+// dns.promises.lookup() has no built-in timeout and does not accept an AbortSignal
+// (unlike fetch()), so a slow/unresponsive DNS server for one particular hostname can
+// hang this call indefinitely. That in turn hangs assertFetchUrlAllowed() and everything
+// that awaits it — including fetchWithSafeRedirects(), whose own AbortController-based
+// timeout only covers the fetch() call itself, not this DNS step. Racing against a plain
+// timer bounds the wait from our side even though the underlying OS-level lookup keeps
+// running in the background and its result is simply discarded.
+function dnsLookupWithTimeout(host, options) {
+  return Promise.race([
+    dns.promises.lookup(host, options),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("DNS lookup timed out")), DNS_LOOKUP_TIMEOUT_MS);
+    }),
+  ]);
+}
+
 async function assertFetchUrlAllowed(url) {
   if (!["http:", "https:"].includes(url.protocol) || isBlockedHostLiteral(url.hostname)) {
     const error = new Error("URL is not allowed");
@@ -185,7 +203,7 @@ async function assertFetchUrlAllowed(url) {
   }
   let addresses;
   try {
-    addresses = await dns.promises.lookup(host, { all: true, verbatim: true });
+    addresses = await dnsLookupWithTimeout(host, { all: true, verbatim: true });
   } catch {
     const error = new Error("Host could not be resolved");
     error.statusCode = 400;
