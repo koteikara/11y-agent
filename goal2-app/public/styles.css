@@ -2522,6 +2522,11 @@ label {
   gap: 4px;
 }
 
+.michecker-engine-panel #micheckerEngineRecheckButton {
+  width: fit-content;
+  justify-self: start;
+}
+
 .michecker-engine-panel .michecker-checklist-fold {
   margin-top: 12px;
   border: 1px solid var(--line);
