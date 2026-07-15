@@ -680,17 +680,38 @@ select {
 .rule-scope-picker {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-right: auto;
   font-size: var(--text-small);
   color: var(--muted);
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.rule-scope-picker legend {
+  padding: 0;
+  float: none;
+  width: auto;
+}
+
+.rule-scope-options {
+  display: flex;
+  gap: 16px;
+}
+
+.rule-scope-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: var(--text-small);
   white-space: nowrap;
 }
 
-.rule-scope-picker select {
-  min-height: 36px;
-  padding: 4px 8px;
-  font-size: var(--text-small);
+.rule-scope-options input[type="radio"] {
+  cursor: pointer;
+  accent-color: var(--primary);
 }
 
 .goal3-loading {
