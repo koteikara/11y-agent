@@ -1151,32 +1151,6 @@
         })
       );
     });
-
-    const deprecatedTableAttrs = ["align", "border", "cellpadding", "cellspacing", "width", "height"];
-    fragment.content.querySelectorAll("table").forEach((table) => {
-      const hasDeprecated = deprecatedTableAttrs.some(attr => table.hasAttribute(attr));
-      if (!hasDeprecated) {
-        return;
-      }
-      const clone = table.cloneNode(true);
-      deprecatedTableAttrs.forEach(attr => clone.removeAttribute(attr));
-      if (clone.outerHTML === table.outerHTML) {
-        return;
-      }
-      const removedAttrs = deprecatedTableAttrs.filter(attr => table.hasAttribute(attr)).join(", ");
-      candidates.push(
-        makeCandidate({
-          ruleId: "html-structure.deprecated-elements",
-          element: table,
-          message: `table要素に非推奨な属性が使われています（${removedAttrs}）。`,
-          reason: `${removedAttrs}属性はHTML5で非推奨です。表の書式はCSSで指定してください。`,
-          afterHtml: clone.outerHTML,
-          patch: { type: "set-attribute", name: "data-removed-attrs", value: removedAttrs },
-          confidence: "high",
-          requiresHumanReview: false,
-        })
-      );
-    });
   }
 
   // miChecker C_51.0/C_51.4: frame要素のtitle欠落・空白。
