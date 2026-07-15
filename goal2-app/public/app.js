@@ -6008,11 +6008,15 @@
     renderMicheckerEnginePanel();
   }
 
+  // miChecker公式(ReportMessageDialog.java)の表示文言と一致させたマッピング。
+  // checkitem.xmlのtype属性(error/warning/info/user)は、IProblemConst定数
+  // ESSENTIAL/WARNING/USER_CHECK/INFOとそれぞれ対応しており、infoが「手動確認」、
+  // userが「要判断箇所」という一見直感に反する対応関係になっている(逆ではない)。
   const MICHECKER_ENGINE_TYPE_LABEL = {
-    error: "エラー",
-    warning: "警告",
-    info: "情報",
-    user: "要確認",
+    error: "問題あり",
+    warning: "問題の可能性大",
+    info: "手動確認",
+    user: "要判断箇所",
   };
 
   const MICHECKER_ENGINE_BASIS_LABEL = {

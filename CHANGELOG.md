@@ -19,6 +19,14 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker相当チェック結果の「種別」表示を公式表示文言に修正
+
+- 背景・目的: 「miChecker相当チェック結果」表の「種別」列の表示文言(エラー/警告/情報/要確認)が、実機miChecker公式の表示文言(問題あり/問題の可能性大/要判断箇所/手動確認、`michecker-compare.js`が実CSVから読み取っている値と同一)と一致しているかユーザーから質問された。調査したところ、独自の直訳的な文言を使っており、公式文言とは異なっていたことが判明。さらに、当初「`info`→要判断箇所、`user`→手動確認だろう」と推測で回答したが、実際にeclipse-actf公式ソース(`ReportMessageDialog.java`の`switch (curItem.getSeverity())`、および`IProblemConst.java`の定数定義)を確認したところ、**`info`↔手動確認、`user`↔要判断箇所という逆の対応関係**であることが判明した(`IEvaluationItem.SEV_INFO`は`IProblemConst.INFO`="手動確認"に、`SEV_USER`は`IProblemConst.USER_CHECK`="要判断箇所"に対応)。この発見は、PR-M3で「常に発火する手動確認事項(always型)」が全て`type="info"`だったという既知の事実とも整合する(infoが手動確認に対応するなら当然の結果)。
+- 主な変更内容:
+  - `app.js`の`MICHECKER_ENGINE_TYPE_LABEL`を、`{ error: "問題あり", warning: "問題の可能性大", info: "手動確認", user: "要判断箇所" }`に修正(修正前は`{ error: "エラー", warning: "警告", info: "情報", user: "要確認" }`という独自訳語だった)。
+- 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、miCheckerモードで解析した際の表示種別が実際に「問題あり」「要判断箇所」「手動確認」という公式文言になっていることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-14: miChecker相当チェックを最終HTMLに対して手動再実行できるようにする
 
 - 背景・目的: PR-M4のレビュー時、「miChecker相当チェック結果」パネルが候補生成時点の元HTML(`state.sourceHtml`)のみを検査しており、候補を採用・編集した後の最終HTMLに対しては検査できない(修正で指摘が解消されたか確認できない)ことをユーザーから指摘された。ボタンによる手動再実行方式を採用した(候補一覧操作のたびに自動再実行してコストをかけるより、いつの時点の結果かを明示できる方が良いという判断)。
