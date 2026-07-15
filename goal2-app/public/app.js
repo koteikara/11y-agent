@@ -225,6 +225,131 @@
 <p>午後1時～午後8時</p>
 <p>【内容】</p>`,
     },
+    {
+      id: "anjo-bidding-flat",
+      label: "表: セマンティック構造・結合セル削除（安城市）",
+      pageTitle: "競争入札の結果公表",
+      oldUrl: "https://www.city.anjo.aichi.jp/zigyo/nyusatsu/kekka.html",
+      cmsTarget: "本体サイト > 業務 > 入札結果",
+      html: `<h1>競争入札の結果公表</h1>
+<p>安城市が行った競争入札の結果を公表します。本市は、原則として毎週金曜日に入札を行っています。</p>
+
+<h2>電子入札の入札結果（あいち電子調達共同システム）</h2>
+<ul>
+  <li><a href="https://www.chotatsu.e-aichi.jp/portal/index.jsp">入札結果（建設工事、設計・測量・建設コンサルタント等業務）（外部リンク）</a></li>
+  <li><a href="http://www.buppin.e-aichi.jp/public/pubTop.do?methodName=initDisplayForPub">入札結果（その他委託）（外部リンク）</a></li>
+  <li><a href="/zigyo/nyusatsu/keiyaku/2023310534kekka.html">入札結果（第310534号）</a>（令和5年11月17日掲載）</li>
+  <li><a href="/zigyo/nyusatsu/keiyaku/2024300596kekka.html">入札結果（第300596号）</a>（令和6年4月16日掲載）</li>
+</ul>
+
+<h2>平成27年度までの電子入札の入札結果（工事・委託）</h2>
+<p>安城市が行った旧電子入札システムでの入札結果</p>
+
+<h3>工事</h3>
+<ul>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H27_KJ_kekka.html">平成27年度入札結果（工事）</a></li>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H26_KJ_kekka.html">平成26年度入札結果（工事）</a></li>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H25_KJ_kekka.html">平成25年度入札結果（工事）</a></li>
+  <li><a href="/zigyo/nyusatsu/keiyaku/yoteikekka/sougouhyouka.html">入札結果（総合評価）</a></li>
+</ul>
+
+<h3>委託</h3>
+<ul>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H27_IT_kekka.html">平成27年度入札結果（委託）</a></li>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H26_IT_kekka.html">平成26年度入札結果（委託）</a></li>
+  <li><a href="http://www.city.anjo.aichi.jp/zigyo/nyusatsu/keiyaku/H25_IT_kekka.html">平成25年度入札結果（委託）</a></li>
+</ul>
+
+<h2>郵便入札及び紙入札案件（工事・委託）</h2>
+
+<h3>令和８年度</h3>
+<table border="1" cellpadding="5" cellspacing="0" width="100%">
+  <caption>令和８年度入札結果</caption>
+  <thead>
+    <tr><th>月</th><th>日1</th><th>日2</th><th>日3</th><th>日4</th><th>日5</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>4月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20260410nyusatsukekkaoyobikeika.pdf">10日（PDF：76KB）</a></td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20260416sougouhyoukanyusatsukekkaoyobikeika.pdf">17日（PDF：55KB）（総合評価）</a></td><td></td><td></td><td></td></tr>
+    <tr><td>5月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>6月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>7月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>8月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>9月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>10月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>11月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>12月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>1月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>2月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>3月</td><td></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>令和７年度</h3>
+<table border="1" cellpadding="5" cellspacing="0" width="100%">
+  <caption>令和７年度入札結果</caption>
+  <thead>
+    <tr><th>月</th><th>日1</th><th>日2</th><th>日3</th><th>日4</th><th>日5</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>4月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>5月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/2025340001.pdf">30日（PDF：70KB）（土地改良区）</a></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>6月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/2025350001.pdf">6日（PDF：61KB）（土地開発公社）</a></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>7月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>8月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>9月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>10月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>11月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>12月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>1月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>2月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>3月</td><td></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>令和６年度</h3>
+<table border="1" cellpadding="5" cellspacing="0" width="100%">
+  <caption>令和６年度入札結果</caption>
+  <thead>
+    <tr><th>月</th><th>日1</th><th>日2</th><th>日3</th><th>日4</th><th>日5</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>4月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20240412nyusatsukekka2.pdf">12日（PDF：562KB）</a></td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20240418sogohyokakekka.pdf">18日（PDF：242KB）(総合評価)</a></td><td></td><td></td><td></td></tr>
+    <tr><td>5月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>6月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>7月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>8月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>9月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>10月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/2024140005.pdf">18日（PDF：68KB）(土地改良区)</a></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>11月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>12月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>1月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>2月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>3月</td><td></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>令和５年度</h3>
+<table border="1" cellpadding="5" cellspacing="0" width="100%">
+  <caption>令和５年度入札結果</caption>
+  <thead>
+    <tr><th>月</th><th>日1</th><th>日2</th><th>日3</th><th>日4</th><th>日5</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>4月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/2023301001.pdf">7日（PDF：36KB）</a></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>5月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>6月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>7月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>8月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>9月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/2023307226.pdf">15日（PDF：30KB）</a></td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20230922kekkakouhyou.pdf">22日（PDF：30KB）</a></td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20230929kekkakouhyou.pdf">29日（PDF：56KB）</a></td><td></td><td></td></tr>
+    <tr><td>10月</td><td><a href="/zigyo/nyusatsu/keiyaku/documents/20231006kekkakouhyou.pdf">6日（PDF：84KB）</a></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>11月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>12月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>1月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>2月</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>3月</td><td></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>`,
+    },
   ];
 
   const state = {
@@ -290,7 +415,7 @@
     loadSampleButton: document.getElementById("loadSampleButton"),
     analyzeButton: document.getElementById("analyzeButton"),
     resetButton: document.getElementById("resetButton"),
-    ruleScopeSelect: document.getElementById("ruleScopeSelect"),
+    ruleScopeRadios: document.querySelectorAll('input[name="ruleScopeSelect"]'),
     candidateSummary: document.getElementById("candidateSummary"),
     completionPill: document.getElementById("completionPill"),
     analyzeOverlay: document.getElementById("analyzeOverlay"),
@@ -373,7 +498,7 @@
     els.loadSampleButton.addEventListener("click", () => loadSample(els.sampleSelect.value));
     els.analyzeButton.addEventListener("click", analyze);
     els.resetButton.addEventListener("click", reset);
-    els.ruleScopeSelect.addEventListener("change", handleRuleScopeChange);
+    els.ruleScopeRadios.forEach(radio => radio.addEventListener("change", handleRuleScopeChange));
     els.micheckerEngineRecheckButton?.addEventListener("click", recheckMicheckerEngineAgainstFinalHtml);
     els.micheckerEngineTableBody?.addEventListener("click", handleMicheckerEngineTableClick);
     els.bulkSelectAll.addEventListener("change", toggleBulkSelection);
@@ -751,7 +876,8 @@
   }
 
   function handleRuleScopeChange() {
-    state.ruleScopeMode = els.ruleScopeSelect.value;
+    const checkedRadio = Array.from(els.ruleScopeRadios).find(radio => radio.checked);
+    state.ruleScopeMode = checkedRadio?.value || "kb";
     state.selectedMicheckerProblemIndex = null;
     if (state.candidates.length || state.notices.length) {
       els.candidateSummary.textContent = "修正基準を変更しました。「候補生成」を押すと反映されます（既存の判断はリセットされます）。";

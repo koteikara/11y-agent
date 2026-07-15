@@ -75,13 +75,19 @@
           <div class="input-primary-actions" aria-label="入力HTMLの操作">
             <button type="button" id="analyzeButton" class="primary">候補生成</button>
             <button type="button" id="resetButton">リセット</button>
-            <label class="rule-scope-picker" for="ruleScopeSelect">
-              修正基準
-              <select id="ruleScopeSelect">
-                <option value="kb">移行ルール全体（miChecker含む）</option>
-                <option value="michecker">miChecker指摘対応のみ</option>
-              </select>
-            </label>
+            <fieldset id="ruleScopeSelect" class="rule-scope-picker">
+              <legend>修正基準</legend>
+              <div class="rule-scope-options">
+                <label>
+                  <input type="radio" name="ruleScopeSelect" value="kb" checked>
+                  移行ルール全体（miChecker含む）
+                </label>
+                <label>
+                  <input type="radio" name="ruleScopeSelect" value="michecker">
+                  miChecker指摘対応のみ
+                </label>
+              </div>
+            </fieldset>
           </div>
       </section>
 
