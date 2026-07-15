@@ -876,7 +876,8 @@ label {
   padding: 22px;
 }
 
-.preview-pane {
+.preview-pane,
+.detail-pane {
   background: var(--surface-2);
 }
 
