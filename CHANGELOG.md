@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-14: miChecker相当チェックを最終HTMLに対して手動再実行できるようにする
+
+- 背景・目的: PR-M4のレビュー時、「miChecker相当チェック結果」パネルが候補生成時点の元HTML(`state.sourceHtml`)のみを検査しており、候補を採用・編集した後の最終HTMLに対しては検査できない(修正で指摘が解消されたか確認できない)ことをユーザーから指摘された。ボタンによる手動再実行方式を採用した(候補一覧操作のたびに自動再実行してコストをかけるより、いつの時点の結果かを明示できる方が良いという判断)。
+- 主な変更内容:
+  - `index.html`のmiCheckerエンジンパネルに「最終HTMLで再実行」ボタン(`#micheckerEngineRecheckButton`)と、現在表示中の結果が元HTML/最終HTMLのどちらに対するものかを示すラベル(`#micheckerEngineResultBasis`)を追加。
+  - `state.micheckerEngineResultBasis`(`"source"` / `"final"` / `null`)を新設。`analyze()`実行時は常に`"source"`にリセットされる(候補生成をやり直すと元HTMLの結果に戻る)。
+  - `recheckMicheckerEngineAgainstFinalHtml()`(app.js)を新設。ボタン押下時に`stripInternalFromHtml(state.workingHtml || state.sourceHtml)`(出力ドロワーの「最終HTML」と同じ組み立て方)を`runMicheckerEngine()`へ渡して再実行し、`state.micheckerEngineResult`を上書きしてパネルを再描画する。この結果は証跡JSON(`buildEvidenceFor`)の`michecker_engine`フィールドにもそのまま反映される(押した時点でパネルに表示されている内容が証跡としてもエクスポートされる、という単純な一貫性を優先した)。
+  - 「既存ヒューリスティック候補との突き合わせサマリー」は、再実行後も引き続き元の候補生成時点のヒューリスティック検出セット(`state.candidates`/`state.notices`)と比較する(採用済み候補を除外した差分比較などは行っていない、簡易な参考値のまま)。
+  - KB全ルールモードではボタンごとパネルが非表示のままで、既存挙動に影響はない。
+- 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、miCheckerモードで解析→ラベルが「元のHTML」表示→再実行ボタン押下→ラベルが「最終HTML」表示に切り替わり証跡にも反映されること、KBモードへ切り替えるとパネルが再び非表示になり操作に影響がないことを確認。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/styles.css`
+
 ## 2026-07-14: miChecker公式判定エンジン移植 PR-M4: GOAL2/GOAL1統合+UI
 
 - 背景・目的: `MICHECKER_ENGINE_PORT_INSTRUCTIONS.md` §4.3/§5 PR-M4を実装。PR-M0〜M3で移植した`michecker-engine.js`(108件の判定ロジック)を、実際にGOAL2画面・GOAL1バッチのパイプラインへ接続した。エンジン自体のロジックは無変更(呼び出し側の配線のみ)。

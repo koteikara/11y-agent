@@ -583,6 +583,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため当然の結果)。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwright E2Eで、(1) KB全ルールモードでは解析前後ともパネル非表示・証跡に`michecker_engine`フィールドなしを確認、(2) miCheckerモードに切り替えて解析すると、パネルが表示され表とチェックリストが描画され、証跡に`michecker_engine`が実データ付きで含まれることを確認、(3) 再度KBモードへ切り替えると非表示・証跡フィールドも消えることを確認(モード切替の可逆性を確認)、(4) GOAL1側は`window.goal2Engine.analyze()`をブラウザ内で直接呼び出し、KBモードでは`micheckerEngineResult: null`、miCheckerモードでは実データが返り証跡へ正しく反映されること、ページ一覧のヘッダーが新規列を含む10列になることを確認。
   - これでPR-M0〜M4の全てが完了し、miChecker公式判定エンジン移植プロジェクトの実装フェーズが完了した。残るPR-M5(実機ゴールデン検証)はユーザー自身のWindows環境での`htmlchecker.exe`実行と証跡CSV提供が必要なため、別途ユーザーへ依頼する。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #72として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーがCloud Runへの本番デプロイを実施し、PR-M4の新機能(miCheckerモードでのパネル表示、GOAL1のエンジン検出列)が正しく反映されていることを確認。そのうえで「修正後のHTMLにmiChecker相当チェックを当てることは可能か」という質問を受けた。調査の結果、`state.micheckerEngineResult`は`analyze()`実行時(候補生成時点の元HTML)にのみ計算され、候補を採用・編集した後の最終HTML(`state.workingHtml`)に対しては再実行されない設計だったことを確認し、その旨を回答した。
+  - ユーザーに実装方式を選んでもらったところ「ボタンで手動再実行」を選択(候補一覧操作のたびに自動再実行するコストを避け、いつの時点の結果かを明示する方を優先)。
+  - `index.html`のmiCheckerエンジンパネルに「最終HTMLで再実行」ボタン(`#micheckerEngineRecheckButton`)と結果の基準を示すラベル(`#micheckerEngineResultBasis`、「元のHTML」/「最終HTML」)を追加。`state.micheckerEngineResultBasis`(`"source"`/`"final"`/`null`)を新設し、`analyze()`実行時は常に`"source"`にリセットされる。
+  - `recheckMicheckerEngineAgainstFinalHtml()`(app.js)を新設。出力ドロワーの「最終HTML」と同じ組み立て方(`stripInternalFromHtml(state.workingHtml || state.sourceHtml)`)でHTMLを作り、`runMicheckerEngine()`で再実行して`state.micheckerEngineResult`を上書き、パネルと出力(証跡JSON含む)を再描画する。証跡はボタン押下後に表示されている内容がそのままエクスポートされる設計にした(押した時点の結果=証跡、という単純な一貫性を優先)。
+  - 「既存ヒューリスティック候補との突き合わせサマリー」は再実行後も元の候補生成時点のヒューリスティック検出セットと比較する簡易版のまま(採用済み候補を除いた差分比較などへの拡張は行っていない、スコープ外として明記)。
+  - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、miCheckerモードで解析→ラベルが「元のHTML」→再実行ボタン押下→ラベルが「最終HTML」に切り替わり証跡にも反映されること、KBモードへ切り替えるとパネルが再び非表示に戻り既存挙動へ影響がないことを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

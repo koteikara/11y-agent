@@ -250,6 +250,9 @@
     micheckerCheckitems: [],
     ruleByCheckId: new Map(),
     micheckerEngineResult: null,
+    // "source"(候補生成時点の入力HTML) / "final"(最終HTMLで手動再実行した結果) のどちらを
+    // micheckerEngineResultが表しているかを、パネル上のラベルとボタン操作で明示するためのフラグ。
+    micheckerEngineResultBasis: null,
   };
 
   // GOAL1 batch mode runs the analysis pipeline without the goal2 screen, so the
@@ -327,6 +330,8 @@
     copyEvidenceButton: document.getElementById("copyEvidenceButton"),
     downloadCsvButton: document.getElementById("downloadCsvButton"),
     micheckerEnginePanel: document.getElementById("micheckerEnginePanel"),
+    micheckerEngineResultBasis: document.getElementById("micheckerEngineResultBasis"),
+    micheckerEngineRecheckButton: document.getElementById("micheckerEngineRecheckButton"),
     micheckerEngineSummary: document.getElementById("micheckerEngineSummary"),
     micheckerEngineTableBody: document.getElementById("micheckerEngineTableBody"),
     micheckerEngineEmptyNote: document.getElementById("micheckerEngineEmptyNote"),
@@ -364,6 +369,7 @@
     els.analyzeButton.addEventListener("click", analyze);
     els.resetButton.addEventListener("click", reset);
     els.ruleScopeSelect.addEventListener("change", handleRuleScopeChange);
+    els.micheckerEngineRecheckButton?.addEventListener("click", recheckMicheckerEngineAgainstFinalHtml);
     els.bulkSelectAll.addEventListener("change", toggleBulkSelection);
     els.bulkAcceptButton.addEventListener("click", bulkAcceptSelected);
     els.acceptButton.addEventListener("click", () => decide("accepted"));
@@ -693,6 +699,7 @@
       state.candidates = candidates;
       state.notices = notices;
       state.micheckerEngineResult = micheckerEngineResult;
+      state.micheckerEngineResultBasis = micheckerEngineResult ? "source" : null;
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
       if (state.pendingAutoAcceptSafe) {
@@ -707,6 +714,7 @@
       state.candidates = [];
       state.notices = [];
       state.micheckerEngineResult = null;
+      state.micheckerEngineResultBasis = null;
       state.selectedCandidateId = null;
       clearBulkSelection();
       state.workingHtml = state.sourceHtml || els.htmlInput.value.trim();
@@ -6007,11 +6015,19 @@
     user: "要確認",
   };
 
+  const MICHECKER_ENGINE_BASIS_LABEL = {
+    source: "元のHTML(候補生成時点)に対する結果です。",
+    final: "最終HTML(現在の採用・編集状況を反映したもの)に対する結果です。",
+  };
+
   // 計画書§4.3: 「miChecker指摘対応のみ」モードでの解析結果のみ表示し、既存候補一覧とは
   // 統合・重複排除しない独立表示。KB全ルールモードでは常に非表示(既定モードの挙動を維持)。
   function renderMicheckerEnginePanel() {
     if (!els.micheckerEnginePanel) return;
     const result = state.micheckerEngineResult;
+    if (els.micheckerEngineRecheckButton) {
+      els.micheckerEngineRecheckButton.disabled = state.ruleScopeMode !== "michecker" || !result;
+    }
     if (state.ruleScopeMode !== "michecker" || !result) {
       els.micheckerEnginePanel.hidden = true;
       els.micheckerEngineTableBody.innerHTML = "";
@@ -6019,6 +6035,10 @@
       return;
     }
     els.micheckerEnginePanel.hidden = false;
+    if (els.micheckerEngineResultBasis) {
+      els.micheckerEngineResultBasis.textContent =
+        MICHECKER_ENGINE_BASIS_LABEL[state.micheckerEngineResultBasis] || "";
+    }
 
     const problems = result.problems || [];
     const checklist = result.checklist || [];
@@ -6073,6 +6093,21 @@
       if (!engineCheckIds.has(id)) heuristicOnly += 1;
     });
     return `既存ヒューリスティック候補との突き合わせ(チェックID単位、参考値): 両方で検出 ${both}件 / エンジンのみ ${engineOnly}件 / ヒューリスティックのみ ${heuristicOnly}件`;
+  }
+
+  // 「最終HTMLで再実行」ボタンのハンドラ。候補生成時点の入力HTMLではなく、採用/編集済みの
+  // 最終HTMLに対してmiChecker相当エンジンを手動で再実行する(自動再実行はしない — 候補の
+  // 採用状況が変わるたびに走らせるコストを避け、いつの時点の結果かをボタン操作とラベルで
+  // 明確にするという運用判断)。証跡出力(buildEvidence)もこの結果を反映するため、
+  // 再実行後に出力欄も再描画する。
+  function recheckMicheckerEngineAgainstFinalHtml() {
+    if (state.ruleScopeMode !== "michecker") return;
+    const finalHtml = stripInternalFromHtml(state.workingHtml || state.sourceHtml);
+    const result = runMicheckerEngine(finalHtml);
+    state.micheckerEngineResult = result;
+    state.micheckerEngineResultBasis = result ? "final" : null;
+    renderMicheckerEnginePanel();
+    renderOutputs();
   }
 
   function renderPageAgent() {
