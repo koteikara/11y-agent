@@ -12,7 +12,7 @@
         <p class="eyebrow">候補レビュー</p>
         <h1 id="pageHeading" tabindex="-1">アクセシビリティ候補レビュー</h1>
       </div>
-      <div class="header-status" id="ruleStatus">KB読み込み中</div>
+      <div class="header-status" id="ruleStatus">移行ルール読み込み中</div>
       <nav class="app-nav" aria-label="画面切り替え">
         <a class="app-nav-link" href="/goal1.html">一括最適化</a>
         <a class="app-nav-link" href="/" aria-current="page">候補レビュー</a>
@@ -78,7 +78,7 @@
             <label class="rule-scope-picker" for="ruleScopeSelect">
               修正基準
               <select id="ruleScopeSelect">
-                <option value="kb">KB全ルール（miChecker含む）</option>
+                <option value="kb">移行ルール全体（miChecker含む）</option>
                 <option value="michecker">miChecker指摘対応のみ</option>
               </select>
             </label>
@@ -175,7 +175,7 @@
                 </label>
                 <label>
                   判断理由
-                  <input id="decisionReason" type="text" placeholder="例: KBルールに沿って採用" />
+                  <input id="decisionReason" type="text" placeholder="例: 移行ルールに沿って採用" />
                 </label>
                 <div class="detail-info-grid">
                   <div class="detail-info-card">
@@ -216,7 +216,8 @@
                 <th scope="col">チェックID</th>
                 <th scope="col">該当箇所</th>
                 <th scope="col">公式メッセージ</th>
-                <th scope="col">対応KBルール</th>
+                <th scope="col">対応する移行ルール</th>
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody id="micheckerEngineTableBody"></tbody>

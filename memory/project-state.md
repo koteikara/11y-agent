@@ -598,6 +598,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `app.js`の`MICHECKER_ENGINE_TYPE_LABEL`を`{ error: "問題あり", warning: "問題の可能性大", info: "手動確認", user: "要判断箇所" }`に修正。
   - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20、なお検証中に一度`tables=0`という異常値が出たが、これは`pkill`でサーバーを停止する処理と検証スクリプトの実行を同じコマンドチェーンに入れてしまいレースコンディションが起きた一時的なもので、サーバーを再起動して単独で再実行したところ`tables=23`で正しく一致することを確認済み)。Playwrightで、実際に解析した際の表示種別が「問題あり」「要判断箇所」「手動確認」という公式文言になっていることを確認。
   - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #74として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから3件の改善要望を一度に受けた: (1)「miChecker相当チェック結果」の該当箇所がセレクタ文字列のままでは作業者に分からないのでビジュアル化、(2)「KB」という表記が開発者目線すぎるので「移行ルール」に置き換え、(3)元のHTMLのid/class属性は移行に不要なので候補生成時に一括削除。
+  - (1)(3)にはリスクがあるため、実装前に`AskUserQuestion`で方式を確認した。(1)は「プレビューでのハイライト+表のセレクタ列自体をHTML抜粋表示に差し替え」の両方を採用。(2)は画面上の表示文言全体を対象とし、内部の変数名・APIエンドポイント名は変更しないことを確認。(3)は2つのリスク(`table.className`をレイアウト表判定の信号に使う既存ヒューリスティックが候補生成前の削除で壊れる、`id`がページ内アンカーのリンク先として参照されている場合に先に消すとリンクが壊れる)を提示し、「最終HTMLの構築段階でのみ削除、参照されているidは残す」方針で合意した。
+  - **(1) ビジュアル化**: `buildMicheckerLocationCell`/`truncateHtmlSnippet`を新設し、「該当箇所」セルをCSSセレクタ文字列から実際の要素のHTML抜粋(短縮・エスケープ済み)表示に変更。表に「操作」列を追加し「プレビューで確認」ボタンを設置、押すとプレビューペインで該当要素をハイライト・スクロールする(`highlightMicheckerProblemInFragment`、既存候補選択時と同じ`.goal2-highlight`クラス・スクロール機構`scrollPreviewToSelectedCandidate`を共用するため`hasActivePreviewHighlightTarget`/`currentPreviewHighlightId`という汎用ヘルパーへリファクタリングした)。miChecker側のセレクタは`DOMParser`が補う`html > body > ...`から始まるのに対し、プレビュー側の`<template>`フラグメントにはhtml/body要素自体が無いため一致しない問題があり、`stripMicheckerSelectorPrefix`でプレフィックスを除去してから照合するようにした。
+  - **(2) KB→移行ルール**: `grep`で画面上の全「KB」表示文言(ステータス表示・修正基準セレクトの選択肢・プレースホルダ・テーブル見出し・詳細パネルのdt・miChecker比較画面のバッジ「KB未対応」等)を洗い出し、内部識別子(`value="kb"`・`state.ruleScopeMode`・`/api/rules`等)とキロバイト単位の"KB"(サンプルHTML内のファイルサイズ表記、無関係)を除外した上で全て「移行ルール」に置き換えた。
+  - **(3) id/class一括削除**: `stripMigrationUnneededAttributes`/`stripMigrationUnneededAttributesFromHtml`を新設し、`renderOutputs()`のfinalHtml計算とGOAL1の`window.goal2Engine.buildFinalHtml()`という「最終HTML構築の最終段階」にのみ適用(候補生成・検出ロジックには一切適用しない)。class属性は無条件削除。id属性は`collectReferencedIds`でページ内アンカー(`href="#foo"`)・ARIA関連付け属性(`aria-describedby`等7種)・`label[for]`から実際に参照されているものを収集し、それ以外だけ削除する設計にした。実装中に、GOAL1の`window.goal2Engine.buildFinalHtml()`がこれまで`rebuildWorkingHtmlFor()`の生の出力(内部管理用の`data-goal2-node-id`属性が残ったまま)を返す既存の抜け漏れに気づき、同じ経路で`stripInternalFromHtml`も通すよう修正して併せて解消した(今回のid/class削除機能をGOAL1側にも正しく適用するために必要な修正であり、範囲内の対応と判断)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため影響なし)。既存6サンプル回帰完全一致(11/10/23/29/5/20、id/class削除は検出後にのみ適用されるため件数に影響なし)。Playwrightで、該当箇所セルにHTML抜粋の`<code>`要素が表示されること、「プレビューで確認」ボタン押下で行に`is-selected`が付きプレビュー内に`.goal2-highlight`が現れること、画面上の「KB」表記が「移行ルール」に統一されていること、最終HTMLに`class`/`id`属性が含まれないことを確認。別途、`window.goal2Engine`を直接呼び出す専用テストで、`href="#target"`で参照されるidは最終HTMLに残り、未参照のidと全classは削除されること、GOAL1の`buildFinalHtml()`から`data-goal2-node-id`の漏れが無くなったことを確認した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
 
 ## Decisions
 

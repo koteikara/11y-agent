@@ -19,6 +19,16 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-15: 該当箇所のビジュアル化・「KB」表記の統一・id/class属性の一括削除
+
+- 背景・目的: ユーザーから3件の改善要望を受けた。(1)「miChecker相当チェック結果」表の「該当箇所」がCSSセレクタ文字列のままで作業者には分からない、(2)「KB」という表記が開発者目線すぎる、(3)元のHTMLのid/class属性は移行に不要なので候補生成時に一括削除したい。3点ともリスクを含むため、実装前にユーザーへ方式を確認した。
+- 主な変更内容:
+  1. **該当箇所のビジュアル化**: 「該当箇所」セルをCSSセレクタ文字列から、実際に検出時点で使ったHTML(`state.micheckerEngineResultHtml`)を再パースして得た該当要素のHTML抜粋(短縮・エスケープ済み)表示に変更(`buildMicheckerLocationCell`/`truncateHtmlSnippet`)。加えて表に「操作」列を追加し、「プレビューで確認」ボタンを押すとプレビューペインで該当要素へジャンプ・ハイライト表示するようにした(`highlightMicheckerProblemInFragment`、既存の候補選択時と同じ`.goal2-highlight`クラス・スクロール機構を再利用)。miChecker側のセレクタは`DOMParser`が補う`html > body > ...`から始まるため、プレビュー側の`<template>`フラグメント(html/body要素を持たない)へ適用する際はこのプレフィックスを`stripMicheckerSelectorPrefix`で除去する必要があった。
+  2. **「KB」→「移行ルール」表記統一**: 画面上の表示文言(ステータス表示・修正基準セレクトの選択肢・プレースホルダ・テーブル見出し・詳細パネルのラベル・miChecker比較画面のバッジ「KB未対応」→「移行ルール未対応」等)を全て「移行ルール」に統一。内部の変数名・state項目名・APIエンドポイント名(`/api/rules`等)・`value="kb"`のような内部識別子・コード中のコメントは変更していない(スコープ外として明示的に除外)。
+  3. **id/class属性の一括削除**: 新設した`stripMigrationUnneededAttributes`/`stripMigrationUnneededAttributesFromHtml`を、最終HTML構築の最終段階(`renderOutputs()`のfinalHtml計算、GOAL1の`window.goal2Engine.buildFinalHtml()`)にのみ適用。候補生成・検出ロジックより前には一切適用しないため、`table.className`をレイアウト表判定の信号として使う既存ヒューリスティックは影響を受けない。class属性は無条件削除。id属性は、ページ内アンカー(`href="#foo"`)やARIA関連付け属性(`aria-describedby`/`aria-labelledby`/`aria-controls`/`aria-owns`/`aria-activedescendant`/`aria-details`/`aria-errormessage`/`aria-flowto`)、`label[for]`から実際に参照されているものだけ`collectReferencedIds`で検出し保持、それ以外は削除する。副次的に、GOAL1の`buildFinalHtml()`がこれまで`data-goal2-node-id`(内部管理用の属性)を最終HTMLに残したまま返していた既存の抜け漏れも、同じ経路で`stripInternalFromHtml`を通すことで併せて修正した。
+- 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更)。既存6サンプル回帰完全一致(11/10/23/29/5/20、id/class削除は検出前ではなく最終HTML構築後にのみ適用しているため件数に影響なし)。Playwrightで、(1)「該当箇所」セルにHTML抜粋の`<code>`要素が表示されること、(2)「プレビューで確認」ボタン押下で行に`is-selected`が付きプレビュー内に`.goal2-highlight`要素が現れること、(3)画面上の「KB」表記が全て「移行ルール」に置き換わっていること、(4)最終HTMLに`class`/`id`属性が一切含まれないこと、を確認。別途、`href="#target"`で参照されるid属性は最終HTMLに残り、参照されないidと全classは削除されること、GOAL1の`buildFinalHtml()`から`data-goal2-node-id`が漏れなくなったことを、`window.goal2Engine`を直接呼び出すテストで確認した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/goal1.html`、`goal2-app/public/michecker-compare.html`、`goal2-app/public/michecker-compare.js`、`goal2-app/public/styles.css`
+
 ## 2026-07-14: miChecker相当チェック結果の「種別」表示を公式表示文言に修正
 
 - 背景・目的: 「miChecker相当チェック結果」表の「種別」列の表示文言(エラー/警告/情報/要確認)が、実機miChecker公式の表示文言(問題あり/問題の可能性大/要判断箇所/手動確認、`michecker-compare.js`が実CSVから読み取っている値と同一)と一致しているかユーザーから質問された。調査したところ、独自の直訳的な文言を使っており、公式文言とは異なっていたことが判明。さらに、当初「`info`→要判断箇所、`user`→手動確認だろう」と推測で回答したが、実際にeclipse-actf公式ソース(`ReportMessageDialog.java`の`switch (curItem.getSeverity())`、および`IProblemConst.java`の定数定義)を確認したところ、**`info`↔手動確認、`user`↔要判断箇所という逆の対応関係**であることが判明した(`IEvaluationItem.SEV_INFO`は`IProblemConst.INFO`="手動確認"に、`SEV_USER`は`IProblemConst.USER_CHECK`="要判断箇所"に対応)。この発見は、PR-M3で「常に発火する手動確認事項(always型)」が全て`type="info"`だったという既知の事実とも整合する(infoが手動確認に対応するなら当然の結果)。

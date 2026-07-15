@@ -89,7 +89,7 @@
           「対応ルール」列は、内容欄のメッセージをmiChecker公式のチェック項目定義と照合し、
           <code>a11y-migration-kb</code>の該当ルール(マニュアル版/miChecker版)を自動表示します。
           「本文スコープ外」はテンプレート・スクリプト実装・サイト全体設計などCMS本文の編集では対応できない項目、
-          「KB未対応」は本文で対応できる可能性があるのにKBにルールが無い項目(KB拡張の検討対象)、
+          「移行ルール未対応」は本文で対応できる可能性があるのに移行ルールが無い項目(移行ルール拡張の検討対象)、
           「照合不可」は公式定義と一致しなかった項目です。
           「対応ルールの基準」を「miChecker基準のみ」にすると、マニュアル版とmiChecker版の両方があるルールで
           miChecker版(最小限の修正観点)だけを表示します(検収基準がmiChecker通過のみの案件向け)。
@@ -103,7 +103,7 @@
           <label class="michecker-filter" for="ruleBasisSelect">
             対応ルールの基準
             <select id="ruleBasisSelect">
-              <option value="kb">KB基準（miChecker含む）</option>
+              <option value="kb">移行ルール基準（miChecker含む）</option>
               <option value="michecker">miChecker基準のみ</option>
             </select>
           </label>

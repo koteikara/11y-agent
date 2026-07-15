@@ -516,7 +516,7 @@
       }
       const wcagText = result.wcagGap && result.wcagGap.length ? result.wcagGap.join(", ") : "";
       const wcagLabel = wcagText ? ` <span class="michecker-wcag-gap">(WCAG ${escapeHtml(wcagText)})</span>` : "";
-      return `<span class="michecker-origin-badge michecker-origin-gap">KB未対応</span>${wcagLabel}`;
+      return `<span class="michecker-origin-badge michecker-origin-gap">移行ルール未対応</span>${wcagLabel}`;
     }
     return `<span class="michecker-rule-unmatched">照合不可</span>`;
   }

@@ -253,6 +253,11 @@
     // "source"(候補生成時点の入力HTML) / "final"(最終HTMLで手動再実行した結果) のどちらを
     // micheckerEngineResultが表しているかを、パネル上のラベルとボタン操作で明示するためのフラグ。
     micheckerEngineResultBasis: null,
+    // micheckerEngineResultの計算に実際に使ったHTML文字列(該当箇所のHTML抜粋表示・
+    // プレビューハイライトの解決に再利用する)。
+    micheckerEngineResultHtml: null,
+    // miChecker相当チェック結果の表で選択中の行(プレビューハイライト対象)。
+    selectedMicheckerProblemIndex: null,
   };
 
   // GOAL1 batch mode runs the analysis pipeline without the goal2 screen, so the
@@ -370,6 +375,7 @@
     els.resetButton.addEventListener("click", reset);
     els.ruleScopeSelect.addEventListener("change", handleRuleScopeChange);
     els.micheckerEngineRecheckButton?.addEventListener("click", recheckMicheckerEngineAgainstFinalHtml);
+    els.micheckerEngineTableBody?.addEventListener("click", handleMicheckerEngineTableClick);
     els.bulkSelectAll.addEventListener("change", toggleBulkSelection);
     els.bulkAcceptButton.addEventListener("click", bulkAcceptSelected);
     els.acceptButton.addEventListener("click", () => decide("accepted"));
@@ -507,14 +513,14 @@
       state.ruleByCheckId = buildRuleByCheckIdIndex(state.rules);
       const summary = payload.summary || {};
       if (els.ruleStatus) {
-        els.ruleStatus.textContent = `KB ${summary.total || state.rules.length}件 / ${payload.source || "rules.jsonl"}`;
+        els.ruleStatus.textContent = `移行ルール ${summary.total || state.rules.length}件 / ${payload.source || "rules.jsonl"}`;
       }
     } catch (error) {
       state.rules = fallbackRules();
       state.ruleMap = new Map(state.rules.map((rule) => [rule.id, rule]));
       state.ruleByCheckId = buildRuleByCheckIdIndex(state.rules);
       if (els.ruleStatus) {
-        els.ruleStatus.textContent = `KBの読み込みに失敗したため、画面内の最小ルールで起動しています。`;
+        els.ruleStatus.textContent = `移行ルールの読み込みに失敗したため、画面内の最小ルールで起動しています。`;
       }
     }
   }
@@ -700,6 +706,8 @@
       state.notices = notices;
       state.micheckerEngineResult = micheckerEngineResult;
       state.micheckerEngineResultBasis = micheckerEngineResult ? "source" : null;
+      state.micheckerEngineResultHtml = micheckerEngineResult ? state.sourceHtml : null;
+      state.selectedMicheckerProblemIndex = null;
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
       if (state.pendingAutoAcceptSafe) {
@@ -715,6 +723,8 @@
       state.notices = [];
       state.micheckerEngineResult = null;
       state.micheckerEngineResultBasis = null;
+      state.micheckerEngineResultHtml = null;
+      state.selectedMicheckerProblemIndex = null;
       state.selectedCandidateId = null;
       clearBulkSelection();
       state.workingHtml = state.sourceHtml || els.htmlInput.value.trim();
@@ -742,6 +752,7 @@
 
   function handleRuleScopeChange() {
     state.ruleScopeMode = els.ruleScopeSelect.value;
+    state.selectedMicheckerProblemIndex = null;
     if (state.candidates.length || state.notices.length) {
       els.candidateSummary.textContent = "修正基準を変更しました。「候補生成」を押すと反映されます（既存の判断はリセットされます）。";
     }
@@ -6046,22 +6057,30 @@
 
     const problems = result.problems || [];
     const checklist = result.checklist || [];
+    // 該当箇所はCSSセレクタ文字列のままでは作業者に分からないため、実際にmiChecker相当
+    // エンジンを実行した時点のHTML(micheckerEngineResultHtml)を再パースし、セレクタが
+    // 指す要素のHTML抜粋(短縮)に差し替えて表示する(ビジュアル化)。
+    const snippetDoc = state.micheckerEngineResultHtml
+      ? new DOMParser().parseFromString(state.micheckerEngineResultHtml, "text/html")
+      : null;
 
     els.micheckerEngineEmptyNote.hidden = problems.length > 0;
     els.micheckerEngineTableBody.innerHTML = problems
-      .map((problem) => {
+      .map((problem, index) => {
         const rules = state.ruleByCheckId.get(problem.checkId) || [];
         const ruleText = rules.length
           ? rules.map((rule) => escapeHtml(rule.title || rule.id)).join("、")
-          : "(対応ルールなし)";
-        const selectorText = (problem.nodes || []).join(", ") || "(ページ全体)";
+          : "(対応する移行ルールなし)";
+        const locationHtml = buildMicheckerLocationCell(problem, snippetDoc);
+        const selectedClass = index === state.selectedMicheckerProblemIndex ? " is-selected" : "";
         return `
-          <tr>
+          <tr class="${selectedClass.trim()}">
             <td>${escapeHtml(MICHECKER_ENGINE_TYPE_LABEL[problem.type] || problem.type || "")}</td>
             <td>${escapeHtml(problem.checkId)}</td>
-            <td>${escapeHtml(selectorText)}</td>
+            <td>${locationHtml}</td>
             <td>${escapeHtml(problem.message || "")}</td>
             <td>${ruleText}</td>
+            <td><button type="button" class="secondary" data-michecker-index="${index}">プレビューで確認</button></td>
           </tr>
         `;
       })
@@ -6073,6 +6092,55 @@
       .join("");
 
     els.micheckerEngineSummary.textContent = buildMicheckerCompareSummaryText(problems);
+  }
+
+  const MICHECKER_LOCATION_SNIPPET_MAX = 3;
+
+  // 「該当箇所」セルの中身を、CSSセレクタ文字列そのものではなく実際の要素のHTML抜粋に
+  // する。snippetDocがまだ無い(結果はあるがHTMLの再パースに失敗した等)場合はセレクタの
+  // 文字列表示にフォールバックする。
+  function buildMicheckerLocationCell(problem, snippetDoc) {
+    const selectors = problem.nodes || [];
+    if (!selectors.length) {
+      return "(ページ全体)";
+    }
+    if (!snippetDoc) {
+      return escapeHtml(selectors.join(", "));
+    }
+    const snippets = selectors
+      .slice(0, MICHECKER_LOCATION_SNIPPET_MAX)
+      .map((selector) => {
+        let element = null;
+        try {
+          element = snippetDoc.querySelector(selector);
+        } catch {
+          element = null;
+        }
+        return element ? truncateHtmlSnippet(element.outerHTML) : null;
+      })
+      .filter(Boolean);
+    if (!snippets.length) {
+      return escapeHtml(selectors.join(", "));
+    }
+    const extraCount = selectors.length - snippets.length;
+    const extraNote = extraCount > 0 ? `<div class="michecker-location-extra">他${extraCount}件</div>` : "";
+    return snippets.map((snippet) => `<code class="michecker-location-snippet">${snippet}</code>`).join("") + extraNote;
+  }
+
+  function truncateHtmlSnippet(outerHtml, maxLen = 120) {
+    const collapsed = outerHtml.replace(/\s+/g, " ").trim();
+    const truncated = collapsed.length > maxLen ? `${collapsed.slice(0, maxLen)}…` : collapsed;
+    return escapeHtml(truncated);
+  }
+
+  function handleMicheckerEngineTableClick(event) {
+    const button = event.target.closest("[data-michecker-index]");
+    if (!button) return;
+    const index = Number(button.dataset.micheckerIndex);
+    if (Number.isNaN(index)) return;
+    state.selectedMicheckerProblemIndex = index;
+    renderMicheckerEnginePanel();
+    renderPreview();
   }
 
   // 既存ヒューリスティック候補(state.candidates/notices)とエンジン検出結果を、チェックID
@@ -6106,12 +6174,17 @@
   // 再実行後に出力欄も再描画する。
   function recheckMicheckerEngineAgainstFinalHtml() {
     if (state.ruleScopeMode !== "michecker") return;
-    const finalHtml = stripInternalFromHtml(state.workingHtml || state.sourceHtml);
+    const finalHtml = stripMigrationUnneededAttributesFromHtml(
+      stripInternalFromHtml(state.workingHtml || state.sourceHtml)
+    );
     const result = runMicheckerEngine(finalHtml);
     state.micheckerEngineResult = result;
     state.micheckerEngineResultBasis = result ? "final" : null;
+    state.micheckerEngineResultHtml = result ? finalHtml : null;
+    state.selectedMicheckerProblemIndex = null;
     renderMicheckerEnginePanel();
     renderOutputs();
+    renderPreview();
   }
 
   function renderPageAgent() {
@@ -6841,7 +6914,7 @@
           <div class="detail-row"><dt>問題</dt><dd>${escapeHtml(candidate.issue.message)}</dd></div>
           <div class="detail-row"><dt>理由</dt><dd>${escapeHtml(candidate.issue.reason)}</dd></div>
           <div class="detail-row"><dt>WCAG/JIS</dt><dd>${escapeHtml([...candidate.issue.wcag, ...candidate.issue.jis].filter(Boolean).join(", ") || "なし")}</dd></div>
-          <div class="detail-row"><dt>KB根拠</dt><dd>${escapeHtml(candidate.rule.source || "未設定")}</dd></div>
+          <div class="detail-row"><dt>移行ルール根拠</dt><dd>${escapeHtml(candidate.rule.source || "未設定")}</dd></div>
         </dl>
       `;
     }
@@ -7316,6 +7389,29 @@
     return cleanHtml(template.innerHTML);
   }
 
+  // michecker-engine.jsのselectorPathFor()は、DOMParserが常に補うhtml/body要素を含む
+  // 完全なDocumentに対して計算されているため、"html > body > ..."から始まることが多い。
+  // buildPreviewHtml()が使う<template>のDocumentFragmentにはhtml/body要素自体が存在しない
+  // ため、そのままでは一致しない。フラグメントのルート直下を基準にするプレフィックスだけ
+  // 取り除く(id指定で経路が短絡しているセレクタは対象外なのでそのまま使う)。
+  function stripMicheckerSelectorPrefix(selector) {
+    return selector.replace(/^html\s*>\s*body\s*(>\s*)?/, "");
+  }
+
+  function highlightMicheckerProblemInFragment(root) {
+    const problem = state.micheckerEngineResult?.problems?.[state.selectedMicheckerProblemIndex];
+    if (!problem) return;
+    (problem.nodes || []).forEach((selector) => {
+      const relativeSelector = stripMicheckerSelectorPrefix(selector);
+      if (!relativeSelector) return;
+      try {
+        root.querySelectorAll(relativeSelector).forEach((element) => element.classList.add("goal2-highlight"));
+      } catch {
+        // ブラウザがこのセレクタ構文をサポートしない場合はハイライトをスキップする(致命的ではない)。
+      }
+    });
+  }
+
   function buildPreviewHtml() {
     const html = state.workingHtml || cleanHtml(state.sourceHtml);
     const template = document.createElement("template");
@@ -7327,6 +7423,9 @@
       if (target) {
         target.classList.add("goal2-highlight");
       }
+    }
+    if (state.ruleScopeMode === "michecker" && state.selectedMicheckerProblemIndex != null) {
+      highlightMicheckerProblemInFragment(template.content);
     }
     const previewHtml = stripInternalFromHtml(template.innerHTML);
     return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>
@@ -7345,27 +7444,41 @@
     </style></head><body>${previewHtml || "<p>HTMLを入力してください。</p>"}</body></html>`;
   }
 
-  function renderPreview() {
+  // 通常の候補選択に加え、miChecker相当チェック結果の行選択もプレビューハイライト対象に
+  // なるため、「ハイライト対象があるか」「その識別子」をこの2関数に集約する。
+  function hasActivePreviewHighlightTarget() {
+    return Boolean(selectedCandidate()) || (state.ruleScopeMode === "michecker" && state.selectedMicheckerProblemIndex != null);
+  }
+
+  function currentPreviewHighlightId() {
     const candidate = selectedCandidate();
+    if (candidate) return candidate.candidate_id;
+    if (state.ruleScopeMode === "michecker" && state.selectedMicheckerProblemIndex != null) {
+      return `michecker_${state.selectedMicheckerProblemIndex}`;
+    }
+    return "";
+  }
+
+  function renderPreview() {
     const previewHtml = buildPreviewHtml();
-    els.previewFrame.dataset.scrollStatus = candidate ? "pending" : "idle";
-    els.previewFrame.dataset.scrollCandidateId = candidate?.candidate_id || "";
+    const pending = hasActivePreviewHighlightTarget();
+    els.previewFrame.dataset.scrollStatus = pending ? "pending" : "idle";
+    els.previewFrame.dataset.scrollCandidateId = currentPreviewHighlightId();
     els.previewFrame.srcdoc = previewHtml;
     if (els.previewFrameExpanded && els.previewExpandOverlay && !els.previewExpandOverlay.hidden) {
-      els.previewFrameExpanded.dataset.scrollStatus = candidate ? "pending" : "idle";
-      els.previewFrameExpanded.dataset.scrollCandidateId = candidate?.candidate_id || "";
+      els.previewFrameExpanded.dataset.scrollStatus = pending ? "pending" : "idle";
+      els.previewFrameExpanded.dataset.scrollCandidateId = currentPreviewHighlightId();
       els.previewFrameExpanded.srcdoc = previewHtml;
     }
   }
 
   function scrollPreviewToSelectedCandidate(frame = els.previewFrame) {
     if (!frame) return;
-    const candidate = selectedCandidate();
-    if (!candidate) {
+    if (!hasActivePreviewHighlightTarget()) {
       frame.dataset.scrollStatus = "idle";
       return;
     }
-    const candidateId = candidate.candidate_id;
+    const highlightId = currentPreviewHighlightId();
     requestAnimationFrame(() => {
       try {
         const target = frame.contentDocument?.querySelector(".goal2-highlight");
@@ -7375,7 +7488,7 @@
         }
         target.scrollIntoView({ block: "center", inline: "nearest" });
         frame.dataset.scrollStatus = "scrolled";
-        frame.dataset.scrollCandidateId = candidateId;
+        frame.dataset.scrollCandidateId = highlightId;
       } catch {
         // The preview is sandboxed; if browser access is denied, keep the highlight visible without auto-scroll.
         frame.dataset.scrollStatus = "blocked";
@@ -7385,9 +7498,9 @@
 
   function openPreviewExpanded() {
     if (!els.previewExpandOverlay || !els.previewFrameExpanded) return;
-    const candidate = selectedCandidate();
-    els.previewFrameExpanded.dataset.scrollStatus = candidate ? "pending" : "idle";
-    els.previewFrameExpanded.dataset.scrollCandidateId = candidate?.candidate_id || "";
+    const pending = hasActivePreviewHighlightTarget();
+    els.previewFrameExpanded.dataset.scrollStatus = pending ? "pending" : "idle";
+    els.previewFrameExpanded.dataset.scrollCandidateId = currentPreviewHighlightId();
     els.previewFrameExpanded.srcdoc = buildPreviewHtml();
     els.previewExpandOverlay.hidden = false;
     if (els.appMain) {
@@ -7406,7 +7519,7 @@
   }
 
   function renderOutputs() {
-    const finalHtml = stripInternalFromHtml(state.workingHtml || state.sourceHtml);
+    const finalHtml = stripMigrationUnneededAttributesFromHtml(stripInternalFromHtml(state.workingHtml || state.sourceHtml));
     els.finalHtml.value = finalHtml;
     renderNoticeOutput();
     els.evidenceOutput.value = JSON.stringify(buildEvidence(finalHtml), null, 2);
@@ -7530,7 +7643,7 @@
     els.noticeOutput.innerHTML = state.notices
       .map((notice, index) => {
         const source = notice.rule.source
-          ? `<div><dt>KB根拠</dt><dd>${escapeHtml(notice.rule.source)}</dd></div>`
+          ? `<div><dt>移行ルール根拠</dt><dd>${escapeHtml(notice.rule.source)}</dd></div>`
           : "";
         return `
           <article class="notice-item" role="listitem">
@@ -8612,6 +8725,65 @@
     return stripInternalFromHtml(html || "");
   }
 
+  // 元のid/class属性を参照しうる属性(ページ内アンカー・ARIA関連付け・label for)。
+  // href以外は空白区切りで複数idを保持できるIDREFS型属性のため split で全件拾う。
+  const ID_REFERENCE_ATTRS = [
+    "href",
+    "aria-describedby",
+    "aria-labelledby",
+    "aria-controls",
+    "aria-owns",
+    "aria-activedescendant",
+    "aria-details",
+    "aria-errormessage",
+    "aria-flowto",
+    "for",
+  ];
+
+  function collectReferencedIds(root) {
+    const referenced = new Set();
+    root.querySelectorAll("*").forEach((element) => {
+      ID_REFERENCE_ATTRS.forEach((attr) => {
+        const value = element.getAttribute(attr);
+        if (!value) return;
+        if (attr === "href") {
+          if (value.startsWith("#") && value.length > 1) {
+            referenced.add(value.slice(1));
+          }
+          return;
+        }
+        value
+          .split(/\s+/)
+          .filter(Boolean)
+          .forEach((id) => referenced.add(id));
+      });
+    });
+    return referenced;
+  }
+
+  // 移行先CMSでは旧サイトのCSS/JSに紐づくid・class属性は不要かつテンプレートと衝突しうる
+  // ため、最終HTML(全候補の採用・編集結果を反映した後)構築の最終段階でのみ一括削除する
+  // (候補生成・検出ロジックは元のid/classを引き続き使う。例: table.classNameをレイアウト
+  // 表判定の信号に使うヒューリスティックがあるため、削除を検出より前に行うと壊れる)。
+  // classは無条件削除。idはページ内アンカーやARIA属性等で実際に参照されているものだけ残す
+  // (参照元のリンク自体はlink.in-page-anchorルール等で別途人間確認の対象になる)。
+  function stripMigrationUnneededAttributes(root) {
+    const referencedIds = collectReferencedIds(root);
+    root.querySelectorAll("[class]").forEach((element) => element.removeAttribute("class"));
+    root.querySelectorAll("[id]").forEach((element) => {
+      if (!referencedIds.has(element.id)) {
+        element.removeAttribute("id");
+      }
+    });
+  }
+
+  function stripMigrationUnneededAttributesFromHtml(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    stripMigrationUnneededAttributes(template.content);
+    return template.innerHTML.trim();
+  }
+
   function normalizeText(text) {
     return String(text || "").replace(/\s+/g, " ").trim();
   }
@@ -8696,7 +8868,9 @@
     },
 
     buildFinalHtml(sourceHtml, candidates) {
-      return rebuildWorkingHtmlFor(sourceHtml, candidates);
+      return stripMigrationUnneededAttributesFromHtml(
+        stripInternalFromHtml(rebuildWorkingHtmlFor(sourceHtml, candidates))
+      );
     },
 
     buildEvidence(context, finalHtml) {
