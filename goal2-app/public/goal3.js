@@ -146,7 +146,8 @@
 
   function buildCandidate(element, index, pageTitle) {
     const clone = cleanContentClone(element, pageTitle);
-    const html = cleanHtml(clone.innerHTML || clone.outerHTML);
+    const cleaned = cleanHtml(clone.innerHTML || clone.outerHTML);
+    const html = cleaned.html;
     const text = normalizeText(clone.textContent);
     const links = clone.querySelectorAll("a").length;
     const parts = {
@@ -173,6 +174,7 @@
       parts,
       excluded,
       html,
+      legacyCleanup: cleaned.stats,
       path: domPath(element),
       element,
     };
@@ -565,6 +567,7 @@
           ${candidate.parts.isFileListContent ? "<li>ファイルリンク中心の本文として評価しています。</li>" : ""}
           ${candidate.parts.isNewsListContent ? "<li>日付・年度付きのお知らせ一覧本文として評価しています。</li>" : ""}
           <li>除外: h1 ${candidate.excluded.h1}件、本文開始マーカー ${candidate.excluded.skipToContent}件、ページトップ ${candidate.excluded.pageTop}件、テンプレート補助 ${candidate.excluded.utility}件、署名候補 ${candidate.excluded.signature}件</li>
+          ${legacyCleanupSummaryLine(candidate.legacyCleanup)}
         </ul>
       </section>
     `;
@@ -862,11 +865,91 @@
     });
   }
 
+  // HTML Living Standardの非適合(廃止)属性のうち、要素の種類を問わず安全に除去できるもの。
+  // width/height/borderのように要素によって現在も有効な意味を持つ属性(img/canvas/iframe等)は
+  // 対象外とし、それらはGoal2側のtable.format-clear(テーブル文脈に限定)に委ねる。
+  const OBSOLETE_ATTRS = [
+    "align", "valign", "bgcolor", "background", "border", "cellpadding", "cellspacing",
+    "char", "charoff", "clear", "compact", "face", "hspace", "vspace", "noshade", "nowrap",
+    "language", "link", "vlink", "alink", "text", "marginheight", "marginwidth", "scrolling",
+    "frameborder", "rules", "classid", "codebase", "codetype", "declare", "standby", "archive",
+    "profile", "rev", "scheme", "urn", "axis", "valuetype", "nohref", "longdesc", "summary",
+  ];
+
+  // id/name(aのページ内アンカー名)は、同一断片内のhref="#..."やfor/headers/aria-*等から
+  // 参照されている場合は着地点として機能するため保持する。参照されていないものだけ除去する。
+  function collectReferencedFragmentIds(root) {
+    const ids = new Set();
+    const addFromFragmentRefs = (value) => {
+      (value || "").match(/#[^\s#"']+/g)?.forEach((match) => ids.add(match.slice(1)));
+    };
+    const addSpaceSeparated = (value) => {
+      (value || "").split(/\s+/).forEach((id) => id && ids.add(id));
+    };
+    root.querySelectorAll("[href]").forEach((element) => addFromFragmentRefs(element.getAttribute("href")));
+    root.querySelectorAll("[usemap]").forEach((element) => addFromFragmentRefs(element.getAttribute("usemap")));
+    ["for", "headers", "aria-describedby", "aria-labelledby", "aria-controls", "aria-owns", "list", "form"].forEach(
+      (attribute) => {
+        root.querySelectorAll(`[${attribute}]`).forEach((element) => addSpaceSeparated(element.getAttribute(attribute)));
+      }
+    );
+    return ids;
+  }
+
+  function stripLegacyAttributes(root) {
+    const referencedIds = collectReferencedFragmentIds(root);
+    const stats = { attributesRemoved: 0, classRemoved: 0, idsRemoved: 0, idsPreserved: 0 };
+    root.querySelectorAll("*").forEach((element) => {
+      OBSOLETE_ATTRS.forEach((name) => {
+        if (element.hasAttribute(name)) {
+          element.removeAttribute(name);
+          stats.attributesRemoved += 1;
+        }
+      });
+      if (element.hasAttribute("class")) {
+        element.removeAttribute("class");
+        stats.classRemoved += 1;
+      }
+      const id = element.getAttribute("id");
+      if (id) {
+        if (referencedIds.has(id)) {
+          stats.idsPreserved += 1;
+        } else {
+          element.removeAttribute("id");
+          stats.idsRemoved += 1;
+        }
+      }
+      if (element.tagName === "A" && element.hasAttribute("name")) {
+        const name = element.getAttribute("name");
+        if (referencedIds.has(name)) {
+          stats.idsPreserved += 1;
+        } else {
+          element.removeAttribute("name");
+          stats.idsRemoved += 1;
+        }
+      }
+    });
+    return stats;
+  }
+
   function cleanHtml(html) {
     const template = document.createElement("template");
     template.innerHTML = html || "";
     sanitizePreview(template.content);
-    return template.innerHTML.trim();
+    const stats = stripLegacyAttributes(template.content);
+    return { html: template.innerHTML.trim(), stats };
+  }
+
+  function legacyCleanupSummaryLine(stats) {
+    if (!stats || (!stats.attributesRemoved && !stats.classRemoved && !stats.idsRemoved)) {
+      return "";
+    }
+    const parts = [];
+    if (stats.attributesRemoved) parts.push(`非推奨属性 ${stats.attributesRemoved}件`);
+    if (stats.classRemoved) parts.push(`class ${stats.classRemoved}件`);
+    if (stats.idsRemoved) parts.push(`未参照id ${stats.idsRemoved}件`);
+    const preservedNote = stats.idsPreserved ? `(ページ内リンクの参照先id ${stats.idsPreserved}件は保持)` : "";
+    return `<li>自動除去: ${parts.join("、")}を除去しました${preservedNote}。</li>`;
   }
 
   function normalizeText(text) {
