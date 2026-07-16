@@ -647,7 +647,17 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 修正: 重複・不具合のあるブロック(`collectDeprecatedAttributeCandidates`内の`deprecatedTableAttrs`検出処理、約26行)を削除し、`table.format-clear`ルールへ一本化。
   - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存サンプルの検出結果に影響なし)。
   - コミット`3ffc215`「Remove broken duplicate deprecated table attribute detector」。ブランチ`claude/goal-overview-rxgrf2`へプッシュ、PR#83本文を更新。
-  - 次のステップ: 弘前市・豊橋市などの追加サンプルをユーザーから順次提供してもらい、GOAL3の汎用性・頑健性を検証。
+- PR #83・#84はユーザーが承認後、マージ済み(#84は`claude/goal-overview-rxgrf2`への差分PR、その後PR #85で`main`へ反映)。マージ確認の過程で、ユーザーへの案内ミス(「Goal3画面で確認して」と伝えたが、非推奨属性検出ロジックは実際には`app.js`(Goal2の候補生成エンジン、`window.goal2Engine`)にあり、`goal3.js`(Goal3の独立した抽出エンジン)には同種のロジックが一切無いことが判明)を訂正。
+- 上記のやり取りから、ユーザーより「Goal3の抽出結果に対しても、TABLEに限らず除去できるものはここで実行してしまうのは理に適っている」との提案。証跡(何を除去したか)を残さずに無条件で処理すると「AGENTの出力は最終成果物ではなく確認対象」という基本方針に反するため、「Goal3抽出直後に機械的・高確信度のクリーンアップを証跡付きで実行する」という折衷案を提示し合意。スコープは「HTML Living Standardに無い属性 + id + class」(ユーザー指定)。
+  - 実装: `goal2-app/public/goal3.js`の`cleanHtml()`(候補HTML生成の最終ステップ、Goal1のバッチ処理からも`window.goal3Engine.extract()`経由で共通利用される)に`stripLegacyAttributes()`を追加。
+    - `OBSOLETE_ATTRS`: `align`/`valign`/`bgcolor`/`background`/`border`/`cellpadding`/`cellspacing`/`char`/`charoff`/`clear`/`compact`/`face`/`hspace`/`vspace`/`noshade`/`nowrap`/`language`/`link`/`vlink`/`alink`/`text`/`marginheight`/`marginwidth`/`scrolling`/`frameborder`/`rules`/`classid`/`codebase`/`codetype`/`declare`/`standby`/`archive`/`profile`/`rev`/`scheme`/`urn`/`axis`/`valuetype`/`nohref`/`longdesc`/`summary`など、要素の種類を問わず安全に除去できるものに限定。`width`/`height`/`border`のように要素によっては現在も有効(img/canvas/iframe等)な属性は対象外とし、テーブル文脈限定の`table.format-clear`(Goal2側、既存)に委ねる設計とした。
+    - `class`は無条件除去。`id`は`collectReferencedFragmentIds()`で同一断片内の`href="#..."`/`usemap`/`for`/`headers`/`aria-describedby`/`aria-labelledby`/`aria-controls`/`aria-owns`/`list`/`form`から参照されているものを検出し、参照されているidのみ保持(ページ内アンカーナビゲーションの破壊を防止。安城市サンプル自体に`<a id="kouiki" name="kouiki">`実例があり、この安全策の必要性を裏付けた)。`<a name="...">`も同様にページ内アンカー名として参照有無で保持/除去を判定。
+    - 除去件数は`legacyCleanup`統計として候補に付与し、Goal3画面の「抽出根拠」カードに「自動除去: 非推奨属性N件、classN件、未参照idN件を除去しました(参照先idN件は保持)」として証跡表示(除去が0件のときは非表示)。
+  - 検証中に、ローカル作業ツリーがPR #84/#85マージ内容を反映していない古い状態(`git reset --hard`実行時点から`git pull`していなかった)だったため、テストが誤って「重複候補が再発している」ように見えるという事故が発生。`git pull --ff-only`で解消し、以後は最新状態で検証した。
+  - Playwrightで実ブラウザ検証: (1)非推奨属性を含む合成テストHTMLで、align/valign/border/cellpadding/cellspacing/summary/class が除去され、width(テーブル)は保持され、href="#kouiki"で参照されたid="kouiki"は保持、未参照id="unused123"は除去されることを確認。(2)安城市サンプル(既に前回の修正で属性クリーン済み)では除去件数0・保持id 2件のみとなることを確認。(3)Goal3で抽出したHTMLをGoal2の`window.goal2Engine.analyze()`に渡し、`table.format-clear`(残ったwidthを検出)は正常に発火し、`html-structure.deprecated-elements`との重複発火が起きないことを確認。
+  - 実装中に発見した表示バグ(`idsPreserved`のみ非ゼロで他が0件のとき「自動除去: を除去しました」という空欄混じりの文言になる)を、条件式から`idsPreserved`単独ケースを除外して修正。
+  - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存6サンプルの検出結果に影響なし)。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
 
 ## Decisions
 
