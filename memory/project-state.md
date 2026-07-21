@@ -657,7 +657,20 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Playwrightで実ブラウザ検証: (1)非推奨属性を含む合成テストHTMLで、align/valign/border/cellpadding/cellspacing/summary/class が除去され、width(テーブル)は保持され、href="#kouiki"で参照されたid="kouiki"は保持、未参照id="unused123"は除去されることを確認。(2)安城市サンプル(既に前回の修正で属性クリーン済み)では除去件数0・保持id 2件のみとなることを確認。(3)Goal3で抽出したHTMLをGoal2の`window.goal2Engine.analyze()`に渡し、`table.format-clear`(残ったwidthを検出)は正常に発火し、`html-structure.deprecated-elements`との重複発火が起きないことを確認。
   - 実装中に発見した表示バグ(`idsPreserved`のみ非ゼロで他が0件のとき「自動除去: を除去しました」という空欄混じりの文言になる)を、条件式から`idsPreserved`単独ケースを除外して修正。
   - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存6サンプルの検出結果に影響なし)。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+  - コミット`81df529`、PR #86として作成。
+
+**2026-07-21 表修正手段メニュー拡張: 計画策定と実装指示書の作成**
+
+- ユーザーから「表組みの修正方法が現状2件のみの提案に留まっているが、考えうる全ての手段から選択できるようにしたい。まず計画を立て、Sonnetに実行させるための指示書を作成してほしい」との指示(計画担当: Fable、実装担当: Sonnet想定)。
+- 原因調査: 「修正方法」パネルは同一`target.node_id`の兄弟候補集合(`candidatesForSameTarget()`)をラジオカード表示する仕組みだが、構造候補の生成元`planTableTreatment()`(app.js:3054)が早期returnのウォーターフォールで1表につき1件(データ表維持 or 分割 or レイアウト解体)しか返さず、独立生成のセル結合候補と合わせて最大2件になっていた。
+- `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`を新規作成(GOAL1_BUILD_INSTRUCTIONS.md等と同形式の実装担当AGENT向け指示書)。要点:
+  - 手段=兄弟候補という既存機構を流用し、`planTableTreatments()`(複数返却化)で適用可能な全手段を同一表への候補としてプッシュする方針。選択・採用(`selected_method_id`)・最終HTML反映(`applyCandidatePatch`)・競合自動解決(`resolveSupersededTableCandidates`)は既存のまま機能する。
+  - 手段メニュー6種: M1 データ表維持+セマンティクス整備(既存)/M2 複数表分割(既存)/M3 見出し+段落解体(既存)/M4 結合セル解除フラット化(新規`buildFlattenedTableHtml`、`buildExpandedTableGrid`利用)/M5 箇条書き化(新規)/M6 1行=1項目の見出し+段落化(新規)。`<dl>`化は確定方針(2026-07-10)により含めない。
+  - 全構造手段は`requiresHumanReview: true`で一括採用・GOAL1 autoAcceptSafeの対象外。
+  - 実装はPR-T1(複数化骨格)→T2(フラット化)→T3(リスト化・段落化)→T4(実データ検証+ドキュメント)の4段階。各段階に合格条件・Playwright検証シナリオ・回帰基準の更新手順を定義。
+  - 過去の表関連バグ(colspan無視パディング、colspanヘッダー複製)の教訓を新ビルダーの注意事項として明記。
+- ユーザー確定事項(AskUserQuestionで確認済み): (1)新規手段のrule_idは既存idへ相乗り(M4→`table.cell-merge-layout`、M5/M6→`table.layout-table`)し、表示は`makeCandidate`に追加する`methodLabel`で区別。KB新設・rules.jsonl再生成はしない。(2)候補一覧は従来どおり全兄弟候補を表示(既存の「同じ箇所の代替手段 N件中」バッジのまま。間引きはしない)。
+- 次のアクション: 実装担当AGENT(Sonnet)が指示書に従いPR-T1から着手。
 
 ## Decisions
 
