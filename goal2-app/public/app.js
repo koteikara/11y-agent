@@ -809,6 +809,7 @@
     const fragment = parseFragment(html);
     let reviewItems = generateCandidates(fragment);
     if (ruleScopeMode === "michecker") {
+      // enrichment(特にLLM呼び出し)の対象・件数を絞るため、ここで先に一度フィルタする。
       reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
     }
     await enrichLinkTitleCandidates(reviewItems);
@@ -824,6 +825,15 @@
     // already-enriched standalone image.alt-text result instead of firing a duplicate vision
     // call when the same image also appears inside a decomposed layout table.
     await enrichLayoutTableImagesWithLlm(reviewItems);
+    if (ruleScopeMode === "michecker") {
+      // enrichHeadingReviewWithLlm等は既存候補の書き換えだけでなく、items.push()で
+      // 新規候補を追加することがある(見出し追加のAI提案等)。その新規候補のルールID
+      // (例: html-structure.heading-required、michecker_check_idsを持たない)は
+      // 上の事前フィルタの対象外(=まだreviewItemsに存在しなかった)だったため、
+      // ここでもう一度同じフィルタをかけ、miCheckerモードで非対応ルールが後から
+      // 紛れ込むのを防ぐ。
+      reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
+    }
     const candidates = reviewItems
       .filter((item) => !isNoticeItem(item))
       .map((candidate, index) => ({

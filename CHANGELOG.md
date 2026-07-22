@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: miChecker指摘対応のみモードでも、enrichment由来の非対応ルール候補が漏れる不具合を修正
+
+- 背景・目的: 直前の「見出し提案(AI)が表セル内の段落を見出し要素に変換してしまう不具合」修正をユーザーに説明したところ、「miChecker版もこのように修正されてしまうようです」と、`<p><strong>連絡先</strong></p>` → `<h4>連絡先</h4><p><strong>連絡先</strong></p>`という同じ壊れ方をする例を提示された。「miChecker指摘対応のみ」モードは`html-structure.heading-required`のようなmichecker_check_idsを持たないルールの候補を表示しない設計のため、本来この症状はKBモードだけの問題のはずだったが、実際にはmiCheckerモードでも起きる別のバグがあることが分かった。
+- 原因: `runAnalysis()`は、`ruleScopeMode === "michecker"`のとき`generateCandidates()`直後の`reviewItems`を`isMicheckerRelevantRule()`でフィルタしていたが、そのフィルタは**enrichment(AI呼び出し)より前の1回だけ**実行されていた。`enrichHeadingReviewWithLlm`(見出し提案)・`enrichAvoidTextAsImageWithLlm`(画像内テキスト検出)・`enrichAsciiArtWithLlm`(顔文字検出)は、既存候補の書き換えだけでなく`items.push()`で**新規候補を追加**することがあり、これらの新規候補はmiCheckerモードのフィルタを一切通過していなかった。結果、`html-structure.heading-required`のようなmiChecker非対応ルールの候補が、AIのenrichmentを経由することでmiCheckerモードでも表示されてしまっていた。
+- 主な変更内容:
+  - `runAnalysis()`で、`ruleScopeMode === "michecker"`時のフィルタを**enrichment前後の2箇所**に適用するよう変更。前段(既存どおり)はenrichmentの呼び出し対象・LLM呼び出し件数を絞るための最適化として維持し、後段(新規追加)はenrichmentが新規に追加した候補も含めて最終的な候補集合からmiChecker非対応ルールを確実に除外する。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで`tables`サンプルをKBモード(31件・13ルールID)とmiCheckerモード(23件・9ルールID)の両方で解析し、miCheckerモードの結果に`html-structure.heading-required`が含まれないこと、両モードとも候補生成でエラーが発生しないことを確認。
+  - AI enrichmentが実際に新規候補を追加するケース(GEMINI_API_KEY有効時)での二重フィルタの動作は、ローカル環境にAPIキーが無いため未検証(フィルタのタイミング変更自体の正しさとしては、既存のPlaywright検証および既存テストスイートの全件成功で担保)。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-22: 見出し提案(AI)が表セル内の段落を見出し要素に変換してしまう不具合を修正
 
 - 背景・目的: PR#95提示後、ユーザーから「安城市のサンプルページで表を修正したのに見出しの設定の修正が完了するまで全体が完了にならないのはおかしくないか」との指摘があり、当初は「ページ内の全候補に決定を下すまで完了にならない」という既存の完了判定仕様(`renderCandidates()`の`done = total > 0 && unresolved === 0`)の説明で対応したが、ユーザーから「表内のことでは」との再指摘、続けて動画とサンプルHTML原文の提示があり、実際には**表のth要素(列見出しセル)の中身が個別にh4見出しへ変換される提案**(「名称」→`<h4>名称</h4>`、「連絡先」→同様、等)が発生していたことが判明した。

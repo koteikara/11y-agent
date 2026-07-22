@@ -771,6 +771,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 教訓: ユーザーの「おかしくないですか」という素朴な疑問(完了条件への疑問)が、調査を進めると全く別の重大なバグ(表構造破壊)の発見につながった。最初の説明(完了判定仕様の説明)だけで納得せず、ユーザーが「表内のことでは」と食い下がった点を軽視せず、具体的な動画・HTML原文の提示を求めたことが功を奏した。また、本番環境が未再デプロイという事実と、コード自体に実在するバグという事実は別の問題であり、「本番は古いから」で思考停止せず、現行コードそのものに同じ脆弱性がないか確認する必要がある。
 - 関連ファイル: `goal2-app/public/app.js`
 
+**2026-07-22 続き: 「miChecker版もこのように修正されてしまう」から二重フィルタ不足を発見**
+
+- 上記のth/td除外修正をユーザーに説明したところ、「miChecker版もこのように修正されてしまうようです」と、`<p><strong>連絡先</strong></p>` → `<h4>連絡先</h4><p><strong>連絡先</strong></p>`という同じ症状を提示された。miCheckerモードは`isMicheckerRelevantRule()`でmichecker_check_idsを持たないルール(`html-structure.heading-required`はこれに該当)を除外する設計のため、本来この症状が出ないはずだが、別バグとして実在した。
+- 原因: `runAnalysis()`のmiCheckerモードフィルタは`generateCandidates()`直後、enrichment(AI呼び出し)より**前**に1回だけ適用されていた。`enrichHeadingReviewWithLlm`・`enrichAvoidTextAsImageWithLlm`・`enrichAsciiArtWithLlm`はいずれも`items.push()`で新規候補を追加することがあり、この新規追加分はフィルタを一切通過せず素通りしていた。
+- 修正: 同じフィルタをenrichment完了後にも追加適用(二重フィルタ)。前段は既存どおりenrichment対象・LLM呼び出し件数を絞る最適化として維持し、後段でenrichmentが追加した非対応ルール候補を確実に除外する。
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで`tables`サンプルをKBモード(31件)とmiCheckerモード(23件、`html-structure.heading-required`含まれず)で解析しエラー無しを確認。AI enrichmentが実際に新規候補を追加するケースでの効果はGEMINI_API_KEY未設定のため未検証。
+- 教訓: 1つの症状報告(表セル内の見出し破壊)を直しても、同じ根本原因が複数の経路(KBモード・miCheckerモード)に染み出している可能性がある。「モード違いでも同じ症状が出た」というユーザーの追加報告は、表面的な修正が不十分だったことを示す重要なシグナルであり、安易に「まだデプロイされていないだけ」と決めつけず、コードパスを最後まで追う必要がある。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。
