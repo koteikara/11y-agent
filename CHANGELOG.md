@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 表修正手段(M2分割/M4フラット化)のルール解説がテーブルの実際の結合分類とずれる不具合を修正
+
+- 背景・目的: PR#91/#92/#93で「ルール解説ポップアップが選択中の修正方法と食い違う」不具合を修正したはずだったが、ユーザーが追加のスクリーンショット(cand_001、rule_id `table.cell-merge-layout`、修正方法1件のみ「結合セルを解除してフラットな表に整える」)で「修正されていなさそう」と再報告。調査の結果、PR#91-93はポップアップが参照する候補オブジェクトのルーティング(どの候補を見せるか)は正しく直っていたが、その候補オブジェクト自体が持つ`rule_id`が依然として不正確なケースが残っていた。具体的には`planTableTreatments()`内のM2(複数表へ分割)・M4(結合解除フラット化)が、その表の実際の結合分類(`classifyMergedCellTable()`が返す見出し/概要/注記/レイアウト等の判定)を無視し、`rule_id: "table.cell-merge-layout"`(レイアウト用途)を無条件に固定していた。このため、例えば見出し用途の結合セル(候補「先頭の結合セルが見出し用途に見えます」、本来の分類は`table.cell-merge-heading`)でM4(フラット化)を選ぶと、ポップアップは無関係な「セル結合①レイアウト用途」(表を画像2枚並びに置き換える、という助言)を表示していた。これはセッション冒頭でユーザーが最初に報告したのと同種の不一致で、PR#91-93では対処しきれていなかった根本原因。
+- 主な変更内容:
+  - `collectTableCandidates()`が`classifyMergedCellTable()`の結果(`mergeRule`)を`planTableTreatments(table, mergeRule)`に渡すよう変更。
+  - `planTableTreatments()`内でM2(`buildSplitMethod`)・M4(`buildFlattenMethod`)の`ruleId`を、`mergeRule?.ruleId || "table.cell-merge-layout"`(分類が取れた場合はその分類、取れない場合のみ従来どおりレイアウト用途にフォールバック)に変更。
+  - 上記に伴い、`fixMethodDescription()`・`fixMethodBadge()`内でM2(分割案)を判定していた`rule_id === "table.cell-merge-layout" && 生成後HTMLに表が2つ以上`という間接的な判定を、M4等と同様の`method_label === "意味単位ごとに複数の表へ分割"`という直接判定に置き換え(rule_idが表の分類によって変動するようになったため、旧判定はM2を検出できなくなる)。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功(既存サンプルの候補件数に変化なし、rule_idの値のみ表の分類に応じて変わる)。
+  - Playwrightで`tables`サンプルの候補「先頭の結合セルが見出し用途に見えます」(`table.cell-merge-heading`)を選択し、修正方法をM4(結合セルを解除してフラットな表に整える)に切り替えてルール解説ポップアップを確認したところ、タイトルが「セル結合②見出し用途」(修正前は誤って「セル結合①レイアウト用途」)に正しく変わることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-22: 表修正手段メニューをPR-T4(実データ検証+ドキュメント整備)で完了
 
 - 背景・目的: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`の最終ステージとして、全サンプルでの手段件数・変換品質の総括検証と、作業者向けドキュメントの整備を行った。これによりPR-T1(複数手段化の骨格)〜T4までの表修正手段メニュー拡張プロジェクトが完了した。

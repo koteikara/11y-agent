@@ -2982,7 +2982,7 @@
 
       // 表修正の代替手段メニュー(M1: データ表として維持/M2: 複数表へ分割/M3: 見出し・段落へ解体)。
       // 適用可能なものを全て兄弟候補としてプッシュする — 詳細はplanTableTreatments()を参照。
-      const methods = planTableTreatments(table);
+      const methods = planTableTreatments(table, mergeRule);
       methods.forEach((method) => {
         candidates.push(
           makeCandidate({
@@ -3083,10 +3083,15 @@
   // M1(データ表として維持)とM3(表をやめて解体)は、旧来の単一判定(shouldPreserveAsDataTable /
   // isLikelyLayoutTable)より緩いゲートで「選択肢として提示するかどうか」を決める。ただし
   // shouldPreserveAsDataTable()自体は確信度・推奨順の判断材料として引き続き使う。
-  function planTableTreatments(table) {
+  function planTableTreatments(table, mergeRule) {
     const preserve = shouldPreserveAsDataTable(table);
     const canOfferSemantics = canOfferDataTableSemanticsMethod(table);
     const canOfferSplit = canSplitMergedRowsIntoTables(table);
+    // M2(分割)・M4(フラット化)は結合そのものを解消する手段であり、そのルール解説は
+    // この表で実際に検出された結合分類(見出し/概要/注記/レイアウト等)に合わせる。
+    // 分類が無い(classifyMergedCellTable()がnullを返した)場合のみ、汎用の
+    // table.cell-merge-layoutをフォールバックとして使う。
+    const mergeRuleId = mergeRule?.ruleId || "table.cell-merge-layout";
 
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
@@ -3103,7 +3108,7 @@
     });
 
     const buildSplitMethod = () => ({
-      ruleId: "table.cell-merge-layout",
+      ruleId: mergeRuleId,
       message: "結合により複数の意味単位が1つの表にまとめられています。",
       reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
       afterHtml: splitMergedRowsIntoTablesHtml(table),
@@ -3138,7 +3143,7 @@
     // 維持したいがセル結合だけをやめたい場合の選択肢。M2(複数表への分割)とは異なり表を割らない
     // ため、両方が適用可能な表でも別の選択肢として共存させる。
     const buildFlattenMethod = () => ({
-      ruleId: "table.cell-merge-layout",
+      ruleId: mergeRuleId,
       message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
       reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
       afterHtml: buildFlattenedTableHtml(table),
@@ -7720,11 +7725,10 @@
 
   function fixMethodDescription(candidate) {
     const ruleId = candidate?.rule_id || "";
-    const afterHtml = candidate?.proposal?.after_html || "";
     if (ruleId === "table.caption") {
       return "表は残し、caption / th / scope など読み取りに必要な構造を整えます。";
     }
-    if (ruleId === "table.cell-merge-layout" && (afterHtml.match(/<table\b/gi) || []).length >= 2) {
+    if (candidate?.method_label === "意味単位ごとに複数の表へ分割") {
       return "1つの表に押し込まれた内容を、意味単位ごとの複数の表に分割します。";
     }
     if (candidate?.method_label === "結合セルを解除してフラットな表に整える") {
@@ -7758,7 +7762,7 @@
   }
 
   function fixMethodBadge(candidate) {
-    if (candidate?.rule_id === "table.cell-merge-layout" && ((candidate?.proposal?.after_html || "").match(/<table\b/gi) || []).length >= 2) {
+    if (candidate?.method_label === "意味単位ごとに複数の表へ分割") {
       return "分割案";
     }
     if (candidate?.proposal?.patch_mode === "none") {
