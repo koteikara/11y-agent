@@ -565,7 +565,9 @@
     });
     els.candidateDetail?.addEventListener("click", (event) => {
       if (event.target.closest(".rule-learn-more-trigger")) {
-        openRuleLearnMore(selectedCandidate());
+        // Use the currently viewed fix method (not always the primary/default candidate) so the
+        // rule explanation matches what "この候補で変わること" is currently describing.
+        openRuleLearnMore(activeFixMethodCandidate(selectedCandidate()));
       }
     });
     els.ruleLearnMoreCloseButton?.addEventListener("click", closeRuleLearnMore);
