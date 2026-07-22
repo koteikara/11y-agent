@@ -3132,8 +3132,23 @@
       };
     };
 
-    // 推奨順は現行のウォーターフォール判定(データ表維持 > 分割 > レイアウト解体)を踏襲する。
-    // データ表として維持すべき表では維持案を先に、そうでない表では分割・解体案を先に示す。
+    // M4: 結合セルを解除し、rowspan/colspanを持たない単純な行×列グリッドの表に整える。表自体は
+    // 維持したいがセル結合だけをやめたい場合の選択肢。M2(複数表への分割)とは異なり表を割らない
+    // ため、両方が適用可能な表でも別の選択肢として共存させる。
+    const buildFlattenMethod = () => ({
+      ruleId: "table.cell-merge-layout",
+      message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
+      reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
+      afterHtml: buildFlattenedTableHtml(table),
+      patchMode: "replace",
+      confidence: "medium",
+      requiresHumanReview: true,
+      llmContext: null,
+      methodLabel: "結合セルを解除してフラットな表に整える",
+    });
+
+    // 推奨順は現行のウォーターフォール判定(データ表維持 > 分割 > レイアウト解体)を踏襲し、
+    // 新手段(M4)はその後ろに追加する。
     const methods = [];
     if (preserve) {
       if (canOfferSemantics) methods.push(buildSemanticsMethod());
@@ -3143,7 +3158,97 @@
       methods.push(buildDecomposeMethod());
       if (canOfferSemantics) methods.push(buildSemanticsMethod());
     }
+    if (table.querySelector("[rowspan], [colspan]")) {
+      methods.push(buildFlattenMethod());
+    }
     return methods;
+  }
+
+  // M4のセル生成ヘルパー。結合で複数マスを占めていたセルは、そのマス全てに同じ内容(innerHTML)を
+  // 複製する(テキストだけでなくリンク等の構造も保持する。空セルにはしない)。rowspan/colspan/
+  // scope/headers/bgcolor/idはこの表側で再設定・除去するため元セルから引き継がない(idは
+  // 複製先すべてに同じ値を持たせるとHTML上のid重複を生むため必ず除外する)。
+  function buildFlattenedCell(item, tagName, scope) {
+    const el = document.createElement(tagName);
+    [...item.cell.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (["scope", "headers", "bgcolor", "rowspan", "colspan", "id"].includes(name)) return;
+      el.setAttribute(attr.name, attr.value);
+    });
+    el.innerHTML = item.cell.innerHTML;
+    removeStyleProperties(el, ["color", "background", "background-color"]);
+    if (scope) {
+      el.setAttribute("scope", scope);
+    }
+    return el;
+  }
+
+  // buildExpandedTableGrid()で結合を展開したグリッドから、rowspan/colspanの無い単純な表を
+  // 再構築する(M4)。過去バグの教訓(buildDataTableSemanticsHtmlのcolspan無視パディング、
+  // splitMergedRowsIntoTablesHtmlのcolspanヘッダー複製)を踏まえ、グリッドの各マス(isOriginの
+  // 真偽を問わず)をそのまま1マス=1セルとして書き出す(マス数を数え違えない)。
+  function buildFlattenedTableHtml(table) {
+    const grid = buildExpandedTableGrid(table);
+    if (!grid.length) {
+      return cleanHtml(table.outerHTML);
+    }
+    let maxColumns = grid.reduce((max, row) => Math.max(max, row.length), 0);
+    // 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して書かれていると
+    // (実データで確認済み)、buildExpandedTableGridがその余剰セルを新しい列として展開してしまう。
+    // 全行にわたって完全に空の末尾列は情報を持たないため切り詰める(先頭・中間の空セルは
+    // 位置関係の情報を持ちうるため対象外。末尾のみ)。
+    while (maxColumns > 0 && grid.every((row) => !row[maxColumns - 1]?.text)) {
+      maxColumns -= 1;
+    }
+    const firstRowIsHeaderRow = Boolean(grid[0]?.length) && grid[0].slice(0, maxColumns).every((item) => item?.isHeader);
+
+    const output = document.createElement("table");
+    [...table.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (["rowspan", "colspan"].includes(name)) return;
+      output.setAttribute(attr.name, attr.value);
+    });
+
+    const captionElement = table.querySelector(":scope > caption");
+    if (captionElement) {
+      const caption = document.createElement("caption");
+      caption.textContent = normalizeText(captionElement.textContent);
+      output.appendChild(caption);
+    }
+
+    const rows = grid.map((row, rowIndex) => {
+      const tr = document.createElement("tr");
+      for (let columnIndex = 0; columnIndex < maxColumns; columnIndex += 1) {
+        const item = row[columnIndex];
+        if (!item) {
+          tr.appendChild(document.createElement("td"));
+          continue;
+        }
+        let scope = "";
+        if (firstRowIsHeaderRow && rowIndex === 0 && item.isHeader) {
+          scope = "col";
+        } else if (columnIndex === 0 && item.isHeader) {
+          scope = "row";
+        }
+        tr.appendChild(buildFlattenedCell(item, item.isHeader ? "th" : "td", scope));
+      }
+      return tr;
+    });
+
+    if (firstRowIsHeaderRow) {
+      const thead = document.createElement("thead");
+      thead.appendChild(rows[0]);
+      output.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      rows.slice(1).forEach((tr) => tbody.appendChild(tr));
+      output.appendChild(tbody);
+    } else {
+      const tbody = document.createElement("tbody");
+      rows.forEach((tr) => tbody.appendChild(tr));
+      output.appendChild(tbody);
+    }
+
+    return cleanHtml(output.outerHTML);
   }
 
   // miChecker C_331.0/C_331.1: th要素はscope属性(col/row/colgroup/rowgroup)を持つ必要がある。
@@ -7446,6 +7551,9 @@
     }
     if (ruleId === "table.cell-merge-layout" && (afterHtml.match(/<table\b/gi) || []).length >= 2) {
       return "1つの表に押し込まれた内容を、意味単位ごとの複数の表に分割します。";
+    }
+    if (candidate?.method_label === "結合セルを解除してフラットな表に整える") {
+      return "rowspan/colspanを解除し、結合していたマスに同じ内容を並べた単純な表に整えます。表は1つのまま、分割や解体はしません。";
     }
     if (ruleId === "table.layout-table") {
       return "表としての関係が薄い場合に、本文や画像配置へ分解します。";
