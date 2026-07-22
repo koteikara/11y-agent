@@ -7369,7 +7369,9 @@
     const fixMethodCandidates = candidatesForSameTarget(candidate);
     const chosenMethodCandidate = activeFixMethodCandidate(candidate);
     const chosenMethodId = chosenMethodCandidate.candidate_id;
-    const changeSummary = buildChangeSummary(candidate)
+    // Use the currently chosen method (not always the primary/default candidate) so "この候補で
+    // 変わること" reflects whichever method is selected in the "修正方法" grid below it.
+    const changeSummary = buildChangeSummary(chosenMethodCandidate)
       .map((item) => `<li>${escapeHtml(item)}</li>`)
       .join("");
     const changeNote = invisibleChangeNote(chosenMethodCandidate);
@@ -7489,7 +7491,11 @@
     } else if (ruleId === "link.link-purpose-standalone") {
       items.push("読み上げでもリンクの行き先が分かるようにします。");
     } else if (ruleId.startsWith("table.")) {
-      items.push("表は、見出しやキャプションの役割が分かる形に整えます。");
+      // 表の候補は複数の手段(データ表維持/分割/解体/フラット化/箇条書き化/見出し段落展開)を
+      // 持ちうるため、汎用文言ではなく選択中の手段固有の説明(fixMethodDescription、修正方法
+      // グリッドと同じ文言)を使う。こうすることで、この直後に置かれるルール解説ボタンの内容
+      // (activeFixMethodCandidate経由で同じ候補を参照)と食い違わなくなる。
+      items.push(fixMethodDescription(candidate));
     } else if (ruleId === "html-structure.deprecated-elements") {
       items.push("古い装飾用のタグを取り除き、通常のテキストとして表示します。");
     } else if (ruleId === "html-structure.embedded-script-behavior") {
