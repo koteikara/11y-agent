@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 曖昧な見出し検知(html-structure.heading-content-quality)で「修正後HTML」が変わらず分かりにくい点にUI注記を追加
+
+- 背景・目的: ユーザーから、AIが曖昧な見出し(例:「注意！」)を検知した候補で「修正前HTML」と「修正後HTML」が完全に同一のまま表示され、「これもおかしい」との指摘があった。一時、「`<span>`を太字と誤判定しているのでは」との仮説も検討したが、AIが返した実際の理由(reason)を確認したところ「見出しの文言が抽象的で、直後の段落の具体的な内容が不明瞭」という正当な判定であり、span/太字とは無関係と判明した。
+  - 根本の設計: `html-structure.heading-content-quality`ルール(見出しの内容と太字利用の区別)は、機械判定(`collectHeadingContentQualityCandidates`、極端に短い/記号のみの見出し)・AI判定(`applyHeadingReviewResult`の`vague_headings`)のどちらも、意図的に代替の見出し文言を提案しない(`patch_mode: "none"`、`afterHtml`は`beforeHtml`と同一)。理由の判断に高い文脈理解が必要なため、AIに文言まで生成させず人間が判断する設計だが、UI上「修正後HTML」欄が「修正前」と同じテキストのまま表示されるため、何も変わっていないように見えて分かりにくかった。
+  - ユーザーに改善方向(AIに代替文言も提案させる/UIで「AIは文言を提案しない」旨を明示する)を確認したところ、後者を選択。
+- 主な変更内容:
+  - `goal2-app/public/index.html`の`#decisionFold`内、`#afterHtml`テキストエリアの直後に`#afterHtmlNoAiSuggestionNote`(既定で`hidden`)を追加。
+  - `renderDetail()`で、選択中の候補(`chosenMethodCandidate`)の`rule_id`が`html-structure.heading-content-quality`かつ`proposal.patch_mode`が`"none"`のときだけ、この注記の`hidden`を解除するよう変更。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで、記号のみの見出し(`<h2>※</h2>`)を含むカスタムHTMLを解析し、「見出しの内容と太字利用の区別」候補選択時のみ注記が表示され、他の候補(`html-structure.heading-order`・`text.note-symbol`)選択時は表示されないことを確認。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/app.js`
+
 ## 2026-07-22: miChecker指摘対応のみモードでも、enrichment由来の非対応ルール候補が漏れる不具合を修正
 
 - 背景・目的: 直前の「見出し提案(AI)が表セル内の段落を見出し要素に変換してしまう不具合」修正をユーザーに説明したところ、「miChecker版もこのように修正されてしまうようです」と、`<p><strong>連絡先</strong></p>` → `<h4>連絡先</h4><p><strong>連絡先</strong></p>`という同じ壊れ方をする例を提示された。「miChecker指摘対応のみ」モードは`html-structure.heading-required`のようなmichecker_check_idsを持たないルールの候補を表示しない設計のため、本来この症状はKBモードだけの問題のはずだったが、実際にはmiCheckerモードでも起きる別のバグがあることが分かった。
