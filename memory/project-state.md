@@ -759,8 +759,17 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 原文の要点(表組み利用時の3ポイントのうち1番目): 「表組みはできるだけ単純な構造にする。セルの結合や入れ子は、表が複雑になりスクリーンリーダー等の支援技術での理解を困難にすることがある。セルの結合自体は非推奨ではないが、結合や入れ子を使う場合は読み上げが適切にできるか確認する。」これはM2(分割)・M4(フラット化)の設計意図(表を維持したまま結合を解消・分割して単純化する)と正確に一致しており、th-scope(scope属性という副次的な実装詳細への言及に留まる)よりも直接的で正確な解説になると判断した。
 - `a11y-migration-kb/rules/table/simple-structure.md`を新規作成(`origin: external-guideline`という新しい出自区分を導入。既存は`manual`/`michecker`のみだったが、フロントマター規約上origin値に列挙制限は無く、UI側も`origin`フィールドを参照する分岐が無いことを確認済みのため追加して問題ないと判断)。M2/M4の`ruleId`をこれに変更。KB→JSONLを再生成し`goal2-app/data/rules.jsonl`へ反映。
 - 作業中の事故と教訓: Editツールの`replace_all: true`で`ruleId: "table.th-scope"`という短い文字列を一括置換したところ、意図した2箇所(M2/M4)以外に、既存の独立したth-scope検出ロジック(`collectTableHeaderScopeCandidates`等、6箇所)まで誤って書き換えてしまった。置換後に`grep`で全箇所を確認して発見し、6箇所を`table.th-scope`へ戻して事なきを得た。**同一の短い文字列が複数箇所に存在しうる場合、`replace_all`は使わずピンポイントで個別置換するか、置換直後に必ずgrepで意図しない箇所が変わっていないか確認すること。**
-- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで(a)M4切り替え時のポップアップが「表組みの単純な構造」に変わり出典URLも表示されること、(b)既存th-scope候補のポップアップが「表の見出しセル(th)とscope属性」のまま誤って書き換わっていないこと、の両方を確認。PR#96として作成予定。
-- 関連ファイル: `a11y-migration-kb/rules/table/simple-structure.md`(新規)、`a11y-migration-kb/rules/table/index.md`、`goal2-app/public/app.js`、`goal2-app/data/rules.jsonl`、`a11y-migration-kb/build/rules.jsonl`。関連PR: #95(th-scope版、その後この修正で置き換え)。
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで(a)M4切り替え時のポップアップが「表組みの単純な構造」に変わり出典URLも表示されること、(b)既存th-scope候補のポップアップが「表の見出しセル(th)とscope属性」のまま誤って書き換わっていないこと、の両方を確認。同一ブランチ(claude/goal-overview-rxgrf2)への追加コミットのためPR#95のタイトル・本文を更新して反映(新規PRは作成せず)。
+- 関連ファイル: `a11y-migration-kb/rules/table/simple-structure.md`(新規)、`a11y-migration-kb/rules/table/index.md`、`goal2-app/public/app.js`、`goal2-app/data/rules.jsonl`、`a11y-migration-kb/build/rules.jsonl`。関連PR: #95。
+
+**2026-07-22 続き: 「表を直したのに全体完了にならない」報告から、AI見出し提案が表セル内を破壊する実バグを発見**
+
+- PR#95提示後、ユーザーから「安城市のサンプルページで表を修正したのに見出しの設定の修正が完了するまで全体が完了にならないのはおかしくないか」と質問。当初は「全候補に決定を下すまでページ完了にならない」という既存の完了判定仕様(`renderCandidates()`)の説明で応答し、加えて具体的に調べた「見出し階層の順守」候補(ページ先頭のh1→h2変換)は表と無関係と回答した。
+- ユーザーから「表内のことでは？」と再指摘があり、実際にはユーザーが見ていたのは別サンプル(安城市 指定緊急避難場所一覧)の別候補(「見出しの設定」= `html-structure.heading-required`、cand_003〜006)で、表のth要素(名称・連絡先・所在地・面積)を個別にh4見出しへ変換する提案だったことが、動画とサンプルHTML原文の提示で判明。ローカル環境(GEMINI_API_KEY未設定)では再現できず、コード上も現在の`buildHeadingReviewOutline()`はth/tdの祖先チェックが無いため理論上は再現しうるが、実際にAskUserQuestionで確認したところ**ユーザーはCloud Run本番環境(未再デプロイ、古いコード)で確認していたことが判明**。
+- 原因調査の結果、ユーザーが貼り付けたサンプルHTML原文から根本原因が判明: 表のth要素が`<th scope="col"><p><strong>名称</strong></p></th>`のように内部に`<p>`要素を持つ構造になっており、`buildHeadingReviewOutline()`(AIへ渡す文書アウトライン構築)が`h1〜h6,p`を祖先を問わず収集していたため、この`<p>`もアウトラインに含まれ、AIの`missing_headings`提案で`<h4>名称</h4><p>名称</p>`のようにth要素内部へ新しい見出しを挿入する候補が生成される構造的バグだった。現行コードにも実在するバグ(本番が古いから起きているのではなく、現行コードでもGEMINI_API_KEY設定時は再現しうる)と判断し修正。
+- `buildHeadingReviewOutline()`と`collectHeadingCandidates()`内のp/div短文マッチャーの両方に`element.closest("th,td")`による除外を追加。`node --check`・`node test/run-tests.js`成功。ユーザー提示の実データHTMLを`window.goal2Engine.analyze()`で直接解析し、th要素内の短文を対象にした見出し変換候補が生成されないこと、既存の`table.th-scope`候補は引き続き正しく生成されることを確認(ただしAI有効時の実際の抑止効果はGEMINI_API_KEY未設定のため未検証、入力除外のみ確認)。
+- 教訓: ユーザーの「おかしくないですか」という素朴な疑問(完了条件への疑問)が、調査を進めると全く別の重大なバグ(表構造破壊)の発見につながった。最初の説明(完了判定仕様の説明)だけで納得せず、ユーザーが「表内のことでは」と食い下がった点を軽視せず、具体的な動画・HTML原文の提示を求めたことが功を奏した。また、本番環境が未再デプロイという事実と、コード自体に実在するバグという事実は別の問題であり、「本番は古いから」で思考停止せず、現行コードそのものに同じ脆弱性がないか確認する必要がある。
+- 関連ファイル: `goal2-app/public/app.js`
 
 ## Decisions
 
