@@ -809,6 +809,7 @@
     const fragment = parseFragment(html);
     let reviewItems = generateCandidates(fragment);
     if (ruleScopeMode === "michecker") {
+      // enrichment(特にLLM呼び出し)の対象・件数を絞るため、ここで先に一度フィルタする。
       reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
     }
     await enrichLinkTitleCandidates(reviewItems);
@@ -824,6 +825,15 @@
     // already-enriched standalone image.alt-text result instead of firing a duplicate vision
     // call when the same image also appears inside a decomposed layout table.
     await enrichLayoutTableImagesWithLlm(reviewItems);
+    if (ruleScopeMode === "michecker") {
+      // enrichHeadingReviewWithLlm等は既存候補の書き換えだけでなく、items.push()で
+      // 新規候補を追加することがある(見出し追加のAI提案等)。その新規候補のルールID
+      // (例: html-structure.heading-required、michecker_check_idsを持たない)は
+      // 上の事前フィルタの対象外(=まだreviewItemsに存在しなかった)だったため、
+      // ここでもう一度同じフィルタをかけ、miCheckerモードで非対応ルールが後から
+      // 紛れ込むのを防ぐ。
+      reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
+    }
     const candidates = reviewItems
       .filter((item) => !isNoticeItem(item))
       .map((candidate, index) => ({
@@ -1889,6 +1899,12 @@
   function buildHeadingReviewOutline(fragment) {
     const blocks = [];
     fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach((element) => {
+      // 表のセル(th/td)内の段落・見出しは文書の見出し階層(アウトライン)の一部ではなく、
+      // AIに渡すとth要素の中に新しい見出し要素を挿入する提案を生成してしまう(表構造が壊れる)。
+      // 表側の見出し関連はth/scope等の専用ルールが別途扱うため、ここでは除外する。
+      if (element.closest("th,td")) {
+        return;
+      }
       const text = normalizeText(element.textContent);
       if (!text) {
         return;
@@ -2406,6 +2422,11 @@
     });
 
     fragment.content.querySelectorAll("p,div").forEach((element) => {
+      // 表のセル(th/td)内の段落は、th/scope等の表専用ルールが別途扱う対象であり、
+      // ここで見出し要素へ変換すると表構造が壊れるため対象外にする。
+      if (element.closest("th,td")) {
+        return;
+      }
       const text = normalizeText(element.textContent);
       if (element.children.length <= 1 && text.length > 0 && text.length <= 24 && /^(担当課|担当部署|届出期間|受付期間|受付窓口|申請方法|対象者|対象|問い合わせ|問合せ|お問い合わせ|お問合せ|提出先|必要書類)$/.test(text)) {
         const clone = renameElement(element, "h3");
