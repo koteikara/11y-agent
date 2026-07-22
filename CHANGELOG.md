@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 新規ルールtable/simple-structure.md追加、M2/M4のルール解説をこの一般ルールへ差し替え
+
+- 背景・目的: 直前のPR#95(M2/M4のルール解説をth-scopeへ差し替え)提示に対し、ユーザーからScience Tokyo(旧東京科学大学)のウェブアクセシビリティサポートブック内「表組み(テーブル)における配慮」ページのURLとともに、「結合セルはできるだけ単純な構造にする」というガイドラインを採用できないか、との提案があった。同ページ本文(ユーザーが直接貼り付けたもの。プロキシのドメインポリシーにより本セッションからは直接フェッチ不可)は、表組みの3つのポイント(1. できるだけ単純な構造にする、2. 行・列に見出しをつける、3. 表組み以外の表現を検討する)を挙げており、特に1番目が「セルの結合や入れ子は複雑になるため避け、結合を使う場合は読み上げ確認をする」という内容で、M2(複数表への分割)・M4(結合解除フラット化)の実際の動作(表を維持したまま結合を解消・分割して単純化する)と正確に一致していた。th-scope(PR#95)はM2/M4が副次的に行うscope属性設定への言及に留まっていたのに対し、この新ルールは両手法の設計意図そのものを説明できる。
+- 主な変更内容:
+  - `a11y-migration-kb/rules/table/simple-structure.md`を新規作成。`origin: external-guideline`(内部マニュアル`manual`・miChecker`michecker`のいずれでもない出典を明示する新しい値)、`resource`に該当ページのURLを設定。本文はユーザーが貼り付けた原文を要約する形で記載し、M2(分割)・M4(フラット化)それぞれに対応する例を2件収録。
+  - `a11y-migration-kb/rules/table/index.md`に追記。
+  - `planTableTreatments()`のM2(`buildSplitMethod`)・M4(`buildFlattenMethod`)の`ruleId`を、PR#95の`"table.th-scope"`から`"table.simple-structure"`へ変更。
+  - `a11y-migration-kb/tools/okf2jsonl.py --bundle . --out build/rules.jsonl`でJSONLを再生成し、`goal2-app/data/rules.jsonl`へコピー(運用手順どおり)。
+  - 作業中、Editツールの`replace_all`で`ruleId: "table.th-scope"`という文字列を一括置換した際、無関係な既存のth-scope検出候補(`collectTableHeaderScopeCandidates`・`collectThLayoutPatternCandidate`・`collectThlessDataTableFallbackCandidate`内の6箇所)まで誤って`table.simple-structure`に書き換わっていたことに気づき、対象2箇所(M2/M4)のみ残して6箇所を`table.th-scope`に戻した。教訓: 複数箇所に同一の短い文字列が存在する場合、`replace_all`は意図しない箇所まで書き換えるリスクがあるため、対象を一意に絞れる周辺コンテキストを含めて置換するか、置換後に必ず`grep`で全箇所を確認する。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで、候補「先頭の結合セルが見出し用途に見えます」をM4に切り替え、ルール解説ポップアップが「表組みの単純な構造」(出典: 該当URL)に変わり、本文がM4の実際の動作と整合することを確認。あわせて、既存のth-scope検出候補(「表の見出しセル(th)とscope属性」)のポップアップが誤って書き換わっていないことも確認。
+- 関連ファイル: `a11y-migration-kb/rules/table/simple-structure.md`(新規)、`a11y-migration-kb/rules/table/index.md`、`goal2-app/public/app.js`、`goal2-app/data/rules.jsonl`、`a11y-migration-kb/build/rules.jsonl`
+
 ## 2026-07-22: 表修正手段(M2分割/M4フラット化)のルール解説がテーブルの実際の結合分類とずれる不具合を修正
 
 - 背景・目的: PR#91/#92/#93で「ルール解説ポップアップが選択中の修正方法と食い違う」不具合を修正したはずだったが、ユーザーが追加のスクリーンショット(cand_001、rule_id `table.cell-merge-layout`、修正方法1件のみ「結合セルを解除してフラットな表に整える」)で「修正されていなさそう」と再報告。調査の結果、PR#91-93はポップアップが参照する候補オブジェクトのルーティング(どの候補を見せるか)は正しく直っていたが、その候補オブジェクト自体が持つ`rule_id`が依然として不正確なケースが残っていた。具体的には`planTableTreatments()`内のM2(複数表へ分割)・M4(結合解除フラット化)が、その表の実際の結合分類(`classifyMergedCellTable()`が返す見出し/概要/注記/レイアウト等の判定)を無視し、`rule_id: "table.cell-merge-layout"`(レイアウト用途)を無条件に固定していた。このため、例えば見出し用途の結合セル(候補「先頭の結合セルが見出し用途に見えます」、本来の分類は`table.cell-merge-heading`)でM4(フラット化)を選ぶと、ポップアップは無関係な「セル結合①レイアウト用途」(表を画像2枚並びに置き換える、という助言)を表示していた。これはセッション冒頭でユーザーが最初に報告したのと同種の不一致で、PR#91-93では対処しきれていなかった根本原因。

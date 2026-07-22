@@ -3090,8 +3090,9 @@
     // M2(分割)・M4(フラット化)は、見出し/概要/注記/レイアウトいった「結合の用途」を
     // 判定するcell-merge-N系ルールのどれとも一致しない(表を維持したまま結合だけを
     // 解消する、または意味単位に割るという、このツール独自の技術的な手段のため)。
-    // どちらも実際にth要素へscope属性を設定する変換を行うため、用途分類ではなく
-    // 最も近い一般ルールであるtable.th-scopeを解説として使う。
+    // どちらも「結合セルはできるだけ単純な構造にする」という一般原則(table.simple-structure、
+    // 出典: Science Tokyoウェブアクセシビリティサポートブック)そのものの実装なので、
+    // 用途分類ではなくこの一般ルールを解説として使う。
 
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
@@ -3108,7 +3109,7 @@
     });
 
     const buildSplitMethod = () => ({
-      ruleId: "table.th-scope",
+      ruleId: "table.simple-structure",
       message: "結合により複数の意味単位が1つの表にまとめられています。",
       reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
       afterHtml: splitMergedRowsIntoTablesHtml(table),
@@ -3143,7 +3144,7 @@
     // 維持したいがセル結合だけをやめたい場合の選択肢。M2(複数表への分割)とは異なり表を割らない
     // ため、両方が適用可能な表でも別の選択肢として共存させる。
     const buildFlattenMethod = () => ({
-      ruleId: "table.th-scope",
+      ruleId: "table.simple-structure",
       message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
       reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
       afterHtml: buildFlattenedTableHtml(table),

@@ -7,6 +7,7 @@ timestamp: 2025-12-15T00:00:00Z
 # 表ルール
 - [caption.md](/rules/table/caption.md) — 表のキャプション
 - [th-scope.md](/rules/table/th-scope.md) — 表の見出しセル(th)とscope属性
+- [simple-structure.md](/rules/table/simple-structure.md) — 表組みの単純な構造
 - [format-clear.md](/rules/table/format-clear.md) — 取込/貼付け表の書式解除
 - [layout-table.md](/rules/table/layout-table.md) — テーブルレイアウトの解体
 - [cell-merge-layout.md](/rules/table/cell-merge-layout.md) — セル結合①レイアウト用途
