@@ -3147,8 +3147,34 @@
       methodLabel: "結合セルを解除してフラットな表に整える",
     });
 
+    // M5: 実質1列、または2列の「ラベル: 値」構造の表を箇条書きへ変換する。
+    const buildListMethod = () => ({
+      ruleId: "table.layout-table",
+      message: "この表は箇条書きとして表現できる可能性があります。",
+      reason: "列数が少なく1項目=1行の構造に見えるため、表をやめて箇条書き(リスト)へ変換する方法も選択肢に含めます。",
+      afterHtml: buildTableAsListHtml(table),
+      patchMode: "replace",
+      confidence: "medium",
+      requiresHumanReview: true,
+      llmContext: null,
+      methodLabel: "箇条書きに変換する",
+    });
+
+    // M6: 行見出しを持つ表を、1行=1項目の見出し+段落へ展開する。<dl>は使わない(確定方針)。
+    const buildRowSectionsMethod = () => ({
+      ruleId: "table.layout-table",
+      message: "この表は行ごとに見出し+説明文として表現できる可能性があります。",
+      reason: "各行が行見出し(1列目)を持ち、独立した項目として読めるため、1行=1項目の見出し+段落へ展開する方法も選択肢に含めます。",
+      afterHtml: buildRowsAsSectionsHtml(table),
+      patchMode: "replace",
+      confidence: "medium",
+      requiresHumanReview: true,
+      llmContext: null,
+      methodLabel: "1行ずつ見出し・段落に展開する",
+    });
+
     // 推奨順は現行のウォーターフォール判定(データ表維持 > 分割 > レイアウト解体)を踏襲し、
-    // 新手段(M4)はその後ろに追加する。
+    // 新手段(M4〜M6)はその後ろに追加する。
     const methods = [];
     if (preserve) {
       if (canOfferSemantics) methods.push(buildSemanticsMethod());
@@ -3160,6 +3186,12 @@
     }
     if (table.querySelector("[rowspan], [colspan]")) {
       methods.push(buildFlattenMethod());
+    }
+    if (canOfferListConversion(table)) {
+      methods.push(buildListMethod());
+    }
+    if (canOfferRowSections(table)) {
+      methods.push(buildRowSectionsMethod());
     }
     return methods;
   }
@@ -3187,10 +3219,12 @@
   // 再構築する(M4)。過去バグの教訓(buildDataTableSemanticsHtmlのcolspan無視パディング、
   // splitMergedRowsIntoTablesHtmlのcolspanヘッダー複製)を踏まえ、グリッドの各マス(isOriginの
   // 真偽を問わず)をそのまま1マス=1セルとして書き出す(マス数を数え違えない)。
-  function buildFlattenedTableHtml(table) {
+  // buildExpandedTableGrid()の結果から、M4〜M6が共通して必要とする形状情報(列数・ヘッダー行の
+  // 有無・ボディ行)をまとめて計算する。
+  function computeTableGridShape(table) {
     const grid = buildExpandedTableGrid(table);
     if (!grid.length) {
-      return cleanHtml(table.outerHTML);
+      return null;
     }
     let maxColumns = grid.reduce((max, row) => Math.max(max, row.length), 0);
     // 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して書かれていると
@@ -3200,7 +3234,140 @@
     while (maxColumns > 0 && grid.every((row) => !row[maxColumns - 1]?.text)) {
       maxColumns -= 1;
     }
-    const firstRowIsHeaderRow = Boolean(grid[0]?.length) && grid[0].slice(0, maxColumns).every((item) => item?.isHeader);
+    const firstRowIsHeaderRow = maxColumns > 0 && Boolean(grid[0]?.length) && grid[0].slice(0, maxColumns).every((item) => item?.isHeader);
+    const bodyRows = firstRowIsHeaderRow ? grid.slice(1) : grid;
+    return { grid, maxColumns, firstRowIsHeaderRow, bodyRows };
+  }
+
+  // M5: 実質1列の表、または2列で「ラベル: 値」構造の表(ボディ行の1列目がラベルらしい短い
+  // テキストであること)にのみ適用する。3列以上や、ラベルらしくない1列目を持つ表は対象外。
+  function canOfferListConversion(table) {
+    const shape = computeTableGridShape(table);
+    if (!shape || !shape.bodyRows.length) return false;
+    if (shape.maxColumns === 1) return true;
+    if (shape.maxColumns === 2) {
+      return shape.bodyRows.every((row) => row[0]?.cell && isHeaderLikeTableCell(row[0].cell));
+    }
+    return false;
+  }
+
+  // M6: 行見出し(1列目がth、またはラベルらしい短いテキスト)を持つ3行以上の表にのみ適用する。
+  function canOfferRowSections(table) {
+    const shape = computeTableGridShape(table);
+    if (!shape) return false;
+    if (shape.maxColumns < 2 || shape.bodyRows.length < 3) return false;
+    return shape.bodyRows.every((row) => {
+      const first = row[0];
+      return Boolean(first?.cell) && (first.isHeader || isHeaderLikeTableCell(first.cell));
+    });
+  }
+
+  // M5: ヘッダー行を除く各行を<li>へ変換する。2列構造なら「1列目: 2列目」を1項目にまとめる。
+  // キャプションがあれば見出しとして先頭に置く。セル内のリンク・画像はinnerHTMLごと引き継ぎ、
+  // テキストだけに削らない。
+  // 行の先頭maxColumns個のマスが全て同一の元セル(colspanで複数列にまたがる1つのセル)を
+  // 指しているかどうかを判定する。M4のグリッド展開はこのようなセルを列ごとに複製するため、
+  // 「ラベル: 値」形式で組み立てるM5/M6がこれをそのまま使うと「見出し: 見出し」のように
+  // 同じ内容を重複表示してしまう。該当する行は1つの完結した内容として扱う。
+  function isSingleMergedCellRow(row, maxColumns) {
+    const firstCell = row[0]?.cell;
+    if (!firstCell) return false;
+    for (let columnIndex = 1; columnIndex < maxColumns; columnIndex += 1) {
+      if (row[columnIndex]?.cell !== firstCell) return false;
+    }
+    return true;
+  }
+
+  function buildTableAsListHtml(table) {
+    const shape = computeTableGridShape(table);
+    if (!shape) {
+      return cleanHtml(table.outerHTML);
+    }
+    const { maxColumns, bodyRows } = shape;
+
+    const output = document.createElement("template");
+    const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
+    if (captionText) {
+      const heading = document.createElement(suggestSeparatedHeadingTag(table));
+      heading.textContent = captionText;
+      output.content.appendChild(heading);
+    }
+
+    const list = document.createElement("ul");
+    bodyRows.forEach((row) => {
+      const li = document.createElement("li");
+      const isSingleCell = maxColumns < 2 || isSingleMergedCellRow(row, maxColumns);
+      if (!isSingleCell && row[0]?.text) {
+        const strong = document.createElement("strong");
+        strong.textContent = `${row[0].text}: `;
+        li.appendChild(strong);
+        if (row[1]?.cell) {
+          appendHtml(li, cleanHtml(row[1].cell.innerHTML));
+        }
+      } else if (row[0]?.cell) {
+        appendHtml(li, cleanHtml(row[0].cell.innerHTML));
+      }
+      if (normalizeText(li.textContent)) {
+        list.appendChild(li);
+      }
+    });
+    output.content.appendChild(list);
+    return cleanHtml(output.innerHTML);
+  }
+
+  // M6: 各行を「行見出し+値の段落」に展開する。列見出しは1行目th(あれば)を使い、無ければ
+  // 機械的なラベルを付けず値のみの段落にする。<dl>は使わない(確定方針、project-state.md
+  // Decisions 2026-07-10: CMS入力画面での運用のしやすさを優先し見出し+段落構造を使う)。
+  function buildRowsAsSectionsHtml(table) {
+    const shape = computeTableGridShape(table);
+    if (!shape) {
+      return cleanHtml(table.outerHTML);
+    }
+    const { maxColumns, firstRowIsHeaderRow, grid, bodyRows } = shape;
+    const columnHeaders = firstRowIsHeaderRow ? grid[0].slice(0, maxColumns).map((item) => item?.text || "") : [];
+    const headingTag = suggestSeparatedHeadingTag(table);
+
+    const output = document.createElement("template");
+    const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
+    if (captionText) {
+      const captionParagraph = document.createElement("p");
+      captionParagraph.textContent = captionText;
+      output.content.appendChild(captionParagraph);
+    }
+
+    bodyRows.forEach((row) => {
+      const first = row[0];
+      if (!first?.cell) return;
+      const heading = document.createElement(headingTag);
+      appendHtml(heading, cleanHtml(first.cell.innerHTML));
+      output.content.appendChild(heading);
+      // colspanで行全体が1つのセルの場合、見出しが行の内容全てを既に含んでいるため、
+      // 同じ内容を繰り返す段落は追加しない(isSingleMergedCellRow、buildTableAsListHtml参照)。
+      if (isSingleMergedCellRow(row, maxColumns)) return;
+      for (let columnIndex = 1; columnIndex < maxColumns; columnIndex += 1) {
+        const item = row[columnIndex];
+        if (!item?.cell || !item.text) continue;
+        const paragraph = document.createElement("p");
+        const columnHeaderText = columnHeaders[columnIndex];
+        if (columnHeaderText) {
+          const strong = document.createElement("strong");
+          strong.textContent = `${columnHeaderText}: `;
+          paragraph.appendChild(strong);
+        }
+        appendHtml(paragraph, cleanHtml(item.cell.innerHTML));
+        output.content.appendChild(paragraph);
+      }
+    });
+
+    return cleanHtml(output.innerHTML);
+  }
+
+  function buildFlattenedTableHtml(table) {
+    const shape = computeTableGridShape(table);
+    if (!shape || shape.maxColumns === 0) {
+      return cleanHtml(table.outerHTML);
+    }
+    const { grid, maxColumns, firstRowIsHeaderRow } = shape;
 
     const output = document.createElement("table");
     [...table.attributes].forEach((attr) => {
@@ -7554,6 +7721,12 @@
     }
     if (candidate?.method_label === "結合セルを解除してフラットな表に整える") {
       return "rowspan/colspanを解除し、結合していたマスに同じ内容を並べた単純な表に整えます。表は1つのまま、分割や解体はしません。";
+    }
+    if (candidate?.method_label === "箇条書きに変換する") {
+      return "1項目=1行の構造に見えるため、表をやめて箇条書き(リスト)として表現します。";
+    }
+    if (candidate?.method_label === "1行ずつ見出し・段落に展開する") {
+      return "行ごとに見出し+説明文の段落として展開し、1行=1項目の読みやすい構成にします。";
     }
     if (ruleId === "table.layout-table") {
       return "表としての関係が薄い場合に、本文や画像配置へ分解します。";

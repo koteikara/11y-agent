@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 表修正手段メニューをPR-T3(M5: 箇条書き化/M6: 見出し・段落展開)で拡張
+
+- 背景・目的: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`のPR-T3として、列数が少ない表を箇条書きへ変換する手段(M5)と、行見出しを持つ表を1行=1項目の見出し+段落へ展開する手段(M6)を追加した。
+- 主な変更内容:
+  - `computeTableGridShape(table)`を新設。`buildExpandedTableGrid()`とM4で導入した末尾空列トリミングロジックを共通化し、M4/M5/M6が同じ形状情報(列数・ヘッダー行の有無・ボディ行)を共有する。
+  - `canOfferListConversion(table)`(M5適用条件: 実質1列、または2列でボディ行の1列目が`isHeaderLikeTableCell`判定でラベルらしい表)、`canOfferRowSections(table)`(M6適用条件: 1列目が行見出し(th、またはラベルらしいテキスト)を持つ3行以上の表)を新設。指示書の「保守的に実装」方針どおり、条件を満たさない表にはカードを出さない。
+  - `buildTableAsListHtml(table)`(M5)・`buildRowsAsSectionsHtml(table)`(M6)を新設。両方ともセル内のリンク・画像はinnerHTMLごと引き継ぎ、テキストだけに削らない。M6は`<dl>`を使わず見出し+段落構造にする(確定方針、project-state.md Decisions 2026-07-10)。
+  - M5/M6ともrule_idは既存の`table.layout-table`に相乗り(PR-T1/T2の方針どおり、新設なし)。`fixMethodDescription()`に`method_label`で判定する専用の説明文分岐を追加。
+- **実装中に発見・修正した不具合**: colspanで複数列にまたがる1つのセルを持つ行で、M5が「見出し: 見出し」、M6でも同内容の段落が重複表示される不具合をPlaywright検証で発見(procedure-overviewサンプルの「受付時間」表: `<td colspan="2">受付時間</td>`が「受付時間: 受付時間」という無意味な箇条書き項目になっていた)。原因は、M4のグリッド展開ロジックがcolspanセルを列ごとに複製する仕様(M4自体には正しい挙動)を、M5/M6が「1列目=ラベル、2列目=値」という前提でそのまま流用したため。`isSingleMergedCellRow(row, maxColumns)`ヘルパーを新設し、行の全列が同一の元セルを指す場合は「ラベル: 値」に分解せず、1つの完結した内容として扱うよう修正した。
+- 検証: `node --check`成功。`node test/run-tests.js`全テスト成功。既存6サンプル+安城市サンプルの検出件数を変更前後で比較し、M5/M6の適用条件を満たす表がある場合のみ増加(procedure-overview 9→10、tables 27→31)、他は変化なし(回帰なし)。修正後の全M5/M6候補で`<dl>`が一切含まれないこと、テキスト長がbefore/afterで大きく変わらない(冗長な重複除去分のみ減少)ことを確認。画面操作でM6カードの選択→専用説明文の表示→採用→最終HTMLへの反映を確認した。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連ドキュメント: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`
+
 ## 2026-07-22: 表修正手段メニューをPR-T2(M4: 結合セル解除フラット化)で拡張
 
 - 背景・目的: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`のPR-T2として、表を分割・解体せず「結合セルだけを解除して単純な表に整える」手段(M4)を追加した。

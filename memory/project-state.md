@@ -710,6 +710,24 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 安城市の「市内公園施設情報」表を実際にM4で変換し、全行が同一列数(5列)になり、`<a>`リンクを含むテキストが一切欠落しないことを確認(空列トリミング修正後)。
   - 画面操作: M4カードの選択→専用説明文の表示→最終HTMLへの反映を確認。
 - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-T3(M5リスト化/M6見出し段落化ビルダー)へ。
+- ユーザー確認の上、PR #88として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T3(M5リスト化/M6見出し段落化ビルダー)実装**
+
+- ユーザーから「はい」との指示でPR-T3に着手。
+- 実装内容(`goal2-app/public/app.js`):
+  - `computeTableGridShape(table)`を新設し、M4で導入した「グリッド計算+末尾空列トリミング+ヘッダー行判定」ロジックを共通ヘルパーとして抽出。M4自身もこのヘルパーを使うようリファクタ(重複コードの解消、既存挙動は変更なし)。
+  - `canOfferListConversion(table)`(M5): 実質1列、または2列でボディ行の1列目が`isHeaderLikeTableCell()`(既存)判定でラベルらしい表にのみ適用。
+  - `canOfferRowSections(table)`(M6): 1列目が行見出し(th、またはラベルらしいテキスト)を持つ3行以上の表にのみ適用。
+  - `buildTableAsListHtml(table)`(M5)・`buildRowsAsSectionsHtml(table)`(M6)を新設。両方ともセル内のリンク・画像はinnerHTMLごと引き継ぐ。M6は確定方針どおり`<dl>`を使わない。
+  - rule_idは両方とも既存の`table.layout-table`に相乗り(新設なし、PR-T1で確定済みの方針を踏襲)。`fixMethodDescription()`に`method_label`判定の専用分岐を追加。
+- **実装中に発見・修正した不具合**: Playwright実データ検証中、procedure-overviewサンプルの「受付時間」表(`<td colspan="2">受付時間</td>`+2列データ行、project-state.md 2026-07-15付エントリで既知の問題表として記録済み)で、M5の変換結果が「受付時間: 受付時間」という無意味な重複表示になっていることを発見。原因はM4のグリッド展開ロジック(colspanセルを列ごとに複製する、M4自体には正しい仕様)を、M5/M6が「1列目=ラベル、2列目=値」という前提のままそのまま流用していたため、colspanで列0と列1が同一セルを指す行を誤って「ラベル: ラベル」と表示していた。`isSingleMergedCellRow(row, maxColumns)`ヘルパーを新設し、行の全列が同一の元セルを指す場合は分解せず1つの完結した内容として扱うよう、M5・M6の両ビルダーを修正。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前後の候補件数を比較: procedure-overview 9→10、images 4/4、tables 27→31、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 1/1。M5/M6の適用条件を満たす表がある場合のみ増加、他は変化なし(回帰なし)。
+  - 修正後の全M5/M6候補(procedure-overview 1件、tables 4件)で`<dl>`が一切含まれないこと、修正前に見られた「ラベル: ラベル」の重複が解消されたこと、テキスト長がbefore/afterで大きく変わらない(冗長な重複除去分のみわずかに減少)ことを確認。
+  - 画面操作: `tables`サンプルの「講座の実施日程」表(3件のM6対象行)でM6カードを選択→専用説明文の表示→採用→最終HTMLへの反映を確認。
+- 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-T4(実データ検証+ドキュメント整備、指示書における最終ステージ)へ。
 
 ## Decisions
 
