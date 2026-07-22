@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: GOAL3本文抽出で画像が丸ごと消える不具合を修正 + 相対パスの画像を絶対パスへ変換
+
+- 背景・目的: ユーザーから「本文抽出の際に画像パスなどが相対パスで記載されている際に認識できなくなってしまうので絶対パスに置き換えるようにしてほしい」との要望(例示ページ: 尼崎市 交通案内ページ)。調査のため実際の相対パス画像を含むHTMLでGOAL3の抽出結果をPlaywrightで検証したところ、要望どおりの絶対パス化を実装する過程で、**それ以前の、より重大な既存バグ**を発見した: `removeEmptyElements()`(空要素除去)が、`<img>`(および`<iframe>`/`<table>`/`<video>`/`<audio>`)要素を、`<p>`等で囲んでいても囲んでいなくても、**常に「空要素」として除去してしまっていた**。原因は、この関数の保護判定が`element.querySelector("img,iframe,table,video,audio")`(子孫にこれらを含むかどうか)のみをチェックしており、要素自身がこれらのタグである場合の自己チェック(`element.matches(...)`)が欠落していたため。`<img>`要素はテキストを持たない(`textContent`が空)ため、この判定に無条件で引っかかり、GOAL3で本文抽出したHTMLから画像が常に消えていた(サンプル入力ではこれまで裸のimgタグを含む実データでの検証機会が少なく、見過ごされていた)。
+- 主な変更内容:
+  - `goal2-app/public/goal3.js`の`removeEmptyElements()`に、`element.matches("img,iframe,table,video,audio")`の自己チェックを追加(該当要素自身は無条件で保護し、以後のtextContent/子孫チェックをスキップ)。
+  - 新規`absolutizeResourceUrl(rawUrl, baseUrl)`・`absolutizeSrcsetValue(srcset, baseUrl)`・`absolutizeImageUrls(root, baseUrl)`を追加。`img[src]`・`img[srcset]`・`source[srcset]`を、旧ページURL(`旧ページURL`欄の入力値、GOAL1バッチ処理では`page.url`)を基準に絶対URLへ書き換える。`data:`/`mailto:`/`tel:`/`javascript:`/`#`始まりの値、および旧ページURL未入力時は対象外(元の値のまま)。
+  - `cleanContentClone()`・`buildCandidate()`・`buildContentCandidates()`・`extractCandidates()`・`window.goal3Engine.extract()`に`baseUrl`を伝播。`goal2-app/public/goal1.js`の`window.goal3Engine.extract()`呼び出しに`page.url`を追加。
+- 検証:
+  - `node --check public/goal3.js public/goal1.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで、裸の`<img>`・`<p>`で囲んだ`<img>`の両方を含むHTMLをGOAL3で抽出し、修正前は画像が完全に消えていたのが修正後は正しく残ることを確認。あわせて、ルート相対パス(`/foo/bar.jpg`)・相対パス(`img/bar.png`、`srcset`含む)・プロトコル相対(`//cdn.example.jp/x.png`)が旧ページURLを基準に正しい絶対URLへ変換され、既に絶対URLの値・`data:`URIは変更されないことを確認。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/goal1.js`
+
 ## 2026-07-22: 曖昧な見出し検知(html-structure.heading-content-quality)で「修正後HTML」が変わらず分かりにくい点にUI注記を追加
 
 - 背景・目的: ユーザーから、AIが曖昧な見出し(例:「注意！」)を検知した候補で「修正前HTML」と「修正後HTML」が完全に同一のまま表示され、「これもおかしい」との指摘があった。一時、「`<span>`を太字と誤判定しているのでは」との仮説も検討したが、AIが返した実際の理由(reason)を確認したところ「見出しの文言が抽象的で、直後の段落の具体的な内容が不明瞭」という正当な判定であり、span/太字とは無関係と判明した。

@@ -40,12 +40,12 @@
   // Headless entry point for GOAL1 batch processing: same sanitize/scan/scoring logic
   // as the on-screen 候補抽出, without touching the DOM of the hosting page.
   window.goal3Engine = {
-    extract(html, pageTitle) {
+    extract(html, pageTitle, baseUrl) {
       const parsed = new DOMParser().parseFromString(html || "", "text/html");
       const resolvedTitle = (pageTitle || "").trim() || pageTitleFromDocument(parsed);
       return {
         pageTitle: resolvedTitle,
-        candidates: buildContentCandidates(parsed, resolvedTitle),
+        candidates: buildContentCandidates(parsed, resolvedTitle, (baseUrl || "").trim()),
       };
     },
   };
@@ -99,7 +99,8 @@
         els.pageTitleInput.value = pageTitle;
       }
 
-      const candidates = buildContentCandidates(document, pageTitle);
+      const baseUrl = els.sourceUrlInput.value.trim();
+      const candidates = buildContentCandidates(document, pageTitle, baseUrl);
       state.candidates = candidates;
       state.selectedId = candidates[0]?.id || null;
       render();
@@ -108,13 +109,13 @@
     }
   }
 
-  function buildContentCandidates(document, pageTitle) {
+  function buildContentCandidates(document, pageTitle, baseUrl) {
     const body = document.body;
     if (!body) return [];
     sanitizeDocument(body);
     const containers = candidateContainers(body);
     const candidates = containers
-      .map((element, index) => buildCandidate(element, index, pageTitle))
+      .map((element, index) => buildCandidate(element, index, pageTitle, baseUrl))
       .filter((candidate) => candidate.textLength >= 30 || candidate.parts.headings > 0 || candidate.parts.tables > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 8);
@@ -144,8 +145,8 @@
     return [body, ...elements];
   }
 
-  function buildCandidate(element, index, pageTitle) {
-    const clone = cleanContentClone(element, pageTitle);
+  function buildCandidate(element, index, pageTitle, baseUrl) {
+    const clone = cleanContentClone(element, pageTitle, baseUrl);
     const cleaned = cleanHtml(clone.innerHTML || clone.outerHTML);
     const html = cleaned.html;
     const text = normalizeText(clone.textContent);
@@ -180,7 +181,7 @@
     };
   }
 
-  function cleanContentClone(element, pageTitle) {
+  function cleanContentClone(element, pageTitle, baseUrl) {
     const clone = element.cloneNode(true);
     clone.querySelectorAll("h1").forEach((heading) => heading.remove());
     clone.querySelectorAll("*").forEach((node) => {
@@ -209,6 +210,7 @@
     }
     removeLeadingTemplateFragments(clone, pageTitle);
     removeDuplicateLeadingFragments(clone);
+    absolutizeImageUrls(clone, baseUrl);
     return clone;
   }
 
@@ -841,11 +843,19 @@
     });
   }
 
+  // img/iframe/table/video/audioはテキストを持たないため、この関数の「空要素」判定が
+  // 子孫にこれらを含む祖先要素だけを保護し、要素自身がこれらのタグである場合を見落として
+  // いた(matches()での自己チェックが無く、querySelector()による子孫チェックのみだった)。
+  // そのため単独で置かれた<img>タグ(<p>や<figure>で囲まれていても、img自身が反復処理の
+  // 対象になった時点でquerySelector()の対象は子孫のみで自分自身にはヒットしない)が、常に
+  // 「空要素」として除去されてしまっていた。本文抽出後のHTMLから画像が丸ごと消える不具合。
+  const PRESERVED_LEAF_SELECTOR = "img,iframe,table,video,audio";
   function removeEmptyElements(root) {
     [...root.querySelectorAll("*")]
       .reverse()
       .forEach((element) => {
-        if (!normalizeText(element.textContent) && !element.querySelector("img,iframe,table,video,audio")) {
+        if (element.matches(PRESERVED_LEAF_SELECTOR)) return;
+        if (!normalizeText(element.textContent) && !element.querySelector(PRESERVED_LEAF_SELECTOR)) {
           element.remove();
         }
       });
@@ -938,6 +948,45 @@
     sanitizePreview(template.content);
     const stats = stripLegacyAttributes(template.content);
     return { html: template.innerHTML.trim(), stats };
+  }
+
+  // 旧ページの相対パス(/images/foo.jpgや../foo.jpg等)は、抽出後にCMSやGOAL2へ
+  // 単体で渡されると解決先が無くなり画像が認識できなくなる。旧ページURL(baseUrl)を
+  // 基準に絶対URLへ書き換える。data:/mailto:/tel:/javascript:/#始まりの値や、
+  // baseUrlが未入力(空)の場合は対象外(解決できないため元の値のまま残す)。
+  function absolutizeResourceUrl(rawUrl, baseUrl) {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed || !baseUrl) return rawUrl;
+    if (/^(data:|mailto:|tel:|javascript:|#)/i.test(trimmed)) return rawUrl;
+    try {
+      return new URL(trimmed, baseUrl).href;
+    } catch {
+      return rawUrl;
+    }
+  }
+
+  function absolutizeSrcsetValue(srcset, baseUrl) {
+    return srcset
+      .split(",")
+      .map((part) => {
+        const trimmed = part.trim();
+        if (!trimmed) return trimmed;
+        const match = trimmed.match(/^(\S+)(\s+.+)?$/);
+        if (!match) return trimmed;
+        const resolved = absolutizeResourceUrl(match[1], baseUrl);
+        return match[2] ? `${resolved}${match[2]}` : resolved;
+      })
+      .join(", ");
+  }
+
+  function absolutizeImageUrls(root, baseUrl) {
+    if (!baseUrl) return;
+    root.querySelectorAll("img[src]").forEach((img) => {
+      img.setAttribute("src", absolutizeResourceUrl(img.getAttribute("src"), baseUrl));
+    });
+    root.querySelectorAll("img[srcset],source[srcset]").forEach((element) => {
+      element.setAttribute("srcset", absolutizeSrcsetValue(element.getAttribute("srcset"), baseUrl));
+    });
   }
 
   function legacyCleanupSummaryLine(stats) {
