@@ -494,6 +494,7 @@
     aiImageNameStatus: document.getElementById("aiImageNameStatus"),
     applyAiImageNameButton: document.getElementById("applyAiImageNameButton"),
     afterHtml: document.getElementById("afterHtml"),
+    afterHtmlNoAiSuggestionNote: document.getElementById("afterHtmlNoAiSuggestionNote"),
     decisionReason: document.getElementById("decisionReason"),
     acceptButton: document.getElementById("acceptButton"),
     editAcceptButton: document.getElementById("editAcceptButton"),
@@ -7470,6 +7471,15 @@
     });
     els.beforeHtml.value = currentTargetHtml(candidate) || candidate.proposal.before_html;
     els.afterHtml.value = chosenMethodCandidate.decision.after_html || currentCandidateAfterHtml(chosenMethodCandidate) || chosenMethodCandidate.proposal.after_html;
+    if (els.afterHtmlNoAiSuggestionNote) {
+      // html-structure.heading-content-quality(曖昧な見出し検知)は、AIも機械判定も
+      // 代替の見出し文言を提案しない(patch_mode: "none"、修正後HTMLは修正前と同一)。
+      // 何も変わっていないように見えて分かりにくいため、直接入力を促す注記を表示する。
+      els.afterHtmlNoAiSuggestionNote.hidden = !(
+        chosenMethodCandidate.rule_id === "html-structure.heading-content-quality" &&
+        chosenMethodCandidate.proposal.patch_mode === "none"
+      );
+    }
     const candidateMeta = document.getElementById("candidateMeta");
     if (candidateMeta) {
       candidateMeta.innerHTML = `
