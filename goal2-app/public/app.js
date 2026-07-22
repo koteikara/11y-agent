@@ -2932,14 +2932,38 @@
   function collectTableCandidates(fragment, candidates) {
     fragment.content.querySelectorAll("table").forEach((table) => {
       const mergeRule = table.querySelector("[rowspan], [colspan]") ? classifyMergedCellTable(table) : null;
-      if (mergeRule && tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
+
+      // In-place restructure candidates(heading/summary/note): 単一の推奨案のみ。下のM1〜M3
+      // 代替手段メニューとは別枠(この3分類向けの代替手段は今回のスコープ外)。
+      if (mergeRule && !tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
         const mergeProposal = buildMergedCellProposal(table, mergeRule);
         candidates.push(
           makeCandidate({
             ruleId: mergeRule.ruleId,
             element: table,
             message: mergeRule.message,
-            reason: `${mergeRule.reason} このセル結合の再構成は、キャプション修正とは別の候補として提示しています。`,
+            reason: `${mergeRule.reason} このセル結合の再構成は、他の修正方法とあわせて選択できます。`,
+            afterHtml: mergeProposal.afterHtml,
+            patchMode: mergeProposal.patchMode,
+            confidence: mergeRule.confidence,
+            requiresHumanReview: true,
+          })
+        );
+      }
+
+      // file/mark分類は単一の専用候補を維持する(従来どおり無条件)。"layout"分類はここでは
+      // プッシュしない — その2通りの処理(分割/解体)は下のplanTableTreatments()のM2/M3が
+      // 担うため、ここで重ねて出すと同一内容の候補が二重生成される(canSplitMergedRowsIntoTables()
+      // がtrueのとき、旧コードはこのブロックとplanTableTreatment()の両方でsplitMergedRowsIntoTablesHtml()
+      // を呼び、実質同じ候補を2件生成していた)。
+      if (mergeRule && (mergeRule.ruleId === "table.cell-merge-file" || mergeRule.ruleId === "table.cell-merge-mark")) {
+        const mergeProposal = buildMergedCellProposal(table, mergeRule);
+        candidates.push(
+          makeCandidate({
+            ruleId: mergeRule.ruleId,
+            element: table,
+            message: mergeRule.message,
+            reason: `${mergeRule.reason} このセル結合の再構成は、他の修正方法とあわせて選択できます。`,
             afterHtml: mergeProposal.afterHtml,
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
@@ -2948,47 +2972,46 @@
           })
         );
       }
-      if (mergeRule && !tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
-        const mergeProposal = buildMergedCellProposal(table, mergeRule);
-        candidates.push(
-          makeCandidate({
-            ruleId: mergeRule.ruleId,
-            element: table,
-            message: mergeRule.message,
-            reason: `${mergeRule.reason} このセル結合の再構成は、キャプション修正とは別の候補として提示しています。`,
-            afterHtml: mergeProposal.afterHtml,
-            patchMode: mergeProposal.patchMode,
-            confidence: mergeRule.confidence,
-            requiresHumanReview: true,
-          })
-        );
-      }
 
       // miChecker C_331.0/C_331.1/C_332.1/C_332.2: th単位のscope検査とheaders参照検証。
-      // 表全体をデータ表/レイアウト表として再構築する下記のplanTableTreatment判定とは独立に、
+      // 表全体をデータ表/レイアウト表として再構築する下記のplanTableTreatments判定とは独立に、
       // 個々のth・headers属性を機械的に走査する(表単位のhasScope判定は変更しない)。
       collectTableHeaderScopeCandidates(table, candidates);
 
-      const plan = planTableTreatment(table);
-
-      if (plan.kind === "structural") {
+      // 表修正の代替手段メニュー(M1: データ表として維持/M2: 複数表へ分割/M3: 見出し・段落へ解体)。
+      // 適用可能なものを全て兄弟候補としてプッシュする — 詳細はplanTableTreatments()を参照。
+      const methods = planTableTreatments(table);
+      methods.forEach((method) => {
         candidates.push(
           makeCandidate({
-            ruleId: plan.ruleId,
+            ruleId: method.ruleId,
             element: table,
-            message: plan.message,
-            reason: plan.reason,
-            afterHtml: plan.afterHtml,
-            patchMode: plan.patchMode,
-            confidence: plan.confidence,
-            requiresHumanReview: plan.requiresHumanReview,
-            llmContext: plan.llmContext,
+            message: method.message,
+            reason: method.reason,
+            afterHtml: method.afterHtml,
+            patchMode: method.patchMode,
+            confidence: method.confidence,
+            requiresHumanReview: method.requiresHumanReview,
+            llmContext: method.llmContext,
+            methodLabel: method.methodLabel,
           })
         );
+      });
+
+      // 従来の単一判定(旧planTableTreatment)が「構造的な解体・再構築が必要」と判断していた
+      // 条件をそのまま踏襲し、その場合はnaive構造判定・書式解除・キャプション欠落の簡易候補を
+      // 出さない(この判定を変えると回帰件数が変わってしまうため、上のM1/M3で緩めたゲートとは
+      // 独立に、従来どおり厳しい条件のまま保持する)。
+      const hadStructuralPick =
+        (shouldPreserveAsDataTable(table) && tableNeedsDataTableSemantics(table)) ||
+        (mergeRule && tableDecomposeMergeRuleIds.has(mergeRule.ruleId) && canSplitMergedRowsIntoTables(table)) ||
+        isLikelyLayoutTable(table);
+
+      if (hadStructuralPick) {
         return;
       }
 
-      // miChecker C_12.0/C_12.1/C_12.2/C_23.0/C_23.2/C_75.0: 上のplanTableTreatment()が
+      // miChecker C_12.0/C_12.1/C_12.2/C_23.0/C_23.2/C_75.0: 上の判定が
       // 「構造的な解体・再構築が必要」と判断しなかった表に対して、miChecker本体の素朴な構造判定
       // (nested/1row1col/notdata/data)を独立したシグナルとして適用する。
       collectNaiveTableStructureCandidates(table, candidates);
@@ -3051,43 +3074,52 @@
     });
   }
 
-  function planTableTreatment(table) {
-    const mergeRule = table.querySelector("[rowspan], [colspan]") ? classifyMergedCellTable(table) : null;
+  // 表1件に対して適用可能な構造的な修正方法を、推奨順ですべて配列で返す。各要素はそのまま
+  // makeCandidate()に渡せる形にしてあり(collectTableCandidates()が全件を兄弟候補としてプッシュ)、
+  // 「手段=候補」という既存の仕組みをそのまま使う(新しい「メソッド配列」型のデータ構造は導入しない)。
+  //
+  // M1(データ表として維持)とM3(表をやめて解体)は、旧来の単一判定(shouldPreserveAsDataTable /
+  // isLikelyLayoutTable)より緩いゲートで「選択肢として提示するかどうか」を決める。ただし
+  // shouldPreserveAsDataTable()自体は確信度・推奨順の判断材料として引き続き使う。
+  function planTableTreatments(table) {
+    const preserve = shouldPreserveAsDataTable(table);
+    const canOfferSemantics = canOfferDataTableSemanticsMethod(table);
+    const canOfferSplit = canSplitMergedRowsIntoTables(table);
 
-    if (shouldPreserveAsDataTable(table) && tableNeedsDataTableSemantics(table)) {
-      return {
-        kind: "structural",
-        ruleId: "table.caption",
-        message: "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
-        reason: "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。",
-        afterHtml: buildDataTableSemanticsHtml(table),
-        patchMode: "replace",
-        confidence: dataTableSemanticsConfidence(table),
-        requiresHumanReview: true,
-      };
-    }
+    const buildSemanticsMethod = () => ({
+      ruleId: "table.caption",
+      message: "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+      reason: preserve
+        ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
+        : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
+      afterHtml: buildDataTableSemanticsHtml(table),
+      patchMode: "replace",
+      confidence: preserve ? dataTableSemanticsConfidence(table) : "low",
+      requiresHumanReview: true,
+      llmContext: null,
+      methodLabel: "データ表として維持し構造を整える",
+    });
 
-    if (mergeRule && tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
-      if (canSplitMergedRowsIntoTables(table)) {
-        return {
-          kind: "structural",
-          ruleId: "table.cell-merge-layout",
-          message: "結合により複数の意味単位が1つの表にまとめられています。",
-          reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
-          afterHtml: splitMergedRowsIntoTablesHtml(table),
-          patchMode: "replace",
-          confidence: "medium",
-          requiresHumanReview: true,
-        };
-      }
-      return { kind: "data" };
-    }
+    const buildSplitMethod = () => ({
+      ruleId: "table.cell-merge-layout",
+      message: "結合により複数の意味単位が1つの表にまとめられています。",
+      reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
+      afterHtml: splitMergedRowsIntoTablesHtml(table),
+      patchMode: "replace",
+      confidence: "medium",
+      requiresHumanReview: true,
+      llmContext: null,
+      methodLabel: "意味単位ごとに複数の表へ分割",
+    });
 
-    if (isLikelyLayoutTable(table)) {
+    // 表をやめて見出し・段落・画像配置へ解体する手段。shouldPreserveAsDataTable()がtrueの表
+    // には出さない — 実データで、行見出しをrowspanで持つ正当なデータ表(例: 大規模な一覧表)が
+    // この解体で構造の無い段落の羅列に変換された事例があり(classifyMergedCellTable()の
+    // preserveAsDataTableによるnull-return、同関数内のコメント参照)、それと同じ安全策を踏襲する。
+    const buildDecomposeMethod = () => {
       const imageContexts = [];
       const afterHtml = decomposeLayoutTable(table, imageContexts);
       return {
-        kind: "structural",
         ruleId: "table.layout-table",
         message: "この表はレイアウト目的で使われている可能性があります。",
         reason: layoutTableReason(table),
@@ -3096,15 +3128,22 @@
         confidence: layoutTableConfidence(table),
         requiresHumanReview: true,
         llmContext: imageContexts.length ? { images: imageContexts } : null,
+        methodLabel: "表をやめて見出し・段落・画像配置へ解体",
       };
-    }
+    };
 
-    // Note: a non-decompose-set mergeRule (heading/note/summary/...) is NOT re-emitted here.
-    // collectTableCandidates() already pushes it unconditionally via its own direct check
-    // (the "mergeRule && !tableDecomposeMergeRuleIds.has(...)" branch); re-pushing the same
-    // candidate here as "structural" would duplicate it whenever shouldPreserveAsDataTable()
-    // is false (the only case execution reaches this point with such a mergeRule).
-    return { kind: "data" };
+    // 推奨順は現行のウォーターフォール判定(データ表維持 > 分割 > レイアウト解体)を踏襲する。
+    // データ表として維持すべき表では維持案を先に、そうでない表では分割・解体案を先に示す。
+    const methods = [];
+    if (preserve) {
+      if (canOfferSemantics) methods.push(buildSemanticsMethod());
+      if (canOfferSplit) methods.push(buildSplitMethod());
+    } else {
+      if (canOfferSplit) methods.push(buildSplitMethod());
+      methods.push(buildDecomposeMethod());
+      if (canOfferSemantics) methods.push(buildSemanticsMethod());
+    }
+    return methods;
   }
 
   // miChecker C_331.0/C_331.1: th要素はscope属性(col/row/colgroup/rowgroup)を持つ必要がある。
@@ -3295,6 +3334,13 @@
     return profile.rows.length >= 2 && profile.maxCells >= 2 && (profile.firstRowHeaderLike || profile.hasDataValues);
   }
 
+  function tableSemanticsGapExists(profile) {
+    if (isKeyValueDataTableProfile(profile) || isRowHeaderOnlyDataTableProfile(profile)) {
+      return !profile.hasCaption || !profile.hasHeaderCell || !profile.hasScope || profile.hasThead;
+    }
+    return !profile.hasCaption || !profile.hasThead || !profile.hasHeaderCell || !profile.hasScope;
+  }
+
   function tableNeedsDataTableSemantics(table) {
     const profile = dataTableProfile(table);
     if ((profile.rows.length < 2 && !isSingleRecordContactDataTableProfile(profile)) || profile.maxCells < 2) {
@@ -3303,10 +3349,19 @@
     if (!shouldPreserveAsDataTable(table)) {
       return false;
     }
-    if (isKeyValueDataTableProfile(profile) || isRowHeaderOnlyDataTableProfile(profile)) {
-      return !profile.hasCaption || !profile.hasHeaderCell || !profile.hasScope || profile.hasThead;
+    return tableSemanticsGapExists(profile);
+  }
+
+  // planTableTreatments()の代替手段メニュー向けの緩和版ゲート。shouldPreserveAsDataTable()を
+  // 必須にしないことで、「データ表として維持する」手段を、ヒューリスティックがデータ表と
+  // 判定しなかった表にも選択肢として提示できるようにする(確信度はplanTableTreatments()側で
+  // lowに下げる。shouldPreserveAsDataTable()自体は他の判定で引き続き使われるため変更しない)。
+  function canOfferDataTableSemanticsMethod(table) {
+    const profile = dataTableProfile(table);
+    if ((profile.rows.length < 2 && !isSingleRecordContactDataTableProfile(profile)) || profile.maxCells < 2) {
+      return false;
     }
-    return !profile.hasCaption || !profile.hasThead || !profile.hasHeaderCell || !profile.hasScope;
+    return tableSemanticsGapExists(profile);
   }
 
   function dataTableSemanticsConfidence(table) {
@@ -5646,6 +5701,7 @@
     return {
       page_session_id: currentSessionId(),
       rule_id: options.ruleId,
+      method_label: options.methodLabel || null,
       category: kbRule.category || "unknown",
       processing_class: options.processingClass || kbRule.processing_class || "hybrid",
       status: "unresolved",
@@ -6036,6 +6092,7 @@
       selected_method_id: selectedMethodCandidate.candidate_id,
       selected_method_rule_id: selectedMethodCandidate.rule_id,
       selected_method_title: selectedMethodCandidate.rule.title,
+      selected_method_label: selectedMethodCandidate.method_label || null,
     };
     state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
     resolveSupersededTableCandidates(candidate);
@@ -6934,6 +6991,9 @@
   // classifyMergedCellTable()) instead. The KB rule.title is still used for the KB browser,
   // aria/decision exports, etc. — this only affects what's shown while picking a candidate.
   function candidateDisplayTitle(candidate) {
+    if (candidate.method_label) {
+      return candidate.method_label;
+    }
     if (candidate.rule_id && candidate.rule_id.startsWith("table.cell-merge-") && candidate.issue?.message) {
       return candidate.issue.message.replace(/[。.]+$/, "");
     }
@@ -7810,6 +7870,10 @@
         ai_image_name_source: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.source || null : null,
         before_html: candidate.proposal.before_html,
         after_html: candidateAfterHtmlForEvidence(candidate),
+        selected_method_id: candidate.decision.selected_method_id || null,
+        selected_method_rule_id: candidate.decision.selected_method_rule_id || null,
+        selected_method_title: candidate.decision.selected_method_title || null,
+        selected_method_label: candidate.decision.selected_method_label || null,
         decision_reason: candidate.decision.reason,
         actor: candidate.decision.actor,
         decided_at: candidate.decision.decided_at,

@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 表修正手段メニューをPR-T1(複数手段化の骨格)で拡張
+
+- 背景・目的: 表の「修正方法」パネルが最大2件(構造候補1件+セル結合候補1件)しか提示できていなかった。`goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`の計画に基づき、適用可能な修正方法を全て選択肢として提示するPR-T1(骨格)を実装した。
+- 主な変更内容:
+  - 早期returnのウォーターフォールだった`planTableTreatment()`を、適用可能な全手段を配列で返す`planTableTreatments()`に置き換えた。既存3手段(M1: データ表として維持+セマンティクス整備/M2: 複数表への分割/M3: 見出し・段落・画像配置への解体)を、適用条件を満たす限り併記する。
+  - M1のゲートを`shouldPreserveAsDataTable()`必須から緩和(`canOfferDataTableSemanticsMethod()`新設)し、確信度のみに反映するよう変更。M3は逆に`!shouldPreserveAsDataTable(table)`を必須条件として追加した — 実装中に、`classifyMergedCellTable()`内の既存コメント(大規模なrowspan見出し付きデータ表が解体候補で構造の無い段落の羅列に変換された過去の実データ事例)を発見し、M3を無条件に「常時提示」すると同じ不具合を再現することが判明したため、ユーザーに確認の上この安全策を追加した。
+  - `collectTableCandidates()`内の重複候補生成バグを修正: 従来、`table.cell-merge-layout`分類の表かつ`canSplitMergedRowsIntoTables()`がtrueの場合、トップレベルの無条件プッシュと`planTableTreatment()`の両方が同一内容(`splitMergedRowsIntoTablesHtml()`)の候補を生成していた。この重複を解消し、"layout"分類はM2/M3経由でのみ候補化するようにした。
+  - `makeCandidate()`に`methodLabel`オプションを追加し、`candidate.method_label`として保持。`candidateDisplayTitle()`で最優先表示することで、同一rule_idの複数手段カードを区別できるようにした(rule_idの新設・KB再生成は行わず、既存id(`table.caption`/`table.cell-merge-layout`/`table.layout-table`)への相乗りで対応)。
+  - `applyCandidateDecision()`の`decision`と`buildEvidenceFor()`の証跡出力に`selected_method_label`(および`selected_method_id`/`selected_method_rule_id`/`selected_method_title`、従来evidenceに未出力だった)を追加。
+- 検証: `node --check`成功。`node test/run-tests.js`全テスト成功。既存6サンプル+安城市サンプルの検出件数を変更前後でPlaywright比較し、`tables`サンプルのみ20→22件(table.caption +1、table.layout-table +1、想定通りの新規代替手段追加分)、他は変化なしを確認(回帰なし)。画面操作で、複数手段カードの表示・切り替え・採用・最終HTMLへの反映・未採用の兄弟候補の自動conflicted化を確認した。
+- 既知の残課題: 一部の表で、M1(データ表として維持)と既存の単純なキャプション欠落候補が並んで表示され、内容が一部重複するケースがある(いずれを採用しても他方は自動的にconflictedへ解決されるため実害はないが、PR-T2/T3で整理を検討)。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連ドキュメント: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`
+
 ## 2026-07-15: 大きな表・列グループ化ヘッダーを持つ表の候補生成が表構造を破壊する不具合を修正
 
 - 背景・目的: ユーザーから実際の自治体ページ(避難場所一覧、185行の表を含む)の候補生成結果が「おかしい」と、元HTMLと生成後HTMLの両方を提示された。調査したところ、3件の重大な不具合が見つかった。いずれも「セル結合(colspan/rowspan)の分解・再構成」ロジック(`table.cell-merge-*`)まわりの過剰発火・誤判定が原因だった。
