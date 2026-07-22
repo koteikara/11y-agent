@@ -742,6 +742,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - これでPR-T1(複数手段化の骨格)→T2(M4フラット化)→T3(M5箇条書き化/M6見出し段落化)→T4(実データ検証+ドキュメント)の全ステージが完了。表の「修正方法」は当初の最大2件から、条件を満たす場合最大6種類の手段(+セル結合分類固有の候補)まで拡張された。
 - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、表修正手段メニュー拡張プロジェクトは完了扱いとする。
 
+**2026-07-22 ルール解説ポップアップの不一致バグ: PR#91〜93の後も残っていた根本原因を修正**
+
+- 経緯: PR#91(ボタンのスタイル修正)マージ後、ユーザーから「ルールの解説が(見出し・キャプション系の文言)に対してセル結合①レイアウト用途の解説がされていておかしい」と報告。調査したところ`openRuleLearnMore(selectedCandidate())`が、修正方法(M1〜M6)の切り替えに関わらず常にプライマリ候補のルールを表示していたことが判明し、`activeFixMethodCandidate(selectedCandidate())`を渡すよう修正(コミット8c55de4)。ところがこの環境のgit remoteはローカルプロキシ経由でGitHubと非同期になっており、`git push`成功後もPR#91のマージにこのコミットが実際には含まれていない事態が発生(`mcp__github__pull_request_read get_commits`で確認)。プロキシ経由の`git push`は「成功」と報告してもGitHub側に実際に反映されたとは限らないため、以後は`mcp__github__get_commit`でプッシュ後に必ず着地を確認する運用に変更。該当コミットをcherry-pickし直しPR#92で再度マージ。
+- しかしユーザーが「承認しましたが改修されていないように思う」と再報告。Playwrightで4パターン検証したところ、ポップアップ自体はPR#92の修正で正しく追従するようになっていたが、詳細パネルの「この候補で変わること」(`buildChangeSummary()`)が選択中の修正方法ではなく常にプライマリ候補を参照しており、表(table.*)ルールでは単一の汎用文言しか出していなかったことが判明。`renderDetail()`が`chosenMethodCandidate`(選択中の方法)を`buildChangeSummary()`に渡すよう修正し、`buildChangeSummary()`のtable.*分岐を`fixMethodDescription(candidate)`(修正方法カードと同じ、方法ごとに正確な文言を返す関数)の再利用に変更(コミット6d048b3、PR#93)。
+- それでもユーザーから2枚のスクリーンショット(cand_001、rule_id `table.cell-merge-layout`、修正方法1件のみ「結合セルを解除してフラットな表に整える」、ポップアップは「セル結合①レイアウト用途」)とともに「修正されていなさそう」との再々報告。調査の結果、PR#91〜93はいずれも「どの候補オブジェクトを表示するか」というルーティングの修正であり、候補オブジェクト自体が持つ`rule_id`の正確性は対象外だったことが根本原因と判明。`planTableTreatments()`のM2(複数表へ分割)・M4(結合解除フラット化)が、その表の実際の結合分類(`classifyMergedCellTable()`が返す見出し/概要/注記/レイアウト等)を無視し`rule_id: "table.cell-merge-layout"`を常に固定していたため、見出し用途の結合セル表でM4を選んでも「セル結合①レイアウト用途」(画像2枚並びへの置き換えを勧める、無関係な助言)が表示され続けていた。`collectTableCandidates()`から`mergeRule`を`planTableTreatments(table, mergeRule)`に渡し、M2/M4の`ruleId`を`mergeRule?.ruleId || "table.cell-merge-layout"`に変更(分類が取れないときのみ従来のレイアウト用途にフォールバック)。付随して`fixMethodDescription()`/`fixMethodBadge()`のM2判定を`method_label === "意味単位ごとに複数の表へ分割"`という直接判定に置き換え(旧判定はrule_id固定に依存していたため機能しなくなるところだった)。
+- 検証: `node --check`・`node test/run-tests.js`成功(既存サンプルの候補件数は不変)。Playwrightで候補「先頭の結合セルが見出し用途に見えます」(`table.cell-merge-heading`)をM4に切り替え、ポップアップタイトルが「セル結合①レイアウト用途」(誤)から「セル結合②見出し用途」(正)に変わることを確認。
+- 教訓: 「表示位置の配線」を直しても、配線の先にある候補オブジェクトのデータ自体が不正確だと、ユーザーからは同じ症状(内容の食い違い)として見え続ける。表面的な症状の再現に固執せず、関連するデータ生成ロジック(`planTableTreatments()`のようなハードコードされたruleId)まで遡って確認する必要がある。
+- 関連ファイル: `goal2-app/public/app.js`。関連PR: #91、#92、#93、および本修正(未PR化、`claude/goal-overview-rxgrf2`ブランチへ直接コミット)。
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。
