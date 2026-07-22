@@ -369,7 +369,7 @@
       }
 
       page.status = "extracting";
-      const extraction = window.goal3Engine.extract(html, page.pageTitle);
+      const extraction = window.goal3Engine.extract(html, page.pageTitle, page.url);
       if (!extraction.candidates.length) {
         page.status = "extract-failed";
         page.errorMessage = "本文候補を抽出できませんでした。";

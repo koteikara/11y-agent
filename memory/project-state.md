@@ -789,6 +789,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 教訓: ユーザーの技術的な仮説(span/太字誤検知)が結果的に誤りだったケースでも、その仮説を検証する過程(AIのreason文言を実際に取得)で、より本質的な別の改善点(UI上の分かりにくさ)にたどり着けた。ユーザーの仮説を鵜呑みにせず、かつ頭ごなしに否定もせず、検証可能な形で確認を依頼したことが功を奏した。
 - 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/app.js`
 
+**2026-07-22 GOAL3: 画像相対パス絶対化の要望から、画像が丸ごと消える重大バグを発見・修正**
+
+- ユーザーから「本文抽出の際に画像パスなどが相対パスで記載されている際に認識できなくなってしまうので絶対パスに置き換えるようにしてください」と要望(例: 尼崎市の交通案内ページ)。当該ページは環境のプロキシポリシーで直接フェッチできなかったため、相対パス画像を含む合成HTMLで検証しながら実装。
+- 絶対パス化のPlaywright検証中、`<img>`要素が抽出結果から完全に消えていることに気づき調査。`removeEmptyElements()`(GOAL3の空要素除去処理)が、`<img>`/`<iframe>`/`<table>`/`<video>`/`<audio>`要素を**それ自身が該当タグであっても**「保護対象」と判定できていなかった(子孫にこれらのタグを含むかどうかの`querySelector`チェックのみで、要素自身へのチェック`matches()`が欠落)。`<img>`はtextContentを持たないため、この判定漏れで無条件に「空要素」として除去されてしまい、GOAL3で抽出した本文から画像が(相対パスかどうかに関わらず)常に消えるという、要望より重大な既存バグだった。
+- 修正: `removeEmptyElements()`に`element.matches("img,iframe,table,video,audio")`の自己チェックを追加。あわせて要望どおり`absolutizeResourceUrl`/`absolutizeSrcsetValue`/`absolutizeImageUrls`を新設し、`img[src]`・`img[srcset]`・`source[srcset]`を旧ページURL基準の絶対URLへ変換する処理を追加(`cleanContentClone`等へ`baseUrl`を伝播、GOAL1バッチ処理の`window.goal3Engine.extract()`にも`page.url`を渡すよう変更)。
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで、裸のimg/`<p>`で囲んだimgの両方が修正前は消え修正後は残ることを確認。ルート相対・相対(srcset含む)・プロトコル相対パスが旧ページURL基準で正しい絶対URLに変換され、既に絶対URLの値・`data:`URIは変更されないことを確認。
+- 教訓: 機能要望(絶対パス化)を実装するための検証作業そのものが、要望よりも深刻な既存バグ(画像の消失)を偶然発見する機会になった。新機能のためのテストコードを書く際は、期待する変化(パスが絶対になる)だけでなく、要素の存在自体が保たれているかも含めて出力全体を確認するべき。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/goal1.js`
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。
