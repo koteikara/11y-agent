@@ -2982,7 +2982,7 @@
 
       // 表修正の代替手段メニュー(M1: データ表として維持/M2: 複数表へ分割/M3: 見出し・段落へ解体)。
       // 適用可能なものを全て兄弟候補としてプッシュする — 詳細はplanTableTreatments()を参照。
-      const methods = planTableTreatments(table, mergeRule);
+      const methods = planTableTreatments(table);
       methods.forEach((method) => {
         candidates.push(
           makeCandidate({
@@ -3083,15 +3083,15 @@
   // M1(データ表として維持)とM3(表をやめて解体)は、旧来の単一判定(shouldPreserveAsDataTable /
   // isLikelyLayoutTable)より緩いゲートで「選択肢として提示するかどうか」を決める。ただし
   // shouldPreserveAsDataTable()自体は確信度・推奨順の判断材料として引き続き使う。
-  function planTableTreatments(table, mergeRule) {
+  function planTableTreatments(table) {
     const preserve = shouldPreserveAsDataTable(table);
     const canOfferSemantics = canOfferDataTableSemanticsMethod(table);
     const canOfferSplit = canSplitMergedRowsIntoTables(table);
-    // M2(分割)・M4(フラット化)は結合そのものを解消する手段であり、そのルール解説は
-    // この表で実際に検出された結合分類(見出し/概要/注記/レイアウト等)に合わせる。
-    // 分類が無い(classifyMergedCellTable()がnullを返した)場合のみ、汎用の
-    // table.cell-merge-layoutをフォールバックとして使う。
-    const mergeRuleId = mergeRule?.ruleId || "table.cell-merge-layout";
+    // M2(分割)・M4(フラット化)は、見出し/概要/注記/レイアウトいった「結合の用途」を
+    // 判定するcell-merge-N系ルールのどれとも一致しない(表を維持したまま結合だけを
+    // 解消する、または意味単位に割るという、このツール独自の技術的な手段のため)。
+    // どちらも実際にth要素へscope属性を設定する変換を行うため、用途分類ではなく
+    // 最も近い一般ルールであるtable.th-scopeを解説として使う。
 
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
@@ -3108,7 +3108,7 @@
     });
 
     const buildSplitMethod = () => ({
-      ruleId: mergeRuleId,
+      ruleId: "table.th-scope",
       message: "結合により複数の意味単位が1つの表にまとめられています。",
       reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
       afterHtml: splitMergedRowsIntoTablesHtml(table),
@@ -3143,7 +3143,7 @@
     // 維持したいがセル結合だけをやめたい場合の選択肢。M2(複数表への分割)とは異なり表を割らない
     // ため、両方が適用可能な表でも別の選択肢として共存させる。
     const buildFlattenMethod = () => ({
-      ruleId: mergeRuleId,
+      ruleId: "table.th-scope",
       message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
       reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
       afterHtml: buildFlattenedTableHtml(table),
