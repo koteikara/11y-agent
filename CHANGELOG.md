@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-22: 表修正手段メニューをPR-T2(M4: 結合セル解除フラット化)で拡張
+
+- 背景・目的: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`のPR-T2として、表を分割・解体せず「結合セルだけを解除して単純な表に整える」手段(M4)を追加した。
+- 主な変更内容:
+  - `buildFlattenedTableHtml(table)`を新設。`buildExpandedTableGrid()`で結合を展開したグリッドから、rowspan/colspanの無い単純な行×列の表を再構築する。結合で複数マスを占めていたセルは、そのマス全てに同じ内容(innerHTML、リンク等の構造含む)を複製する(空セルにしない)。1行目が全てthなら`<thead>`+`scope="col"`、各行1列目がthなら`scope="row"`を付与する。
+  - 実データ検証中に、安城市サンプルの「市内公園施設情報」表(指示書が想定した好例: rowspan=2とcolspan=2が共存)で、末尾に意味のない空列が1つ余分に生成される問題を発見。原因は元HTMLに、rowspanで既にカバーされている位置へさらに空の`<td></td>`が重複して書かれているという実データ側の欠陥で、`buildExpandedTableGrid`(ブラウザの表レンダリングと同じロジック)がこれを新しい列として展開してしまうためだった。「全行にわたって完全に空の末尾列」を切り詰めるトリミング処理を追加して解消した。
+  - M4は既存rule_id `table.cell-merge-layout`に相乗りするため(PR-T1で確定済みの方針)、既存の`fixMethodDescription()`が汎用の「結合セルが見出し・注記・レイアウトのどれかを見て、必要な形に直します。」という説明文をM4にも適用してしまう問題をPlaywright検証で発見。`candidate.method_label`で判定する専用の説明文分岐を追加して解消した。
+  - `planTableTreatments()`にM4を追加: `table.querySelector("[rowspan], [colspan]")`が存在する表であれば、M1〜M3の適用可否に関わらず末尾に追加する(preserveAsDataTableの値を問わない、非破壊的な手段のため)。
+- 検証: `node --check`成功。`node test/run-tests.js`全テスト成功。既存6サンプル+安城市サンプルの検出件数を変更前後で比較し、結合セルを持つ表がある場合のみ+1件(M4追加分)、他は変化なしを確認(procedure-overview 8→9、tables 22→27、anjo-evacuation-shelters 0→1、他4サンプルは変化なし)。Playwrightで、安城市の「市内公園施設情報」表(rowspan+colspan混在)を実際にM4で変換し、全行が同一列数(5列)になり、リンクを含むテキストが一切欠落しないことを確認。画面操作でM4カードの選択・専用説明文の表示・最終HTMLへの反映も確認した。
+- 関連ファイル: `goal2-app/public/app.js`
+- 関連ドキュメント: `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`
+
 ## 2026-07-22: 表修正手段メニューをPR-T1(複数手段化の骨格)で拡張
 
 - 背景・目的: 表の「修正方法」パネルが最大2件(構造候補1件+セル結合候補1件)しか提示できていなかった。`goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`の計画に基づき、適用可能な修正方法を全て選択肢として提示するPR-T1(骨格)を実装した。

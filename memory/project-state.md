@@ -690,6 +690,26 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 画面操作(Playwright): サンプル「表: レイアウト・結合・添付」で、同一表に2件・7件の代替手段カードが表示されることを確認。2件のケースで、デフォルト以外の手段(M1)へ切り替え→採用→最終HTMLに選択した手段のafterHtmlが反映されること、未採用の兄弟候補3件が自動的にconflictedへ解決されることを確認。
 - 既知の残課題(次PRで検討): 一部の表で、M1(データ表として維持)と既存の単純なキャプション欠落候補(`hadStructuralPick`がfalseの場合に生成される簡易版)が並んで表示され、内容が一部重複する(いずれを採用しても他方は自動的にconflicted化されるため実害はない)。
 - 次のアクション: ユーザー確認の上コミット・プッシュ。マージ後PR-T2(M4フラット化ビルダー)へ。
+- ユーザー確認の上、PR #87として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T2(M4フラット化ビルダー)実装**
+
+- ユーザーから「続けて」との指示でPR-T2に着手。
+- 実装内容(`goal2-app/public/app.js`):
+  - `buildFlattenedTableHtml(table)`を新設。`buildExpandedTableGrid()`で結合を展開したグリッドから、rowspan/colspanの無い単純な行×列の表を再構築する。結合で複数マスを占めていたセルは、そのマス全てに同じ内容(innerHTML、リンク等の構造を含む。テキストだけの複製ではない)を複製する。1行目が全てthなら`<thead>`+`scope="col"`、各行1列目がthなら`scope="row"`を付与する。
+  - `buildFlattenedCell(item, tagName, scope)`ヘルパーを新設(rowspan/colspan/scope/headers/bgcolor/idを元セルから引き継がない。idは複製先すべてに同じ値を持たせるとHTML上のid重複を生むため必ず除外)。
+  - `planTableTreatments()`にM4を追加: `table.querySelector("[rowspan], [colspan]")`が存在する表であれば、`shouldPreserveAsDataTable()`の値やM1〜M3の適用可否に関わらず末尾に追加する(表を分割・解体しない非破壊的な手段のため)。rule_idは既存の`table.cell-merge-layout`に相乗り(PR-T1で確定済みの方針どおり、新設なし)。
+- **実装中に発見した2件の不具合を修正**:
+  1. Playwright実データ検証中、安城市サンプルの「市内公園施設情報」表(指示書がM4の好例として挙げていた、rowspan=2とcolspan=2が共存する表)で、変換結果の末尾に意味のない空列が1つ余分に生成される問題を発見。調査の結果、元HTML自体に欠陥があった: rowspanで既にカバーされている位置(2行目の面積列)へ、さらに空の`<td></td>`が重複して書かれており、`buildExpandedTableGrid`(ブラウザの表レンダリングと同じロジックで列位置を計算)がこの余剰セルを新しい6列目として展開してしまっていた。「全行にわたって完全に空の末尾列」を切り詰めるトリミング処理(`buildFlattenedTableHtml`冒頭)を追加して解消。修正後は全行が正しく5列に揃い、リンクを含むテキストも一切欠落しないことを確認。
+  2. M4がrule_id `table.cell-merge-layout`に相乗りする設計のため、既存の`fixMethodDescription()`の汎用フォールバック(「結合セルが見出し・注記・レイアウトのどれかを見て、必要な形に直します。」、heading/note/summary/mark/file等の他バリアントと共通の文言)がM4のカードにもそのまま適用され、「フラット化」であることが説明文から伝わらない問題をPlaywright画面確認で発見。`candidate.method_label`で判定する専用の説明文分岐を追加して解消。
+  - この2件はいずれも実装直後のセルフレビューではなくPlaywrightでの実データ・実画面検証によって発見した(コード上は正しく見えても実際に動かすと問題が分かる典型例として記録)。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前後の候補件数を比較: procedure-overview 8→9、images 4/4、tables 22→27、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 0→1。結合セル(rowspan/colspan)を持つ表がある場合のみ+1件(M4追加分)、他は変化なし(回帰なし)。
+  - `tables`サンプルの5件のM4候補全てで、行ごとのセル数が完全に一致し(不整合ゼロ)、rowspan/colspan属性が残っていないことを確認。
+  - 安城市の「市内公園施設情報」表を実際にM4で変換し、全行が同一列数(5列)になり、`<a>`リンクを含むテキストが一切欠落しないことを確認(空列トリミング修正後)。
+  - 画面操作: M4カードの選択→専用説明文の表示→最終HTMLへの反映を確認。
+- 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-T3(M5リスト化/M6見出し段落化ビルダー)へ。
 
 ## Decisions
 
