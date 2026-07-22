@@ -657,7 +657,39 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Playwrightで実ブラウザ検証: (1)非推奨属性を含む合成テストHTMLで、align/valign/border/cellpadding/cellspacing/summary/class が除去され、width(テーブル)は保持され、href="#kouiki"で参照されたid="kouiki"は保持、未参照id="unused123"は除去されることを確認。(2)安城市サンプル(既に前回の修正で属性クリーン済み)では除去件数0・保持id 2件のみとなることを確認。(3)Goal3で抽出したHTMLをGoal2の`window.goal2Engine.analyze()`に渡し、`table.format-clear`(残ったwidthを検出)は正常に発火し、`html-structure.deprecated-elements`との重複発火が起きないことを確認。
   - 実装中に発見した表示バグ(`idsPreserved`のみ非ゼロで他が0件のとき「自動除去: を除去しました」という空欄混じりの文言になる)を、条件式から`idsPreserved`単独ケースを除外して修正。
   - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存6サンプルの検出結果に影響なし)。
-  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+  - コミット`81df529`、PR #86として作成。
+
+**2026-07-21 表修正手段メニュー拡張: 計画策定と実装指示書の作成**
+
+- ユーザーから「表組みの修正方法が現状2件のみの提案に留まっているが、考えうる全ての手段から選択できるようにしたい。まず計画を立て、Sonnetに実行させるための指示書を作成してほしい」との指示(計画担当: Fable、実装担当: Sonnet想定)。
+- 原因調査: 「修正方法」パネルは同一`target.node_id`の兄弟候補集合(`candidatesForSameTarget()`)をラジオカード表示する仕組みだが、構造候補の生成元`planTableTreatment()`(app.js:3054)が早期returnのウォーターフォールで1表につき1件(データ表維持 or 分割 or レイアウト解体)しか返さず、独立生成のセル結合候補と合わせて最大2件になっていた。
+- `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`を新規作成(GOAL1_BUILD_INSTRUCTIONS.md等と同形式の実装担当AGENT向け指示書)。要点:
+  - 手段=兄弟候補という既存機構を流用し、`planTableTreatments()`(複数返却化)で適用可能な全手段を同一表への候補としてプッシュする方針。選択・採用(`selected_method_id`)・最終HTML反映(`applyCandidatePatch`)・競合自動解決(`resolveSupersededTableCandidates`)は既存のまま機能する。
+  - 手段メニュー6種: M1 データ表維持+セマンティクス整備(既存)/M2 複数表分割(既存)/M3 見出し+段落解体(既存)/M4 結合セル解除フラット化(新規`buildFlattenedTableHtml`、`buildExpandedTableGrid`利用)/M5 箇条書き化(新規)/M6 1行=1項目の見出し+段落化(新規)。`<dl>`化は確定方針(2026-07-10)により含めない。
+  - 全構造手段は`requiresHumanReview: true`で一括採用・GOAL1 autoAcceptSafeの対象外。
+  - 実装はPR-T1(複数化骨格)→T2(フラット化)→T3(リスト化・段落化)→T4(実データ検証+ドキュメント)の4段階。各段階に合格条件・Playwright検証シナリオ・回帰基準の更新手順を定義。
+  - 過去の表関連バグ(colspan無視パディング、colspanヘッダー複製)の教訓を新ビルダーの注意事項として明記。
+- ユーザー確定事項(AskUserQuestionで確認済み): (1)新規手段のrule_idは既存idへ相乗り(M4→`table.cell-merge-layout`、M5/M6→`table.layout-table`)し、表示は`makeCandidate`に追加する`methodLabel`で区別。KB新設・rules.jsonl再生成はしない。(2)候補一覧は従来どおり全兄弟候補を表示(既存の「同じ箇所の代替手段 N件中」バッジのまま。間引きはしない)。
+- 次のアクション: 実装担当AGENT(Sonnet)が指示書に従いPR-T1から着手。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T1(複数手段化の骨格)実装**
+
+- ユーザー(モデルをSonnetへ切り替え)から「TABLE_FIX_METHODS_INSTRUCTIONS.mdに従ってPR-T1から実装して」と指示。
+- 実装前に指示書の内容とコードを突き合わせたところ、指示書自身に安全性上の問題を発見: M3(表をやめて解体)を「常時選択肢に出す」とした記述が、`classifyMergedCellTable()`内のコメント(実データで確認済み: 大規模なrowspan見出し付きデータ表が解体候補で構造の無い段落の羅列に変換された過去の実バグ、2026-07-15のCHANGELOGエントリに詳細記録あり)と矛盾することに気づいた。ユーザーに日本語で状況を説明し確認したところ、「`shouldPreserveAsDataTable`がfalseの場合にのみM3を選択肢に出す」という案が採用された。M1(データ表として維持)は非破壊的なため、この安全策の対象外とし、指示書どおり緩いゲート(`canOfferDataTableSemanticsMethod`、確信度のみpreserve値で調整)のまま実装。
+- 実装内容(`goal2-app/public/app.js`):
+  - `planTableTreatment()`(早期returnのウォーターフォール)を`planTableTreatments()`(適用可能な全手段を配列で返す)に置き換え。M1/M2/M3を推奨順(preserve時: M1→M2、非preserve時: M2→M3→M1)で併記。
+  - `tableNeedsDataTableSemantics()`から共通ゲート判定を`tableSemanticsGapExists()`として抽出し、`shouldPreserveAsDataTable()`を必須にしない緩和版`canOfferDataTableSemanticsMethod()`を新設(M1用)。
+  - `collectTableCandidates()`内で発見した既存の重複候補生成バグを修正: `mergeRule.ruleId === "table.cell-merge-layout"`かつ`canSplitMergedRowsIntoTables()`がtrueの場合、トップレベルの無条件プッシュと旧`planTableTreatment()`の両方が同一内容(`splitMergedRowsIntoTablesHtml()`)を生成していた(GOAL3の`data-removed-attrs`バグ発見時と同種の、独立した既存の重複バグ)。"layout"分類はトップレベルでは候補化せず、M2/M3経由に一本化して解消。file/mark分類は従来どおり単一候補を維持。
+  - 「構造的な解体・再構築が必要」と判断された場合にnaive構造判定・format-clear・キャプション欠落簡易候補をスキップする既存ゲート(`hadStructuralPick`)は、M1/M3で緩めたゲートとは別に、旧来の厳しい条件のまま独立して維持(回帰件数を変えないため)。
+  - `makeCandidate()`に`methodLabel`オプション追加(`candidate.method_label`として保持)。`candidateDisplayTitle()`で最優先表示し、同一rule_id(table.caption/table.cell-merge-layout/table.layout-table)の複数手段カードを区別できるようにした。rule_id新設・KB再生成はユーザー確定事項どおり行わず。
+  - `applyCandidateDecision()`の`decision`と`buildEvidenceFor()`の証跡出力に`selected_method_label`(および従来evidenceに出力されていなかった`selected_method_id`/`selected_method_rule_id`/`selected_method_title`)を追加。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前(`git stash`)/変更後の候補件数を`window.goal2Engine.analyze()`経由で比較。procedure-overview 8/8、images 4/4、tables **20→22**(table.caption +1、table.layout-table +1)、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 0/0(既にクリーン済みのため妥当)。tables以外は完全一致、tablesの増分も想定どおり新規代替手段の追加分のみで説明可能(回帰なし)。
+    - 注記: この件数はnotice系(patchMode: none)を除いた`window.goal2Engine.analyze()`の`candidates.length`(ruleScopeMode既定値)で計測しており、2026-07-15付CHANGELOGに記載の固定基準値(procedure-overview 10等)とは計測方法が異なるため単純比較できない。今回はセッション内で同一手法によるbefore/after比較のみで回帰なしを確認した。
+  - 画面操作(Playwright): サンプル「表: レイアウト・結合・添付」で、同一表に2件・7件の代替手段カードが表示されることを確認。2件のケースで、デフォルト以外の手段(M1)へ切り替え→採用→最終HTMLに選択した手段のafterHtmlが反映されること、未採用の兄弟候補3件が自動的にconflictedへ解決されることを確認。
+- 既知の残課題(次PRで検討): 一部の表で、M1(データ表として維持)と既存の単純なキャプション欠落候補(`hadStructuralPick`がfalseの場合に生成される簡易版)が並んで表示され、内容が一部重複する(いずれを採用しても他方は自動的にconflicted化されるため実害はない)。
+- 次のアクション: ユーザー確認の上コミット・プッシュ。マージ後PR-T2(M4フラット化ビルダー)へ。
 
 ## Decisions
 
