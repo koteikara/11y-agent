@@ -1441,17 +1441,21 @@ label {
 
 .rule-learn-more-trigger {
   margin-top: 4px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--primary-strong);
+  min-height: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .rule-learn-more-trigger:hover {
-  text-decoration: underline;
+  background: color-mix(in srgb, var(--primary), white 92%);
+  border-color: var(--primary-strong);
+  color: var(--primary-strong);
 }
 
 .rule-learn-more-overlay {
