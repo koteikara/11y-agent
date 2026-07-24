@@ -19,6 +19,17 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 複雑画像の画像名を「100文字に収まるかで分岐」＋画像内の文字も取り込むよう改善
+
+- 背景・目的: ユーザーから「ポスターの画像名に、画像内の記載文字も含めるか検討したい。100文字を超えそうなら『詳細は以下』を付ける形に」との提案。画像内の文字は画像の情報そのもの（WCAG 1.4.5/1.1.1）であり、短ければaltに全部入れるのが最善、長ければ主題＋「詳細は以下」に振るのが適切で、miCheckerの150字上限とも整合する。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`の`image-alt`タスク: 画像内に文字がある場合はその文字もalt_textに含めるよう指示。is_complexを「画像の内容（画像内の文字を含む）を代替テキスト一行＝100文字程度に収められるか」で判定するよう再定義。収まる場合はis_complex=falseで内容（画像内の文字を含む）をそのままalt_textに入れる（例：小さな告知バナー→「7月10日は休館日です」、接尾辞なし）。収まらない場合はis_complex=trueで主題を具体的に書き、網羅的な詳細（全数値・全項目・全写真・画像内の全文字）はcomplex_detailへ回す。
+  - `goal2-app/public/app.js`の`applyImageAltLlmResult()`: 「詳細は以下」を付けるかを、機械的な複雑画像判定（rule_id＝キーワードで過剰発火しうる）ではなく**AI自身のis_complex判定**で決めるよう変更（`isComplex = result.is_complex === true`）。これにより、機械判定で複雑画像とタグ付けされても、AIが100文字に収まると判断すれば接尾辞は付かず全内容がaltに入る。
+  - `a11y-migration-kb/rules/image/complex-image-report.md`: 「画像内の文字は可能な範囲で画像名に含める」「100文字に収まれば文字をそのまま画像名にし接尾辞なし／収まらなければ主題＋詳細は以下＋網羅的詳細は本文・報告へ」を明記。収まる例（告知バナー「7月10日は休館日です」）を追加し、例を4件に整理。
+  - `a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`を再生成。
+- 検証: `node --check public/app.js lib/llm-prompts.js`成功。`node test/run-tests.js`全テスト成功。rules.jsonl再生成で複雑画像の例4件が反映されることを確認。実際のGemini出力の変化はローカルにAPIキーが無いため未検証。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`, `goal2-app/public/app.js`, `a11y-migration-kb/rules/image/complex-image-report.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`
+
 ## 2026-07-24: 複雑画像の画像名「詳細は以下」の前半を具体的に書くようKB・プロンプトを修正
 
 - 背景・目的: 実データで vision が「観光地特集のポスター 詳細は以下」を生成した。「詳細は以下」の前が分類語一語に近く薄いため、ユーザーから「前半もルールに合わせてできるだけ具体的にしたい」と要望。原本(p64)の実際の画像名も「人口推移の集計結果のグラフ」「展示図録の案内チラシ」「杵築市都市計画図の凡例」のように具体的で、前回の修正(短い分類ラベルのみ)は行き過ぎだった。
