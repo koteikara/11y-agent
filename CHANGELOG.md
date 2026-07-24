@@ -19,6 +19,22 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 未実装だったtext.spaced-characters(文字間の不要な空白)を実装
+
+- 背景・目的: KB全60ルールの実装状況を棚卸ししたところ、候補生成ロジックに未実装のルールが3件(`text.spaced-characters`・`text.abbreviation`・`text.quotation`)残っていた。このうち、機械的に確実に検出でき誤検出リスクが低く実務価値の高い`text.spaced-characters`をユーザーの選択により実装した(残り2件は今回スコープ外)。
+- ルール概要: 「お　知　ら　せ」のように単一文字の間に空白を挟んで見た目を整えた表記は、読み上げソフトが単語として正しく読み上げられない(WCAG 1.3.2)。空白を除去し、間隔調整はCSSのletter-spacing等で行う。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - 検出ヘルパー`findSpacedCharacterMatches()`/`collapseSpacedCharacters()`を追加。単一文字が横方向の空白(半角/全角/タブ/NBSP、改行は含めない)で3つ以上連続して区切られ、かつ日本語(かな・漢字)を含むまとまりのみを対象にし、英字の綴り読み上げ(意図的な区切り)・通常の英文・スペース区切りの数字列の誤検出を避ける。
+  - `collectTextReplacementCandidates()`に検出ブロックを追加し、見出し・本文・リンク・ボタン・表セル等の可視テキスト(テキストノード)を対象に、空白除去の`replace-text`候補を生成。
+  - `collectImageCandidates()`にalt属性向けの検出を追加し、alt内の文字間空白を除去する`set-attribute`候補を生成。
+  - いずれも`confidence: "medium"`・`requiresHumanReview: true`(綴りの意図的区切り等の例外があるため人間確認前提)。
+- 補足: 本ルールは`michecker_check_ids`が空(KBのみ)のため、miChecker指摘対応モードでは対象外(KBモードでのみ表示)。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - 正規表現ロジックを8ケースで単体検証(「お　知　ら　せ」→「お知らせ」、「第 1 回 大 会」→「第1回大会」等の検出、通常文・英字・数字列・スペース区切り複数語の非検出)。
+  - Playwrightライブ検証: 見出しの文字間空白は`replace-text`候補、alt内の文字間空白は`set-attribute`候補が生成され、通常テキストでは候補ゼロになることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-24: 未実装だった画像ルール2件(showcase-section / heritage-image)を実装
 
 - 背景・目的: `a11y-migration-kb/rules/image/`配下の画像ルールのうち、`image.showcase-section`(画像＋関連リンクのまとまり)と`image.heritage-image`(文化財・個別紹介ページの画像)の2件がGOAL2に未実装だった(候補生成ロジックが存在せず、KBの.mdも`# 必須ルール`見出しを持たず`rule`本文が空だった)。ユーザーの要望で、画像にまつわる未実装ルールを実装した。
