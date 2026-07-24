@@ -19,6 +19,15 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 自然な日本語ガイドをエージェントのスキル化＋LLMプロンプトへ反映
+
+- 背景・目的: 共有された自然な日本語ガイド(k16shikano氏のSKILL.md、Unlicense)を、(1)このリポジトリで日本語を書くエージェント自身が使えるようにし、(2)本ツールのAIが生成する日本語にも反映する。
+- 主な変更内容:
+  - `.claude/skills/natural-japanese/SKILL.md`(新規): 原典を全8章構成のまま収録したClaude Codeスキル。コミットメッセージ・PR説明・CHANGELOG・KBルール文・ドキュメント・日本語の返答を書くときに適用する。frontmatterのdescriptionで日本語の散文を書く場面に反応する。
+  - `goal2-app/lib/llm-prompts.js`: 全LLMタスクのsystemPromptの末尾に、短文向けに抜粋した「自然な日本語」指針(`NATURAL_JAPANESE_GUIDANCE`)を一括付与。空虚な定型句(「重要なのは」「〜において」「多角的」等)・中身の無い強調語(「非常に」「極めて」)・言い換えの繰り返しを避け、能動態で具体的に書き、「い形容詞＋です」を整えるよう指示。TASKS定義後にループで付与するため、各タスクの記述を個別に触らずに全13タスクへ反映される。
+- 検証: `node --check lib/llm-prompts.js`成功。全13タスクにガイダンスが付与されることをNodeで確認。`node test/run-tests.js`全テスト成功(LLM未設定時の既存動作に影響なし)。
+- 関連ファイル: `.claude/skills/natural-japanese/SKILL.md`, `goal2-app/lib/llm-prompts.js`
+
 ## 2026-07-24: 自然な日本語ガイドをKBに追加＋見送っていた画像ルール2件（サムネ拡大／アニメGIF）を補完
 
 - 背景・目的: ユーザーから、LLM特有の不自然な日本語を避けるためのスタイルガイド(k16shikano氏のSKILL.md、Unlicense)が「自然な日本語を作成するのに役立ちそう」と共有された。あわせて、原本マニュアル画像セクションの差分洗い出しで見送っていたE(サムネ/拡大画像)・F(アニメGIF)もKBに補完する依頼。

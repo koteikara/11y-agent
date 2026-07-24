@@ -407,6 +407,22 @@ const TASKS = {
   },
 };
 
+// 全タスク共通で末尾に付与する「自然な日本語」の指針。生成文がLLM特有の不自然な言い回しに
+// ならないようにする(a11y-migration-kb/guidelines/natural-japanese.md、原典は k16shikano 氏の
+// SKILL.md / Unlicense を短文生成向けに抜粋)。短文向けに、空虚な定型句・強調語の排除、能動態、
+// 冗長回避、「い形容詞＋です」回避に絞る。
+const NATURAL_JAPANESE_GUIDANCE =
+  "なお、提案する日本語は自然で簡潔にしてください。" +
+  "「重要なのは」「〜において」「〜という側面から」「〜の観点から」「多角的」「包括的」「総合的」「掘り下げる」のような中身の無い定型句や、" +
+  "「非常に」「極めて」「大いに」のような中身の無い強調語、同じ内容の言い換えの繰り返しを避け、能動態で具体的に書いてください。" +
+  "「難しいです」のような「い形容詞＋です」は「〜しにくい」「困難です」等に整えてください。";
+
+for (const task of Object.values(TASKS)) {
+  if (typeof task.systemPrompt === "string") {
+    task.systemPrompt += NATURAL_JAPANESE_GUIDANCE;
+  }
+}
+
 function getTaskConfig(task) {
   return TASKS[task] || null;
 }
