@@ -19,6 +19,22 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 原本の表・リンク・ファイルセクションの差分を反映（セル結合⑦〜⑪・内部リンク分離・入れ子表）
+
+- 背景・目的: 原本マニュアルの表(p39〜52)・リンク(p77〜87)・ファイル(p53〜55)セクションを差分洗い出しした。大半は既存ルールで対応済みだったが、以下が未対応だった。
+- B1: セル結合の修正法⑦〜⑪をKB化（原本p44〜48）:
+  - `table/cell-merge-repeat.md`（新規, ⑦⑧⑨ 同じ項目の結合）: セル分割・表の下への記載・2つの表への分割で整理。
+  - `table/cell-merge-option.md`（新規, ⑩ オプション的な結合）: セル内に括弧書きで表現。
+  - `table/cell-merge-toc.md`（新規, ⑪ 目次の結合）: 目次ごとに表を分割し、見出し・キャプションで表す。
+  - 既存の①〜⑥（cell-merge-layout/heading/summary/note/file/mark）と合わせ、原本の11パターンが揃った。
+- B2: 入れ子テーブル（原本p50）: `table/layout-table.md`に「表の中に表が入れ子の場合は中の表だけを取り出し外側の表を削除する」を追記。
+- L1: 内部リンクの文中埋め込み回避（原本p80）:
+  - `link/internal-link.md`に「内部リンクは本文の文章中に埋め込まず、テキストとリンクを分離する（外部リンクは文中でも可）」を明記し、分離の例を追加。
+  - GOAL2実装 `goal2-app/public/app.js`: 既存の`link.internal-link`確認候補で、内部リンク（相対href等）が段落(p/li/dd/dt)内に本文テキストと一緒に埋め込まれている場合のみ、理由文に分離の案内を追記（新規候補は増やさない）。
+- 今回見送り（優先度低）: 有効拡張子の制限・日本語ファイル名→半角英数字（F1、CMS操作寄り）。
+- 検証: `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。rules.jsonl再生成でセル結合3ルールが追加されることを確認。Playwrightで、文中埋め込みの内部リンクに分離案内が付き、独立した内部リンクには付かないことを確認。
+- 関連ファイル: `a11y-migration-kb/rules/table/cell-merge-repeat.md`, `a11y-migration-kb/rules/table/cell-merge-option.md`, `a11y-migration-kb/rules/table/cell-merge-toc.md`, `a11y-migration-kb/rules/table/layout-table.md`, `a11y-migration-kb/rules/link/internal-link.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`, `goal2-app/public/app.js`
+
 ## 2026-07-24: 原本テキストセクションの差分から text.meaningless-symbol（矢印・装飾記号）を新設
 
 - 背景・目的: 原本マニュアルのテキストセクション（p20〜30）とHTML構造（p31〜33）を差分洗い出しした。大半は既存ルールで対応済みだったが、原本p23「意味の無い記号は使用しない」の矢印記号・装飾記号がGOAL2に未対応だった（見出し順序のh1本文禁止・低→高方向の飛ばし許容は既に対応済みと確認）。ユーザーの選択（私見どおりT1・T2を機械検出、T1は文脈依存で自動置換しない）に沿って実装した。

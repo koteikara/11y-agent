@@ -3123,12 +3123,24 @@
         !hrefInfo.isCategoryCandidate &&
         !hrefInfo.isCrossPageAnchor
       ) {
+        // L1(原本p80): 内部リンクは本文の文章中に埋め込まず、テキストとリンクを分離する運用
+        // (外部リンクは文章中でも可)。段落(p/li/dd/dt)内にリンク以外の本文テキストがある場合のみ、
+        // 分離の確認を理由に追記する。
+        const proseBlock = link.closest("p,li,dd,dt");
+        const embeddedInProse =
+          proseBlock &&
+          normalizeText(proseBlock.textContent).length > normalizeText(link.textContent).length + 4;
+        let internalReason = "CMS管理内ページであれば、移行後ページを内部リンク機能で指定できるか確認します。";
+        if (embeddedInProse) {
+          internalReason +=
+            "また、内部リンクは本文の文章中に埋め込まず、テキストとリンクを分離してください(「詳細は〜をご覧ください」等の文＋独立したリンク)。外部リンクは文章中でも構いません。";
+        }
         candidates.push(
           makeCandidate({
             ruleId: "link.internal-link",
             element: link,
             message: hrefInfo.isInternalAbsolute ? "同一ドメインの絶対URLリンクです。" : "CMS管理内ページへの相対リンクです。",
-            reason: "CMS管理内ページであれば、移行後ページを内部リンク機能で指定できるか確認します。",
+            reason: internalReason,
             afterHtml: link.outerHTML,
             confidence: "medium",
             requiresHumanReview: true,
