@@ -19,6 +19,58 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 未実装だった画像ルール2件(showcase-section / heritage-image)を実装
+
+- 背景・目的: `a11y-migration-kb/rules/image/`配下の画像ルールのうち、`image.showcase-section`(画像＋関連リンクのまとまり)と`image.heritage-image`(文化財・個別紹介ページの画像)の2件がGOAL2に未実装だった(候補生成ロジックが存在せず、KBの.mdも`# 必須ルール`見出しを持たず`rule`本文が空だった)。ユーザーの要望で、画像にまつわる未実装ルールを実装した。
+- KB整備(両ルール共通):
+  - `heritage-image.md`・`showcase-section.md`を他ルールと同じ標準形式(`# 必須ルール`+`# 例`)に書き換え、`wcag`/`jis`/`origin`等のfrontmatterも補った。`tools/okf2jsonl.py`でrules.jsonlを再生成し、`goal2-app/data/rules.jsonl`へ反映(両ルールの`rule`本文・例が正しく生成されることを確認)。
+- image.showcase-section(機械検出のadvisory notice):
+  - `collectShowcaseSectionCandidates()`を新設。見出し(h2〜h4)直後の兄弟要素を同レベル以上の次見出しまで1セクションとして走査し、画像2枚以上＋リンク2件以上を含むセクションを検出したら、「まとまり全体を1セクションとして扱う(見出しはまとまり名、画像altは内容+種類、リンクは飛び先が分かる文言に、「こちら」等の曖昧表現を避ける)」確認候補(`patchMode:"none"`、自動修正なし、人間確認前提)を見出しに付与。`noticeRuleIds`へ登録。
+- image.heritage-image(LLM支援検出のadvisory notice):
+  - 純粋な機械判定が難しい「特定の対象(文化財・仏像・美術工芸品・史跡等)を個別紹介するページか」をLLMにページ全体で判定させる。`lib/llm-prompts.js`に`heritage-check`タスク(ページタイトル・見出し一覧・画像一覧・リンク総数を渡し、個別対象ページか・対象名・代表画像のblock_id・理由を返す)を追加。`app.js`に`enrichHeritageImageWithLlm()`/`applyHeritageImageResult()`を新設し、該当時のみ代表画像へ「画像名は対象名を基本に、キャプションは短い説明に、リンクが少なければ関連リンク群としてまとめない」確認候補を1件付与。`runAnalysis`のenrichment Promise.allへ追加。`noticeRuleIds`へ登録。GEMINI_API_KEY未設定時は発火しない(既存動作を完全維持)。
+- 補足: 両ルールとも`michecker_check_ids`が空(manual origin)のため、miChecker指摘対応モードでは対象外(KBモードでのみ表示)。これは既存の絞り込みロジックで正しく除外される。
+- 検証:
+  - `node --check public/app.js lib/llm-prompts.js server.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightでライブ検証: showcase-sectionは「h2+画像2+リンク2」で確認候補が1件発火(notice扱い・patchMode none)、「画像2+リンク1」では発火しないこと、miCheckerモードでは除外されることを確認。heritage-checkタスクはサーバー側で正しく認識され(未知タスク扱いされず)、GEMINI_API_KEY未設定環境ではクライアントがサイレントフォールバックして候補ゼロ(既存動作維持)になることを確認。
+  - 実際のGemini応答でのheritage-image判定精度は、ローカルに`GEMINI_API_KEY`が無いため未検証。ユーザー環境での再検証を推奨。
+- 関連ファイル: `a11y-migration-kb/rules/image/heritage-image.md`, `a11y-migration-kb/rules/image/showcase-section.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`, `goal2-app/public/app.js`, `goal2-app/lib/llm-prompts.js`
+
+## 2026-07-24: image.avoid-text-as-image(文字を画像化しない)のAI判定漏れを修正(装飾的な見出し文字をロゴと誤判定する問題)
+
+- 背景・目的: ユーザーが実際に公開したポスター画像(`docs/images/tourism-feature-banner.png`、「観光地特集」「グルメも絶景も一緒に楽しみたい！」「SIGHTSEEING」「ENJOY TRIP」等、大量の文字情報が装飾的な書体で描き込まれたバナー)を本番デプロイ環境(commit `78cb8f2`)でGOAL2解析させたところ、alt-text/complex-image-report系の候補は出たが、`image.avoid-text-as-image`(文字を画像化しない)の指摘だけが出なかったと報告。
+- 原因調査: コード側の候補生成ロジック(`enrichAvoidTextAsImageWithLlm`、URL解決、michecker絞り込み、キャッシュキー、呼び出し数上限)には問題が見つからず、この環境の通信プロキシがデプロイ先ドメインをブロックしているため実機再現もできなかった。ユーザーへの確認の結果、alt-text等の他の指摘は正常に出ていたことから、画像取得自体は成功しており、AIが装飾的な大きな見出し文字を「対象外のロゴ・アイコン」と誤判定して`has_embedded_text: false`と判定した可能性が高いと判断した。既存プロンプトの「ロゴ・アイコンや...の文字は対象外」という除外条件の記述が曖昧で、ポスター調の凝った書体の見出し文字もロゴとして除外されうる状態だった。
+- 主な変更内容:
+  - `lib/llm-prompts.js`の`"avoid-text-as-image"`タスクのsystemPromptを改訂。装飾的な書体・ポスター調のデザインであっても見出し・キャッチコピー・企画タイトルは対象に含めることを明記し、「見た目が凝っていることは除外理由にならない」ことを明示。対象外の「ロゴ・アイコン」を「サイト運営者やブランドを示す小さな企業名・サービス名のマーク」に限定し、画像の主題として大きく配置された見出し文字はロゴ扱いしないよう指示を追加。複数の見出し・キャッチコピーがある場合は全て列挙するよう指示。
+- 検証:
+  - `node --check lib/llm-prompts.js`成功。`node test/run-tests.js`全テスト成功(LLM未設定時の既存検出結果に影響なし)。
+  - 実際のGemini vision応答での動作確認は、この環境から本番デプロイ先への通信がプロキシでブロックされ、かつローカルに`GEMINI_API_KEY`も無いため未実施。ユーザーの環境での再デプロイ後の再検証を推奨。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`
+
+## 2026-07-24: 複雑画像のAI生成alt文言、短い分類ラベル化+詳細情報の報告欄への引き継ぎに対応(PR#101のフォローアップ)
+
+- 背景・目的: PR#101で「詳細は以下」の接尾辞付与のみ対応したところ、ユーザーから「いやそもそもルールを一度読み返してみよう」と指摘を受けた。`a11y-migration-kb/rules/image/complex-image-report.md`を読み返すと、ルールの例(「人口推移の集計結果のグラフ」→「人口推移のグラフ 詳細は以下」)は接尾辞を付けるだけでなく**alt文言自体を短い分類・主題ラベルへ短縮する**ことを示しており、さらに**除外した詳細内容を本文への追記または報告欄への起票で別途扱う**ことも定めている。PR#101の修正は接尾辞付与のみで、この2点をどちらも満たしていなかった。
+- 主な変更内容:
+  - `goal2-app/lib/llm-prompts.js`の`"image-alt"`タスク: システムプロンプトを改訂し、`is_complex`がtrueの場合は`alt_text`を「人口推移のグラフ」のような短い分類・主題ラベルのみにするよう明示的に指示(「詳細は以下」の接尾辞自体はAIに付けさせず、後処理で機械的に付与する運用を明記)。alt_textから除外した詳細情報(画像に具体的に何が描かれているか)を格納する新フィールド`complex_detail`をレスポンススキーマに追加。
+  - `goal2-app/public/app.js`の`applyImageAltLlmResult()`: `complex_detail`が返ってきた場合、`candidate.issue.reason`に「AIが読み取った画像の詳細: ...(本文への追記または報告欄への記載に使用してください)」という形で追記し、作業者が本文追記・報告欄起票にそのまま使えるようにした(詳細情報を捨てずに人間側へ引き継ぐ)。
+- 検証:
+  - `node --check public/app.js lib/llm-prompts.js`成功。`node test/run-tests.js`全テスト成功(LLM未設定時の既存検出結果に影響なし)。
+  - 実際のGemini vision応答での動作確認は、ローカル環境に`GEMINI_API_KEY`が無いため未実施。ユーザーの環境での再検証を推奨(PR#101と同様の制約)。
+- 関連ファイル: `goal2-app/lib/llm-prompts.js`, `goal2-app/public/app.js`
+
+## 2026-07-24: 複雑な画像(チラシ・ポスター等)のAI生成alt文言が「詳細は以下」ルールから外れる不具合を修正
+
+- 背景・目的: ユーザーが公開ページの観光地特集バナー(写真多数配置のポスター画像)を実際にGEMINI_API_KEY有効な環境でGOAL2に解析させたところ、「生成した画像名がルールと逸脱してます」と報告(生成された画像名は「観光地特集のポスター。各地のグルメや景勝地の写真が多数配置。」という内容だった)。KBルール`image/complex-image-report.md`は、グラフ・チラシ・ポスター等の複雑な画像には画像名へ「詳細は以下」を付す必要があると定めている。
+- 原因(2点、いずれも独立):
+  1. `applyImageAltLlmResult()`(AIのalt_text応答を候補へ反映する処理)が、`image.complex-image-report`候補に対してもAIの`alt_text`をそのまま上書きしていた。機械的な下書き(`generateComplexImageNameDraft`)は「詳細は以下」を正しく付与していたが、AI enrichmentがこれを気にせず上書きするため、AI有効時は常にルール違反の画像名に後退していた。
+  2. さらに根本として、この画像は機械的な複雑画像判定(`isComplexImageCandidate`)自体が発火しておらず(alt=""のため`isMicheckerComplexImageAltText`が不成立、かつsrc/alt/captionに「地図」「グラフ」等の既存キーワードが一致しない)、`image.complex-image-report`候補がそもそも生成されていなかった。AIのレスポンススキーマには`is_complex`フィールドが既にあったが、クライアント側でこの値を一切参照していなかった(死んだフィールド)。
+- 主な変更内容:
+  - `applyImageAltLlmResult()`で、`candidate.rule_id === "image.complex-image-report"`のときに加え、AIが`is_complex: true`と判定した場合も、alt_textへ「詳細は以下」を付与するよう変更(既に含まれる場合は付与しない)。
+  - `isComplexImageCandidate()`のキーワード一致リストに「チラシ」「ポスター」「バナー」「flyer」「poster」「banner」を追加(KBルールの例示に合わせた defense-in-depth、AI無効時にも一部のケースで機械的に拾えるようにする)。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Node上でsuffix付与ロジックを直接検証: `image.alt-text`候補+`is_complex: true`、`image.complex-image-report`候補、通常の`image.alt-text`候補(付与しない)、既に「詳細は以下」を含む名前(重複付与しない)の4パターンで期待どおりの結果を確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-24: GOAL3本文抽出でheader内のバナー画像が消える不具合を修正 + デプロイ確認用のバージョン表示を追加
 
 - 背景・目的: ユーザーが実際に公開したページ(`docs/tourism-spots-feature.html`、`<header><img ...></header><main>...</main>`という構成)をGOAL3(本文抽出)で取得したところ、「本文抽出した際に画像が欠落する」と報告。また「デプロイが最新かわかりにくいのでバージョン情報をページのどこかに入れよう」との提案もあった。

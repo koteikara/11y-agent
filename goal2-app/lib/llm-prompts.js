@@ -249,7 +249,10 @@ const TASKS = {
       "与えられた画像を見て、画像を見られない利用者にも内容が伝わる簡潔な代替テキスト(altテキスト、30文字程度まで)を日本語で提案してください。" +
       "「画像」「写真」などの単語だけで終わらせず、何が写っているか具体的に書いてください。" +
       "内容を持たない装飾目的のみの画像(罫線・アイコン等)と判断した場合はis_decorativeをtrueにしてください。" +
-      "地図・グラフ・図表など、alt一行では内容を伝えきれない複雑な画像の場合はis_complexをtrueにしてください。" +
+      "地図・グラフ・図表・チラシ・ポスターなど、alt一行(30文字程度)では内容を伝えきれない複雑な画像の場合はis_complexをtrueにしてください。" +
+      "is_complexがtrueの場合、alt_textには「人口推移のグラフ」「観光地特集のポスター」のような短い分類・主題ラベルのみを入れてください" +
+      "(詳細な内容は本文へ別途追記する運用のため、alt_textに全ての情報を詰め込まないでください。「詳細は以下」という接尾辞は付けないでください、後処理で自動的に付与されます)。" +
+      "alt_textに含めなかった詳細情報(画像に具体的に何が描かれているか。複数の要素がある場合は列挙してください)は、is_complexがtrueの場合のみcomplex_detailに記述してください。" +
       "近接するキャプション文言(caption)が渡されている場合は、キャプションと重複しない情報を優先してください。",
     responseSchema: {
       type: "OBJECT",
@@ -257,6 +260,7 @@ const TASKS = {
         alt_text: { type: "STRING" },
         is_decorative: { type: "BOOLEAN" },
         is_complex: { type: "BOOLEAN" },
+        complex_detail: { type: "STRING" },
       },
       required: ["alt_text"],
     },
@@ -272,9 +276,15 @@ const TASKS = {
       "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
       "与えられた画像を見て、バナーや告知画像のように、本来は本文テキストとして提供すべき見出し・告知文・日付・案内文等の文字情報が、" +
       "画像の中に描き込まれているかを判定してください。" +
-      "ロゴ・アイコンや、写真の中にたまたま写り込んでいる看板・商品パッケージ等の文字は対象外です。" +
-      "画像自体が文字情報を伝える目的で作られている場合のみhas_embedded_textをtrueにし、" +
-      "画像内の文字をそのまま日本語テキストとしてextracted_textに書き起こしてください(改行はスペースでつなげてよい)。",
+      "装飾的な書体・大きな飾り文字・複数の写真を組み合わせたポスター調のデザインであっても、" +
+      "そこに書かれている見出しやキャッチコピー、企画タイトル(例:「観光地特集」「〇〇まつり開催中」)は対象に含めてください" +
+      "(見た目が凝っていることは除外理由になりません)。" +
+      "対象外となる「ロゴ・アイコン」とは、サイト運営者やブランドを示す小さな企業名・サービス名のマーク(コーナーに小さく入る運営者名等)のみを指します。" +
+      "画像の主題として大きく配置された見出し・タイトル文字は、たとえ字体が装飾的でもロゴ扱いにせず対象に含めてください。" +
+      "写真の中にたまたま写り込んでいる看板・商品パッケージ等の文字も対象外です。" +
+      "画像自体が文字情報を伝える目的で作られている場合はhas_embedded_textをtrueにし、" +
+      "画像内の主要な文字情報をそのまま日本語テキストとしてextracted_textに書き起こしてください" +
+      "(複数の見出し・キャッチコピーがある場合は全て列挙し、改行はスペースでつなげてよい)。",
     responseSchema: {
       type: "OBJECT",
       properties: {
@@ -348,6 +358,48 @@ const TASKS = {
     },
     buildUserText(items) {
       return JSON.stringify(items.map((item) => ({ id: item.id, blocks: item.blocks })));
+    },
+  },
+
+  // heritage-check reasons over the whole page at once (like heading-review) to decide whether
+  // the page is an individual named-subject / cultural-property introduction page — a case where
+  // images support one specific subject (仏像・美術工芸品・史跡等) and should be named after that
+  // subject, rather than being folded into the generic image+related-links "showcase" treatment.
+  // Called with a single synthetic item ({ id, page_title, headings, images, link_count }).
+  "heritage-check": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "1ページ分の情報(ページタイトル・見出し一覧・画像一覧(各画像にblock_id・alt・キャプション)・ページ内リンク総数)を受け取ります。" +
+      "このページが「特定の対象を個別に紹介するページ」かどうかを判定してください。" +
+      "対象とは、文化財・仏像・美術工芸品・史跡・記念物・特定の建造物や作品など、固有名を持つ単一の題材を指します。" +
+      "そのようなページでは、画像はページ全体の寄せ集めではなく、その対象の説明補助になっています。" +
+      "該当する場合のみis_individual_subject_pageをtrueにし、対象名(subject_name)、その対象を最もよく表す代表画像のblock_id(target_image_id、必ず入力の画像一覧に実在するものだけ)、判定理由(reason)を返してください。" +
+      "イベント告知・お知らせ一覧・複数の話題をまとめた案内ページ・観光特集のように複数の対象を横断的に紹介するページ・画像が主題を持たない装飾/バナーだけのページは対象外です(is_individual_subject_pageをfalseにしてください)。" +
+      "確信が持てない場合はfalseにしてください。",
+    responseSchema: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          id: { type: "STRING" },
+          is_individual_subject_page: { type: "BOOLEAN" },
+          subject_name: { type: "STRING" },
+          target_image_id: { type: "STRING" },
+          reason: { type: "STRING" },
+        },
+        required: ["id", "is_individual_subject_page"],
+      },
+    },
+    buildUserText(items) {
+      return JSON.stringify(
+        items.map((item) => ({
+          id: item.id,
+          page_title: item.page_title || "",
+          headings: item.headings || [],
+          images: item.images || [],
+          link_count: item.link_count || 0,
+        }))
+      );
     },
   },
 };
