@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 自然な日本語ガイドをKBに追加＋見送っていた画像ルール2件（サムネ拡大／アニメGIF）を補完
+
+- 背景・目的: ユーザーから、LLM特有の不自然な日本語を避けるためのスタイルガイド(k16shikano氏のSKILL.md、Unlicense)が「自然な日本語を作成するのに役立ちそう」と共有された。あわせて、原本マニュアル画像セクションの差分洗い出しで見送っていたE(サムネ/拡大画像)・F(アニメGIF)もKBに補完する依頼。
+- 追加内容:
+  - `a11y-migration-kb/guidelines/natural-japanese.md`(新規): 共有されたスタイルガイドを、本ツールが生成・提案する短文(画像名/リンク文言/見出し/キャプション/AIの理由文)向けに抜粋・適応したガイド。能動態・主語明示、曖昧語の回避、用語の一貫、LLMっぽい空虚表現の禁止句リスト(「重要なのは〜」「〜において」「多角的」「非常に」等)、冗長排除、「い形容詞＋です」回避、ダッシュ・中黒の扱いなどを収録。出典URL・Unlicenseを明記。長文文書向けの段落構成・論証の項は本ツールの対象外として除外。※`guidelines/`配下のため`rules.jsonl`(候補生成)には取り込まれない参照ドキュメント。
+  - `a11y-migration-kb/rules/image/thumbnail-enlarged.md`(新規, 原本p67): クリック拡大画像の移行ルール。原則サムネ=画像パーツ・拡大画像=ファイルリンク。拡大画像に情報がある場合(ポスター・チラシ・申込書・マップ・グラフ等)は拡大画像も残す。情報の無い拡大は拡大リンクを外す。
+  - `a11y-migration-kb/rules/image/animation.md`(新規, 原本p70, WCAG 2.2.2): 5秒以上動くアニメーションGIFはそのまま移行せず質問欄で確認。静止画は対象外。アクセシビリティチェックはGIF全般に指摘が出るが、静止画なら問題なし。
+  - `a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`を再生成(image.thumbnail-enlarged / image.animation を反映)。
+- 補足: 今回はKB文書の補完のみ(GOAL2の候補生成ロジックは変更なし)。自然な日本語ガイドのLLMプロンプトへの反映、E/Fの機械検出は今後の検討事項。
+- 検証: `node test/run-tests.js`全テスト成功。rules.jsonl再生成で新規2ルールが取り込まれること、guidelines配下が候補生成に混入しないことを確認。
+- 関連ファイル: `a11y-migration-kb/guidelines/natural-japanese.md`, `a11y-migration-kb/rules/image/thumbnail-enlarged.md`, `a11y-migration-kb/rules/image/animation.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`
+
 ## 2026-07-24: 原本マニュアル画像セクションの残差分を反映（alt-text報告フロー等の補強＋リンク画像altルール新設）
 
 - 背景・目的: 原本マニュアル(`a11y-migration-kb/sources/manual.pdf`)の画像セクション(p56〜76)と現行KBの差分を全数洗い出し、優先度の高い項目を反映した。
