@@ -27,6 +27,7 @@
     "iframe.cms-review",
     "iframe.frame-unsupported",
     "text.bold",
+    "text.meaningless-symbol",
   ]);
 
   const tableRelatedRuleIds = new Set([
@@ -4616,7 +4617,59 @@
       collectForeignLanguageCandidate(element, text, candidates, seen);
       collectNoteSymbolCandidate(element, text, candidates, seen);
       collectPositionalLanguageCandidate(element, text, candidates, seen);
+      collectMeaninglessSymbolCandidate(element, text, candidates, seen);
     });
+  }
+
+  // text.meaningless-symbol(原本p23「意味の無い記号は使用しない」): 読み上げで読み飛ばされる
+  // 矢印記号や、装飾目的だけの記号を検出し、文脈に応じた対応(言葉への置換・削除・構造化)を促す
+  // 確認候補(patchMode: none、自動修正なし)を出す。置換先や削除可否は文脈依存(方向の矢印は
+  // 「から」「へ」等を文意で選ぶ、装飾記号でも固有名詞や箇条書き・見出しの代わりなら扱いが変わる)
+  // のため、機械的な置換はしない。表内(td/th)の矢印・記号は表ルール側で扱うため対象外にする。
+  const ARROW_SYMBOL_PATTERN = /[→↓↑←⇔⇒⇨]/;
+  const DECORATIVE_SYMBOL_PATTERN = /[○●◎□■◇◆☆★]/;
+
+  function collectMeaninglessSymbolCandidate(element, text, candidates, seen) {
+    if (element.closest("td,th")) {
+      return;
+    }
+    const hasArrow = ARROW_SYMBOL_PATTERN.test(text);
+    const hasDecorative = DECORATIVE_SYMBOL_PATTERN.test(text);
+    if (!hasArrow && !hasDecorative) {
+      return;
+    }
+    let message;
+    let reason;
+    if (hasArrow && hasDecorative) {
+      message = "矢印記号・装飾記号が含まれています。";
+      reason =
+        "矢印記号(→↓↑←⇔⇒)は読み上げで読み飛ばされ、装飾目的の記号(○●◎□■◇◆☆★)は読み上げの妨げになります。" +
+        "矢印は文脈に応じて「から」「へ」等の言葉に置き換え(機械的に固定しない)、装飾記号は削除してください(必要に応じて半角スペースに)。" +
+        "箇条書き・見出しの代わりに使われている場合はリスト・見出しに変換し、固有名詞の一部はそのまま残してください。";
+    } else if (hasArrow) {
+      message = "方向を示す矢印記号が含まれています。";
+      reason =
+        "矢印記号(→↓↑←⇔⇒)は読み上げソフトで読み飛ばされます。文脈に応じて「から」「へ」等の言葉に置き換えるか、レイアウトの見直しを検討してください(機械的に「から」へ固定しないでください)。";
+    } else {
+      message = "装飾目的の記号が含まれています。";
+      reason =
+        "装飾目的の記号(○●◎□■◇◆☆★)は読み上げの妨げになるため削除します(必要に応じて半角スペースに)。" +
+        "箇条書き・見出しの代わりに使われている場合はリスト・見出しに変換し、固有名詞の一部(例:わくわく☆イベント)はそのまま残してください。";
+    }
+    pushUniqueCandidate(
+      candidates,
+      seen,
+      makeCandidate({
+        ruleId: "text.meaningless-symbol",
+        element,
+        message,
+        reason,
+        afterHtml: element.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
   }
 
   // miChecker C_83.0(text.sensory-characteristics): コンテンツの形・位置だけに依存した案内文言
