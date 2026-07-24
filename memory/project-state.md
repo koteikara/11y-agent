@@ -806,6 +806,23 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - **重要な制約をユーザーに申し送り**: `image.avoid-text-as-image`(画像内埋め込み文字のvision検出)やGemini vision経由の`image.alt-text`強化は、サーバー側で画像バイトを実際に取得できて初めて動作する。このサンプルの「旧ページURL」は`https://www.example-city.jp/...`という実在しないプレースホルダドメインのため、画像取得は常に失敗しAI vision判定は実行されない(既存の他4サンプル画像も同じ制約を受けており、今回新規に生じたものではない)。実際のAI vision判定(バナー内の文字を正しく検出できるか)を検証するには、実在する旧ページURL(ユーザーが以前提示した尼崎市の例等)で試す必要がある旨を伝えた。
 - 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/images/sample-banner-generated.png`(新規)
 
+**2026-07-22〜24 実在バナー画像の検証用にGitHub Pagesページを公開、AI vision実テストの土台を整備**
+
+- 上記の制約を受け、ユーザーが実際の観光地特集バナー画像(実写真+日本語文字入りの本格的な旅行バナー)を貼り付け、「GitHubページに公開しよう、画像はこちらを使用して」と依頼。
+- 画像ファイル自体はチャット上で視覚的に見えるのみでこの環境のディスクには保存されない(アップロードディレクトリを何度探索しても見つからない)ことが判明。動画のような`@"/root/.claude/uploads/..."`形式のファイル添付とは異なる扱いだった。複数回の再送でも解決せず、最終的にユーザーがGitHubのWeb UIから直接アップロードする方式で合意。
+- リポジトリ(`koteikara/11y-agent`)に`docs/`ディレクトリを新設。`docs/images/`(画像アップロード先として`.gitkeep`で先に作成)と、見出し・本文を含む実ページに近い構成の`docs/tourism-spots-feature.html`(ファイル名は「index」を避け内容が分かる名前にとの指示どおり)を作成。ユーザーが`docs/images/tourism-feature-banner.png`へ画像をアップロードし、Settings > PagesでGitHub Pagesを`main`/`docs`ソースに設定し、`https://koteikara.github.io/11y-agent/tourism-spots-feature.html`として公開完了。
+- この環境からは`design-system.isct.ac.jp`同様`github.io`への直接fetchもプロキシポリシーでブロックされるため、公開確認はGitHub API(`get_file_contents`)でファイルの存在を確認する形で代替した。
+- 教訓: チャットに貼り付けられた画像は、動画等の「ファイル添付」とは異なり、この環境のファイルシステムには保存されないことがある(モデルには視覚的に見えても`find`等では発見できない)。同じ方法で繰り返し依頼しても解決しないため、早めに「ファイル添付」「URLで渡す」「相手が直接配置する」等の代替手段に切り替える判断が必要。
+- 関連ファイル: `docs/images/.gitkeep`、`docs/tourism-spots-feature.html`(いずれも新規)
+
+**2026-07-24 実ページでの検証から、GOAL3のheader内バナー画像消失バグとバージョン表示機能を発見・実装**
+
+- 公開したページ(`docs/tourism-spots-feature.html`)をユーザーが実際にGOAL3で本文抽出したところ「画像が欠落する」と報告。あわせて「デプロイが最新かわかりにくいのでバージョン情報をページのどこかに入れよう」との提案。
+- 画像欠落は、PR#98(`removeEmptyElements()`の自己チェック漏れ)とは別の、GOAL3側の2段階のバグだった: (1) `isLikelyContentBlock()`がheaderをテキスト量だけで判定しバナー画像だけのheaderを常に除去、(2) それを直しても`isLeadingTemplateFragment()`の`if (!text) return true`という早期returnが、ページ先頭の無テキスト要素(headerがまさにこれ)を画像の有無を問わず除去。さらに(3) `dedupeCandidates()`がテキストの同一性だけで候補を重複判定し、画像を含むbody候補と含まないmain候補を「同じ」とみなしてfootprintの小さいmain候補を残し画像入りのbody候補を捨てる、という3段階目のバグも重なっていた。3つとも修正し、`hasSubstantialImage()`ヘルパーを新設(閾値は当初80x40で設定したが、Playwright回帰確認で典型的なサイトロゴ(120x40)まで拾ってしまうことが判明し、幅300px・高さ80px以上に調整、ヒーロー・バナー画像相当のみを対象化)。
+- バージョン表示: `goal2-app/public/version-badge.js`を新設し、`/build-info.json`(Cloud Runデプロイ時にPowerShellスクリプトが`git rev-parse`等から生成、ローカル開発では存在せず404で非表示)を読み込んで画面右下に「build: <コミット短縮ID> (デプロイ日時)」を表示。3画面(index/goal3/goal1)すべてに追加し、`CLOUD_RUN_DEPLOY.md`にも生成手順と確認方法を追記。これにより、本セッションで繰り返し発生した「本番が古いコードのままで再現しない」という混乱を今後減らせる見込み。
+- 教訓: ユーザー自身が用意した実ページでの検証(サンプルではなく本物のURL)が、サンプルでは決して踏まなかったコードパス(header内の無テキストバナー画像)のバグを次々とあぶり出した。合成テストデータだけに頼らず、実データでの検証機会を活かして深掘りする価値が高い。また、1つの症状(画像消失)の背後に、独立した複数のバグ(除去ロジック2箇所+重複排除ロジック1箇所)が積み重なっているケースがあり、1つ直して満足せず、実際に期待どおりの最終結果が出るまで確認を続ける必要がある。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/version-badge.js`(新規)、`goal2-app/public/index.html`、`goal2-app/public/goal3.html`、`goal2-app/public/goal1.html`、`goal2-app/public/styles.css`、`goal2-app/CLOUD_RUN_DEPLOY.md`
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。

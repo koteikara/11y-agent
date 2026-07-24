@@ -19,6 +19,25 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: GOAL3本文抽出でheader内のバナー画像が消える不具合を修正 + デプロイ確認用のバージョン表示を追加
+
+- 背景・目的: ユーザーが実際に公開したページ(`docs/tourism-spots-feature.html`、`<header><img ...></header><main>...</main>`という構成)をGOAL3(本文抽出)で取得したところ、「本文抽出した際に画像が欠落する」と報告。また「デプロイが最新かわかりにくいのでバージョン情報をページのどこかに入れよう」との提案もあった。
+- 画像欠落の調査・原因: PR#98(`removeEmptyElements()`のimg自己チェック漏れ)とは**別の、2段階の原因**がGOAL3側にあった。
+  1. `sanitizeDocument()`が呼ぶ`isLikelyContentBlock()`は、`header`要素をテキスト量(300文字超)だけで判定しており、バナー画像だけで構成されテキストをほぼ持たない`<header>`は常に定型のナビゲーションとして除去されていた。
+  2. (1)を個別に直しても、`removeLeadingTemplateFragments()`が呼ぶ`isLeadingTemplateFragment()`に`if (!text) return true`という早期returnがあり、ページ先頭の要素はテキストが無ければ画像の有無を問わず「先頭のテンプレート断片」として無条件に除去されていた。`<header>`は`body`の先頭の子要素にあたるため、(1)を回避してもここで除去されていた。
+- 主な変更内容:
+  - `isLikelyContentBlock()`に、`<header>`要素かつ十分なサイズの画像を含む場合は保持する分岐を追加(nav/footer/aside/formは対象外のまま、テキスト量のみで判定を継続)。
+  - `isLeadingTemplateFragment()`の`if (!text) return true`を、`hasSubstantialImage()`を使った判定に変更(テキストが無くても十分なサイズの画像を含む場合は先頭断片とみなさない)。
+  - `hasSubstantialImage(element)`を新設。判定当初は幅80px・高さ40px以上としたが、Playwrightでの回帰確認中に典型的なサイト共通ヘッダーのロゴ(120x40)まで本文画像として拾ってしまうことが判明したため、幅300px・高さ80px以上(サイズ未指定は許容)に調整。ヒーロー・バナー画像相当のサイズのみを対象にし、ロゴ・アイコンとの誤検知を避ける。
+  - `dedupeCandidates()`のキーにも画像件数を追加。テキストが同じでも画像件数が異なる候補(画像入りheaderを持つbody候補 vs それを含まないmain候補)を「重複」として黙って一方を捨てないようにする不具合も合わせて修正(この不具合により、(1)(2)を直した直後もまだ画像入り候補が消えていた)。
+  - バージョン表示: `goal2-app/public/version-badge.js`を新設。`/build-info.json`(Cloud Runデプロイ時に生成、ローカル開発では存在しないため404で何も表示されない)を読み込み、画面右下に「build: <コミット短縮ID> (デプロイ日時)」を表示する。`index.html`・`goal3.html`・`goal1.html`の3画面すべてに追加。`CLOUD_RUN_DEPLOY.md`のデプロイ手順に、`git rev-parse`等でこのファイルを生成するPowerShellの手順を追記。
+- 検証:
+  - `node --check public/goal3.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで、実際に公開したページと同じ構成(header内バナー画像+main本文)のHTMLをGOAL3で抽出し、画像を含む「body候補」が推奨候補として生成されることを確認。
+  - 回帰確認: ロゴ(120x40)+ナビゲーションリンクを持つheaderでは、リンクの生テキストは従来どおり除去され、ロゴ画像も(閾値調整後は)本文候補に含まれないことを確認。
+  - バージョン表示: ローカル開発環境(build-info.json無し)では表示されないこと、`public/build-info.json`を仮生成した状態では画面右下に正しく表示されることを3画面すべてで確認。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/version-badge.js`(新規)、`goal2-app/public/index.html`、`goal2-app/public/goal3.html`、`goal2-app/public/goal1.html`、`goal2-app/public/styles.css`、`goal2-app/CLOUD_RUN_DEPLOY.md`
+
 ## 2026-07-22: 「画像: alt・キャプション・複雑画像」サンプルに、文字が書き込まれたバナー画像を追加
 
 - 背景・目的: ユーザーから「画像の中に文字が入っているバナーに対して代替テキストを正しく提供できるか検証したい」とのサンプル追加要望。

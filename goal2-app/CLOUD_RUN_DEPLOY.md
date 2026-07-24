@@ -53,9 +53,20 @@ $REPO = "goal2-app"
 $TAG = Get-Date -Format "yyyyMMdd-HHmmss"
 $IMAGE = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${TAG}"
 
+# 画面右下に表示するバージョン表示用。デプロイ元のコミット・デプロイ日時をpublic/build-info.jsonへ
+# 書き出し、Dockerイメージへ静的ファイルとして含める(server.js側の変更は不要)。
+@{
+  commit      = (git rev-parse HEAD)
+  commitShort = (git rev-parse --short HEAD)
+  commitDate  = (git log -1 --format=%cI)
+  deployedAt  = (Get-Date).ToString("o")
+} | ConvertTo-Json | Set-Content -Path "public/build-info.json" -Encoding utf8
+
 gcloud builds submit --tag "$IMAGE" .
 gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated
 ```
+
+デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。ローカル開発環境(`node server.js`)では `public/build-info.json` が存在しないため、この表示自体が出ません(表示が無い=ローカル、という目印にもなります)。
 
 `main` 以外のブランチ(マージ前のPRなど)を試験的にデプロイしたい場合は、`git clone --branch main` と `git checkout main` の部分をブランチ名に置き換えます。ただし通常の更新デプロイは、PRがマージされて `main` に反映された後に実行します。
 
@@ -68,12 +79,15 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/
 https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 ```
 
+画面右下の `build:` 表示のコミットIDが、GitHubの `main` ブランチの最新コミット([コミット履歴](https://github.com/koteikara/11y-agent/commits/main))と一致しているかを確認すると、目的の変更が反映されているか一目で分かります。
+
 反映されないときは次を確認します。
 
 - `gcloud builds submit` が成功しているか
 - `gcloud run deploy` が成功しているか
 - ブラウザのキャッシュが残っていないか
 - Cloud Run の最新リビジョンに 100% のトラフィックがあるか
+- 画面右下の `build:` 表示のコミットIDが古いままでないか(古い場合はデプロイ手順そのものが最新の`main`を取得できていない可能性がある)
 
 ## LLM (Gemini) 連携を有効にする場合
 
