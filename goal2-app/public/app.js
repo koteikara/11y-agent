@@ -1518,14 +1518,14 @@
     if (!altText || candidate.proposal.patch?.type !== "set-attribute") {
       return;
     }
-    // image.complex-image-report(グラフ・チラシ・ポスター等)は、KBルール(complex-image-report.md)
-    // により画像名に「詳細は以下」を付す必要がある。機械的な下書き(generateComplexImageNameDraft)は
-    // これを付けているが、AIのalt_textはこの命名規則を知らないため、上書き前に必ず付与し直す
-    // (付けないと、AIによる上書きでルール違反の画像名に後退してしまう)。機械的な複雑画像判定
-    // (isComplexImageCandidate)がキーワード一致に依存し見落とすケースもあるため、AI自身が
-    // is_complexをtrueと判定した場合も同様に扱う(候補のrule_idがimage.alt-textのままでも、
-    // 少なくとも画像名だけは命名規則に沿わせる)。
-    if ((candidate.rule_id === "image.complex-image-report" || result.is_complex === true) && !/詳細は以下/.test(altText)) {
+    // 機械的な複雑画像判定(isComplexImageCandidate)はキーワード一致に依存し見落とすケースもあるため、
+    // AI自身がis_complexをtrueと判定した場合も、候補のrule_idがimage.alt-textのままでも複雑画像として扱う。
+    const isComplex = candidate.rule_id === "image.complex-image-report" || result.is_complex === true;
+    // image.complex-image-report(グラフ・チラシ・ポスター等)のKBルール(complex-image-report.md)は、
+    // 画像名を「人口推移のグラフ 詳細は以下」のように短い分類・主題ラベル+接尾辞にとどめ、詳しい内容は
+    // 本文への追記または報告欄への起票で別途扱う運用を定めている(画像名に詳細を全て詰め込まない)。
+    // alt_text自体はプロンプト側で短いラベルになるよう指示済みだが、接尾辞の付与はここで機械的に保証する。
+    if (isComplex && !/詳細は以下/.test(altText)) {
       altText = `${altText} 詳細は以下`;
     }
     const template = document.createElement("template");
@@ -1538,6 +1538,13 @@
     candidate.proposal.patch.value = altText;
     candidate.proposal.after_html = cleanHtml(element.outerHTML);
     candidate.issue.reason = `${candidate.issue.reason}(画像を解析したAIの下書きです。内容を確認してください。)`;
+    // ルール上、複雑な画像は本文への内容説明の追記、または報告欄への起票が必要。alt_textから
+    // あえて外した詳細情報をここに残し、作業者が本文追記・報告欄記載にそのまま使えるようにする
+    // (画像名を短くする代わりに、詳細情報自体を捨ててしまわないようにする)。
+    const complexDetail = normalizeText(result.complex_detail || "");
+    if (isComplex && complexDetail) {
+      candidate.issue.reason += ` AIが読み取った画像の詳細: ${complexDetail}(本文への追記または報告欄への記載に使用してください)`;
+    }
   }
 
   // table.layout-table / table.cell-merge-*: decomposeLayoutTable() bakes heuristic alt text
