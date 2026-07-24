@@ -6798,20 +6798,54 @@
 
     const decidedAt = new Date().toISOString();
     state.candidates.forEach((other) => {
-      if (other === candidate || other.decision.status) {
+      if (other === candidate) {
+        return;
+      }
+      const isDescendantCandidate = isDescendantOfCandidateTarget(other, candidate);
+      // 表内の「内容修正」候補(file.file-display-text でリンク文言から「（PDF：76KB）」を削除する、
+      // text.* の文字修正など、table.* 以外)は、表の構造変換では実行されない。表構造候補の変換後HTMLへ
+      // この修正を畳み込むことで、採用順に関わらず出力に修正が反映されるようにする。
+      const isContentDescendant = isDescendantCandidate && !other.rule_id.startsWith("table.");
+
+      // 既に採用済みの内容修正候補: 表を丸ごと置換する変換後HTMLが、この修正を上書きして消してしまう
+      // ため、変換後HTMLへ畳み込んでおく(候補自体の状態は変えない)。
+      if (isContentDescendant && ["accepted", "edited"].includes(other.decision.status)) {
+        foldDescendantFixIntoAncestor(candidate, other);
+        return;
+      }
+
+      if (other.decision.status) {
         return;
       }
       const isSameTableCandidate = other.target.node_id === candidate.target.node_id && isTableRelatedCandidate(other);
-      const isDescendantCandidate = isDescendantOfCandidateTarget(other, candidate);
       if (!isSameTableCandidate && !isDescendantCandidate) {
         return;
       }
 
+      // 未処理の内容修正候補: 変換後HTMLへ畳み込めた場合のみ「解決済み」にする。畳み込めない場合は、
+      // 修正が失われたまま「完了」と誤表示するのを避けるため、未処理のまま残す。
+      if (isContentDescendant && !isSameTableCandidate) {
+        if (!foldDescendantFixIntoAncestor(candidate, other)) {
+          return;
+        }
+        other.status = "conflicted";
+        other.decision = {
+          status: "conflicted",
+          reason: "表の構造変換候補の変換後HTMLへ、この修正内容を反映済みとして自動解決",
+          actor: "AGENT",
+          decided_at: decidedAt,
+          after_html: null,
+        };
+        state.bulkSelectedCandidateIds.delete(other.candidate_id);
+        return;
+      }
+
+      // 表関連(th/scope・キャプション・セル結合など)の候補は、表の構造変換で意味がなくなるため自動解決。
       other.status = "conflicted";
       other.decision = {
         status: "conflicted",
         reason: isDescendantCandidate
-          ? "表の構造変換候補が採用されたため、表内要素への候補は変換後HTMLで再評価するものとして自動解決"
+          ? "表の構造変換候補が採用されたため、表内の表関連候補は変換後HTMLで再評価するものとして自動解決"
           : "同じ表の構造変換候補が採用されたため、この表への追加の表関連修正は不要として自動解決",
         actor: "AGENT",
         decided_at: decidedAt,
@@ -6819,6 +6853,23 @@
       };
       state.bulkSelectedCandidateIds.delete(other.candidate_id);
     });
+  }
+
+  // 採用済みの表構造候補(ancestor)の変換後HTMLへ、表内の内容修正候補(descendant)の修正を畳み込む。
+  // descendant の before_html が変換後HTMLに現れる場合のみ、after_html へ置換する(現れない場合は
+  // 畳み込めないため false を返す)。
+  function foldDescendantFixIntoAncestor(ancestor, descendant) {
+    const before = descendant.proposal?.before_html || "";
+    const after = descendant.proposal?.after_html || "";
+    if (!before || !after || before === after) {
+      return false;
+    }
+    const current = ancestor.decision?.after_html;
+    if (typeof current !== "string" || !current.includes(before)) {
+      return false;
+    }
+    ancestor.decision.after_html = current.split(before).join(after);
+    return true;
   }
 
   function isTableStructuralCandidate(candidate) {
