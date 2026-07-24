@@ -798,6 +798,14 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 教訓: 機能要望(絶対パス化)を実装するための検証作業そのものが、要望よりも深刻な既存バグ(画像の消失)を偶然発見する機会になった。新機能のためのテストコードを書く際は、期待する変化(パスが絶対になる)だけでなく、要素の存在自体が保たれているかも含めて出力全体を確認するべき。
 - 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/goal1.js`
 
+**2026-07-22 「画像: alt・キャプション・複雑画像」サンプルに文字入りバナー画像を追加**
+
+- ユーザーから「画像の中に文字が入っているバナーに対して代替テキストを正しく提供できるか検証したい」との要望。既存の生成PNGサンプル画像(sample-park/map/flower/family-generated.png)にならい、Playwrightでスタイル付きdivをスクリーンショットして`sample-banner-generated.png`(600×180px、「夏の交通安全運動実施中　7月11日（土）～7月20日（月）」の文言入り、青地・黄色縁取りの自治体バナー風デザイン)を新規生成。
+- 「画像」サンプルのHTMLに`<img src="/images/sample-banner-generated.png" alt="" width="600">`を追加(alt=""は、実際は情報を持つ画像に空altを付けてしまう実務でよくある誤りを意図的に再現)。`generateImageNameDraft()`にもPoCフォールバックエントリを追加。
+- Playwrightで、バナー画像が実際に配信されること(HTTP 200)、`image.alt-text`候補としてバナーが正しく候補一覧に含まれることを確認。
+- **重要な制約をユーザーに申し送り**: `image.avoid-text-as-image`(画像内埋め込み文字のvision検出)やGemini vision経由の`image.alt-text`強化は、サーバー側で画像バイトを実際に取得できて初めて動作する。このサンプルの「旧ページURL」は`https://www.example-city.jp/...`という実在しないプレースホルダドメインのため、画像取得は常に失敗しAI vision判定は実行されない(既存の他4サンプル画像も同じ制約を受けており、今回新規に生じたものではない)。実際のAI vision判定(バナー内の文字を正しく検出できるか)を検証するには、実在する旧ページURL(ユーザーが以前提示した尼崎市の例等)で試す必要がある旨を伝えた。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/images/sample-banner-generated.png`(新規)
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。

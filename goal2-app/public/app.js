@@ -101,7 +101,8 @@
   <img src="/images/sample-flower-generated.png" alt="写真" width="220">
   <img src="/images/sample-family-generated.png" alt="祖父母と親子の集合写真" width="220">
   <p>イベント当日は、花壇づくりと読み聞かせを行います。</p>
-</div>`,
+</div>
+<p><img src="/images/sample-banner-generated.png" alt="" width="600"></p>`,
     },
     {
       id: "tables",
@@ -8929,6 +8930,11 @@
       {
         match: "sample-family-generated.png",
         name: "祖父母と親子が並んだ家族の集合写真",
+        confidence: "medium",
+      },
+      {
+        match: "sample-banner-generated.png",
+        name: "夏の交通安全運動実施中　7月11日（土）～7月20日（月）",
         confidence: "medium",
       },
     ];
