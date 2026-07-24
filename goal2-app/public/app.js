@@ -1514,9 +1514,19 @@
   }
 
   function applyImageAltLlmResult(candidate, result) {
-    const altText = normalizeText(result.alt_text || "");
+    let altText = normalizeText(result.alt_text || "");
     if (!altText || candidate.proposal.patch?.type !== "set-attribute") {
       return;
+    }
+    // image.complex-image-report(グラフ・チラシ・ポスター等)は、KBルール(complex-image-report.md)
+    // により画像名に「詳細は以下」を付す必要がある。機械的な下書き(generateComplexImageNameDraft)は
+    // これを付けているが、AIのalt_textはこの命名規則を知らないため、上書き前に必ず付与し直す
+    // (付けないと、AIによる上書きでルール違反の画像名に後退してしまう)。機械的な複雑画像判定
+    // (isComplexImageCandidate)がキーワード一致に依存し見落とすケースもあるため、AI自身が
+    // is_complexをtrueと判定した場合も同様に扱う(候補のrule_idがimage.alt-textのままでも、
+    // 少なくとも画像名だけは命名規則に沿わせる)。
+    if ((candidate.rule_id === "image.complex-image-report" || result.is_complex === true) && !/詳細は以下/.test(altText)) {
+      altText = `${altText} 詳細は以下`;
     }
     const template = document.createElement("template");
     template.innerHTML = candidate.proposal.after_html || "";
@@ -8850,7 +8860,7 @@
     const src = img.getAttribute("src") || "";
     const alt = img.getAttribute("alt") || "";
     const text = `${src} ${alt} ${caption}`;
-    if (/(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|map|chart|graph)/i.test(text)) {
+    if (/(地図|案内図|図表|グラフ|チャート|フローチャート|組織図|路線図|配置図|模式図|チラシ|ポスター|バナー|map|chart|graph|flyer|poster|banner)/i.test(text)) {
       return true;
     }
     // miChecker C_4.0(item_4()): キーワード非依存のシグナル。isNormalImage()相当(極端に小さい・

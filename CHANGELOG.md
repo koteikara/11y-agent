@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 複雑な画像(チラシ・ポスター等)のAI生成alt文言が「詳細は以下」ルールから外れる不具合を修正
+
+- 背景・目的: ユーザーが公開ページの観光地特集バナー(写真多数配置のポスター画像)を実際にGEMINI_API_KEY有効な環境でGOAL2に解析させたところ、「生成した画像名がルールと逸脱してます」と報告(生成された画像名は「観光地特集のポスター。各地のグルメや景勝地の写真が多数配置。」という内容だった)。KBルール`image/complex-image-report.md`は、グラフ・チラシ・ポスター等の複雑な画像には画像名へ「詳細は以下」を付す必要があると定めている。
+- 原因(2点、いずれも独立):
+  1. `applyImageAltLlmResult()`(AIのalt_text応答を候補へ反映する処理)が、`image.complex-image-report`候補に対してもAIの`alt_text`をそのまま上書きしていた。機械的な下書き(`generateComplexImageNameDraft`)は「詳細は以下」を正しく付与していたが、AI enrichmentがこれを気にせず上書きするため、AI有効時は常にルール違反の画像名に後退していた。
+  2. さらに根本として、この画像は機械的な複雑画像判定(`isComplexImageCandidate`)自体が発火しておらず(alt=""のため`isMicheckerComplexImageAltText`が不成立、かつsrc/alt/captionに「地図」「グラフ」等の既存キーワードが一致しない)、`image.complex-image-report`候補がそもそも生成されていなかった。AIのレスポンススキーマには`is_complex`フィールドが既にあったが、クライアント側でこの値を一切参照していなかった(死んだフィールド)。
+- 主な変更内容:
+  - `applyImageAltLlmResult()`で、`candidate.rule_id === "image.complex-image-report"`のときに加え、AIが`is_complex: true`と判定した場合も、alt_textへ「詳細は以下」を付与するよう変更(既に含まれる場合は付与しない)。
+  - `isComplexImageCandidate()`のキーワード一致リストに「チラシ」「ポスター」「バナー」「flyer」「poster」「banner」を追加(KBルールの例示に合わせた defense-in-depth、AI無効時にも一部のケースで機械的に拾えるようにする)。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Node上でsuffix付与ロジックを直接検証: `image.alt-text`候補+`is_complex: true`、`image.complex-image-report`候補、通常の`image.alt-text`候補(付与しない)、既に「詳細は以下」を含む名前(重複付与しない)の4パターンで期待どおりの結果を確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-24: GOAL3本文抽出でheader内のバナー画像が消える不具合を修正 + デプロイ確認用のバージョン表示を追加
 
 - 背景・目的: ユーザーが実際に公開したページ(`docs/tourism-spots-feature.html`、`<header><img ...></header><main>...</main>`という構成)をGOAL3(本文抽出)で取得したところ、「本文抽出した際に画像が欠落する」と報告。また「デプロイが最新かわかりにくいのでバージョン情報をページのどこかに入れよう」との提案もあった。

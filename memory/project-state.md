@@ -823,6 +823,15 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 教訓: ユーザー自身が用意した実ページでの検証(サンプルではなく本物のURL)が、サンプルでは決して踏まなかったコードパス(header内の無テキストバナー画像)のバグを次々とあぶり出した。合成テストデータだけに頼らず、実データでの検証機会を活かして深掘りする価値が高い。また、1つの症状(画像消失)の背後に、独立した複数のバグ(除去ロジック2箇所+重複排除ロジック1箇所)が積み重なっているケースがあり、1つ直して満足せず、実際に期待どおりの最終結果が出るまで確認を続ける必要がある。
 - 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/version-badge.js`(新規)、`goal2-app/public/index.html`、`goal2-app/public/goal3.html`、`goal2-app/public/goal1.html`、`goal2-app/public/styles.css`、`goal2-app/CLOUD_RUN_DEPLOY.md`
 
+**2026-07-24 バージョン表示の動作確認後、複雑画像(チラシ・ポスター)のAI画像名ルール逸脱を発見・修正**
+
+- バージョン表示の位置をキャプチャ画像で説明した直後、ユーザーから「いけた。ただ生成した画像名がルールと逸脱してます」と、実際にGEMINI_API_KEY有効な環境で観光地特集バナー(写真多数配置のポスター)をGOAL2解析させた結果を共有。生成された画像名は「観光地特集のポスター。各地のグルメや景勝地の写真が多数配置。」で、KBルール`image/complex-image-report.md`が要求する「詳細は以下」という接尾辞が無かった。
+- 原因は独立した2点: (1) `applyImageAltLlmResult()`が`image.complex-image-report`候補でもAIの`alt_text`をそのまま上書きしており、機械的な下書き(`generateComplexImageNameDraft`)が正しく付けていた「詳細は以下」をAI enrichmentが上書きで消していた。(2) さらに根本として、この画像は機械的な複雑画像判定(`isComplexImageCandidate`)自体が発火しておらず(alt=""のため既存alt文字列条件が不成立、src/alt/captionにも「地図」「グラフ」等の既存キーワードが一致しない)、そもそも`image.complex-image-report`候補が生成されていなかった。AIのレスポンススキーマには`is_complex`フィールドが元々あったが、クライアント側で一切参照されていない「死んだフィールド」だった。
+- 修正: `applyImageAltLlmResult()`で、`rule_id === "image.complex-image-report"`のときに加えAIが`is_complex: true`と判定した場合も「詳細は以下」を付与するよう変更。あわせて`isComplexImageCandidate()`のキーワードに「チラシ」「ポスター」「バナー」等を追加(KBルールの例示に合わせたdefense-in-depth)。
+- 検証: `node --check`・`node test/run-tests.js`成功。Node上でsuffix付与ロジックを直接検証(4パターンで期待どおりの結果)。GEMINI_API_KEYが無いためAIレスポンス経由の実地検証はできず、ロジックの単体検証に留まる。
+- 教訓: `is_complex`のように、レスポンススキーマには定義されているのにクライアント側で一切参照されていない「死んだフィールド」がある場合、そのフィールドが本来防ぐはずだった不具合(ここでは複雑画像の誤分類・命名規則違反)が実際に発生するまで気づかれないことがある。プロンプト設計時に定義したスキーマフィールドが、実装側で本当に消費されているかを後から棚卸しする価値がある。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## Decisions
 
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。
