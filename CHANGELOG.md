@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 複雑画像の機械フォールバックが英語ファイル名を流用した無意味な画像名を生成する不具合を修正
+
+- 背景・目的: ユーザーが観光地特集バナー(`tourism-feature-banner.png`)を解析したところ、代替テキスト候補が「tourism feature bannerの図表 詳細は以下」という無意味な内容になっていた。英語ファイル名をそのまま流用し、さらに実態と合わない「図表」というカテゴリを決め打ちで付与していた。
+- 原因: `inferComplexImageNameFromContext()`(GEMINI未設定時・vision失敗時の機械フォールバック)が、キャプションも意味あるaltも無い場合に、ファイル名のスラッグ(`tourism-feature-banner`→`tourism feature banner`)へ「の図表」を付けて画像名にしていた。英字ファイル名は画像内容の説明ではなく技術的な識別子であり、代替テキストへ流用すると意味のない画像名になる。「図表」の決め打ちもポスター等では実態と食い違う。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `inferComplexImageNameFromContext()`で、ファイル名からの推測は**日本語(かな・漢字)を含む場合のみ**最後の手がかりとして使うよう変更。英字スラッグのみのファイル名は流用しない(空文字を返す)。また画像の種類はファイル名からは判別できないため「の図表」等のカテゴリ語の決め打ち付与を廃止。
+  - これにより、英字ファイル名で内容が特定できない複雑画像は、機械フォールバックでは無理に画像名を捏造せず、alt未設定候補では「画像内容を具体的に入力」というプレースホルダ、complex-image-report候補では自動命名なし(patchMode: none)という正直な挙動になる。GEMINI有効時はvisionが適切な短いラベルで上書きする(既存動作)。
+- 検証:
+  - `node --check public/app.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightライブ検証: `tourism-feature-banner.png`(英字・alt空)で「tourism feature bannerの図表」が生成されなくなり、alt候補はプレースホルダ・complex候補は自動命名なしになること、日本語alt/キャプションがある画像では従来どおり画像名下書きが出ることを確認。
+- 関連ファイル: `goal2-app/public/app.js`
+
 ## 2026-07-24: 未実装だったtext.spaced-characters(文字間の不要な空白)を実装
 
 - 背景・目的: KB全60ルールの実装状況を棚卸ししたところ、候補生成ロジックに未実装のルールが3件(`text.spaced-characters`・`text.abbreviation`・`text.quotation`)残っていた。このうち、機械的に確実に検出でき誤検出リスクが低く実務価値の高い`text.spaced-characters`をユーザーの選択により実装した(残り2件は今回スコープ外)。
