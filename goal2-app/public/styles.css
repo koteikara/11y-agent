@@ -2823,3 +2823,18 @@ label {
     grid-template-columns: 1fr;
   }
 }
+
+.version-badge {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
+  user-select: none;
+}

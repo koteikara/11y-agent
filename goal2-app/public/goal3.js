@@ -273,7 +273,35 @@
 
   function isLikelyContentBlock(element) {
     const text = normalizeText(element.textContent);
-    return text.length > 300 && (element.querySelector("h2,h3,p,table") || hasMultipleSubstantiveChildren(element));
+    if (text.length > 300 && (element.querySelector("h2,h3,p,table") || hasMultipleSubstantiveChildren(element))) {
+      return true;
+    }
+    // <header>はページ先頭のバナー画像だけで構成され、ほぼテキストを持たないことが
+    // 実際の自治体サイトでもある(例: <header><img src="banner.png"></header>)。
+    // テキスト量だけで判定すると常に定型のナビゲーションと同様に除去されてしまうため、
+    // 十分なサイズの画像を含む<header>は本文候補として残す。nav/footer/aside/formは
+    // 対象外(ロゴ等の装飾画像を含んでいても実質ナビゲーション・定型文であることが
+    // ほとんどのため、従来どおりテキスト量のみで判定する)。
+    if (element.tagName === "HEADER") {
+      return hasSubstantialImage(element);
+    }
+    return false;
+  }
+
+  function hasSubstantialImage(element) {
+    return [...element.querySelectorAll("img")].some((img) => {
+      const width = Number.parseInt(img.getAttribute("width") || "", 10);
+      const height = Number.parseInt(img.getAttribute("height") || "", 10);
+      // width/height未指定の画像は、アイコンではなく本文画像である可能性が高いため許容する
+      // (小さいロゴ・アイコンには明示的にwidth/height指定がある場合が多い)。
+      if (Number.isNaN(width) && Number.isNaN(height)) return true;
+      // サイズ指定がある場合は、典型的なサイト共通ヘッダーのロゴ(例: 120x40)を
+      // 本文画像として誤って拾わないよう、ヒーロー・バナー画像相当のサイズ
+      // (幅300px以上・高さ80px以上)のみを対象にする。
+      const w = Number.isNaN(width) ? 999 : width;
+      const h = Number.isNaN(height) ? 999 : height;
+      return w >= 300 && h >= 80;
+    });
   }
 
   function hasMultipleSubstantiveChildren(element) {
@@ -413,7 +441,10 @@
   function isLeadingTemplateFragment(element, pageTitle) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
     const text = normalizeText(element.textContent);
-    if (!text) return true;
+    // テキストを持たない要素は多くの場合スキップリンクや空のラッパーだが、先頭に
+    // バナー画像だけが置かれているケース(例: <header><img ...></header>)もあるため、
+    // 十分なサイズの画像を含む場合はテンプレート断片とみなさず残す。
+    if (!text) return !hasSubstantialImage(element);
     if (element.matches("h1")) return true;
     if (isPageTitleDuplicate(element, pageTitle)) return true;
     if (isTemplateUtilityElement(element) || isSignatureBlock(element) || isFeedbackSection(element)) return true;
@@ -497,10 +528,14 @@
     return hasSignatureLabel && (hasContact || looksLikeContactSection) && !contentContext;
   }
 
+  // テキストが同じでも画像件数が異なる候補(例: 画像入りheaderを持つbody候補 vs
+  // それを含まないmain候補)は、片方が実質的な情報(画像)を余分に持つため別候補として
+  // 扱う。画像件数を無視してテキストだけでキー化すると、footprint(要素数)が小さい方が
+  // 常に選ばれ、画像を含む候補が「重複」として黙って捨てられてしまう。
   function dedupeCandidates(candidates) {
     const bestByContent = new Map();
     candidates.forEach((candidate) => {
-      const key = hashText(candidate.text || candidate.html);
+      const key = `${hashText(candidate.text || candidate.html)}:${candidate.parts?.images || 0}`;
       const existing = bestByContent.get(key);
       if (!existing || candidateFootprint(candidate) < candidateFootprint(existing)) {
         bestByContent.set(key, candidate);
