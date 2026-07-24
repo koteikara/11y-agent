@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 原本マニュアルの「画像名の考え方」(①主題＋②様子＋③+α情報)でalt-textルールとAIプロンプトを補強
+
+- 背景・目的: ユーザーから、元マニュアル(V2.01 p61「画像名の考え方」)のPDFを示され、「これが自分の頭とツールの差異につながっている。KBを補強したい」との依頼。原本と現行KB/プロンプトの差分を洗い出した結果、原本の核心である**①主題(what/何が)＋②様子(how/どうなっている)＋③+α情報(どこで・何色・誰と・主役以外の人やものの様子)を一文に整える**という生成フレームワークが、KB本文にもLLMプロンプトにも明示されていなかった。また現行プロンプトの字数制約「30文字程度まで」が原本の標準記述量(30字超)と食い違っていた。
+- 主な変更内容:
+  - `a11y-migration-kb/rules/image/alt-text.md`: 必須ルールに「電話で伝えるイメージ」のメンタルモデルと①②③フレームワーク(＋③の観点リスト: どこで/何色/誰と/主役以外の様子)を明記。例を原本準拠の①②③分解付き(桜・男性・市長)＋サツキ＋area要素の5ケースに刷新。字数は「最大100文字程度まで(miCheckerの150字超指摘の範囲内)」と明記。descriptionも更新。
+  - `goal2-app/lib/llm-prompts.js`の`image-alt`タスク: システムプロンプトに①②③を一文に整える指示を追加し、字数制約を「30文字程度まで」→「最大100文字程度まで」に変更(ユーザー確認済み。miChecker C_80.0の150字上限内)。装飾画像・複雑画像(is_complex/短いラベル)・キャプション重複回避の既存指示は維持。
+  - `a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`を再生成。
+  - `a11y-migration-kb/sources/`(README付き)を新設し、原本マニュアルPDF(`manual-v2.01.pdf`等)の保管場所とKBルールへの対応表を用意。
+- miChecker字数上限の確認: miChecker C_80.0(item_80)は「alt属性が150文字超」を長すぎと指摘するため、100文字は安全に収まる(整合)。
+- 検証: `node --check lib/llm-prompts.js`成功、`node test/run-tests.js`全テスト成功。rules.jsonl再生成で`image.alt-text`の`rule`本文・5例が正しく反映されることを確認。実際のGemini vision出力の変化はローカルにAPIキーが無いため未検証(ユーザー環境での再検証を推奨)。
+- 関連ファイル: `a11y-migration-kb/rules/image/alt-text.md`, `a11y-migration-kb/build/rules.jsonl`, `a11y-migration-kb/sources/README.md`, `goal2-app/data/rules.jsonl`, `goal2-app/lib/llm-prompts.js`
+
 ## 2026-07-24: 画像のAI解析(vision)失敗をサイレントにせず、失敗理由を候補に表示するよう改善
 
 - 背景・目的: ユーザーが最新デプロイ(GEMINI_API_KEY有効)で観光地特集バナーを解析したところ、AIによる画像名ではなく機械フォールバックの下書きが出た。調査の結果、画面の「LLM利用」表示は呼び出し3回(テキスト系のみ、トークン計3350)で、本来発火するはずの画像vision呼び出し(image-alt・avoid-text-as-image)が使用量に計上されていなかった。テキスト系LLM(Gemini API)は成功する一方、画像バイトの取得を伴うvision呼び出しだけが失敗している状態(例: Cloud RunのegressでGoogle APIには到達できるが画像ホストへの一般アウトバウンドが届かない、画像取得のタイムアウト・content-type・サイズ制約等)を示唆していた。問題は、この失敗が完全にサイレント(使用量未計上＋silent catch)で、作業者が「なぜAI画像名にならなかったのか」を知る術がなかったこと。
