@@ -1544,13 +1544,14 @@
     if (!altText || candidate.proposal.patch?.type !== "set-attribute") {
       return;
     }
-    // 機械的な複雑画像判定(isComplexImageCandidate)はキーワード一致に依存し見落とすケースもあるため、
-    // AI自身がis_complexをtrueと判定した場合も、候補のrule_idがimage.alt-textのままでも複雑画像として扱う。
-    const isComplex = candidate.rule_id === "image.complex-image-report" || result.is_complex === true;
-    // image.complex-image-report(グラフ・チラシ・ポスター等)のKBルール(complex-image-report.md)は、
-    // 画像名を「人口推移のグラフ 詳細は以下」のように短い分類・主題ラベル+接尾辞にとどめ、詳しい内容は
-    // 本文への追記または報告欄への起票で別途扱う運用を定めている(画像名に詳細を全て詰め込まない)。
-    // alt_text自体はプロンプト側で短いラベルになるよう指示済みだが、接尾辞の付与はここで機械的に保証する。
+    // 「詳細は以下」を付けるかどうかは、機械的な複雑画像判定(isComplexImageCandidate。キーワード一致で
+    // 過剰に発火しうる)ではなく、AI自身のis_complex判定で決める。プロンプト側でis_complexは
+    // 「画像の内容(画像内の文字を含む)を代替テキスト一行=100文字程度に収められない場合」と定義しており、
+    // 収まる場合(小さなバナー等)はis_complex=falseとして全内容をalt_textに入れ、接尾辞は付けない。
+    // 収まらない場合(is_complex=true)は、主題を具体的に書いたalt_textに接尾辞を付け、網羅的な詳細は
+    // complex_detail(→本文・報告欄)へ回す。候補のrule_idがimage.complex-image-reportでも、AIが
+    // 収まると判断したなら接尾辞は付けない(alt_textに全内容が入っているため)。
+    const isComplex = result.is_complex === true;
     if (isComplex && !/詳細は以下/.test(altText)) {
       altText = `${altText} 詳細は以下`;
     }
