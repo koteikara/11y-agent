@@ -2389,6 +2389,30 @@
         }
       }
 
+      // text.spaced-characters: alt属性内の文字間空白(「お　知　ら　せ」)も、可視テキストと同様に
+      // 読み上げで単語として認識されなくなるため検出し、空白を除去する候補を出す。
+      if (alt) {
+        const altSpacedMatch = findSpacedCharacterMatches(alt)[0];
+        if (altSpacedMatch) {
+          const fixedAlt = alt.replace(altSpacedMatch.text, collapseSpacedCharacters(altSpacedMatch.text));
+          const clone = img.cloneNode(true);
+          clone.setAttribute("alt", fixedAlt);
+          candidates.push(
+            makeCandidate({
+              ruleId: "text.spaced-characters",
+              element: img,
+              message: "画像の代替テキストに不要な文字間空白が含まれています。",
+              reason:
+                "代替テキスト内で文字の間に空白を挟むと、読み上げソフトが単語として正しく読み上げられません。空白を除去してください。",
+              afterHtml: clone.outerHTML,
+              patch: { type: "set-attribute", name: "alt", value: fixedAlt },
+              confidence: "medium",
+              requiresHumanReview: true,
+            })
+          );
+        }
+      }
+
       const imageWidth = getImageDisplayWidth(img);
       if (imageWidth !== null) {
         candidates.push(
@@ -5151,6 +5175,20 @@
         after: `ファックス番号${suffix}`,
         message: "FAXの略記が含まれています。",
         reason: "TEL/FAX等の略記は、自治体別方針に従って電話番号・ファックス番号などに修正します。",
+        confidence: "medium",
+        requiresHumanReview: true,
+      });
+    });
+
+    findSpacedCharacterMatches(text).forEach((match) => {
+      pushTextReplacementCandidate(candidates, seen, {
+        ruleId: "text.spaced-characters",
+        element,
+        before: match.text,
+        after: collapseSpacedCharacters(match.text),
+        message: "文字間に不要な空白が含まれています。",
+        reason:
+          "文字の間に空白を挟むと、読み上げソフトが単語として正しく読み上げられません。空白を除去し、見た目の間隔調整が必要な場合はCSSのletter-spacing等で行ってください。（つづりを1文字ずつ示す意図的な区切りの場合は対象外です。）",
         confidence: "medium",
         requiresHumanReview: true,
       });
@@ -8770,6 +8808,23 @@
       match = regex.exec(text);
     }
     return matches;
+  }
+
+  // text.spaced-characters(文字間の不要な空白): 「お　知　ら　せ」のように単一文字を空白で
+  // 区切って見た目を整えた表記は、読み上げソフトが単語として認識できなくなる。単一文字が
+  // 横方向の空白(半角/全角/タブ/NBSP、改行は含めない)で3つ以上連続して区切られ、かつ
+  // 日本語(かな・漢字)を含むまとまりのみを対象にし、英字の綴り読み上げ(意図的な区切り)や
+  // 通常の英文・スペース区切りの数字列の誤検出を避ける。
+  const SPACED_CHARACTERS_SEPARATOR = /[ \t　 ]+/g;
+  const SPACED_CHARACTERS_PATTERN = /(?:[^\s][ \t　 ]+){2,}[^\s]/g;
+  const SPACED_CHARACTERS_CJK = /[぀-ヿ㐀-鿿豈-﫿]/;
+
+  function findSpacedCharacterMatches(text) {
+    return findMatches(text, SPACED_CHARACTERS_PATTERN).filter((match) => SPACED_CHARACTERS_CJK.test(match.text));
+  }
+
+  function collapseSpacedCharacters(value) {
+    return value.replace(SPACED_CHARACTERS_SEPARATOR, "");
   }
 
   function findFullDateMatches(text) {
