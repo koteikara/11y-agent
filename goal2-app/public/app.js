@@ -9181,12 +9181,20 @@
     if (alt && !isGenericAlt(alt)) {
       return alt;
     }
+    // ファイル名からの推測は、日本語(かな・漢字)を含む場合のみ最後の手がかりとして使う。
+    // 「tourism-feature-banner」のような英字スラッグは画像内容の説明ではなく技術的な識別子で、
+    // これを代替テキストへ流用すると意味のない画像名(例:「tourism feature bannerの図表」)に
+    // なってしまう。また画像の種類(図表・ポスター等)はファイル名からは判別できないため、
+    // 「図表」のようなカテゴリ語の決め打ち付与も行わない(実態と食い違う原因になる)。
     const src = img.getAttribute("src") || "";
     const fileName = decodeURIComponent((src.split("/").pop() || "").split("?")[0])
       .replace(/\.[a-z0-9]+$/i, "")
       .replace(/[-_]+/g, " ")
       .trim();
-    return fileName ? `${fileName}の図表` : "";
+    if (fileName && /[぀-ヿ㐀-鿿]/.test(fileName)) {
+      return fileName;
+    }
+    return "";
   }
 
   function cleanImageCaption(text) {
