@@ -16,6 +16,7 @@
     "image.display-width",
     "image.showcase-section",
     "image.heritage-image",
+    "image.linked-image",
     "link.internal-link",
     "link.external-link",
     "link.category-link",
@@ -2432,6 +2433,29 @@
             })
           );
         }
+      }
+
+      // image.linked-image(原本p68/p69): 画像がリンク(a[href])の中にあり、その画像がリンクの
+      // 読み上げ名を担っている(リンク内に他のテキストが無い)場合、altはそのままリンク名になるため、
+      // 画像の内容だけでなくリンク先が分かる文言にする必要がある。alt空でリンク名が空になるケースは
+      // link.link-purpose-standalone(collectLinkCandidates)が別途扱うので、ここではaltが入力済み
+      // (=リンク名は空でないが、被写体説明のみでリンク先を示しているとは限らない)場合のみ確認を促す。
+      const linkAncestor = img.closest("a[href]");
+      if (linkAncestor && alt && alt.trim() && !isGenericAlt(alt) && !normalizeText(linkAncestor.textContent)) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.linked-image",
+            element: img,
+            message: "リンクになっている画像の代替テキストです。",
+            reason:
+              `この画像はリンクになっており、代替テキストがそのままリンクの読み上げ名になります。画像の内容に加えて「どこへ移動するか(リンク先)」が分かる文言にしてください。` +
+              `例:「観光地特集(◯◯市観光サイトへリンク)」。現在の「${alt.trim()}」がリンク先を示していない場合は、リンク先が分かる言葉を追記してください。`,
+            afterHtml: img.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
+          })
+        );
       }
 
       const imageWidth = getImageDisplayWidth(img);

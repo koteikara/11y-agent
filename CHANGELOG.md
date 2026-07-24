@@ -19,6 +19,34 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 自然な日本語ガイドをKBに追加＋見送っていた画像ルール2件（サムネ拡大／アニメGIF）を補完
+
+- 背景・目的: ユーザーから、LLM特有の不自然な日本語を避けるためのスタイルガイド(k16shikano氏のSKILL.md、Unlicense)が「自然な日本語を作成するのに役立ちそう」と共有された。あわせて、原本マニュアル画像セクションの差分洗い出しで見送っていたE(サムネ/拡大画像)・F(アニメGIF)もKBに補完する依頼。
+- 追加内容:
+  - `a11y-migration-kb/guidelines/natural-japanese.md`(新規): 共有されたスタイルガイドを、本ツールが生成・提案する短文(画像名/リンク文言/見出し/キャプション/AIの理由文)向けに抜粋・適応したガイド。能動態・主語明示、曖昧語の回避、用語の一貫、LLMっぽい空虚表現の禁止句リスト(「重要なのは〜」「〜において」「多角的」「非常に」等)、冗長排除、「い形容詞＋です」回避、ダッシュ・中黒の扱いなどを収録。出典URL・Unlicenseを明記。長文文書向けの段落構成・論証の項は本ツールの対象外として除外。※`guidelines/`配下のため`rules.jsonl`(候補生成)には取り込まれない参照ドキュメント。
+  - `a11y-migration-kb/rules/image/thumbnail-enlarged.md`(新規, 原本p67): クリック拡大画像の移行ルール。原則サムネ=画像パーツ・拡大画像=ファイルリンク。拡大画像に情報がある場合(ポスター・チラシ・申込書・マップ・グラフ等)は拡大画像も残す。情報の無い拡大は拡大リンクを外す。
+  - `a11y-migration-kb/rules/image/animation.md`(新規, 原本p70, WCAG 2.2.2): 5秒以上動くアニメーションGIFはそのまま移行せず質問欄で確認。静止画は対象外。アクセシビリティチェックはGIF全般に指摘が出るが、静止画なら問題なし。
+  - `a11y-migration-kb/build/rules.jsonl`・`goal2-app/data/rules.jsonl`を再生成(image.thumbnail-enlarged / image.animation を反映)。
+- 補足: 今回はKB文書の補完のみ(GOAL2の候補生成ロジックは変更なし)。自然な日本語ガイドのLLMプロンプトへの反映、E/Fの機械検出は今後の検討事項。
+- 検証: `node test/run-tests.js`全テスト成功。rules.jsonl再生成で新規2ルールが取り込まれること、guidelines配下が候補生成に混入しないことを確認。
+- 関連ファイル: `a11y-migration-kb/guidelines/natural-japanese.md`, `a11y-migration-kb/rules/image/thumbnail-enlarged.md`, `a11y-migration-kb/rules/image/animation.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`
+
+## 2026-07-24: 原本マニュアル画像セクションの残差分を反映（alt-text報告フロー等の補強＋リンク画像altルール新設）
+
+- 背景・目的: 原本マニュアル(`a11y-migration-kb/sources/manual.pdf`)の画像セクション(p56〜76)と現行KBの差分を全数洗い出し、優先度の高い項目を反映した。
+- alt-text.md の補強（原本 p60/p61/p63/p66/p72）:
+  - **推敲ステップ**: ①②③を並べた後に読み返し、違和感があれば言葉を並べ替える（例「多くの桜が咲いていて、遠くに山脈が見える写真」→「山脈を背景に咲き誇る、多くの桜の写真」）。
+  - **移行元の画像名は信用しない**: 「イベント写真」「jisseki」「●●●●」等の便宜的な移行元altに関わらず①②③基準で必ず付け直す。
+  - **省略できるのは十分に説明されている場合だけ**: 近接テキストが「日時・場所のみ」等では不十分＝画像名が必要。迷えば質問する。
+  - **判断できない画像は報告する（エスカレーション）**: 文脈から判断できない場合は報告欄に「上から/左から何枚目」を明記して顧客確認を依頼。被写体の種類が分かる場合は分かる範囲で付ける（「機械の部品の写真」等）。
+  - `image-alt` プロンプトにも「判別困難でも見て分かる範囲で具体的に記述（例:機械の部品の写真）」を追加。
+- 新ルール image.linked-image（原本 p68/p69）:
+  - 画像がリンク(a要素)の中にあり画像がリンクの読み上げ名を担う場合、altは画像の内容＋リンク先が分かる文言にする、という必須ルールを新設（`a11y-migration-kb/rules/image/linked-image.md`、WCAG 1.1.1/2.4.4）。
+  - GOAL2実装(`collectImageCandidates`): `a[href] > img` かつ alt入力済み(非汎用)かつリンク内に他テキストが無い場合に、リンク先を示す文言への追記を促す確認候補(patchMode: none, advisory notice)を生成。alt空でリンク名が空になるケースは既存の link.link-purpose-standalone が扱うため重複しない。`noticeRuleIds`へ登録。KBのみ(michecker_check_ids空)のためKBモードで表示。
+- 今回見送り（原本にあるが優先度中〜低）: サムネ/拡大画像の移行(p68)、アニメGIF 5秒以上(p71)、移行後の画像サイズ違和感レビュー(p67/p74-76)。miChecker側でGIF等は別途検出あり。
+- 検証: `node --check public/app.js lib/llm-prompts.js`成功、`node test/run-tests.js`全テスト成功。rules.jsonl再生成で image.linked-image(2例)・image.alt-text(報告/信用しない/不十分を含む)が反映されることを確認。Playwrightで image.linked-image が「記述alt付き単独リンク画像」で発火し、「空alt(既存の空リンク検出が担当)」「リンクに他テキストあり」「裸のimg」では発火しないこと(重複なし)を確認。
+- 関連ファイル: `a11y-migration-kb/rules/image/alt-text.md`, `a11y-migration-kb/rules/image/linked-image.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`, `goal2-app/public/app.js`, `goal2-app/lib/llm-prompts.js`
+
 ## 2026-07-24: 原本マニュアルの「画像名の考え方」(①主題＋②様子＋③+α情報)でalt-textルールとAIプロンプトを補強
 
 - 背景・目的: ユーザーから、元マニュアル(V2.01 p61「画像名の考え方」)のPDFを示され、「これが自分の頭とツールの差異につながっている。KBを補強したい」との依頼。原本と現行KB/プロンプトの差分を洗い出した結果、原本の核心である**①主題(what/何が)＋②様子(how/どうなっている)＋③+α情報(どこで・何色・誰と・主役以外の人やものの様子)を一文に整える**という生成フレームワークが、KB本文にもLLMプロンプトにも明示されていなかった。また現行プロンプトの字数制約「30文字程度まで」が原本の標準記述量(30字超)と食い違っていた。
