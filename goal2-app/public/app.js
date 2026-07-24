@@ -1481,14 +1481,35 @@
         return;
       }
       recordLlmUsage(payload.usage);
-      if (!payload.ok || !payload.result) {
+      if (!payload.ok) {
+        // GEMINI未設定は意図的なオフの範囲なので黙ってヒューリスティックを維持する。それ以外
+        // (画像取得失敗・非対応形式・サイズ超過・タイムアウト・モデルエラー等)は、なぜAIの
+        // 画像名下書きにならなかったのかを作業者が把握できるよう候補の理由に明記する。この
+        // 画像解析はサーバー側で画像バイトを取得してから行うため、テキスト系のLLMが動いていても
+        // (Cloud Runのegress制限等で)画像取得だけ失敗するとサイレントにヒューリスティックへ
+        // 後退してしまい、原因が分からなくなる問題があった。
+        if (payload.error && payload.error !== "llm_not_configured") {
+          annotateImageVisionFailure(candidatesForImage, payload.message || payload.error);
+        }
+        return;
+      }
+      if (!payload.result) {
         return;
       }
       candidatesForImage.forEach((candidate) => applyImageAltLlmResult(candidate, payload.result));
-    } catch {
-      // LLM enrichment is a best-effort upgrade; keep the heuristic draft on failure
-      // (unreachable image, unsupported format, no source page URL configured, etc.)
+    } catch (error) {
+      // ネットワークエラー等。best-effortなのでヒューリスティックを維持しつつ、失敗した事実は残す。
+      annotateImageVisionFailure(candidatesForImage, error?.message || "通信エラー");
     }
+  }
+
+  function annotateImageVisionFailure(candidatesForImage, detail) {
+    const note = `（この画像はAIで解析できなかったため、下の画像名はキャプション・ファイル名等からの機械的な下書きです。AI画像解析エラー: ${normalizeText(detail)}）`;
+    candidatesForImage.forEach((candidate) => {
+      if (!candidate.issue.reason.includes("AI画像解析エラー")) {
+        candidate.issue.reason += note;
+      }
+    });
   }
 
   function extractAttributeFromHtml(html, attrName) {
