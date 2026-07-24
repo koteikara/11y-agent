@@ -14,6 +14,8 @@
     "image.multiple-images",
     "image.image-text-layout",
     "image.display-width",
+    "image.showcase-section",
+    "image.heritage-image",
     "link.internal-link",
     "link.external-link",
     "link.category-link",
@@ -822,6 +824,7 @@
       enrichHeadingReviewWithLlm(fragment, reviewItems),
       enrichAvoidTextAsImageWithLlm(fragment, reviewItems),
       enrichAsciiArtWithLlm(fragment, reviewItems),
+      enrichHeritageImageWithLlm(fragment, reviewItems),
     ]);
     // Runs after enrichImageAltWithLlm (not inside the Promise.all above) so it can reuse an
     // already-enriched standalone image.alt-text result instead of firing a duplicate vision
@@ -1038,6 +1041,7 @@
     collectHeadingCandidates(fragment, candidates);
     collectTableCandidates(fragment, candidates);
     collectImageCandidates(fragment, candidates);
+    collectShowcaseSectionCandidates(fragment, candidates);
     collectLinkCandidates(fragment, candidates);
     collectIframeCandidates(fragment, candidates);
     collectTextCandidates(fragment, candidates);
@@ -2060,6 +2064,98 @@
     return match ? match[0] : "2";
   }
 
+  // image.heritage-image: 純粋な機械判定が難しい「特定の対象(文化財・仏像・美術工芸品・史跡等)を
+  // 個別に紹介するページか」をLLMにページ全体で判定させ、該当する場合のみ、その対象の代表画像へ
+  // 「画像名は対象名を基本に、キャプションは短い説明に、リンクが少なければ関連リンク群としてまとめない」
+  // という確認候補(patchMode: none、自動修正なし)を1件付与する。GEMINI_API_KEY未設定時は発火しない。
+  async function enrichHeritageImageWithLlm(fragment, items) {
+    const images = [...fragment.content.querySelectorAll("img")];
+    if (!images.length) {
+      return;
+    }
+    const imageInfos = images
+      .slice(0, 20)
+      .map((img) => ({
+        block_id: img.getAttribute("data-goal2-node-id"),
+        alt: normalizeText(img.getAttribute("alt") || ""),
+        caption: normalizeText(closestCaptionElement(img)?.textContent || ""),
+      }))
+      .filter((info) => info.block_id);
+    if (!imageInfos.length) {
+      return;
+    }
+    const headings = [...fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6")]
+      .map((heading) => normalizeText(heading.textContent))
+      .filter(Boolean)
+      .slice(0, 30);
+    const linkCount = fragment.content.querySelectorAll("a[href]").length;
+    const validIds = new Set(imageInfos.map((info) => info.block_id));
+    try {
+      const response = await fetch("/api/llm/enrich", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          task: "heritage-check",
+          items: [
+            {
+              id: "page",
+              page_title: normalizeText(currentPageTitle()),
+              headings,
+              images: imageInfos,
+              link_count: linkCount,
+            },
+          ],
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!payload) {
+        return;
+      }
+      recordLlmUsage(payload.usage);
+      if (!payload.ok || !Array.isArray(payload.results) || !payload.results[0]) {
+        return;
+      }
+      applyHeritageImageResult(fragment, items, payload.results[0], validIds);
+    } catch {
+      // best-effort。失敗時は機械的な既存候補(あれば)がそのまま残る。
+    }
+  }
+
+  function applyHeritageImageResult(fragment, items, result, validIds) {
+    if (!result || result.is_individual_subject_page !== true) {
+      return;
+    }
+    const targetId = typeof result.target_image_id === "string" ? result.target_image_id : "";
+    if (!validIds.has(targetId)) {
+      return;
+    }
+    const element = fragment.content.querySelector(`[data-goal2-node-id="${targetId}"]`);
+    if (!element) {
+      return;
+    }
+    if (items.some((item) => item.rule_id === "image.heritage-image" && item.target.node_id === targetId)) {
+      return;
+    }
+    const subjectName = normalizeText(result.subject_name || "");
+    const reason = normalizeText(result.reason || "");
+    items.push(
+      makeCandidate({
+        ruleId: "image.heritage-image",
+        element,
+        message: "文化財・個別対象の紹介画像の可能性があります。(AI判定)",
+        reason:
+          `${subjectName ? `対象「${subjectName}」の個別紹介画像と判定しました。` : "個別対象の紹介画像と判定しました。"}` +
+          "代替テキスト（画像名）は対象名を基本にし、キャプションは対象の短い説明にまとめてください。" +
+          "リンクが少ない場合は、関連リンク群として無理にまとめないでください。" +
+          `${reason ? `（AI判定理由: ${reason}）` : "(AI判定)"}`,
+        afterHtml: element.outerHTML,
+        confidence: "low",
+        requiresHumanReview: true,
+        patchMode: "none",
+      })
+    );
+  }
+
   function applyForeignLanguageLlmResult(candidate, result) {
     if (!result.is_foreign) {
       candidate.issue.reason = `${candidate.issue.reason}(AIによる再判定では外国語でない可能性があります。実際の内容を確認してください。)`;
@@ -2388,6 +2484,43 @@
             afterHtml: imageTextHtml,
             confidence: "low",
             requiresHumanReview: true,
+          })
+        );
+      }
+    });
+  }
+
+  // image.showcase-section: セクション見出し配下に「画像のまとまり」と「関連リンク群」がセットで
+  // 並んでいる構造(暮らし〇〇さがし【食編/子育て編…】のような特集リンク集)を検出し、
+  // まとまり全体を1つのセクションとして整える(見出しはまとまり名、画像altは内容+種類、
+  // リンクは飛び先が分かる文言に)ことを促す確認候補(patchMode: none、自動修正なし)を出す。
+  // 見出し直後の兄弟要素を、同レベル以上の次の見出しが来るまで1セクションとして走査する。
+  function collectShowcaseSectionCandidates(fragment, candidates) {
+    fragment.content.querySelectorAll("h2,h3,h4").forEach((heading) => {
+      const level = headingLevel(heading);
+      let imageCount = 0;
+      let linkCount = 0;
+      let element = heading.nextElementSibling;
+      while (element) {
+        if (/^H[1-6]$/.test(element.tagName) && headingLevel(element) <= level) {
+          break;
+        }
+        imageCount += (element.matches("img") ? 1 : 0) + element.querySelectorAll("img").length;
+        linkCount += (element.matches("a[href]") ? 1 : 0) + element.querySelectorAll("a[href]").length;
+        element = element.nextElementSibling;
+      }
+      if (imageCount >= 2 && linkCount >= 2) {
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.showcase-section",
+            element: heading,
+            message: "セクション見出し配下に画像群と関連リンク群がまとまっています。",
+            reason:
+              "このまとまりは1つのセクションとして扱います。①見出しはまとまり全体を表す短い名称に、②各画像の代替テキストは内容が分かる簡潔な説明（種類が伝わる場合は「写真」「イラスト」「地図」等を補う）に、③リンクは飛び先が分かる文言にし「こちら」等の曖昧な表現を避けてください。",
+            afterHtml: heading.outerHTML,
+            confidence: "low",
+            requiresHumanReview: true,
+            patchMode: "none",
           })
         );
       }

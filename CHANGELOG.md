@@ -19,6 +19,22 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-24: 未実装だった画像ルール2件(showcase-section / heritage-image)を実装
+
+- 背景・目的: `a11y-migration-kb/rules/image/`配下の画像ルールのうち、`image.showcase-section`(画像＋関連リンクのまとまり)と`image.heritage-image`(文化財・個別紹介ページの画像)の2件がGOAL2に未実装だった(候補生成ロジックが存在せず、KBの.mdも`# 必須ルール`見出しを持たず`rule`本文が空だった)。ユーザーの要望で、画像にまつわる未実装ルールを実装した。
+- KB整備(両ルール共通):
+  - `heritage-image.md`・`showcase-section.md`を他ルールと同じ標準形式(`# 必須ルール`+`# 例`)に書き換え、`wcag`/`jis`/`origin`等のfrontmatterも補った。`tools/okf2jsonl.py`でrules.jsonlを再生成し、`goal2-app/data/rules.jsonl`へ反映(両ルールの`rule`本文・例が正しく生成されることを確認)。
+- image.showcase-section(機械検出のadvisory notice):
+  - `collectShowcaseSectionCandidates()`を新設。見出し(h2〜h4)直後の兄弟要素を同レベル以上の次見出しまで1セクションとして走査し、画像2枚以上＋リンク2件以上を含むセクションを検出したら、「まとまり全体を1セクションとして扱う(見出しはまとまり名、画像altは内容+種類、リンクは飛び先が分かる文言に、「こちら」等の曖昧表現を避ける)」確認候補(`patchMode:"none"`、自動修正なし、人間確認前提)を見出しに付与。`noticeRuleIds`へ登録。
+- image.heritage-image(LLM支援検出のadvisory notice):
+  - 純粋な機械判定が難しい「特定の対象(文化財・仏像・美術工芸品・史跡等)を個別紹介するページか」をLLMにページ全体で判定させる。`lib/llm-prompts.js`に`heritage-check`タスク(ページタイトル・見出し一覧・画像一覧・リンク総数を渡し、個別対象ページか・対象名・代表画像のblock_id・理由を返す)を追加。`app.js`に`enrichHeritageImageWithLlm()`/`applyHeritageImageResult()`を新設し、該当時のみ代表画像へ「画像名は対象名を基本に、キャプションは短い説明に、リンクが少なければ関連リンク群としてまとめない」確認候補を1件付与。`runAnalysis`のenrichment Promise.allへ追加。`noticeRuleIds`へ登録。GEMINI_API_KEY未設定時は発火しない(既存動作を完全維持)。
+- 補足: 両ルールとも`michecker_check_ids`が空(manual origin)のため、miChecker指摘対応モードでは対象外(KBモードでのみ表示)。これは既存の絞り込みロジックで正しく除外される。
+- 検証:
+  - `node --check public/app.js lib/llm-prompts.js server.js`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightでライブ検証: showcase-sectionは「h2+画像2+リンク2」で確認候補が1件発火(notice扱い・patchMode none)、「画像2+リンク1」では発火しないこと、miCheckerモードでは除外されることを確認。heritage-checkタスクはサーバー側で正しく認識され(未知タスク扱いされず)、GEMINI_API_KEY未設定環境ではクライアントがサイレントフォールバックして候補ゼロ(既存動作維持)になることを確認。
+  - 実際のGemini応答でのheritage-image判定精度は、ローカルに`GEMINI_API_KEY`が無いため未検証。ユーザー環境での再検証を推奨。
+- 関連ファイル: `a11y-migration-kb/rules/image/heritage-image.md`, `a11y-migration-kb/rules/image/showcase-section.md`, `a11y-migration-kb/build/rules.jsonl`, `goal2-app/data/rules.jsonl`, `goal2-app/public/app.js`, `goal2-app/lib/llm-prompts.js`
+
 ## 2026-07-24: image.avoid-text-as-image(文字を画像化しない)のAI判定漏れを修正(装飾的な見出し文字をロゴと誤判定する問題)
 
 - 背景・目的: ユーザーが実際に公開したポスター画像(`docs/images/tourism-feature-banner.png`、「観光地特集」「グルメも絶景も一緒に楽しみたい！」「SIGHTSEEING」「ENJOY TRIP」等、大量の文字情報が装飾的な書体で描き込まれたバナー)を本番デプロイ環境(commit `78cb8f2`)でGOAL2解析させたところ、alt-text/complex-image-report系の候補は出たが、`image.avoid-text-as-image`(文字を画像化しない)の指摘だけが出なかったと報告。

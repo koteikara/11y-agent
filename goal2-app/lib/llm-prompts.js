@@ -360,6 +360,48 @@ const TASKS = {
       return JSON.stringify(items.map((item) => ({ id: item.id, blocks: item.blocks })));
     },
   },
+
+  // heritage-check reasons over the whole page at once (like heading-review) to decide whether
+  // the page is an individual named-subject / cultural-property introduction page — a case where
+  // images support one specific subject (仏像・美術工芸品・史跡等) and should be named after that
+  // subject, rather than being folded into the generic image+related-links "showcase" treatment.
+  // Called with a single synthetic item ({ id, page_title, headings, images, link_count }).
+  "heritage-check": {
+    systemPrompt:
+      "あなたは日本語の自治体ウェブサイトのアクセシビリティ改修を支援するアシスタントです。" +
+      "1ページ分の情報(ページタイトル・見出し一覧・画像一覧(各画像にblock_id・alt・キャプション)・ページ内リンク総数)を受け取ります。" +
+      "このページが「特定の対象を個別に紹介するページ」かどうかを判定してください。" +
+      "対象とは、文化財・仏像・美術工芸品・史跡・記念物・特定の建造物や作品など、固有名を持つ単一の題材を指します。" +
+      "そのようなページでは、画像はページ全体の寄せ集めではなく、その対象の説明補助になっています。" +
+      "該当する場合のみis_individual_subject_pageをtrueにし、対象名(subject_name)、その対象を最もよく表す代表画像のblock_id(target_image_id、必ず入力の画像一覧に実在するものだけ)、判定理由(reason)を返してください。" +
+      "イベント告知・お知らせ一覧・複数の話題をまとめた案内ページ・観光特集のように複数の対象を横断的に紹介するページ・画像が主題を持たない装飾/バナーだけのページは対象外です(is_individual_subject_pageをfalseにしてください)。" +
+      "確信が持てない場合はfalseにしてください。",
+    responseSchema: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          id: { type: "STRING" },
+          is_individual_subject_page: { type: "BOOLEAN" },
+          subject_name: { type: "STRING" },
+          target_image_id: { type: "STRING" },
+          reason: { type: "STRING" },
+        },
+        required: ["id", "is_individual_subject_page"],
+      },
+    },
+    buildUserText(items) {
+      return JSON.stringify(
+        items.map((item) => ({
+          id: item.id,
+          page_title: item.page_title || "",
+          headings: item.headings || [],
+          images: item.images || [],
+          link_count: item.link_count || 0,
+        }))
+      );
+    },
+  },
 };
 
 function getTaskConfig(task) {
