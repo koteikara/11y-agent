@@ -19,6 +19,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-27: 検証作業ガイドをアプリ内でホストし、ナビゲーションから相互に行き来できるようにした
+
+- 背景・目的: 検証作業ガイドをCloud Run上のアプリから直接開けるようにし、ツールの各画面とガイドを相互に行き来できるようにする。
+- 主な変更内容:
+  - ガイドを `docs/a11y-review-verification-guide.html` から `goal2-app/public/verification-guide.html` へ移動。`public/` はDockerイメージへコピーされるため、デプロイすると `/verification-guide.html` で配信される。
+  - 画面キャプチャの埋め込みをdata URIから通常の画像参照へ変更し、`public/images/verification/*.jpg`(11点)として配置。HTMLは1.28MB→51KBになり、以後は本文の編集も容易になった。
+  - `server.js`: 静的配信の`contentTypes`に`.jpg`/`.jpeg`を追加。未定義の拡張子は`application/octet-stream`で返され、`x-content-type-options: nosniff`により画像として表示されないため。
+  - `index.html` / `goal1.html` / `goal3.html` / `michecker-compare.html` のナビゲーションに「検証ガイド」リンクを追加。
+  - ガイド側の先頭にも画面切り替えナビゲーションを追加し、4画面へ戻れるようにした(印刷時は非表示)。
+  - `README.md` にガイドの配置とURLを追記。
+- 検証: ローカル起動で4画面すべてに「検証ガイド」リンクがあること、リンクからガイドへ遷移できること、ガイドから各画面へ戻れること、画像11点が`image/jpeg`で200を返し表示が壊れていないことをPlaywrightで確認。`node test/run-tests.js` 正常終了。
+- 関連ファイル: `goal2-app/public/verification-guide.html`, `goal2-app/public/images/verification/`, `goal2-app/server.js`, `goal2-app/public/index.html`, `goal2-app/public/goal1.html`, `goal2-app/public/goal3.html`, `goal2-app/public/michecker-compare.html`, `goal2-app/README.md`
+- 関連PR/コミット: (このコミット)
+
 ## 2026-07-27: 3パターン比較検証の作業ガイド(HTML・画面キャプチャ入り)を追加
 
 - 背景・目的: 同一ページを「1.通常移行」「2.AI移行」「3.miChecker移行」の3パターンで作業し、所要時間と品質を比較・検証する取り組みを進めるにあたり、BPOオペレーター・戦略G・検証管理者が参照できる作業手順書が必要になった。
