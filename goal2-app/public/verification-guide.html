@@ -156,6 +156,100 @@
 
   hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
 
+  /* --- 3パターン比較図 --- */
+  .flowmap { margin: 20px 0 8px; }
+  .flowmap-band {
+    border: 1px solid var(--line);
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .flowmap-band .band-sub { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .flowmap-fan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .flowmap-fan .fan-arrow { text-align: center; color: var(--muted); font-size: 20px; line-height: 1.2; padding: 4px 0; }
+
+  .pattern-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .pattern-card {
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    padding: 14px 14px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .pattern-card.p1 { border-top-color: var(--p1); }
+  .pattern-card.p2 { border-top-color: var(--p2); }
+  .pattern-card.p3 { border-top-color: var(--p3); }
+  .pattern-card h3 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .pattern-card .no {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-size: 14px; color: #fff; flex: none;
+  }
+  .pattern-card.p1 .no { background: var(--p1); }
+  .pattern-card.p2 .no { background: var(--p2); }
+  .pattern-card.p3 .no { background: var(--p3); }
+  .pattern-card .role { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+
+  .flow { list-style: none; margin: 0; padding: 0; }
+  .flow > li {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    background: var(--bg);
+  }
+  .flow > li + li { margin-top: 0; }
+  .flow > li.arrow {
+    border: none; background: none; padding: 2px 0;
+    text-align: center; color: var(--muted); font-size: 16px; line-height: 1;
+  }
+  .flow > li.tool {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    border-width: 2px;
+    font-weight: 700;
+  }
+  .flow > li.tool .scope {
+    display: block; margin-top: 4px; font-weight: 400; font-size: 12.5px; color: var(--muted);
+  }
+  .flow > li.extra {
+    border-style: dashed;
+    border-color: var(--warn-line);
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-weight: 700;
+  }
+  .flow > li .step-note { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
+  .pattern-card .card-foot {
+    margin: 12px 0 0; margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line);
+    font-size: 12.5px; color: var(--muted);
+  }
+  .flowmap-goal {
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+    background: var(--accent-soft);
+  }
+  .flow-legend { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  .flow-legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  .flow-legend .swatch-tool { background: var(--accent-soft); border: 2px solid var(--accent); }
+  .flow-legend .swatch-extra { background: var(--warn-bg); border: 1px dashed var(--warn-line); }
+
+  @media (max-width: 700px) {
+    .pattern-cards, .flowmap-fan { grid-template-columns: 1fr; }
+    .flowmap-fan .fan-arrow:nth-child(n+2) { display: none; }
+  }
+
   footer.doc-foot { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0 0; }
 
   @media print {
@@ -165,6 +259,7 @@
     nav.app-switch { display: none; }
     h2 { break-after: avoid; }
     figure { break-inside: avoid; }
+    .flowmap, .pattern-card { break-inside: avoid; }
   }
 </style>
 </head>
@@ -188,7 +283,6 @@
     <dt>対象ツール</dt><dd>アクセシビリティ候補レビュー（goal2-app）</dd>
     <dt>利用URL</dt><dd><a href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/">https://goal2-a11y-review-700549743482.asia-northeast1.run.app/</a></dd>
     <dt>本書のURL</dt><dd><a href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/verification-guide.html">https://goal2-a11y-review-700549743482.asia-northeast1.run.app/verification-guide.html</a>（ツールの各画面から「検証ガイド」で開けます）</dd>
-    <dt>ソース</dt><dd><a href="https://github.com/koteikara/11y-agent/tree/main/goal2-app">github.com/koteikara/11y-agent/tree/main/goal2-app</a></dd>
     <dt>推奨ブラウザ</dt><dd>Google Chrome または Microsoft Edge（最新版）</dd>
     <dt>作成日</dt><dd>2026-07-27</dd>
   </dl>
@@ -221,46 +315,78 @@
   </p>
 
   <h3>1.2 3パターンの定義</h3>
-  <div class="tablewrap">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:14%">パターン</th>
-          <th style="width:26%">内容</th>
-          <th style="width:22%">ツールの使用</th>
-          <th style="width:20%">ツールの「修正基準」</th>
-          <th style="width:18%">位置づけ</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="tag tag-p1">1. 通常移行</span></td>
-          <td>これまでの移行作業をそのまま実施する。</td>
-          <td>使用しない</td>
-          <td>—</td>
-          <td>比較の基準（ベースライン）</td>
-        </tr>
-        <tr>
-          <td><span class="tag tag-p2">2. AI移行</span></td>
-          <td>「アクセシビリティ候補レビュー」を使用して、アクセシブルなHTMLに変換する。</td>
-          <td>使用する</td>
-          <td><strong>移行ルール全体（miChecker含む）</strong></td>
-          <td>移行ルール全体をカバーする本命パターン</td>
-        </tr>
-        <tr>
-          <td><span class="tag tag-p3">3. miChecker移行</span></td>
-          <td>「アクセシビリティ候補レビュー」のmiChecker版を使用し、miCheckerで問題となる箇所のみ対応する。</td>
-          <td>使用する</td>
-          <td><strong>miChecker指摘対応のみ</strong></td>
-          <td>対応範囲を絞った場合の時間・品質を見る</td>
-        </tr>
-      </tbody>
-    </table>
+
+  <div class="flowmap">
+    <div class="flowmap-band">
+      同一の対象ページ（1ページ）
+      <span class="band-sub">3パターンとも、まったく同じ旧ページを出発点にします</span>
+    </div>
+    <div class="flowmap-fan" aria-hidden="true">
+      <div class="fan-arrow">↓</div><div class="fan-arrow">↓</div><div class="fan-arrow">↓</div>
+    </div>
+
+    <div class="pattern-cards">
+      <div class="pattern-card p1">
+        <h3><span class="no" aria-hidden="true">1</span>通常移行</h3>
+        <p class="role">比較の基準（ベースライン）</p>
+        <ul class="flow">
+          <li>CMSで通常取込<span class="step-note">戦略Gが事前に準備</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>これまでどおりの移行作業</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで公開設定などの残作業</li>
+        </ul>
+        <p class="card-foot">ツールは使いません。手順は本書では割愛します（<a href="#s8">8章</a>の計測ルールだけ共通で適用）。</p>
+      </div>
+
+      <div class="pattern-card p2">
+        <h3><span class="no" aria-hidden="true">2</span>AI移行</h3>
+        <p class="role">移行ルール全体をカバーする本命パターン</p>
+        <ul class="flow">
+          <li>CMSで解析まで実行<span class="step-note">「解析まで１」を使用</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="tool">アクセシビリティ候補レビュー
+            <span class="scope">修正基準：移行ルール全体（miChecker含む）</span>
+          </li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>最終HTMLをCMS取込ツールへ戻して取込</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで移行に必要な残作業</li>
+        </ul>
+        <p class="card-foot">手順は<a href="#s4">4章</a>。</p>
+      </div>
+
+      <div class="pattern-card p3">
+        <h3><span class="no" aria-hidden="true">3</span>miChecker移行</h3>
+        <p class="role">対応範囲を絞った場合の時間と品質を見る</p>
+        <ul class="flow">
+          <li>CMSで解析まで実行<span class="step-note">「解析まで２」を使用</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="tool">アクセシビリティ候補レビュー
+            <span class="scope">修正基準：miChecker指摘対応のみ</span>
+          </li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>最終HTMLをCMS取込ツールへ戻して取込</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで移行に必要な残作業</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="extra">＋ miChecker本体との結果一致確認</li>
+        </ul>
+        <p class="card-foot">手順は<a href="#s5">5章</a>、一致確認は<a href="#s6">6章</a>。</p>
+      </div>
+    </div>
+
+    <div class="flowmap-goal">所要時間と品質を3パターンで比較する</div>
+
+    <p class="flow-legend">
+      <span class="swatch swatch-tool"></span>ツールを使う工程
+      <span class="swatch swatch-extra"></span>パターン3だけの追加検証（移行作業の所要時間には含めません）
+    </p>
   </div>
 
   <p>
-    パターン2と3の違いは、ツール上の「修正基準」の切り替え1か所だけです。作業手順そのものは共通です
-    （<a href="#s5">5章</a>で差分のみ説明します）。
+    図のとおり、パターン2と3で違うのは、入力に使う解析結果と、ツール上の「修正基準」の選択だけです。
+    作業手順そのものは共通のため、<a href="#s5">5章</a>では差分だけを説明します。
   </p>
 
   <div class="note">
