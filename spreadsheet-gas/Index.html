@@ -45,7 +45,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             gap: 8px;
         }
 
@@ -70,6 +70,43 @@
 
         .status-badge.breaking { background: #fef7e0; color: #b06000; border-color: rgba(176, 96, 0, 0.2); }
         .status-badge.suspended { background: #f1f3f4; color: #5f6368; border-color: #dadce0; }
+
+        /* 計測区間の選択 */
+        .phase-picker {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .phase-label {
+            font-size: calc(11px * var(--font-scale));
+            color: var(--text-sub);
+            font-weight: bold;
+            text-align: left;
+            margin-bottom: 4px;
+        }
+
+        .phase-btn {
+            flex: 1;
+            padding: 10px 6px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            background: white;
+            color: var(--text-sub);
+            font-size: calc(12px * var(--font-scale));
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .phase-btn.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .phase-btn:disabled { background-color: #f1f3f4; color: #9aa0a6; cursor: not-allowed; border-color: #e0e0e0; }
+        .phase-btn.active:disabled { background-color: #7ba7e8; border-color: #7ba7e8; color: white; }
 
         .controls {
             display: flex;
@@ -102,11 +139,11 @@
 
         .btn-start { background-color: var(--primary-color); color: white; }
         .btn-start:hover { background-color: #1557b0; }
-        
+
         .btn-break { background-color: white; color: var(--text-main); border: 1px solid #dadce0; }
         .btn-break:hover { background-color: #f8f9fa; }
         .btn-break.active { background-color: var(--warning-color); color: white; border: none; }
-        
+
         .btn-end { background-color: var(--danger-color); color: white; }
         .btn-end:hover { background-color: #a50e0e; }
 
@@ -139,6 +176,8 @@
             border-left: 4px solid var(--primary-color);
             margin-top: 10px;
         }
+
+        .log-msg.error { color: #a50e0e; background-color: #fce8e6; border-left-color: var(--danger-color); }
 
         .next-action { font-weight: bold; color: #c5221f; display: block; margin-top: 6px; }
 
@@ -235,7 +274,7 @@
         .usage-step:last-child { margin-bottom: 0; border-bottom: none; }
         .usage-step-text { font-size: calc(11px * var(--font-scale)); font-weight: bold; margin: 0 0 6px 0; color: var(--primary-color); display: flex; align-items: center; gap: 4px; }
         .usage-step-desc { font-size: calc(10px * var(--font-scale)); color: var(--text-main); line-height: 1.6; margin: 0; }
-        
+
         .col-spec {
             background: #f8f9fa;
             border: 1px solid #dadce0;
@@ -265,6 +304,10 @@
         <div class="timer-display" id="display">00:00:00</div>
     </div>
 
+    <!-- 計測する区間の選択 -->
+    <div class="phase-label">計測する区間</div>
+    <div class="phase-picker" id="phasePicker" role="group" aria-label="計測する区間"></div>
+
     <!-- メイン操作ボタン -->
     <div class="controls">
         <button id="startBtn" class="btn btn-start" onclick="handleStart()">▶開始</button>
@@ -282,7 +325,7 @@
 
     <!-- メッセージログ -->
     <div class="log-msg" id="logMsg">
-        <span id="sheetInfo">記録先: <?!= (typeof sheetName !== 'undefined' ? sheetName : '取得中...') ?></span>
+        <span id="sheetInfo">記録先: 取得中...</span>
         <span class="next-action" id="nextAction">👉️ 行を選択して[開始]を押してください</span>
     </div>
 
@@ -292,55 +335,73 @@
             <span>📖 ご利用ガイド・仕様</span>
             <span id="guideIcon">▼</span>
         </div>
-        
+
         <div id="guideBody" class="guide-body">
             <div class="tab-header">
                 <button class="tab-btn active" onclick="switchTab(event, 'tab-op')">操作手順</button>
                 <button class="tab-btn" onclick="switchTab(event, 'tab-spec')">機能・仕様</button>
                 <button class="tab-btn" onclick="switchTab(event, 'tab-auth')">初回認証</button>
             </div>
-            
+
             <!-- 操作手順タブ -->
             <div id="tab-op" class="tab-content active">
                 <div class="usage-step">
-                    <p class="usage-step-text">① 作業の開始</p>
+                    <p class="usage-step-text">① 区間を選ぶ</p>
+                    <p class="usage-step-desc"><b>[ツール作業]</b>と<b>[CMS作業]</b>のどちらを計測するかを選びます。計測中は切り替えられません。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">② 作業の開始</p>
                     <p class="usage-step-desc">シート上の行を選択し<b>[開始]</b>を押します。開始時刻が記録され、その行がロックされます。</p>
                 </div>
                 <div class="usage-step">
-                    <p class="usage-step-text">② 休憩（☕休憩）</p>
+                    <p class="usage-step-text">③ 休憩（☕休憩）</p>
                     <p class="usage-step-desc">離席時は<b>[休憩]</b>、戻ったら<b>[休憩終了]</b>を押します。休憩時間が分単位で計算され、シートへ即座に加算されます。</p>
                 </div>
                 <div class="usage-step">
-                    <p class="usage-step-text">③ 一時停止（⏸中断）</p>
+                    <p class="usage-step-text">④ 一時停止（⏸中断）</p>
                     <p class="usage-step-desc">作業を一時停止したい時は<b>[中断]</b>を使います。タイマーが止まり、データは内部保持されます。再開時は<b>[再開]</b>を押してください。</p>
                 </div>
                 <div class="usage-step">
-                    <p class="usage-step-text">④ 集計と完了（■終了）</p>
-                    <p class="usage-step-desc">完了時に<b>[終了]</b>を押すと終了時刻が記録され、実働時間（総作業ー休憩）が自動算出されます。</p>
+                    <p class="usage-step-text">⑤ 集計と完了（■終了）</p>
+                    <p class="usage-step-desc">完了時に<b>[終了]</b>を押すと終了時刻が記録され、その区間の作業時間（総作業ー休憩）が算出されます。あわせて<b>ツール作業とCMS作業の合計</b>が「作業時間集計」へ書き込まれます。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">⑥ もう一方の区間</p>
+                    <p class="usage-step-desc">区間を切り替えて同じ行で<b>[開始]</b>を押せば、もう一方の計測ができます。合計は終了のたびに計算し直されます。</p>
                 </div>
             </div>
 
             <!-- 機能・仕様タブ -->
             <div id="tab-spec" class="tab-content">
                 <div class="usage-step">
-                    <p class="usage-step-text">累計モード（全シート対応）</p>
-                    <p class="usage-step-desc">過去の記録がある行で[開始]を押すと、<b>前回の続きからタイマーを回す</b>（累計）か、上書きするかを選択可能です。</p>
+                    <p class="usage-step-text">対象シートと列の判別</p>
+                    <p class="usage-step-desc">シート名では判別しません。<b>2行目の見出し</b>に計測用の列があるシートを対象とします。自治体×パターンでシートが増えても設定の変更は不要です。</p>
+                    <div class="col-spec">
+                        <b>見出し行:</b> 2行目 / <b>データ:</b> 3行目から<br>
+                        <b>ツール作業:</b> ツール作業開始・ツール作業終了・ツール休憩時間・ツール作業時間<br>
+                        <b>CMS作業:</b> CMS作業開始・CMS作業終了・CMS休憩時間・CMS作業時間<br>
+                        <b>合計:</b> 作業時間集計
+                    </div>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">区間ごとの計測と合算</p>
+                    <p class="usage-step-desc">ツール作業とCMS作業は別々に計測します。終了のたびに両方の作業時間を足して「作業時間集計」へ書き込みます。ツール作業の列が無いシート（通常移行）では、CMS作業だけが選べます。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">累計モード</p>
+                    <p class="usage-step-desc">過去の記録がある行で[開始]を押すと、<b>前回の続きからタイマーを回す</b>（累計）か、上書きするかを選択できます。上書きを選ぶと、その区間の終了時刻・休憩時間・作業時間を消してから開始します。</p>
                 </div>
                 <div class="usage-step">
                     <p class="usage-step-text">自動復旧機能</p>
                     <p class="usage-step-desc">ブラウザを閉じたりリロードしても、再度パネルを開けば<b>以前の計測状態から自動で復旧</b>します。計測漏れを防ぎます。</p>
                 </div>
                 <div class="usage-step">
-                    <p class="usage-step-text">複数シート判別</p>
-                    <p class="usage-step-desc">開いているシートに応じて、記録する列を自動で切り替えます。</p>
-                    <div class="col-spec">
-                        <b>HTML適正化_検証:</b> G〜J列<br>
-                        <b>一覧:</b> CK〜CN列
-                    </div>
+                    <p class="usage-step-text">タスク切り替え</p>
+                    <p class="usage-step-desc">計測中に別の行や別の区間で[開始]を押すと、<b>現在の作業を集計して終了</b>してから次へ移動できます。</p>
                 </div>
                 <div class="usage-step">
-                    <p class="usage-step-text">タスク切り替え</p>
-                    <p class="usage-step-desc">作業中に別の行で[開始]を押すと、<b>現在の作業を自動で集計終了</b>してスムーズに次の行へ移動できます。</p>
+                    <p class="usage-step-text">休憩したままの終了</p>
+                    <p class="usage-step-desc">休憩中に[終了]を押した場合も、その休憩分を差し引いてから集計します。</p>
                 </div>
             </div>
 
@@ -390,7 +451,7 @@
 <div id="confirmEndModal" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-title">作業を終了しますか？</div>
-        <div class="modal-desc">現在の実働時間を集計し、シートへの書き込みを確定させます。</div>
+        <div class="modal-desc">現在の作業時間を集計し、シートへの書き込みを確定させます。</div>
         <div class="modal-btns">
             <button class="btn-full" style="background:var(--danger-color); color:white;" onclick="confirmEndRecord()">終了する</button>
             <button class="btn-full" style="background:#eee; color:var(--text-main);" onclick="closeModal('confirmEndModal')">戻る</button>
@@ -400,6 +461,7 @@
 
 <script>
     let timerId = null, startTime = null, accumulatedMs = 0, totalBreakMs = 0, status = 'idle', fontScaleLevel = 0, currentBreakStart = null;
+    let phases = [], selectedPhase = null;
     const fontScales = [1, 1.25, 1.5];
 
     function isGas() { return typeof google !== 'undefined' && google.script && google.script.run; }
@@ -407,59 +469,132 @@
     function toggleGuide() { const b = document.getElementById("guideBody"), i = document.getElementById("guideIcon"); const isOpen = b.style.display === "block"; b.style.display = isOpen ? "none" : "block"; i.innerText = isOpen ? "▼" : "▲"; }
     function switchTab(evt, tabId) { const c = document.getElementsByClassName("tab-content"), b = document.getElementsByClassName("tab-btn"); for(let x of c) x.classList.remove("active"); for(let x of b) x.classList.remove("active"); document.getElementById(tabId).classList.add("active"); evt.currentTarget.classList.add("active"); }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-    function updateLog(m, n) { document.getElementById('logMsg').innerHTML = `<span>${m}</span><span class="next-action">👉️ ${n}</span>`; }
+
+    function updateLog(m, n, isError) {
+        const el = document.getElementById('logMsg');
+        el.className = isError ? 'log-msg error' : 'log-msg';
+        el.innerHTML = '<span id="sheetInfo">' + escapeHtml(m) + '</span><span class="next-action" id="nextAction">👉️ ' + escapeHtml(n) + '</span>';
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    // 区間の選択ボタンを描画
+    function renderPhases() {
+        const picker = document.getElementById('phasePicker');
+        picker.innerHTML = '';
+        phases.forEach(function (phase) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'phase-btn' + (phase.key === selectedPhase ? ' active' : '');
+            btn.innerText = phase.label;
+            btn.disabled = !phase.available || status !== 'idle';
+            btn.title = phase.available ? '' : 'このシートにはこの区間の列がありません';
+            btn.onclick = function () { selectPhase(phase.key); };
+            picker.appendChild(btn);
+        });
+        document.getElementById('startBtn').disabled = !selectedPhase || status !== 'idle';
+    }
+
+    function selectPhase(key) {
+        if (status !== 'idle') return;
+        selectedPhase = key;
+        renderPhases();
+    }
+
+    function phaseLabelOf(key) {
+        for (let i = 0; i < phases.length; i += 1) if (phases[i].key === key) return phases[i].label;
+        return key || '';
+    }
+
+    // シートの状況を取得して区間ボタンを組み立てる
+    function loadSheetContext(afterLoad) {
+        if (!isGas()) { if (afterLoad) afterLoad(); return; }
+        google.script.run.withSuccessHandler(function (ctx) {
+            phases = ctx.phases || [];
+            const available = phases.filter(function (p) { return p.available; });
+            if (!selectedPhase || !available.some(function (p) { return p.key === selectedPhase; })) {
+                selectedPhase = available.length ? available[0].key : null;
+            }
+            renderPhases();
+            if (!ctx.isTarget) {
+                updateLog('記録先: ' + ctx.sheetName, '対象外のシートです（2行目の見出しに計測列がありません）', true);
+            } else {
+                updateLog('記録先: ' + ctx.sheetName, '行を選択して[開始]を押してください');
+            }
+            if (afterLoad) afterLoad();
+        }).getSheetContext();
+    }
 
     // 開始ボタン：既存チェックと分岐
     function handleStart() {
+        if (!selectedPhase) { updateLog('区間が選べません', 'このシートには計測列がありません', true); return; }
         if (!isGas()) { document.getElementById('startModal').style.display = 'flex'; return; }
-        updateLog("チェック中...", "少々お待ちください");
-        google.script.run.withSuccessHandler(res => {
-            if (!res) { updateLog("エラー", "対象外のシートです"); return; }
-            
-            // 既に別の場所で計測中の場合
+
+        updateLog('チェック中...', '少々お待ちください');
+        google.script.run.withSuccessHandler(function (res) {
+            if (!res) { updateLog('エラー', '対象外のシートです', true); return; }
+            if (res.error) { updateLog('開始できません', res.error, true); return; }
+
+            // 既に別の行・別の区間で計測中の場合
             if (res.isRunningElsewhere) {
-                document.getElementById('switchDesc').innerText = `現在、${res.runningInfo}を計測中です。この記録を終了（集計）し、新しく選択した行で開始しますか？`;
+                document.getElementById('switchDesc').innerText = '現在、' + res.runningInfo + 'を計測中です。この記録を終了（集計）し、新しく選択した行で開始しますか？';
                 document.getElementById('switchModal').style.display = 'flex';
                 return;
             }
 
-            const accBtn = document.getElementById('accBtn'), newBtn = document.getElementById('newStartBtn'), title = document.getElementById('modalTitle'), desc = document.getElementById('modalDesc');
+            const accBtn = document.getElementById('accBtn');
+            const newBtn = document.getElementById('newStartBtn');
+            const title = document.getElementById('modalTitle');
+            const desc = document.getElementById('modalDesc');
+
             if (res.hasData) {
-                // すべてのシートで累計再開が可能
-                title.innerText = "既存データがあります";
-                desc.innerText = "既に記録されている時間があります。これまでの時間に合算して再開するか、新規で上書きするか選択してください。";
-                accBtn.style.display = "block"; accBtn.innerText = `続き(${res.workMin}分〜)から累計再開`;
-                newBtn.innerText = "新規(上書き)で開始"; newBtn.style.background = "var(--primary-color)";
+                title.innerText = '既存データがあります';
+                desc.innerText = res.row + '行目の' + res.phaseLabel + 'には既に記録があります。これまでの時間に合算して再開するか、新規で上書きするか選択してください。';
+                accBtn.style.display = 'block';
+                accBtn.innerText = '続き(' + res.workMin + '分〜)から累計再開';
+                newBtn.innerText = '新規(上書き)で開始';
             } else {
-                title.innerText = "作業を開始しますか？"; desc.innerText = "選択した行で新しく記録を開始します。";
-                accBtn.style.display = "none"; newBtn.innerText = "開始する"; newBtn.style.background = "var(--primary-color)";
+                title.innerText = '作業を開始しますか？';
+                desc.innerText = res.row + '行目の' + res.phaseLabel + 'の記録を開始します。';
+                accBtn.style.display = 'none';
+                newBtn.innerText = '開始する';
             }
             document.getElementById('startModal').style.display = 'flex';
-            updateLog("準備完了", "開始方法を選択してください");
-        }).checkExistingData();
+            updateLog('記録先: ' + res.sheetName + ' ' + res.row + '行目 / ' + res.phaseLabel, '開始方法を選択してください');
+        }).checkExistingData(selectedPhase);
     }
 
     // 実際の開始処理
     function confirmStart(mode) {
         closeModal('startModal');
-        google.script.run.withSuccessHandler(msg => {
-            status = 'working'; startTime = new Date(); accumulatedMs = 0; totalBreakMs = 0;
-            refreshUIByStatus(); updateLog(msg, "計測を開始しました");
+        google.script.run.withSuccessHandler(function (msg) {
+            if (String(msg).indexOf('エラー') === 0) { updateLog('開始できません', msg, true); return; }
+            status = 'working'; startTime = new Date(); accumulatedMs = 0; totalBreakMs = 0; currentBreakStart = null;
+            refreshUIByStatus();
             // 同期のために最新状態を再取得
-            google.script.run.withSuccessHandler(data => {
-                if(data) {
-                    accumulatedMs = data.accumulatedMs; totalBreakMs = data.totalBreakMs;
-                    if (data.sheetName) document.getElementById('sheetInfo').innerText = "記録先: " + data.sheetName;
+            google.script.run.withSuccessHandler(function (data) {
+                if (data) {
+                    accumulatedMs = data.accumulatedMs;
+                    totalBreakMs = data.totalBreakMs;
+                    updateLog('記録先: ' + data.sheetName + ' ' + data.row + '行目 / ' + data.phaseLabel, msg);
                 }
             }).getTimerStatus();
-        }).processRecord('start', mode);
+        }).processRecord('start', mode, selectedPhase);
     }
 
     // タスク切り替え実行
     function executeSwitch() {
         closeModal('switchModal');
-        updateLog("切り替え中...", "前の作業を終了して移動しています");
-        google.script.run.withSuccessHandler(() => { handleStart(); }).processRecord('end');
+        updateLog('切り替え中...', '前の作業を終了して移動しています');
+        google.script.run.withSuccessHandler(function () {
+            // サーバー側は終了済み。画面も待機中へ戻してから開始し直す
+            resetToIdle();
+            handleStart();
+        }).processRecord('end');
     }
 
     // 終了ボタン押下
@@ -471,19 +606,26 @@
     // 実際の終了実行
     function confirmEndRecord() {
         closeModal('confirmEndModal');
-        google.script.run.withSuccessHandler(msg => {
-            status = 'idle'; refreshUIByStatus(); updateLog(msg, "完了しました。次の行を選んでください");
-            document.getElementById('sheetInfo').innerText = "記録先: 待機中";
+        google.script.run.withSuccessHandler(function (msg) {
+            resetToIdle();
+            updateLog(msg, '完了しました。次の行または区間を選んでください');
+            loadSheetContext();
         }).processRecord('end');
+    }
+
+    function resetToIdle() {
+        status = 'idle'; startTime = null; accumulatedMs = 0; totalBreakMs = 0; currentBreakStart = null;
+        refreshUIByStatus();
     }
 
     // 中断・再開
     function handleSuspendResume() {
         const type = (status === 'working') ? 'suspend' : 'resume';
-        google.script.run.withSuccessHandler(msg => {
+        google.script.run.withSuccessHandler(function (msg) {
             if (type === 'suspend') { accumulatedMs += (new Date() - startTime); startTime = null; status = 'suspended'; }
             else { startTime = new Date(); status = 'working'; }
-            refreshUIByStatus(); updateLog(msg, status === 'suspended' ? "[再開]を押してください" : "作業を再開しました");
+            refreshUIByStatus();
+            updateLog(msg, status === 'suspended' ? '[再開]を押してください' : '作業を再開しました');
         }).processRecord(type);
     }
 
@@ -492,12 +634,19 @@
         const now = new Date();
         if (status !== 'breaking') {
             status = 'breaking'; currentBreakStart = now;
-            updateLog("休憩中...", "戻ったら[休憩終了]を押してください");
+            updateLog('休憩中...', '戻ったら[休憩終了]を押してください');
             if (isGas()) google.script.run.setBreakStatus(true, now.getTime());
         } else {
-            const diff = now - currentBreakStart; totalBreakMs += diff; status = 'working';
-            updateLog("休憩完了", "作業を再開しました");
-            if (isGas()) { google.script.run.setBreakStatus(false); google.script.run.addBreakTime(Math.floor(diff / 60000)); }
+            const diff = now - currentBreakStart;
+            const minutes = Math.floor(diff / 60000);
+            totalBreakMs += minutes * 60000;
+            currentBreakStart = null;
+            status = 'working';
+            updateLog('休憩完了（' + minutes + '分）', '作業を再開しました');
+            if (isGas()) {
+                google.script.run.setBreakStatus(false);
+                if (minutes > 0) google.script.run.addBreakTime(minutes);
+            }
         }
         refreshUIByStatus();
     }
@@ -509,33 +658,43 @@
         else if (status === 'breaking' && startTime) cur = (new Date() - startTime) - (new Date() - currentBreakStart);
         const t = Math.max(0, Math.floor((accumulatedMs + cur - totalBreakMs) / 1000));
         const h = String(Math.floor(t / 3600)).padStart(2, '0'), m = String(Math.floor((t % 3600) / 60)).padStart(2, '0'), s = String(t % 60).padStart(2, '0');
-        document.getElementById('display').innerText = `${h}:${m}:${s}`;
+        document.getElementById('display').innerText = h + ':' + m + ':' + s;
     }
 
     // UI状態の更新
     function refreshUIByStatus() {
         const u = document.getElementById('suspendBtn'), b = document.getElementById('breakBtn'), e = document.getElementById('endBtn'), t = document.getElementById('statusText'), l = document.getElementById('statusLabel');
         clearInterval(timerId);
-        if (status === 'idle') { document.getElementById('display').innerText = "00:00:00"; u.disabled = b.disabled = e.disabled = true; t.innerText = "待機中"; l.className = "status-badge"; return; }
+        renderPhases();
+
+        if (status === 'idle') {
+            document.getElementById('display').innerText = '00:00:00';
+            u.disabled = b.disabled = e.disabled = true;
+            t.innerText = '待機中'; l.className = 'status-badge';
+            return;
+        }
         e.disabled = false;
-        if (status === 'working') { u.disabled = b.disabled = false; u.innerText = "⏸中断"; b.innerText = "☕休憩"; b.classList.remove('active'); t.innerText = "作業中"; l.className = "status-badge"; timerId = setInterval(updateDisplay, 1000); }
-        else if (status === 'suspended') { u.disabled = false; u.innerText = "▶再開"; b.disabled = true; t.innerText = "中断中"; l.className = "status-badge suspended"; updateDisplay(); }
-        else if (status === 'breaking') { u.disabled = true; b.disabled = false; b.innerText = "✅休憩終了"; b.classList.add('active'); t.innerText = "休憩中"; l.className = "status-badge breaking"; timerId = setInterval(updateDisplay, 1000); }
+        if (status === 'working') { u.disabled = b.disabled = false; u.innerText = '⏸中断'; b.innerText = '☕休憩'; b.classList.remove('active'); t.innerText = '作業中'; l.className = 'status-badge'; timerId = setInterval(updateDisplay, 1000); updateDisplay(); }
+        else if (status === 'suspended') { u.disabled = false; u.innerText = '▶再開'; b.disabled = true; t.innerText = '中断中'; l.className = 'status-badge suspended'; updateDisplay(); }
+        else if (status === 'breaking') { u.disabled = true; b.disabled = false; b.innerText = '✅休憩終了'; b.classList.add('active'); t.innerText = '休憩中'; l.className = 'status-badge breaking'; timerId = setInterval(updateDisplay, 1000); updateDisplay(); }
     }
 
-    // window読み込み時の状態復旧
-    window.onload = function() {
-        if (isGas()) {
-            google.script.run.withSuccessHandler(data => {
-                if (data) {
-                    accumulatedMs = data.accumulatedMs; totalBreakMs = data.totalBreakMs; status = data.status;
-                    if (data.startTime) startTime = new Date(data.startTime);
-                    if (data.isBreaking) currentBreakStart = new Date(data.breakStart);
-                    if (data.sheetName) document.getElementById('sheetInfo').innerText = "記録先: " + data.sheetName;
-                    refreshUIByStatus();
-                }
+    // 読み込み時：シートの状況と計測状態を復旧
+    window.onload = function () {
+        loadSheetContext(function () {
+            if (!isGas()) return;
+            google.script.run.withSuccessHandler(function (data) {
+                if (!data) return;
+                accumulatedMs = data.accumulatedMs;
+                totalBreakMs = data.totalBreakMs;
+                status = data.status;
+                selectedPhase = data.phaseKey || selectedPhase;
+                if (data.startTime) startTime = new Date(data.startTime);
+                if (data.isBreaking && data.breakStart) currentBreakStart = new Date(data.breakStart);
+                updateLog('記録先: ' + data.sheetName + ' ' + data.row + '行目 / ' + data.phaseLabel, '計測中の記録から復旧しました');
+                refreshUIByStatus();
             }).getTimerStatus();
-        }
+        });
     };
 </script>
 </body>
