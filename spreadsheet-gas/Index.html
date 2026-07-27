@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作業記録タイマー</title>
+    <style>
+        :root {
+            /* WCAG 2.2 AA 準拠のカラーパレット（Google マテリアルデザイン風） */
+            --primary-color: #1a73e8;
+            --warning-color: #e37400;
+            --danger-color: #c5221f;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #202124;
+            --text-sub: #5f6368;
+            --log-bg: #e8f0fe;
+            --tab-inactive: #e8eaed;
+            /* 文字サイズ調整用スケール (初期値1.0) */
+            --font-scale: 1;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 8px;
+            overflow-x: hidden;
+            font-size: calc(14px * var(--font-scale));
+            color: var(--text-main);
+            transition: font-size 0.2s;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 16px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            gap: 8px;
+        }
+
+        .timer-display {
+            font-size: 32px;
+            font-weight: 700;
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--text-main);
+            margin: 0;
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: #e8f0fe;
+            color: var(--primary-color);
+            font-weight: 600;
+            border: 1px solid rgba(26, 115, 232, 0.2);
+        }
+
+        .status-badge.breaking { background: #fef7e0; color: #b06000; border-color: rgba(176, 96, 0, 0.2); }
+        .status-badge.suspended { background: #f1f3f4; color: #5f6368; border-color: #dadce0; }
+
+        .controls {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            flex: 1;
+            min-width: 85px;
+            padding: 12px 6px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .btn:active { transform: translateY(1px); box-shadow: none; }
+        .btn:disabled { background-color: #e8eaed; color: #9aa0a6; cursor: not-allowed; border: none; box-shadow: none; }
+
+        .btn-start { background-color: var(--primary-color); color: white; }
+        .btn-start:hover { background-color: #1557b0; }
+        
+        .btn-break { background-color: white; color: var(--text-main); border: 1px solid #dadce0; }
+        .btn-break:hover { background-color: #f8f9fa; }
+        .btn-break.active { background-color: var(--warning-color); color: white; border: none; }
+        
+        .btn-end { background-color: var(--danger-color); color: white; }
+        .btn-end:hover { background-color: #a50e0e; }
+
+        /* 文字サイズ調整ツールバー */
+        .font-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 6px;
+            align-items: center;
+        }
+
+        .font-label { font-size: 11px; color: var(--text-sub); font-weight: bold; }
+
+        .btn-font {
+            background: white; border: 1px solid #dadce0; border-radius: 4px;
+            width: 32px; height: 26px; cursor: pointer; color: var(--text-sub);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .log-msg {
+            font-size: calc(10px * var(--font-scale));
+            color: #0b57d0;
+            background-color: var(--log-bg);
+            border-radius: 8px;
+            padding: 10px 12px;
+            text-align: left;
+            line-height: 1.6;
+            min-height: 1.6em;
+            border-left: 4px solid var(--primary-color);
+            margin-top: 10px;
+        }
+
+        .next-action { font-weight: bold; color: #c5221f; display: block; margin-top: 6px; }
+
+        /* モーダル共通スタイル */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            width: 85%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+            animation: modalPop 0.2s ease-out;
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; }
+        .modal-desc { font-size: 13px; color: var(--text-sub); margin-bottom: 24px; line-height: 1.6; text-align: left; }
+        .modal-btns { display: flex; flex-direction: column; gap: 10px; }
+        .btn-full { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; }
+
+        /* ご利用ガイド */
+        .usage-guide {
+            margin-top: 16px;
+            text-align: left;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .guide-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background-color: var(--tab-inactive);
+            cursor: pointer;
+            font-size: calc(12px * var(--font-scale));
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        .tab-header {
+            display: flex;
+            background-color: #f1f3f4;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 4px;
+            font-size: calc(10px * var(--font-scale));
+            font-weight: bold;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: var(--text-sub);
+        }
+
+        .tab-btn.active {
+            background-color: var(--card-bg);
+            color: var(--primary-color);
+            position: relative;
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0; height: 3px;
+            background-color: var(--primary-color);
+        }
+
+        .guide-body { display: none; }
+        .tab-content { display: none; padding: 14px; background-color: var(--card-bg); overflow-y: auto; max-height: 380px; }
+        .tab-content.active { display: block; }
+
+        .usage-step { margin-bottom: 16px; border-bottom: 1px dashed #eee; padding-bottom: 12px; }
+        .usage-step:last-child { margin-bottom: 0; border-bottom: none; }
+        .usage-step-text { font-size: calc(11px * var(--font-scale)); font-weight: bold; margin: 0 0 6px 0; color: var(--primary-color); display: flex; align-items: center; gap: 4px; }
+        .usage-step-desc { font-size: calc(10px * var(--font-scale)); color: var(--text-main); line-height: 1.6; margin: 0; }
+        
+        .col-spec {
+            background: #f8f9fa;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .auth-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: calc(10px * var(--font-scale));
+            margin-top: 10px;
+        }
+        .auth-table th, .auth-table td { border: 1px solid #e0e0e0; padding: 6px; text-align: left; }
+        .auth-table th { background-color: #f8f9fa; color: var(--text-sub); }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <!-- ヘッダー：ステータスとタイマー -->
+    <div class="header-row">
+        <div class="status-badge" id="statusLabel"><span id="statusText">待機中</span></div>
+        <div class="timer-display" id="display">00:00:00</div>
+    </div>
+
+    <!-- メイン操作ボタン -->
+    <div class="controls">
+        <button id="startBtn" class="btn btn-start" onclick="handleStart()">▶開始</button>
+        <button id="suspendBtn" class="btn btn-break" onclick="handleSuspendResume()" disabled>⏸中断</button>
+        <button id="breakBtn" class="btn btn-break" onclick="handleBreak()" disabled>☕休憩</button>
+        <button id="endBtn" class="btn btn-end" onclick="handleEnd()" disabled>■終了</button>
+    </div>
+
+    <!-- ツールバー：文字サイズ -->
+    <div class="font-toolbar">
+        <span class="font-label">文字サイズ</span>
+        <button class="btn-font" title="大きく" onclick="changeFontSize(1)">A+</button>
+        <button class="btn-font" title="標準/小さく" onclick="changeFontSize(-1)">A-</button>
+    </div>
+
+    <!-- メッセージログ -->
+    <div class="log-msg" id="logMsg">
+        <span id="sheetInfo">記録先: <?!= (typeof sheetName !== 'undefined' ? sheetName : '取得中...') ?></span>
+        <span class="next-action" id="nextAction">👉️ 行を選択して[開始]を押してください</span>
+    </div>
+
+    <!-- ご利用ガイド（アコーディオン） -->
+    <div class="usage-guide">
+        <div class="guide-header" onclick="toggleGuide()">
+            <span>📖 ご利用ガイド・仕様</span>
+            <span id="guideIcon">▼</span>
+        </div>
+        
+        <div id="guideBody" class="guide-body">
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="switchTab(event, 'tab-op')">操作手順</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-spec')">機能・仕様</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-auth')">初回認証</button>
+            </div>
+            
+            <!-- 操作手順タブ -->
+            <div id="tab-op" class="tab-content active">
+                <div class="usage-step">
+                    <p class="usage-step-text">① 作業の開始</p>
+                    <p class="usage-step-desc">シート上の行を選択し<b>[開始]</b>を押します。開始時刻が記録され、その行がロックされます。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">② 休憩（☕休憩）</p>
+                    <p class="usage-step-desc">離席時は<b>[休憩]</b>、戻ったら<b>[休憩終了]</b>を押します。休憩時間が分単位で計算され、シートへ即座に加算されます。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">③ 一時停止（⏸中断）</p>
+                    <p class="usage-step-desc">作業を一時停止したい時は<b>[中断]</b>を使います。タイマーが止まり、データは内部保持されます。再開時は<b>[再開]</b>を押してください。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">④ 集計と完了（■終了）</p>
+                    <p class="usage-step-desc">完了時に<b>[終了]</b>を押すと終了時刻が記録され、実働時間（総作業ー休憩）が自動算出されます。</p>
+                </div>
+            </div>
+
+            <!-- 機能・仕様タブ -->
+            <div id="tab-spec" class="tab-content">
+                <div class="usage-step">
+                    <p class="usage-step-text">累計モード（全シート対応）</p>
+                    <p class="usage-step-desc">過去の記録がある行で[開始]を押すと、<b>前回の続きからタイマーを回す</b>（累計）か、上書きするかを選択可能です。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">自動復旧機能</p>
+                    <p class="usage-step-desc">ブラウザを閉じたりリロードしても、再度パネルを開けば<b>以前の計測状態から自動で復旧</b>します。計測漏れを防ぎます。</p>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">複数シート判別</p>
+                    <p class="usage-step-desc">開いているシートに応じて、記録する列を自動で切り替えます。</p>
+                    <div class="col-spec">
+                        <b>HTML適正化_検証:</b> G〜J列<br>
+                        <b>一覧:</b> CK〜CN列
+                    </div>
+                </div>
+                <div class="usage-step">
+                    <p class="usage-step-text">タスク切り替え</p>
+                    <p class="usage-step-desc">作業中に別の行で[開始]を押すと、<b>現在の作業を自動で集計終了</b>してスムーズに次の行へ移動できます。</p>
+                </div>
+            </div>
+
+            <!-- 初回認証タブ -->
+            <div id="tab-auth" class="tab-content">
+                <p class="usage-step-desc">初回利用時のみGoogleの承認が必要です。以下の順にクリックしてください。</p>
+                <table class="auth-table">
+                    <tr><th>手順</th><th>操作</th></tr>
+                    <tr><td>1</td><td>[承認が必要]ポップアップで <b>[続行]</b></td></tr>
+                    <tr><td>2</td><td>自分のGoogleアカウントを選択</td></tr>
+                    <tr><td>3</td><td>警告画面で左下の <b>[詳細]</b> をクリック</td></tr>
+                    <tr><td>4</td><td><b>[作業記録(安全ではない...)へ移動]</b> をクリック</td></tr>
+                    <tr><td>5</td><td>最後に右下の <b>[許可]</b> をクリック</td></tr>
+                </table>
+                <p class="usage-step-desc" style="margin-top:10px; font-size:9px; color:var(--text-sub);">※「安全ではない」とは「自作プログラム」であることを指す仕様上の表現です。</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- モーダル：開始方法選択 -->
+<div id="startModal" class="modal-overlay">
+    <div class="modal-card">
+        <div id="modalTitle" class="modal-title">作業の開始</div>
+        <div id="modalDesc" class="modal-desc"></div>
+        <div class="modal-btns">
+            <button id="accBtn" class="btn-full" style="background:var(--warning-color); color:white; display:none;" onclick="confirmStart('accumulate')">前回の続きから累計再開</button>
+            <button id="newStartBtn" class="btn-full" style="background:var(--primary-color); color:white;" onclick="confirmStart('new')">新規(上書き)で開始</button>
+            <button class="btn-full" style="background:#eee; color:var(--text-main);" onclick="closeModal('startModal')">キャンセル</button>
+        </div>
+    </div>
+</div>
+
+<!-- モーダル：タスク切り替え確認 -->
+<div id="switchModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-title" style="color:var(--danger-color);">作業を切り替えますか？</div>
+        <div id="switchDesc" class="modal-desc"></div>
+        <div class="modal-btns">
+            <button class="btn-full" style="background:var(--danger-color); color:white;" onclick="executeSwitch()">現在の作業を終えて移動</button>
+            <button class="btn-full" style="background:#eee; color:var(--text-main);" onclick="closeModal('switchModal')">キャンセル</button>
+        </div>
+    </div>
+</div>
+
+<!-- モーダル：終了確認 -->
+<div id="confirmEndModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-title">作業を終了しますか？</div>
+        <div class="modal-desc">現在の実働時間を集計し、シートへの書き込みを確定させます。</div>
+        <div class="modal-btns">
+            <button class="btn-full" style="background:var(--danger-color); color:white;" onclick="confirmEndRecord()">終了する</button>
+            <button class="btn-full" style="background:#eee; color:var(--text-main);" onclick="closeModal('confirmEndModal')">戻る</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let timerId = null, startTime = null, accumulatedMs = 0, totalBreakMs = 0, status = 'idle', fontScaleLevel = 0, currentBreakStart = null;
+    const fontScales = [1, 1.25, 1.5];
+
+    function isGas() { return typeof google !== 'undefined' && google.script && google.script.run; }
+    function changeFontSize(delta) { fontScaleLevel = Math.max(0, Math.min(fontScales.length - 1, fontScaleLevel + delta)); document.documentElement.style.setProperty('--font-scale', fontScales[fontScaleLevel]); }
+    function toggleGuide() { const b = document.getElementById("guideBody"), i = document.getElementById("guideIcon"); const isOpen = b.style.display === "block"; b.style.display = isOpen ? "none" : "block"; i.innerText = isOpen ? "▼" : "▲"; }
+    function switchTab(evt, tabId) { const c = document.getElementsByClassName("tab-content"), b = document.getElementsByClassName("tab-btn"); for(let x of c) x.classList.remove("active"); for(let x of b) x.classList.remove("active"); document.getElementById(tabId).classList.add("active"); evt.currentTarget.classList.add("active"); }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function updateLog(m, n) { document.getElementById('logMsg').innerHTML = `<span>${m}</span><span class="next-action">👉️ ${n}</span>`; }
+
+    // 開始ボタン：既存チェックと分岐
+    function handleStart() {
+        if (!isGas()) { document.getElementById('startModal').style.display = 'flex'; return; }
+        updateLog("チェック中...", "少々お待ちください");
+        google.script.run.withSuccessHandler(res => {
+            if (!res) { updateLog("エラー", "対象外のシートです"); return; }
+            
+            // 既に別の場所で計測中の場合
+            if (res.isRunningElsewhere) {
+                document.getElementById('switchDesc').innerText = `現在、${res.runningInfo}を計測中です。この記録を終了（集計）し、新しく選択した行で開始しますか？`;
+                document.getElementById('switchModal').style.display = 'flex';
+                return;
+            }
+
+            const accBtn = document.getElementById('accBtn'), newBtn = document.getElementById('newStartBtn'), title = document.getElementById('modalTitle'), desc = document.getElementById('modalDesc');
+            if (res.hasData) {
+                // すべてのシートで累計再開が可能
+                title.innerText = "既存データがあります";
+                desc.innerText = "既に記録されている時間があります。これまでの時間に合算して再開するか、新規で上書きするか選択してください。";
+                accBtn.style.display = "block"; accBtn.innerText = `続き(${res.workMin}分〜)から累計再開`;
+                newBtn.innerText = "新規(上書き)で開始"; newBtn.style.background = "var(--primary-color)";
+            } else {
+                title.innerText = "作業を開始しますか？"; desc.innerText = "選択した行で新しく記録を開始します。";
+                accBtn.style.display = "none"; newBtn.innerText = "開始する"; newBtn.style.background = "var(--primary-color)";
+            }
+            document.getElementById('startModal').style.display = 'flex';
+            updateLog("準備完了", "開始方法を選択してください");
+        }).checkExistingData();
+    }
+
+    // 実際の開始処理
+    function confirmStart(mode) {
+        closeModal('startModal');
+        google.script.run.withSuccessHandler(msg => {
+            status = 'working'; startTime = new Date(); accumulatedMs = 0; totalBreakMs = 0;
+            refreshUIByStatus(); updateLog(msg, "計測を開始しました");
+            // 同期のために最新状態を再取得
+            google.script.run.withSuccessHandler(data => {
+                if(data) {
+                    accumulatedMs = data.accumulatedMs; totalBreakMs = data.totalBreakMs;
+                    if (data.sheetName) document.getElementById('sheetInfo').innerText = "記録先: " + data.sheetName;
+                }
+            }).getTimerStatus();
+        }).processRecord('start', mode);
+    }
+
+    // タスク切り替え実行
+    function executeSwitch() {
+        closeModal('switchModal');
+        updateLog("切り替え中...", "前の作業を終了して移動しています");
+        google.script.run.withSuccessHandler(() => { handleStart(); }).processRecord('end');
+    }
+
+    // 終了ボタン押下
+    function handleEnd() {
+        if (status === 'idle') return;
+        document.getElementById('confirmEndModal').style.display = 'flex';
+    }
+
+    // 実際の終了実行
+    function confirmEndRecord() {
+        closeModal('confirmEndModal');
+        google.script.run.withSuccessHandler(msg => {
+            status = 'idle'; refreshUIByStatus(); updateLog(msg, "完了しました。次の行を選んでください");
+            document.getElementById('sheetInfo').innerText = "記録先: 待機中";
+        }).processRecord('end');
+    }
+
+    // 中断・再開
+    function handleSuspendResume() {
+        const type = (status === 'working') ? 'suspend' : 'resume';
+        google.script.run.withSuccessHandler(msg => {
+            if (type === 'suspend') { accumulatedMs += (new Date() - startTime); startTime = null; status = 'suspended'; }
+            else { startTime = new Date(); status = 'working'; }
+            refreshUIByStatus(); updateLog(msg, status === 'suspended' ? "[再開]を押してください" : "作業を再開しました");
+        }).processRecord(type);
+    }
+
+    // 休憩
+    function handleBreak() {
+        const now = new Date();
+        if (status !== 'breaking') {
+            status = 'breaking'; currentBreakStart = now;
+            updateLog("休憩中...", "戻ったら[休憩終了]を押してください");
+            if (isGas()) google.script.run.setBreakStatus(true, now.getTime());
+        } else {
+            const diff = now - currentBreakStart; totalBreakMs += diff; status = 'working';
+            updateLog("休憩完了", "作業を再開しました");
+            if (isGas()) { google.script.run.setBreakStatus(false); google.script.run.addBreakTime(Math.floor(diff / 60000)); }
+        }
+        refreshUIByStatus();
+    }
+
+    // タイマー表示計算
+    function updateDisplay() {
+        let cur = 0;
+        if (status === 'working' && startTime) cur = new Date() - startTime;
+        else if (status === 'breaking' && startTime) cur = (new Date() - startTime) - (new Date() - currentBreakStart);
+        const t = Math.max(0, Math.floor((accumulatedMs + cur - totalBreakMs) / 1000));
+        const h = String(Math.floor(t / 3600)).padStart(2, '0'), m = String(Math.floor((t % 3600) / 60)).padStart(2, '0'), s = String(t % 60).padStart(2, '0');
+        document.getElementById('display').innerText = `${h}:${m}:${s}`;
+    }
+
+    // UI状態の更新
+    function refreshUIByStatus() {
+        const u = document.getElementById('suspendBtn'), b = document.getElementById('breakBtn'), e = document.getElementById('endBtn'), t = document.getElementById('statusText'), l = document.getElementById('statusLabel');
+        clearInterval(timerId);
+        if (status === 'idle') { document.getElementById('display').innerText = "00:00:00"; u.disabled = b.disabled = e.disabled = true; t.innerText = "待機中"; l.className = "status-badge"; return; }
+        e.disabled = false;
+        if (status === 'working') { u.disabled = b.disabled = false; u.innerText = "⏸中断"; b.innerText = "☕休憩"; b.classList.remove('active'); t.innerText = "作業中"; l.className = "status-badge"; timerId = setInterval(updateDisplay, 1000); }
+        else if (status === 'suspended') { u.disabled = false; u.innerText = "▶再開"; b.disabled = true; t.innerText = "中断中"; l.className = "status-badge suspended"; updateDisplay(); }
+        else if (status === 'breaking') { u.disabled = true; b.disabled = false; b.innerText = "✅休憩終了"; b.classList.add('active'); t.innerText = "休憩中"; l.className = "status-badge breaking"; timerId = setInterval(updateDisplay, 1000); }
+    }
+
+    // window読み込み時の状態復旧
+    window.onload = function() {
+        if (isGas()) {
+            google.script.run.withSuccessHandler(data => {
+                if (data) {
+                    accumulatedMs = data.accumulatedMs; totalBreakMs = data.totalBreakMs; status = data.status;
+                    if (data.startTime) startTime = new Date(data.startTime);
+                    if (data.isBreaking) currentBreakStart = new Date(data.breakStart);
+                    if (data.sheetName) document.getElementById('sheetInfo').innerText = "記録先: " + data.sheetName;
+                    refreshUIByStatus();
+                }
+            }).getTimerStatus();
+        }
+    };
+</script>
+</body>
+</html>
