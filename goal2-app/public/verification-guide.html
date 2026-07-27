@@ -408,28 +408,25 @@
   <h2>2. 事前準備（ToDo）</h2>
 
   <h3>2.1 BPO：オペレーターを3グループに分ける</h3>
-  <p>オペレーターを3つのグループに分けます。パターンごとの作業をグループに割り当てて実施します。</p>
-  <div class="callout">
-    <p><span class="tag tag-todo">提案・要合意</span>
-      同じグループが常に同じパターンを担当すると、「グループの習熟度の差」と「パターンの差」が分離できません。
-      対象ページを3つのページセットに分け、下表のように<strong>担当パターンをローテーションする</strong>ことを推奨します。
-      この方式にするかどうかは着手前に決定してください。</p>
-  </div>
+  <p>オペレーターを3つのグループに分け、各グループが1つのパターンを担当します。</p>
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th style="width:22%">　</th><th>ページセットA</th><th>ページセットB</th><th>ページセットC</th></tr>
+        <tr><th style="width:22%">グループ</th><th style="width:32%">担当パターン</th><th>使用するCMSの準備物</th></tr>
       </thead>
       <tbody>
-        <tr><th scope="row">グループ1</th><td><span class="tag tag-p1">1. 通常移行</span></td><td><span class="tag tag-p2">2. AI移行</span></td><td><span class="tag tag-p3">3. miChecker移行</span></td></tr>
-        <tr><th scope="row">グループ2</th><td><span class="tag tag-p2">2. AI移行</span></td><td><span class="tag tag-p3">3. miChecker移行</span></td><td><span class="tag tag-p1">1. 通常移行</span></td></tr>
-        <tr><th scope="row">グループ3</th><td><span class="tag tag-p3">3. miChecker移行</span></td><td><span class="tag tag-p1">1. 通常移行</span></td><td><span class="tag tag-p2">2. AI移行</span></td></tr>
+        <tr><th scope="row">グループ1</th><td><span class="tag tag-p1">1. 通常移行</span></td><td>通常取込</td></tr>
+        <tr><th scope="row">グループ2</th><td><span class="tag tag-p2">2. AI移行</span></td><td>解析まで１</td></tr>
+        <tr><th scope="row">グループ3</th><td><span class="tag tag-p3">3. miChecker移行</span></td><td>解析まで２</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="lede" style="font-size:14px">
-    ※ 同一ページを3パターンで作業するため、<strong>先に作業した人の結果を後の人が見ない</strong>よう、作業順・共有範囲に注意してください。
+  <p>
+    同一ページを3パターンで作業するため、<strong>先に作業した人の結果を後の人が見ない</strong>よう、作業順と共有範囲に注意してください。
   </p>
+  <div class="note">
+    <p>所要時間の差には、パターンの差だけでなくグループごとの習熟度の差も含まれます。集計するときはこの点を踏まえて読んでください。</p>
+  </div>
 
   <h3>2.2 戦略G：CMS上に3種類の状態を準備しておく</h3>
   <p>作業開始前に、対象ページについて下記3種類をCMS上に用意します。</p>
@@ -731,7 +728,7 @@
   <h2>6. 追加検証：miChecker本体との結果一致確認</h2>
 
   <div class="callout">
-    <p><strong>パターン3では、移行作業とは別に</strong>「アクセシビリティ候補レビュー」がmiChecker本体と同一の結果を出力できているかを検証する必要があります。<strong>この作業は移行作業の所要時間には含めません</strong>（別途「検証時間」として記録します）。</p>
+    <p><strong>パターン3では、移行作業とは別に</strong>「アクセシビリティ候補レビュー」がmiChecker本体と同一の結果を出力できているかを検証する必要があります。この作業は移行作業ではないため、<strong>所要時間の計測には含めません</strong>。</p>
   </div>
 
   <h3>6.1 検証の手順</h3>
@@ -862,7 +859,7 @@
         <tr><td><strong>計測する</strong></td><td>CMS上での移行残作業（カテゴリ・添付・公開設定など）</td><td>全パターン</td></tr>
         <tr><td><strong>計測する</strong></td><td>候補生成の待ち時間（数十秒かかる場合がある）</td><td>ツールの実力値に含める</td></tr>
         <tr><td>計測しない</td><td>戦略GによるCMS事前準備（通常取込・解析まで１／２）</td><td>全パターン共通の前提</td></tr>
-        <tr><td>計測しない</td><td>miChecker本体との一致確認（<a href="#s6">6章</a>）</td><td>「検証時間」として別に記録</td></tr>
+        <tr><td>計測しない</td><td>miChecker本体との結果一致確認（<a href="#s6">6章</a>）</td><td>移行作業ではないため</td></tr>
         <tr><td>計測しない</td><td>本ガイドを読む時間・ツールの操作習得時間</td><td>初回のみ発生するため</td></tr>
       </tbody>
     </table>
