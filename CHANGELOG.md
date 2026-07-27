@@ -19,6 +19,31 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-27: 検証作業ガイドをアプリ内でホストし、ナビゲーションから相互に行き来できるようにした
+
+- 背景・目的: 検証作業ガイドをCloud Run上のアプリから直接開けるようにし、ツールの各画面とガイドを相互に行き来できるようにする。
+- 主な変更内容:
+  - ガイドを `docs/a11y-review-verification-guide.html` から `goal2-app/public/verification-guide.html` へ移動。`public/` はDockerイメージへコピーされるため、デプロイすると `/verification-guide.html` で配信される。
+  - 画面キャプチャの埋め込みをdata URIから通常の画像参照へ変更し、`public/images/verification/*.jpg`(11点)として配置。HTMLは1.28MB→51KBになり、以後は本文の編集も容易になった。
+  - `server.js`: 静的配信の`contentTypes`に`.jpg`/`.jpeg`を追加。未定義の拡張子は`application/octet-stream`で返され、`x-content-type-options: nosniff`により画像として表示されないため。
+  - `index.html` / `goal1.html` / `goal3.html` / `michecker-compare.html` のナビゲーションに「検証ガイド」リンクを追加。
+  - ガイド側の先頭にも画面切り替えナビゲーションを追加し、4画面へ戻れるようにした(印刷時は非表示)。
+  - `README.md` にガイドの配置とURLを追記。
+- 検証: ローカル起動で4画面すべてに「検証ガイド」リンクがあること、リンクからガイドへ遷移できること、ガイドから各画面へ戻れること、画像11点が`image/jpeg`で200を返し表示が壊れていないことをPlaywrightで確認。`node test/run-tests.js` 正常終了。
+- 関連ファイル: `goal2-app/public/verification-guide.html`, `goal2-app/public/images/verification/`, `goal2-app/server.js`, `goal2-app/public/index.html`, `goal2-app/public/goal1.html`, `goal2-app/public/goal3.html`, `goal2-app/public/michecker-compare.html`, `goal2-app/README.md`
+- 関連PR/コミット: (このコミット)
+
+## 2026-07-27: 3パターン比較検証の作業ガイド(HTML・画面キャプチャ入り)を追加
+
+- 背景・目的: 同一ページを「1.通常移行」「2.AI移行」「3.miChecker移行」の3パターンで作業し、所要時間と品質を比較・検証する取り組みを進めるにあたり、BPOオペレーター・戦略G・検証管理者が参照できる作業手順書が必要になった。
+- 主な変更内容:
+  - `docs/a11y-review-verification-guide.html` を新規追加。単一ファイルで完結する(画面キャプチャをdata URIで埋め込み済み、外部リソース参照なし)HTML手順書。
+  - 収録内容: 3パターンの定義と「修正基準」ラジオとの対応、事前準備ToDo(BPO 3グループ分け・戦略Gの通常取込/解析まで1/解析まで2・記録用スプレッドシート・対象ページ数)、パターン2/3の手順(CMS取込ツールの解析結果を入力→候補レビュー→最終HTMLをCMS取込ツールへ戻す→CMSで残作業)、パターン3の追加検証(miChecker本体との結果一致確認)、記録用スプレッドシートの3シート構成と列定義、時間の計測ルール、品質の評価観点、注意事項・FAQ。
+  - 画面キャプチャ11点は、同一コードをローカル起動してPlaywright(Chromium)で取得。候補レビュー画面、修正基準ラジオ(全体/miCheckerのみ)、候補生成結果(全体10件 vs miCheckerのみ7件)、修正ペイン、出力(最終HTML・注意・証跡)、miChecker相当チェック結果、miChecker結果比較画面。
+  - 未決定事項は本文中に「要決定」「要確認」「提案・要合意」として明示(グループのローテーション方式、一致確認の全件/抜き取り、延べ作業件数の前提、問い合わせ先)。
+- 関連ファイル: `docs/a11y-review-verification-guide.html`
+- 関連PR/コミット: (このコミット)
+
 ## 2026-07-24: 表構造候補の採用で表内の内容修正（file-display-text等）が失われ誤って「完了」になる不具合を修正
 
 - 背景・目的: サンプル「表: セマンティック構造・結合セル削除（安城市）」で、表内リンクの「（PDF：76KB）」を削除する`file.file-display-text`候補が出力に残ったまま「完了」になると報告。原因は`resolveSupersededTableCandidates()`が、表構造候補（table.layout-table 等）の採用時に、その表内の子孫候補を一律で「conflicted（自動解決）」にしていたこと。理由コメントには「変換後HTMLで再評価する」とあるが再評価は行われず、しかも表候補の変換後HTMLには「（PDF：76KB）」が残ったままだった。そのため、内容修正が適用されないのに解決扱いになり、未修正のまま完了と表示されていた。
