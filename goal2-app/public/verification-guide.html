@@ -5,81 +5,145 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>アクセシビリティ候補レビュー 検証作業ガイド</title>
 <style>
+  /* ------------------------------------------------------------------
+     デザイントークンは goal2-app のデザイン定義 /styles.css に合わせている。
+     この資料は単体で配布・印刷できる必要があるためトークンを写しているので、
+     /styles.css の :root を変更したときはここも合わせること。
+     ------------------------------------------------------------------ */
   :root {
-    --bg: #f6f7fb;
-    --card: #ffffff;
-    --ink: #1b2333;
-    --muted: #5b6579;
-    --line: #dfe3ec;
-    --accent: #1d4ed8;
-    --accent-soft: #eef2ff;
-    --p1: #64748b;
-    --p2: #1d4ed8;
-    --p3: #0f766e;
-    --warn-bg: #fff8e6;
-    --warn-line: #e5c46b;
-    --warn-ink: #7a5a00;
-    --code-bg: #f1f3f9;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151c;
-      --card: #1a1f29;
-      --ink: #e7ebf3;
-      --muted: #9aa5b8;
-      --line: #2c3442;
-      --accent: #7ea2ff;
-      --accent-soft: #1f2a45;
-      --p1: #94a3b8;
-      --p2: #7ea2ff;
-      --p3: #5eead4;
-      --warn-bg: #2e2611;
-      --warn-line: #7a6320;
-      --warn-ink: #f0d68a;
-      --code-bg: #222937;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #12151c; --card: #1a1f29; --ink: #e7ebf3; --muted: #9aa5b8;
-    --line: #2c3442; --accent: #7ea2ff; --accent-soft: #1f2a45;
-    --p1: #94a3b8; --p2: #7ea2ff; --p3: #5eead4;
-    --warn-bg: #2e2611; --warn-line: #7a6320; --warn-ink: #f0d68a; --code-bg: #222937;
-  }
-  :root[data-theme="light"] {
-    --bg: #f6f7fb; --card: #ffffff; --ink: #1b2333; --muted: #5b6579;
-    --line: #dfe3ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
-    --p1: #64748b; --p2: #1d4ed8; --p3: #0f766e;
-    --warn-bg: #fff8e6; --warn-line: #e5c46b; --warn-ink: #7a5a00; --code-bg: #f1f3f9;
+    color-scheme: light;
+
+    --bg: #eef2f7;
+    --surface: #fdfeff;
+    --surface-2: #eaf0f7;
+    --surface-3: #dde6f0;
+    --line: #d7dfe9;
+    --line-strong: #b7c3d3;
+    --text: #101a2c;
+    --muted: #56637a;
+    --faint: #69768d;
+
+    --primary: #2f5fdb;
+    --primary-strong: #17274d;
+    --primary-container: #dbe6fb;
+    --on-primary-container: #16305c;
+
+    --sun: #0f6e86;
+    --sun-container: #d6f1f7;
+
+    --error: #b3261e;
+    --error-container: #ffdad4;
+    --warning: #8a5a00;
+    --warning-container: #ffe6b3;
+    --success: #1f7a43;
+    --success-container: #d8f2e2;
+    --focus: var(--primary);
+
+    --font-sans: "Yu Gothic UI", "Hiragino Sans", "Segoe UI", "Noto Sans JP", sans-serif;
+    --font-mono: "Cascadia Code", "SF Mono", Consolas, "Yu Gothic UI", monospace;
+    --text-micro: 11px;
+    --text-caption: 12px;
+    --text-small: 13px;
+    --text-body: 14.5px;
+    --text-md: 15px;
+    --text-title: 19px;
+    --text-display: 25px;
+
+    --radius-xs: 10px;
+    --radius-sm: 12px;
+    --radius-md: 15px;
+    --radius-lg: 20px;
+    --shadow-soft: 0 1px 2px rgba(13, 20, 38, 0.10), 0 1px 3px rgba(13, 20, 38, 0.06);
+    --shadow-1: var(--shadow-soft);
+    --shadow-hover: 0 3px 8px rgba(13, 20, 38, 0.12), 0 10px 22px rgba(13, 20, 38, 0.08);
+    --shadow-2: var(--shadow-hover);
+
+    --space-1: 4px; --space-2: 8px; --space-3: 12px;
+    --space-4: 16px; --space-5: 20px; --space-6: 24px;
+
+    --motion-fast: 180ms;
+    --motion-base: 240ms;
+    --motion-slow: 90s;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+    /* この資料の中で使っている名前を、上のトークンに対応づけている */
+    --card: var(--surface);
+    --ink: var(--text);
+    --accent: var(--primary);
+    --accent-soft: var(--primary-container);
+    --p1: var(--muted);
+    --p2: var(--primary);
+    --p3: var(--sun);
+    --warn-bg: var(--warning-container);
+    --warn-line: var(--warning);
+    --warn-ink: var(--warning);
+    --code-bg: var(--surface-2);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    :root { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; }
+  }
+
+  * { box-sizing: border-box; }
+
   body {
+    position: relative;
+    isolation: isolate;
     margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, -apple-system, sans-serif;
+    background: linear-gradient(160deg, #f4f7fc 0%, var(--bg) 55%, #edf2f9 100%);
+    color: var(--text);
+    font-family: var(--font-sans);
     line-height: 1.8;
     font-size: 16px;
   }
+
+  /* アプリと同じ、ゆっくり動く背景の光 */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(64px);
+    opacity: 0.5;
+    will-change: transform;
+  }
+  body::before {
+    inset: -22% 38% auto -12%;
+    width: 58vw; height: 58vw;
+    background: radial-gradient(circle, color-mix(in srgb, var(--primary), white 58%) 0%, transparent 70%);
+    animation: bg-drift-a var(--motion-slow) var(--ease-standard) infinite alternate;
+  }
+  body::after {
+    inset: auto -18% -28% 32%;
+    width: 52vw; height: 52vw;
+    background: radial-gradient(circle, color-mix(in srgb, var(--sun), white 55%) 0%, transparent 72%);
+    animation: bg-drift-b var(--motion-slow) var(--ease-standard) infinite alternate;
+  }
+  @keyframes bg-drift-a { from { transform: translate(0,0) } to { transform: translate(4%,3%) } }
+  @keyframes bg-drift-b { from { transform: translate(0,0) } to { transform: translate(-3%,-4%) } }
   .wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 96px; }
 
   header.doc-head {
-    background: var(--card);
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 28px 28px 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-1);
+    padding: 28px 30px 26px;
     margin-bottom: 28px;
   }
   .eyebrow { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: .08em; margin: 0 0 6px; }
-  h1 { font-size: 28px; margin: 0 0 12px; line-height: 1.45; }
+  h1 { font-size: 28px; margin: 0 0 12px; line-height: 1.45; letter-spacing: -0.01em; }
   .lede { color: var(--muted); margin: 0 0 18px; }
   .meta-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 14px; margin: 0; }
   .meta-list dt { color: var(--muted); }
   .meta-list dd { margin: 0; word-break: break-all; }
 
   nav.app-switch {
-    background: var(--card);
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-1);
     padding: 12px 16px;
     margin-bottom: 18px;
     display: flex;
@@ -89,25 +153,34 @@
   }
   nav.app-switch .switch-label { font-size: 13px; color: var(--muted); font-weight: 700; margin-right: 4px; }
   nav.app-switch a, nav.app-switch span.current {
-    font-size: 14px;
-    padding: 5px 12px;
+    font-size: var(--text-body);
+    font-weight: 600;
+    padding: 6px 14px;
     border-radius: 999px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-strong);
     text-decoration: none;
     white-space: nowrap;
+    transition: background var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
   }
-  nav.app-switch a { color: var(--accent); }
-  nav.app-switch a:hover { background: var(--accent-soft); }
-  nav.app-switch span.current { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+  nav.app-switch a { color: var(--primary); }
+  nav.app-switch a:hover { background: var(--surface-2); border-color: var(--faint); color: var(--primary-strong); }
+  nav.app-switch span.current { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; box-shadow: var(--shadow-1); }
 
-  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px; margin-bottom: 32px; }
+  nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding: 20px 24px; margin-bottom: 32px; }
   nav.toc h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); }
   nav.toc ol { margin: 0; padding-left: 1.3em; }
   nav.toc li { margin: 4px 0; }
-  a { color: var(--accent); }
+  a { color: var(--primary); }
+  a:hover { color: var(--primary-strong); }
+  a:focus-visible, button:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--focus), transparent 70%);
+    outline-offset: 2px;
+  }
 
-  section.chapter { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; margin-bottom: 24px; }
-  h2 { font-size: 22px; margin: 0 0 4px; padding-bottom: 10px; border-bottom: 2px solid var(--accent-soft); }
+  section.chapter { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding: 28px 30px; margin-bottom: 24px; }
+  h2 { font-size: 22px; margin: 0 0 4px; padding-bottom: 10px; border-bottom: 2px solid var(--primary-container); letter-spacing: -0.01em; }
   h3 { font-size: 17px; margin: 28px 0 8px; }
   h4 { font-size: 15px; margin: 20px 0 6px; color: var(--muted); }
   p { margin: 10px 0; }
@@ -117,22 +190,22 @@
   .tablewrap { overflow-x: auto; margin: 14px 0; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
   th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
-  th { background: var(--accent-soft); font-weight: 700; }
+  th { background: var(--primary-container); color: var(--on-primary-container); font-weight: 700; }
   td.num { text-align: right; white-space: nowrap; }
 
   figure { margin: 18px 0; }
-  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1); }
   figure img.narrow { max-width: 520px; }
   figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
 
-  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .92em; font-family: "SFMono-Regular", Consolas, monospace; }
+  code { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; font-size: .92em; font-family: var(--font-mono); }
 
-  .callout { border: 1px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+  .callout { border: 1px solid var(--warning); background: var(--warning-container); color: var(--warning); border-radius: var(--radius-xs); padding: 14px 18px; margin: 16px 0; }
   .callout p:first-child { margin-top: 0; }
   .callout p:last-child { margin-bottom: 0; }
   .callout strong { color: inherit; }
 
-  .note { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 16px 0; }
+  .note { border-left: 4px solid var(--primary); background: var(--primary-container); color: var(--on-primary-container); border-radius: 0 var(--radius-xs) var(--radius-xs) 0; padding: 12px 18px; margin: 16px 0; }
   .note p:first-child { margin-top: 0; }
   .note p:last-child { margin-bottom: 0; }
 
@@ -254,6 +327,8 @@
 
   @media print {
     body { background: #fff; font-size: 11pt; }
+    body::before, body::after { display: none; }
+    section.chapter, header.doc-head, nav.toc { box-shadow: none; }
     .wrap { max-width: none; padding: 0; }
     section.chapter, header.doc-head, nav.toc { border: none; padding: 0 0 8px; margin-bottom: 18px; break-inside: auto; }
     nav.app-switch { display: none; }

@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-28: 検証作業ガイドもアプリのデザイン定義に合わせた
+
+- 背景・目的: スライド資料をデザイン定義に揃えたのに合わせ、検証作業ガイド `verification-guide.html` も `goal2-app/public/styles.css` のトークンに揃えた。独自の配色（青 #1d4ed8）とダークモードを持っており、アプリやスライドと並べたときに別物に見えていた。
+- 主な変更内容(`goal2-app/public/verification-guide.html`):
+  - `:root` を `styles.css` のトークン（色・タイポ・角丸・影・余白・モーション）に差し替えた。この資料で使っていた名前（`--card` `--ink` `--accent` `--accent-soft` `--p1`〜`--p3` `--warn-*` `--code-bg`）は、対応するトークンへの別名として残しているため、本文側の指定は変えていない。
+  - `color-scheme: light` に合わせ、ダークモードの定義（`prefers-color-scheme` と `data-theme`）を削除した。
+  - 背景をアプリと同じグラデーション＋ゆっくり動く光の層にし、書体を `--font-sans`（Yu Gothic UI）にした。印刷時は光の層と影を出さない。
+  - ヘッダー・目次・各章のカードを `--radius-lg` ＋ `--shadow-1`、画面切り替えナビと図を `--radius-sm` に統一した。画面切り替えのリンクはアプリのボタンと同じ形（現在地だけ塗り）にした。
+  - 表の見出しを `--primary-container` ＋ `--on-primary-container`、注記を `--primary-container`、注意を `--warning-container` と、意味に対応するトークンにした。
+  - リンクとボタンのフォーカスリングを、アプリと同じ指定（`color-mix` の3px）にした。
+- 検証: アプリをローカル起動し、Playwrightで `--primary` と書体がアプリと一致すること、ページ内リンクにリンク切れがないこと、画像27点の表示と代替テキスト、横スクロールの有無を確認した。`node test/run-tests.js` 正常終了。
+- 関連ファイル: `goal2-app/public/verification-guide.html`
+
 ## 2026-07-28: スライド資料をアプリのデザイン定義に合わせて作り直し
 
 - 背景・目的: スライド資料 `verification-slides.html` は独自の配色（青 #1d4ed8、ダークモード対応）で作っており、goal2-appのデザイン定義 `goal2-app/public/styles.css` と揃っていなかった。同じ製品の資料として見えるよう、デザイントークンに合わせた。
