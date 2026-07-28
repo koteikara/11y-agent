@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>アクセシビリティ候補レビュー 検証作業ガイド</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --ink: #1b2333;
+    --muted: #5b6579;
+    --line: #dfe3ec;
+    --accent: #1d4ed8;
+    --accent-soft: #eef2ff;
+    --p1: #64748b;
+    --p2: #1d4ed8;
+    --p3: #0f766e;
+    --warn-bg: #fff8e6;
+    --warn-line: #e5c46b;
+    --warn-ink: #7a5a00;
+    --code-bg: #f1f3f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c;
+      --card: #1a1f29;
+      --ink: #e7ebf3;
+      --muted: #9aa5b8;
+      --line: #2c3442;
+      --accent: #7ea2ff;
+      --accent-soft: #1f2a45;
+      --p1: #94a3b8;
+      --p2: #7ea2ff;
+      --p3: #5eead4;
+      --warn-bg: #2e2611;
+      --warn-line: #7a6320;
+      --warn-ink: #f0d68a;
+      --code-bg: #222937;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c; --card: #1a1f29; --ink: #e7ebf3; --muted: #9aa5b8;
+    --line: #2c3442; --accent: #7ea2ff; --accent-soft: #1f2a45;
+    --p1: #94a3b8; --p2: #7ea2ff; --p3: #5eead4;
+    --warn-bg: #2e2611; --warn-line: #7a6320; --warn-ink: #f0d68a; --code-bg: #222937;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7fb; --card: #ffffff; --ink: #1b2333; --muted: #5b6579;
+    --line: #dfe3ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+    --p1: #64748b; --p2: #1d4ed8; --p3: #0f766e;
+    --warn-bg: #fff8e6; --warn-line: #e5c46b; --warn-ink: #7a5a00; --code-bg: #f1f3f9;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, -apple-system, sans-serif;
+    line-height: 1.8;
+    font-size: 16px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 96px; }
+
+  header.doc-head {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 28px 24px;
+    margin-bottom: 28px;
+  }
+  .eyebrow { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: .08em; margin: 0 0 6px; }
+  h1 { font-size: 28px; margin: 0 0 12px; line-height: 1.45; }
+  .lede { color: var(--muted); margin: 0 0 18px; }
+  .meta-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 14px; margin: 0; }
+  .meta-list dt { color: var(--muted); }
+  .meta-list dd { margin: 0; word-break: break-all; }
+
+  nav.app-switch {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+  }
+  nav.app-switch .switch-label { font-size: 13px; color: var(--muted); font-weight: 700; margin-right: 4px; }
+  nav.app-switch a, nav.app-switch span.current {
+    font-size: 14px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  nav.app-switch a { color: var(--accent); }
+  nav.app-switch a:hover { background: var(--accent-soft); }
+  nav.app-switch span.current { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px; margin-bottom: 32px; }
+  nav.toc h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 1.3em; }
+  nav.toc li { margin: 4px 0; }
+  a { color: var(--accent); }
+
+  section.chapter { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; margin-bottom: 24px; }
+  h2 { font-size: 22px; margin: 0 0 4px; padding-bottom: 10px; border-bottom: 2px solid var(--accent-soft); }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  h4 { font-size: 15px; margin: 20px 0 6px; color: var(--muted); }
+  p { margin: 10px 0; }
+  ul, ol { padding-left: 1.4em; }
+  li { margin: 5px 0; }
+
+  .tablewrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+  th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 700; }
+  td.num { text-align: right; white-space: nowrap; }
+
+  figure { margin: 18px 0; }
+  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figure img.narrow { max-width: 520px; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .92em; font-family: "SFMono-Regular", Consolas, monospace; }
+
+  .callout { border: 1px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+  .callout p:first-child { margin-top: 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout strong { color: inherit; }
+
+  .note { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 16px 0; }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .tag-p1 { color: var(--p1); }
+  .tag-p2 { color: var(--p2); }
+  .tag-p3 { color: var(--p3); }
+  .tag-todo { color: var(--warn-ink); border-color: var(--warn-line); background: var(--warn-bg); }
+
+  ol.steps { list-style: none; counter-reset: step; padding-left: 0; }
+  ol.steps > li { counter-increment: step; position: relative; padding: 0 0 4px 46px; margin: 0 0 22px; }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 2px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+  }
+  ol.steps > li > h3 { margin: 0 0 6px; font-size: 17px; }
+
+  hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
+
+  /* --- 3パターン比較図 --- */
+  .flowmap { margin: 20px 0 8px; }
+  .flowmap-band {
+    border: 1px solid var(--line);
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .flowmap-band .band-sub { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .flowmap-fan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .flowmap-fan .fan-arrow { text-align: center; color: var(--muted); font-size: 20px; line-height: 1.2; padding: 4px 0; }
+
+  .pattern-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .pattern-card {
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    padding: 14px 14px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .pattern-card.p1 { border-top-color: var(--p1); }
+  .pattern-card.p2 { border-top-color: var(--p2); }
+  .pattern-card.p3 { border-top-color: var(--p3); }
+  .pattern-card h3 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .pattern-card .no {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-size: 14px; color: #fff; flex: none;
+  }
+  .pattern-card.p1 .no { background: var(--p1); }
+  .pattern-card.p2 .no { background: var(--p2); }
+  .pattern-card.p3 .no { background: var(--p3); }
+  .pattern-card .role { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+
+  .flow { list-style: none; margin: 0; padding: 0; }
+  .flow > li {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    background: var(--bg);
+  }
+  .flow > li + li { margin-top: 0; }
+  .flow > li.arrow {
+    border: none; background: none; padding: 2px 0;
+    text-align: center; color: var(--muted); font-size: 16px; line-height: 1;
+  }
+  .flow > li.tool {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    border-width: 2px;
+    font-weight: 700;
+  }
+  .flow > li.tool .scope {
+    display: block; margin-top: 4px; font-weight: 400; font-size: 12.5px; color: var(--muted);
+  }
+  .flow > li.extra {
+    border-style: dashed;
+    border-color: var(--warn-line);
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-weight: 700;
+  }
+  .flow > li .step-note { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
+  .pattern-card .card-foot {
+    margin: 12px 0 0; margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line);
+    font-size: 12.5px; color: var(--muted);
+  }
+  .flowmap-goal {
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+    background: var(--accent-soft);
+  }
+  .flow-legend { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  .flow-legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  .flow-legend .swatch-tool { background: var(--accent-soft); border: 2px solid var(--accent); }
+  .flow-legend .swatch-extra { background: var(--warn-bg); border: 1px dashed var(--warn-line); }
+
+  @media (max-width: 700px) {
+    .pattern-cards, .flowmap-fan { grid-template-columns: 1fr; }
+    .flowmap-fan .fan-arrow:nth-child(n+2) { display: none; }
+  }
+
+  footer.doc-foot { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0 0; }
+
+  @media print {
+    body { background: #fff; font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; }
+    section.chapter, header.doc-head, nav.toc { border: none; padding: 0 0 8px; margin-bottom: 18px; break-inside: auto; }
+    nav.app-switch { display: none; }
+    h2 { break-after: avoid; }
+    figure { break-inside: avoid; }
+    .flowmap, .pattern-card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="app-switch" aria-label="画面切り替え">
+  <span class="switch-label">画面切り替え</span>
+  <a href="/goal1.html">一括最適化</a>
+  <a href="/">候補レビュー</a>
+  <a href="/goal3.html">本文抽出</a>
+  <a href="/michecker-compare.html">miChecker結果比較</a>
+  <span class="current" aria-current="page">検証ガイド</span>
+</nav>
+
+<header class="doc-head">
+  <p class="eyebrow">移行アクセシビリティ検証</p>
+  <h1>「アクセシビリティ候補レビュー」を使用した検証作業ガイド</h1>
+  <p class="lede">同一ページを「通常移行」「AI移行」「miChecker移行」の3パターンで作業し、所要時間と品質を比較・検証するための作業手順書です。BPOオペレーター・戦略G・検証管理者を対象としています。</p>
+  <dl class="meta-list">
+    <dt>対象ツール</dt><dd>アクセシビリティ候補レビュー（goal2-app）</dd>
+    <dt>利用URL</dt><dd><a href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/">https://goal2-a11y-review-700549743482.asia-northeast1.run.app/</a></dd>
+    <dt>本書のURL</dt><dd><a href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/verification-guide.html">https://goal2-a11y-review-700549743482.asia-northeast1.run.app/verification-guide.html</a>（ツールの各画面から「検証ガイド」で開けます）</dd>
+    <dt>推奨ブラウザ</dt><dd>Google Chrome または Microsoft Edge（最新版）</dd>
+    <dt>作成日</dt><dd>2026-07-27</dd>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目次">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#s1">検証の目的と3パターンの定義</a></li>
+    <li><a href="#s2">事前準備（ToDo）</a></li>
+    <li><a href="#s3">ツールの画面構成</a></li>
+    <li><a href="#s4">手順：パターン2「AI移行」</a></li>
+    <li><a href="#s5">手順：パターン3「miChecker移行」</a></li>
+    <li><a href="#s6">追加検証：miChecker本体との結果一致確認</a></li>
+    <li><a href="#s7">記録用スプレッドシートの構成</a></li>
+    <li><a href="#s8">時間の計測ルール</a></li>
+    <li><a href="#s9">品質の評価観点</a></li>
+    <li><a href="#s10">注意事項・よくある質問</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================ -->
+<section class="chapter" id="s1">
+  <h2>1. 検証の目的と3パターンの定義</h2>
+
+  <h3>1.1 目的</h3>
+  <p>
+    <strong>同一のページ</strong>を下記の3パターンで作業し、それぞれの<strong>所要時間</strong>と<strong>品質</strong>を比較・検証します。
+    ツールを使うことで移行作業がどれだけ短縮できるか、また品質がどう変わるかを、実データで定量的に把握することが目的です。
+  </p>
+
+  <h3>1.2 3パターンの定義</h3>
+
+  <div class="flowmap">
+    <div class="flowmap-band">
+      同一の対象ページ（1ページ）
+      <span class="band-sub">3パターンとも、まったく同じ旧ページを出発点にします</span>
+    </div>
+    <div class="flowmap-fan" aria-hidden="true">
+      <div class="fan-arrow">↓</div><div class="fan-arrow">↓</div><div class="fan-arrow">↓</div>
+    </div>
+
+    <div class="pattern-cards">
+      <div class="pattern-card p1">
+        <h3><span class="no" aria-hidden="true">1</span>通常移行</h3>
+        <p class="role">比較の基準（ベースライン）</p>
+        <ul class="flow">
+          <li>CMSで通常取込<span class="step-note">戦略Gが事前に準備</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>これまでどおりの移行作業</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで公開設定などの残作業</li>
+        </ul>
+        <p class="card-foot">ツールは使いません。手順は本書では割愛します（<a href="#s8">8章</a>の計測ルールだけ共通で適用）。</p>
+      </div>
+
+      <div class="pattern-card p2">
+        <h3><span class="no" aria-hidden="true">2</span>AI移行</h3>
+        <p class="role">移行ルール全体をカバーする本命パターン</p>
+        <ul class="flow">
+          <li>CMSで解析まで実行<span class="step-note">「解析まで１」を使用</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="tool">アクセシビリティ候補レビュー
+            <span class="scope">修正基準：移行ルール全体（miChecker含む）</span>
+          </li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>最終HTMLをCMS取込ツールへ戻して取込</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで移行に必要な残作業</li>
+        </ul>
+        <p class="card-foot">手順は<a href="#s4">4章</a>。</p>
+      </div>
+
+      <div class="pattern-card p3">
+        <h3><span class="no" aria-hidden="true">3</span>miChecker移行</h3>
+        <p class="role">対応範囲を絞った場合の時間と品質を見る</p>
+        <ul class="flow">
+          <li>CMSで解析まで実行<span class="step-note">「解析まで２」を使用</span></li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="tool">アクセシビリティ候補レビュー
+            <span class="scope">修正基準：miChecker指摘対応のみ</span>
+          </li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>最終HTMLをCMS取込ツールへ戻して取込</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li>CMSで移行に必要な残作業</li>
+          <li class="arrow" aria-hidden="true">↓</li>
+          <li class="extra">＋ miChecker本体との結果一致確認</li>
+        </ul>
+        <p class="card-foot">手順は<a href="#s5">5章</a>、一致確認は<a href="#s6">6章</a>。</p>
+      </div>
+    </div>
+
+    <div class="flowmap-goal">所要時間と品質を3パターンで比較する</div>
+
+    <p class="flow-legend">
+      <span class="swatch swatch-tool"></span>ツールを使う工程
+      <span class="swatch swatch-extra"></span>パターン3だけの追加検証（移行作業の所要時間には含めません）
+    </p>
+  </div>
+
+  <p>
+    図のとおり、パターン2と3で違うのは、入力に使う解析結果と、ツール上の「修正基準」の選択だけです。
+    作業手順そのものは共通のため、<a href="#s5">5章</a>では差分だけを説明します。
+  </p>
+
+  <div class="note">
+    <p><strong>パターン1の手順は本書では割愛します。</strong>これまでどおりの移行手順で作業してください。ただし<strong>時間の計測と記録だけは他パターンと同じルール</strong>（<a href="#s8">8章</a>）で行ってください。比較の基準になる数値です。</p>
+  </div>
+
+  <h3>1.3 対象ページ数</h3>
+  <p>
+    ページ数はスケジュールと進捗に応じて適宜判断します。上限の目安は
+    <strong>1自治体あたり50ページ × 5自治体 ＝ 最大250ページ</strong>です。
+  </p>
+  <div class="callout">
+    <p><span class="tag tag-todo">要確認</span> 同一ページを3パターンで作業するため、上限まで実施した場合の延べ作業件数は最大250ページ×3＝750件となります。スケジュールを引く際はこの前提で問題ないか、着手前に確認してください。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s2">
+  <h2>2. 事前準備（ToDo）</h2>
+
+  <h3>2.1 BPO：オペレーターを3グループに分ける</h3>
+  <p>オペレーターを3つのグループに分け、各グループが1つのパターンを担当します。</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th style="width:22%">グループ</th><th style="width:32%">担当パターン</th><th>使用するCMSの準備物</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">グループ1</th><td><span class="tag tag-p1">1. 通常移行</span></td><td>通常取込</td></tr>
+        <tr><th scope="row">グループ2</th><td><span class="tag tag-p2">2. AI移行</span></td><td>解析まで１</td></tr>
+        <tr><th scope="row">グループ3</th><td><span class="tag tag-p3">3. miChecker移行</span></td><td>解析まで２</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    同一ページを3パターンで作業するため、<strong>先に作業した人の結果を後の人が見ない</strong>よう、作業順と共有範囲に注意してください。
+  </p>
+  <div class="note">
+    <p>所要時間の差には、パターンの差だけでなくグループごとの習熟度の差も含まれます。集計するときはこの点を踏まえて読んでください。</p>
+  </div>
+
+  <h3>2.2 戦略G：CMS上に3種類の状態を準備しておく</h3>
+  <p>作業開始前に、対象ページについて下記3種類をCMS上に用意します。</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th style="width:22%">準備するもの</th><th style="width:20%">対応パターン</th><th>状態</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>通常取込</strong></td>
+          <td><span class="tag tag-p1">1. 通常移行</span></td>
+          <td>これまでどおりの取込を済ませた状態。オペレーターは通常の移行作業から着手する。</td>
+        </tr>
+        <tr>
+          <td><strong>解析まで１</strong></td>
+          <td><span class="tag tag-p2">2. AI移行</span></td>
+          <td>CMSの取込ツールで<strong>解析まで</strong>実行し、コンテンツ箇所のみを抜き出したソースコードが出力された状態。取込は未実施。</td>
+        </tr>
+        <tr>
+          <td><strong>解析まで２</strong></td>
+          <td><span class="tag tag-p3">3. miChecker移行</span></td>
+          <td>「解析まで１」と同じ状態のものを、miChecker移行用にもう1セット用意する。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <p>「解析まで１」「解析まで２」は<strong>同一ページの同一解析結果</strong>である必要があります。入力が違うと時間も品質も比較できません。</p>
+  </div>
+
+  <h3>2.3 記録用スプレッドシートを用意する</h3>
+  <p>作業時間・判断結果・品質評価を記録するスプレッドシートを準備します。シート構成と列定義は<a href="#s7">7章</a>を参照してください。</p>
+
+  <h3>2.4 準備完了チェックリスト</h3>
+  <ul>
+    <li>対象自治体・対象ページの一覧が確定している</li>
+    <li>BPOオペレーターが3グループに分かれ、担当パターンが決まっている</li>
+    <li>CMS上に「通常取込」「解析まで１」「解析まで２」が用意されている</li>
+    <li>記録用スプレッドシートが作成され、全オペレーターが編集できる</li>
+    <li>全オペレーターがツールのURLを開けることを確認済み</li>
+    <li>本ガイドを全オペレーターへ共有済み</li>
+  </ul>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s3">
+  <h2>3. ツールの画面構成</h2>
+
+  <p>
+    URLを開くと「候補レビュー」画面が表示されます。<strong>パターン2・3で使用するのはこの画面です。</strong>
+  </p>
+
+  <figure>
+    <img src="/images/verification/01-top.jpg" alt="アクセシビリティ候補レビューの初期画面。上部に入力HTMLのフォーム、下部に修正候補・修正・プレビューの3ペインが並ぶ。">
+    <figcaption>図3-1　候補レビュー画面の初期表示（HTML未入力の状態）</figcaption>
+  </figure>
+
+  <h3>3.1 画面の構成要素</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:24%">領域</th><th>役割</th></tr></thead>
+      <tbody>
+        <tr><td>左サイドバー</td><td>画面の切り替え。<code>一括最適化</code> / <code>候補レビュー</code> / <code>本文抽出</code> / <code>miChecker結果比較</code>。本検証で主に使うのは「候補レビュー」と、<a href="#s6">6章</a>で使う「miChecker結果比較」。</td></tr>
+        <tr><td>入力HTML</td><td>ページ名・旧URL・CMS登録先・作業者などのページ情報と、本文HTMLを貼り付ける領域。「候補生成」ボタンで解析を実行する。</td></tr>
+        <tr><td>修正基準</td><td><strong>パターン2と3を切り替えるラジオボタン。</strong>詳細は下記3.2。</td></tr>
+        <tr><td>修正候補（左ペイン）</td><td>検出された修正候補の一覧。1件ずつ選択してレビューする。</td></tr>
+        <tr><td>修正（中央ペイン）</td><td>選択中の候補の修正理由・修正方法・修正前後の比較。<code>採用</code> / <code>文言を調整</code> / <code>却下</code> / <code>要確認</code> の判断を行う。</td></tr>
+        <tr><td>プレビュー（右ペイン）</td><td>本文HTMLの表示プレビュー。選択中の候補箇所をハイライトする。</td></tr>
+        <tr><td>出力（画面下部）</td><td>CMS貼り付け用の<strong>最終HTML</strong>、CMS登録時の<strong>注意</strong>、判断記録である<strong>証跡</strong>（JSON／CSV）。</td></tr>
+        <tr><td>「次にやること」パネル</td><td>画面右下に表示される案内。次に行う操作を示す。不要なら右上の×で閉じられる。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.2 「修正基準」でパターン2／3を切り替える</h3>
+  <p>入力欄の下にある「修正基準」が、本検証で最も重要な設定です。</p>
+  <figure>
+    <img class="narrow" src="/images/verification/02-rulescope.jpg" alt="修正基準のラジオボタン。「移行ルール全体（miChecker含む）」が選択されている。">
+    <figcaption>図3-2　修正基準：<strong>パターン2「AI移行」</strong>ではこちら（移行ルール全体）を選択する（初期値）</figcaption>
+  </figure>
+  <figure>
+    <img class="narrow" src="/images/verification/07-rulescope-michecker.jpg" alt="修正基準のラジオボタン。「miChecker指摘対応のみ」が選択されている。">
+    <figcaption>図3-3　修正基準：<strong>パターン3「miChecker移行」</strong>ではこちら（miChecker指摘対応のみ）を選択する</figcaption>
+  </figure>
+  <div class="callout">
+    <p><strong>「修正基準」は候補生成の前に選択してください。</strong>選択を誤ると別パターンの結果になり、そのページの計測はやり直しになります。作業開始時と、記録をつける直前の2回、選択状態を確認してください。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s4">
+  <h2>4. 手順：パターン2「AI移行」</h2>
+
+  <p>
+    CMSの取込ツールでコンテンツ箇所のみを抜き出したソースコードを生成し（CMSの解析作業）、それをツールへ入力します。
+    ツール上で最適化されたソースコードをCMSの取込ツールへ戻し、CMSで取り込んだあと、移行に必要な残りの作業を実施します。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:34%">工程</th><th style="width:22%">場所</th><th>時間計測</th></tr></thead>
+      <tbody>
+        <tr><td>Step 1　解析結果のソースを取得</td><td>CMS取込ツール</td><td>戦略Gが事前準備（<strong>計測対象外</strong>）</td></tr>
+        <tr><td>Step 2〜6　ツールでの候補レビュー</td><td>アクセシビリティ候補レビュー</td><td><strong>計測する</strong></td></tr>
+        <tr><td>Step 7　CMS取込ツールへ戻して取込</td><td>CMS取込ツール／CMS</td><td><strong>計測する</strong></td></tr>
+        <tr><td>Step 8　移行に必要な残作業</td><td>CMS</td><td><strong>計測する</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <h3>解析済みソースコードを取得する</h3>
+      <p>
+        戦略Gが準備した「解析まで１」の状態から、CMSの取込ツールで出力された<strong>コンテンツ箇所のみのソースコード</strong>をコピーします。
+        ヘッダー・フッター・ナビゲーションなどページ共通部分は含めません。
+      </p>
+      <div class="note">
+        <p>ツールに入力するのは<strong>本文（コンテンツ）のHTML断片</strong>です。<code>&lt;html&gt;</code>や<code>&lt;head&gt;</code>を含むページ全体を貼ると、本検証の対象外の指摘が混ざります。</p>
+      </div>
+    </li>
+
+    <li>
+      <h3>ツールを開き、「修正基準」を確認する</h3>
+      <p>
+        ブラウザで
+        <a href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/">https://goal2-a11y-review-700549743482.asia-northeast1.run.app/</a>
+        を開きます。「修正基準」が<strong>「移行ルール全体（miChecker含む）」</strong>になっていることを確認します（図3-2）。初期値はこちらです。
+      </p>
+    </li>
+
+    <li>
+      <h3>ページ情報と本文HTMLを入力する</h3>
+      <p>「入力HTML」の各欄を埋めます。ここで入力した内容は証跡に記録されるため、<strong>記録用スプレッドシートと同じ表記</strong>で入力してください。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:22%">欄</th><th>入力内容</th></tr></thead>
+          <tbody>
+            <tr><td>ページ名</td><td>対象ページのタイトル</td></tr>
+            <tr><td>旧URL</td><td>移行元ページのURL。<strong>画像を含むページでは必ず入力</strong>（画像の内容確認に使用されます）</td></tr>
+            <tr><td>CMS登録先</td><td>CMS上の登録先（例：本体サイト &gt; 手続き）</td></tr>
+            <tr><td>作業者</td><td>オペレーターID。スプレッドシートの「作業者」と一致させる</td></tr>
+            <tr><td>本文HTML</td><td>Step 1でコピーした解析済みソースコードを貼り付け</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>「候補生成」</strong>ボタンを押します。ページの内容によっては数十秒かかる場合があります（AIによる内容確認中は全画面のメッセージが表示されます）。</p>
+    </li>
+
+    <li>
+      <h3>修正候補を1件ずつレビューする</h3>
+      <p>候補生成が終わると、左ペインに修正候補の一覧が表示されます。</p>
+      <figure>
+        <img src="/images/verification/03-candidates-kb.jpg" alt="候補生成後の画面。左に修正候補一覧、中央に修正内容の詳細、右にプレビューが表示されている。">
+        <figcaption>図4-1　候補生成後の画面（修正基準＝移行ルール全体。この例では10件の候補を検出）</figcaption>
+      </figure>
+      <figure>
+        <img class="narrow" src="/images/verification/04-candidate-pane.jpg" alt="修正候補一覧のペイン。候補がカードで並び、一部は「同じ箇所の候補・3件」としてグループ化されている。">
+        <figcaption>図4-2　修正候補ペイン。「同じ箇所の候補・n件」は、同じ場所に対する複数の修正方法。<strong>グループ内から1つを選びます</strong></figcaption>
+      </figure>
+      <p>各候補について、中央の「修正」ペインで内容を確認し、4つのボタンのいずれかで判断します。</p>
+      <figure>
+        <img class="narrow" src="/images/verification/05-detail-pane.jpg" alt="修正ペイン。採用・文言を調整・却下・要確認のボタンと、この候補で変わること、修正方法、見た目の比較が表示されている。">
+        <figcaption>図4-3　修正ペイン。「この候補で変わること」「修正方法」「見た目の比較」を確認して判断する</figcaption>
+      </figure>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:20%">ボタン</th><th>使う場面</th></tr></thead>
+          <tbody>
+            <tr><td><strong>採用</strong></td><td>提案どおりで問題ないとき。修正後HTMLに反映される。</td></tr>
+            <tr><td><strong>文言を調整</strong></td><td>方針は正しいが文言を直したいとき。編集してから採用する。</td></tr>
+            <tr><td><strong>却下</strong></td><td>このページには当てはまらないとき。理由を「判断理由」欄に記入する。</td></tr>
+            <tr><td><strong>要確認</strong></td><td>その場で判断できないとき。後で確認する対象として記録が残る。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <p><strong>ツールの提案は必ず人が確認してください。</strong>提案文言は下書きであり、そのまま正解とは限りません。特に画像の代替テキスト（alt）と見出し文言は、ページの内容と照らして妥当か確認してください。</p>
+      </div>
+      <p>
+        「前」「次の未処理」で候補を移動できます。ヘッダーの「1/10」のような表示で進捗が分かります。
+        すべて判断すると、右上の表示が「未完了」から完了状態に変わります。
+      </p>
+      <h4>画像の代替テキスト（alt）候補が出た場合</h4>
+      <p>
+        画像に関する候補では、AIが解析した代替テキスト候補が入力欄に表示されます。
+        内容を確認・修正したうえで<strong>「修正後HTMLへ投入」</strong>を押し、そのうえで「採用」してください。投入せずに採用すると文言が反映されません。
+      </p>
+    </li>
+
+    <li>
+      <h3>「注意」を確認する</h3>
+      <p>
+        画面下部の「出力」を開くと、中央に<strong>「注意」</strong>が表示されます。これはCMS登録時に人が確認すべき事項で、HTMLへコピーする文言ではありません。
+        例：カテゴリページへの内部リンクは、リンク先カテゴリをCMSツリーで確認する、など。
+      </p>
+    </li>
+
+    <li>
+      <h3>最終HTMLと証跡を取得する</h3>
+      <figure>
+        <img src="/images/verification/06-output.jpg" alt="出力セクション。左に最終HTML、中央に注意、右に証跡JSONとJSONコピー・CSVボタンが並ぶ。">
+        <figcaption>図4-4　出力セクション。左＝最終HTML、中央＝注意、右＝証跡</figcaption>
+      </figure>
+      <ul>
+        <li><strong>最終HTML</strong>：「コピー」ボタンでクリップボードへコピーします。これをCMS取込ツールへ戻します。</li>
+        <li><strong>証跡</strong>：「CSV」ボタンで判断記録をダウンロードします。<strong>ページごとに必ず保存してください</strong>（<a href="#s7">7章</a>の記録に使用します）。</li>
+      </ul>
+    </li>
+
+    <li>
+      <h3>CMSの取込ツールへ戻して取り込む</h3>
+      <p>コピーした最終HTMLをCMSの取込ツールへ戻し、CMSへの取込を実行します。</p>
+    </li>
+
+    <li>
+      <h3>移行に必要な残作業を実施する</h3>
+      <p>
+        CMSで取り込んだあと、移行に必要な残りの作業（カテゴリ設定、添付ファイル、リンク先確認、公開設定など）を通常どおり実施します。
+        ここまでが計測対象です。完了したらスプレッドシートに記録します（<a href="#s7">7章</a>）。
+      </p>
+    </li>
+  </ol>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s5">
+  <h2>5. 手順：パターン3「miChecker移行」</h2>
+
+  <p>
+    手順はパターン2とほぼ同じです。<strong>異なるのは以下の3点だけ</strong>です。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:26%">項目</th><th style="width:37%">パターン2「AI移行」</th><th style="width:37%">パターン3「miChecker移行」</th></tr></thead>
+      <tbody>
+        <tr><td>使用する入力</td><td>「解析まで１」の出力</td><td><strong>「解析まで２」の出力</strong></td></tr>
+        <tr><td>修正基準</td><td>移行ルール全体（miChecker含む）</td><td><strong>miChecker指摘対応のみ</strong></td></tr>
+        <tr><td>追加作業</td><td>なし</td><td><strong>miChecker本体との結果一致確認</strong>（<a href="#s6">6章</a>）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>5.1 修正基準を「miChecker指摘対応のみ」にする</h3>
+  <p>
+    本文HTMLを貼り付ける前に、「修正基準」で<strong>「miChecker指摘対応のみ」</strong>を選択します（図3-3）。この状態で「候補生成」を実行します。
+  </p>
+
+  <figure>
+    <img src="/images/verification/08-candidates-michecker.jpg" alt="miChecker指摘対応のみで候補生成した画面。修正候補は7件に絞られている。">
+    <figcaption>図5-1　修正基準＝miChecker指摘対応のみ。同じページ・同じ入力でも、候補が<strong>miCheckerが指摘する範囲に絞り込まれる</strong>（この例では10件→7件）</figcaption>
+  </figure>
+
+  <figure>
+    <img class="narrow" src="/images/verification/09-candidate-pane-michecker.jpg" alt="miChecker指摘対応のみの修正候補ペイン。候補が7件表示されている。">
+    <figcaption>図5-2　miChecker指摘対応のみの候補一覧。「同じ箇所の候補」のグループ内の選択肢も絞り込まれる</figcaption>
+  </figure>
+
+  <p>候補のレビュー方法（採用／文言を調整／却下／要確認）、最終HTMLのコピー、証跡CSVの保存は<a href="#s4">4章</a>と同じです。</p>
+
+  <h3>5.2 「miChecker相当チェック結果」パネルを確認する</h3>
+  <p>
+    修正基準を「miChecker指摘対応のみ」にした場合のみ、画面下部に<strong>「miChecker相当チェック結果」</strong>パネルが表示されます。
+    これはmiChecker公式判定エンジンを移植した検出結果で、上の修正候補一覧とは統合せず、参考情報として独立表示されます。
+  </p>
+
+  <figure>
+    <img src="/images/verification/10-michecker-engine.jpg" alt="miChecker相当チェック結果のパネル。種別・チェックID・該当箇所・公式メッセージ・対応する移行ルール・操作の表が表示されている。">
+    <figcaption>図5-3　miChecker相当チェック結果。<strong>チェックID</strong>（C_14.0など）と<strong>公式メッセージ</strong>が、miChecker本体と突き合わせるための鍵になる</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:24%">列</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>種別</td><td>「問題あり」＝要対応、「要判断箇所」＝人による確認が必要</td></tr>
+        <tr><td>チェックID</td><td>miCheckerのチェック項目ID。<strong>6章の突合はこのID単位で行います</strong></td></tr>
+        <tr><td>該当箇所</td><td>指摘対象のHTML</td></tr>
+        <tr><td>公式メッセージ</td><td>miCheckerが表示するメッセージ</td></tr>
+        <tr><td>対応する移行ルール</td><td>ツール側のどのルールに対応するか</td></tr>
+        <tr><td>操作</td><td>「プレビューで確認」で該当箇所をプレビュー上でハイライト</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    パネル上部には、既存の候補との突き合わせ結果（<code>両方で検出 n件 / エンジンのみ n件 / ヒューリスティックのみ n件</code>）が参考値として表示されます。
+    また<strong>「最終HTMLで再実行」</strong>ボタンで、修正後のHTMLに対してチェックを実行し、指摘が解消されたかを確認できます。
+  </p>
+  <div class="note">
+    <p>パターン3では<strong>「問題あり」の解消</strong>を作業のゴールとします。「要判断箇所」は内容を確認したうえで、対応不要と判断した場合はスプレッドシートにその旨を記録してください。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s6">
+  <h2>6. 追加検証：miChecker本体との結果一致確認</h2>
+
+  <div class="callout">
+    <p><strong>パターン3では、移行作業とは別に</strong>「アクセシビリティ候補レビュー」がmiChecker本体と同一の結果を出力できているかを検証する必要があります。この作業は移行作業ではないため、<strong>所要時間の計測には含めません</strong>。</p>
+  </div>
+
+  <h3>6.1 検証の手順</h3>
+  <ol>
+    <li>対象ページを<strong>miChecker本体</strong>で検査し、結果をCSVでエクスポートします（miCheckerのCSVはShift-JIS固定です）。</li>
+    <li>同じページをツールの<strong>「miChecker指摘対応のみ」</strong>で候補生成し、「miChecker相当チェック結果」（図5-3）を表示します。</li>
+    <li>両者を<strong>チェックID単位</strong>で突き合わせ、下表の判定を記録します。</li>
+  </ol>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:18%">判定</th><th style="width:30%">状態</th><th>記録すること</th></tr></thead>
+      <tbody>
+        <tr><td><strong>一致</strong></td><td>miChecker本体・ツールの両方で検出</td><td>件数のみ</td></tr>
+        <tr><td><strong>未検出</strong></td><td>miChecker本体では検出、ツールでは未検出</td><td>チェックID・該当箇所（<strong>最重要。ツールの検出漏れ</strong>）</td></tr>
+        <tr><td><strong>過検出</strong></td><td>ツールでは検出、miChecker本体では未検出</td><td>チェックID・該当箇所</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>6.2 「miChecker結果比較」画面</h3>
+  <p>
+    左サイドバーの<strong>「miChecker結果比較」</strong>画面では、miCheckerからエクスポートしたCSVを読み込んで比較できます。
+    移行元（旧ページ）と移行後（新ページ・CMS登録後プレビュー）のCSVをそれぞれ検査・エクスポートし、読み込ませます。
+  </p>
+  <figure>
+    <img src="/images/verification/11-michecker-compare.jpg" alt="miChecker結果比較画面。上部にローカルWindows限定のhtmlchecker.exe自動比較、下部にCSV読み込みのフォームがある。">
+    <figcaption>図6-1　miChecker結果比較画面。下部の「CSVを読み込む」を使用する</figcaption>
+  </figure>
+  <div class="note">
+    <p>画面上部の「htmlchecker.exeで自動比較」は、<strong>goal2-appをご自身のWindows PC上でローカル起動しており、かつ<code>htmlchecker.exe</code>をビルド済みの場合のみ</strong>動作します。Cloud Run上のホスト版（本検証で使うURL）では利用できません。<strong>本検証ではCSV読み込みを使用してください。</strong></p>
+  </div>
+
+  <h3>6.3 検証対象ページ数</h3>
+  <div class="callout">
+    <p><span class="tag tag-todo">要決定</span> 一致確認を<strong>パターン3の全ページで行うか、抜き取りで行うか</strong>は着手前に決めてください。全ページで行うと作業量が大きく増えます。抜き取りとする場合は、対象の選び方（自治体ごと・ページ種別ごとなど）も併せて決めてください。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s7">
+  <h2>7. 記録用スプレッドシートの構成</h2>
+
+  <p>下記3シート構成を推奨します。列はそのまま流用できるよう定義しています。</p>
+
+  <h3>7.1 シート1「作業記録」（1行＝1ページ×1パターン）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:26%">列</th><th style="width:38%">内容</th><th>入力元</th></tr></thead>
+      <tbody>
+        <tr><td>自治体</td><td>対象自治体名</td><td>—</td></tr>
+        <tr><td>ページID</td><td>ページの識別子（全パターンで共通の値）</td><td>—</td></tr>
+        <tr><td>ページ名 / 旧URL</td><td>対象ページ</td><td>ツールの入力欄と一致させる</td></tr>
+        <tr><td>パターン</td><td>1＝通常 / 2＝AI / 3＝miChecker</td><td>—</td></tr>
+        <tr><td>グループ / 作業者</td><td>担当グループとオペレーターID</td><td>ツールの「作業者」と一致させる</td></tr>
+        <tr><td>ツール作業 開始 / 終了 / 所要分</td><td>ツール上での候補レビューの時間</td><td>手入力（パターン1は空欄）</td></tr>
+        <tr><td>CMS作業 開始 / 終了 / 所要分</td><td>取込〜残作業の時間</td><td>手入力</td></tr>
+        <tr><td>合計所要分</td><td>ツール作業＋CMS作業</td><td>数式</td></tr>
+        <tr><td>候補件数</td><td>生成された修正候補の総数</td><td>証跡CSVの行数</td></tr>
+        <tr><td>採用 / 文言調整 / 却下 / 要確認 件数</td><td>判断の内訳</td><td>証跡CSVの<code>status</code>列</td></tr>
+        <tr><td>証跡CSVファイル名</td><td>保存した証跡の識別</td><td>ダウンロードしたファイル名</td></tr>
+        <tr><td>中断時間（分）</td><td>計測から除外した時間</td><td>手入力（<a href="#s8">8章</a>）</td></tr>
+        <tr><td>備考</td><td>詰まった点・イレギュラー</td><td>手入力</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    証跡CSVには <code>page_session_id</code> / <code>candidate_id</code> / <code>rule_id</code> / <code>category</code> / <code>status</code> /
+    <code>confidence</code> / <code>decision_reason</code> / <code>actor</code> / <code>decided_at</code> /
+    <code>before_html</code> / <code>after_html</code> / <code>related_wcag</code> / <code>miChecker_status</code> などが含まれます。
+    件数の集計はこのCSVから行えるため、<strong>手作業での転記は最小限にしてください</strong>。
+  </p>
+
+  <h3>7.2 シート2「品質評価」（1行＝1ページ×1パターン）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:32%">列</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>自治体 / ページID / パターン</td><td>シート1と紐づけるキー</td></tr>
+        <tr><td>miChecker「問題あり」件数（移行前）</td><td>移行元ページの検査結果</td></tr>
+        <tr><td>miChecker「問題あり」件数（移行後）</td><td>移行後ページの検査結果。<strong>0件が目標</strong></td></tr>
+        <tr><td>miChecker「要判断箇所」件数（移行後）</td><td>参考値</td></tr>
+        <tr><td>目視チェック：表崩れ</td><td>OK / NG（NGは内容を備考へ）</td></tr>
+        <tr><td>目視チェック：リンク先</td><td>OK / NG</td></tr>
+        <tr><td>目視チェック：画像alt</td><td>OK / NG</td></tr>
+        <tr><td>目視チェック：見出し構造</td><td>OK / NG</td></tr>
+        <tr><td>レビュー指摘件数</td><td>チェック担当者からの差し戻し件数</td></tr>
+        <tr><td>手戻り有無 / 手戻り所要分</td><td>差し戻し対応が発生したか</td></tr>
+        <tr><td>総合判定</td><td>合格 / 条件付き合格 / 不合格</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>7.3 シート3「miChecker一致確認」（1行＝1ページ×1チェックID）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:32%">列</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>自治体 / ページID</td><td>対象ページ</td></tr>
+        <tr><td>チェックID</td><td>miCheckerのチェック項目ID（例：C_14.0）</td></tr>
+        <tr><td>種別</td><td>問題あり / 要判断箇所</td></tr>
+        <tr><td>miChecker本体の検出</td><td>有 / 無</td></tr>
+        <tr><td>ツールの検出</td><td>有 / 無</td></tr>
+        <tr><td>判定</td><td>一致 / 未検出 / 過検出</td></tr>
+        <tr><td>該当箇所</td><td>対象のHTML（不一致のときは必須）</td></tr>
+        <tr><td>差分の理由・所見</td><td>開発側へのフィードバック</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <p>シート3の<strong>「未検出」（miChecker本体では検出、ツールでは未検出）</strong>が、ツール改善の最優先インプットになります。該当箇所のHTMLを必ず残してください。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s8">
+  <h2>8. 時間の計測ルール</h2>
+
+  <p>パターン間で条件を揃えるため、下記のルールで統一します。<strong>3パターンすべてに同じルールを適用してください。</strong></p>
+
+  <h3>8.1 計測する／しない</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:12%">　</th><th style="width:44%">対象</th><th>備考</th></tr></thead>
+      <tbody>
+        <tr><td><strong>計測する</strong></td><td>ツール上での候補レビュー（入力〜最終HTMLコピーまで）</td><td>パターン2・3のみ</td></tr>
+        <tr><td><strong>計測する</strong></td><td>CMS取込ツールへの投入・CMSでの取込</td><td>全パターン</td></tr>
+        <tr><td><strong>計測する</strong></td><td>CMS上での移行残作業（カテゴリ・添付・公開設定など）</td><td>全パターン</td></tr>
+        <tr><td><strong>計測する</strong></td><td>候補生成の待ち時間（数十秒かかる場合がある）</td><td>ツールの実力値に含める</td></tr>
+        <tr><td>計測しない</td><td>戦略GによるCMS事前準備（通常取込・解析まで１／２）</td><td>全パターン共通の前提</td></tr>
+        <tr><td>計測しない</td><td>miChecker本体との結果一致確認（<a href="#s6">6章</a>）</td><td>移行作業ではないため</td></tr>
+        <tr><td>計測しない</td><td>本ガイドを読む時間・ツールの操作習得時間</td><td>初回のみ発生するため</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>8.2 中断の扱い</h3>
+  <ul>
+    <li>離席・他業務・システム障害などで作業を中断した場合は、<strong>中断時間を記録し、所要分から差し引きます</strong>。</li>
+    <li>5分未満の中断は記録不要とします。</li>
+    <li>1ページの作業は、原則として<strong>同一日・同一作業者</strong>で完了させてください。</li>
+  </ul>
+
+  <h3>8.3 記録の単位</h3>
+  <ul>
+    <li>時刻は<strong>分単位</strong>（例 10:05）で記録します。</li>
+    <li>所要分は開始・終了時刻から数式で算出し、手計算しないでください。</li>
+    <li>1ページの作業が終わるたびに記録します。<strong>まとめて後から入力しないでください</strong>（時間の精度が落ちます）。</li>
+  </ul>
+
+  <div class="callout">
+    <p>初回の数ページは操作に慣れていないため時間が長く出ます。集計時に<strong>最初の数ページを除外して比較する</strong>か、少なくとも「何ページ目か」を分かるようにしておくと、学習効果とツールの効果を切り分けられます。</p>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s9">
+  <h2>9. 品質の評価観点</h2>
+
+  <p>時間だけでなく品質も比較します。移行後のページに対して、下記を確認します。</p>
+
+  <h3>9.1 機械的な確認</h3>
+  <ul>
+    <li>移行後ページを<strong>miChecker本体</strong>で検査し、「問題あり」の件数を記録する（目標：0件）。</li>
+    <li>「要判断箇所」の件数も参考値として記録する。</li>
+  </ul>
+
+  <h3>9.2 目視での確認</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:22%">観点</th><th>確認内容</th></tr></thead>
+      <tbody>
+        <tr><td>表</td><td>行・列の対応が崩れていないか。結合セルの解除で内容が失われていないか。見出しセルが適切か。</td></tr>
+        <tr><td>見出し</td><td>見出しレベルが飛んでいないか。見出し文言がページの内容と合っているか。</td></tr>
+        <tr><td>画像</td><td>代替テキストが画像の内容を正しく説明しているか。事実と異なる説明になっていないか。</td></tr>
+        <tr><td>リンク</td><td>リンク先が正しいか。リンクテキストだけで内容が分かるか。</td></tr>
+        <tr><td>本文</td><td>元ページの情報が欠落・改変されていないか。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>最優先の確認は「情報の欠落・改変がないこと」です。</strong>アクセシビリティ対応の過程で元ページの内容が変わってしまうことは、指摘が残ることよりも重大です。特に金額・日付・条件・連絡先は必ず突き合わせてください。</p>
+  </div>
+
+  <h3>9.3 手戻りの記録</h3>
+  <p>
+    チェック担当者からの差し戻しが発生した場合は、<strong>指摘件数と対応にかかった時間</strong>を記録します。
+    「作業は速いが手戻りが多い」場合、合計時間では優位でなくなるため、この記録が比較の精度を左右します。
+  </p>
+</section>
+
+<!-- ============================================ -->
+<section class="chapter" id="s10">
+  <h2>10. 注意事項・よくある質問</h2>
+
+  <h3>10.1 データの取り扱い</h3>
+  <div class="callout">
+    <p>
+      本ツールは、候補文言の生成に外部のAI（Google Gemini API）を利用する場合があります。この場合、<strong>画面に貼り付けた本文HTMLと、そこに含まれる画像が外部へ送信されます</strong>。
+      実案件データを投入する前に、対象自治体との合意状況を管理者に確認してください（詳細はリポジトリの <code>goal2-app/LLM_DATA_POLICY.md</code>）。
+      CMSの管理情報・認証情報・他ページの内容は送信対象ではありません。
+    </p>
+  </div>
+
+  <h3>10.2 よくある質問</h3>
+
+  <h4>Q. 候補生成に時間がかかり、画面が固まったように見える</h4>
+  <p>A. AIによる内容確認中は全画面メッセージが表示されます。ページの内容によっては数十秒かかります。<strong>この待ち時間も計測に含めてください</strong>（ツールの実力値です）。</p>
+
+  <h4>Q. 「同じ箇所の候補・n件」とは？</h4>
+  <p>A. 同じ箇所に対する複数の修正方法です。<strong>グループの中から1つを選んで採用</strong>します。「推奨」が付いているものが第一候補です。</p>
+
+  <h4>Q. 提案された文言が明らかにおかしい</h4>
+  <p>A. 「文言を調整」で修正して採用するか、「却下」してください。<strong>いずれの場合も「判断理由」欄に理由を記入してください。</strong>これがツール改善の材料になります。</p>
+
+  <h4>Q. 修正基準を間違えて候補生成してしまった</h4>
+  <p>A. そのページのそのパターンの計測は無効です。正しい修正基準で最初からやり直し、スプレッドシートの備考に「やり直し」と記録してください。</p>
+
+  <h4>Q. 「注意」に出た内容はHTMLに貼り付けるのか</h4>
+  <p>A. いいえ。「注意」はCMS登録時に人が確認する事項で、コピー用の出力ではありません。</p>
+
+  <h4>Q. 証跡CSVを保存し忘れた</h4>
+  <p>A. 画面を離れる前であれば「出力」から再取得できます。画面を閉じた後は再現できません。<strong>ページごとに必ずその場で保存してください。</strong></p>
+
+  <h4>Q. 「一括最適化」「本文抽出」の画面は使うのか</h4>
+  <p>A. 本検証では使用しません。「本文抽出」はCMS取込ツールを使わずに旧ページ全体から本文を抜き出す機能ですが、本検証ではCMSの解析結果を入力とします。</p>
+
+  <h3>10.3 困ったときの連絡</h3>
+  <div class="callout">
+    <p><span class="tag tag-todo">要記入</span> 作業中の不明点・ツールの不具合の連絡先と、連絡時に添えてほしい情報（ページID・パターン・証跡CSV・スクリーンショット）を記入してください。</p>
+  </div>
+</section>
+
+<footer class="doc-foot">
+  <p>アクセシビリティ候補レビュー 検証作業ガイド（2026-07-27）<br>
+  画面キャプチャは Cloud Run 版と同一のコードで取得したものです。UI更新により実際の画面と差異が出た場合は、実画面を優先してください。</p>
+</footer>
+
+</div>
+</body>
+</html>

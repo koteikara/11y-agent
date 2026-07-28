@@ -19,17 +19,14 @@
 - 関連PR/コミット
 ```
 
-## 2026-07-28: 検証作業手順書を1本に統合し、アプリ内でホストしていたガイドを削除
+## 2026-07-28: 検証作業手順書のグループ分けとmiChecker一致確認の時間の扱いを、docs配下のガイドにも反映
 
-- 背景・目的: 同じ検証作業の手順書が2本になっていた。`docs/a11y-review-verification-guide.html`（本ブランチ）と、`goal2-app/public/verification-guide.html`（アプリ内でホストし、ナビゲーションからリンク）である。更新のたびに両方を直す必要があり、内容がずれていくため、前者を正とする方針で1本に統合した。
-- 主な変更内容:
-  - `goal2-app/public/verification-guide.html` と `goal2-app/public/images/verification/`（画面キャプチャ11点）を削除し、各画面（`index.html` / `goal1.html` / `goal3.html` / `michecker-compare.html`）のナビゲーションから「検証ガイド」のリンクを外した。`goal2-app/README.md` の参照先を `docs/a11y-review-verification-guide.html` に変更した。
-  - 削除するガイドに入っていた2件の指摘反映を、残すガイドへ移した。
-    - グループ分け: グループ1が通常移行、グループ2がAI移行、グループ3がmiChecker移行を担当し、担当する方式は固定（ローテーションしない）ことを、グループ・方式・CMS準備物の対応表として3章に追加した。所要時間の差にグループごとの習熟度の差が含まれる点も注記した。
-    - miChecker本体との同一性検証は移行作業ではないため、所要時間の計測に含めないことを3章（時間計測の定義）と6章に明記した。
-  - `server.js` の `.jpg` / `.jpeg` のContent-Type定義は、画像形式一般の対応として残した。
-- 検証: Playwrightで、ページ内リンクにリンク切れがないこと、図9点が表示されること、横スクロールが出ないことを確認した。`node test/run-tests.js` 正常終了。削除したパスへの参照がリポジトリに残っていないことを確認した。
-- 関連ファイル: `docs/a11y-review-verification-guide.html`, `goal2-app/README.md`, `goal2-app/public/*.html`
+- 背景・目的: 同じ内容の指摘が `goal2-app/public/verification-guide.html` にだけ反映されており、`docs/a11y-review-verification-guide.html` には入っていなかったため、こちらにも同じ修正を入れた。
+- 主な変更内容(`docs/a11y-review-verification-guide.html`):
+  - グループ分け: グループ1が通常移行、グループ2がAI移行、グループ3がmiChecker移行を担当し、担当する方式は固定（ローテーションしない）ことを、グループ・方式・CMS準備物の対応表として3章に追加した。所要時間の差にグループごとの習熟度の差が含まれる点も注記した。
+  - miChecker本体との同一性検証は移行作業ではないため、所要時間の計測に含めないことを3章（時間計測の定義）と6章に明記した。
+- 検証: Playwrightで、ページ内リンクにリンク切れがないこと、図9点が表示されること、横スクロールが出ないことを確認した。
+- 関連ファイル: `docs/a11y-review-verification-guide.html`
 - 関連PR/コミット: PR #115
 
 ## 2026-07-27: 検証作業手順書にサイドナビ・移行管理シート・CMS操作手順を追加
