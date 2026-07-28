@@ -327,7 +327,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
     padding: var(--space-3) var(--space-5);
     border-top: 1px solid var(--line);
     background: var(--surface);
@@ -376,6 +377,27 @@
     outline: 3px solid color-mix(in srgb, var(--focus), transparent 70%);
     outline-offset: 2px;
   }
+  .bar::before { content: ""; margin-right: auto; }
+  .bar-link {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--primary);
+    font-size: var(--text-small);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
+  }
+  .bar-link:hover { border-color: var(--faint); background: var(--surface-2); color: var(--primary-strong); }
+
   .counter { min-width: 6.5em; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
   .hint { color: var(--faint); font-size: var(--text-caption); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -739,6 +761,7 @@
   <button type="button" id="next" class="primary">次へ →</button>
   <button type="button" id="grid" aria-pressed="false">一覧</button>
   <span class="hint">← → キーでも移動できます</span>
+  <a class="bar-link" href="/verification-guide.html">検証作業ガイドに戻る</a>
 </nav>
 <p aria-live="polite" class="sr" id="live"></p>
 
