@@ -19,6 +19,15 @@
 - 関連PR/コミット
 ```
 
+## 2026-07-28: 重複していた docs 配下の検証作業手順書を削除
+
+- 背景・目的: 同じ検証作業の手順書が2本あった。アプリ内でホストしている `goal2-app/public/verification-guide.html` と、`docs/a11y-review-verification-guide.html` である。前者を正とする方針が決まったため、後者を削除して1本にした。2本あると、更新のたびに両方を直す必要があり、内容がずれていくため。
+- 主な変更内容:
+  - `docs/a11y-review-verification-guide.html` と `docs/images/a11y-review-guide/`（画面キャプチャ9点）を削除した。
+  - 削除したガイドにしかなかった内容はない。サイドナビゲーション・移行管理シートのリンク・CMSでの操作手順は、いずれもPR #115でアプリ内のガイドへ反映済みである。
+- 検証: 削除したパスへの参照がリポジトリに残っていないことを確認した。
+- 関連ファイル: `docs/a11y-review-verification-guide.html`, `docs/images/a11y-review-guide/`
+
 ## 2026-07-28: アプリ内の検証作業ガイドにサイドナビ・移行管理シート・CMS操作手順を追加
 
 - 背景・目的: `goal2-app/public/verification-guide.html` について3点の要望が出た。①ページが長く目的の章まで到達しにくい、②移行管理シートの所在が書かれていない、③CMS側の操作手順がない。
