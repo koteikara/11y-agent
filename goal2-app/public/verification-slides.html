@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>移行作業はこう変わる｜前回（佐賀市）との違い</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #ffffff; --ink: #1b2333; --muted: #5b6579;
+    --line: #dfe3ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+    --p1: #64748b; --p2: #1d4ed8; --p3: #0f766e;
+    --warn-bg: #fff8e6; --warn-line: #e5c46b; --warn-ink: #7a5a00;
+    --bad-bg: #fdf0ee; --bad-line: #e8bcb4; --bad-ink: #9a3412;
+    --code-bg: #f1f3f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1a1f29; --ink: #e7ebf3; --muted: #9aa5b8;
+      --line: #2c3442; --accent: #7ea2ff; --accent-soft: #1f2a45;
+      --p1: #94a3b8; --p2: #7ea2ff; --p3: #5eead4;
+      --warn-bg: #2e2611; --warn-line: #7a6320; --warn-ink: #f0d68a;
+      --bad-bg: #331d17; --bad-line: #7c4a3a; --bad-ink: #f4b8a0;
+      --code-bg: #222937;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c; --card: #1a1f29; --ink: #e7ebf3; --muted: #9aa5b8;
+    --line: #2c3442; --accent: #7ea2ff; --accent-soft: #1f2a45;
+    --p1: #94a3b8; --p2: #7ea2ff; --p3: #5eead4;
+    --warn-bg: #2e2611; --warn-line: #7a6320; --warn-ink: #f0d68a;
+    --bad-bg: #331d17; --bad-line: #7c4a3a; --bad-ink: #f4b8a0; --code-bg: #222937;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7fb; --card: #ffffff; --ink: #1b2333; --muted: #5b6579;
+    --line: #dfe3ec; --accent: #1d4ed8; --accent-soft: #eef2ff;
+    --p1: #64748b; --p2: #1d4ed8; --p3: #0f766e;
+    --warn-bg: #fff8e6; --warn-line: #e5c46b; --warn-ink: #7a5a00;
+    --bad-bg: #fdf0ee; --bad-line: #e8bcb4; --bad-ink: #9a3412; --code-bg: #f1f3f9;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, -apple-system, sans-serif;
+    line-height: 1.7;
+  }
+
+  .deck { max-width: 1180px; margin: 0 auto; padding: 16px 20px 96px; }
+  .slide {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 40px 48px; aspect-ratio: 16 / 9;
+    display: flex; flex-direction: column; justify-content: center; overflow: auto;
+  }
+  .slide[hidden] { display: none; }
+
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--accent); margin: 0 0 10px; }
+  h1 { font-size: 34px; line-height: 1.4; margin: 0 0 16px; }
+  h2 { font-size: 26px; line-height: 1.45; margin: 0 0 6px; }
+  h3 { font-size: 15px; margin: 0 0 8px; color: var(--muted); }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 20px; }
+  .lead { font-size: 18px; margin: 0 0 16px; }
+  p { margin: 10px 0; }
+  .fine { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+  a { color: var(--accent); }
+
+  ul.pts { margin: 6px 0 0; padding-left: 1.3em; font-size: 16px; }
+  ul.pts li { margin: 8px 0; }
+  ul.tight { margin: 4px 0 0; padding-left: 1.2em; font-size: 14.5px; }
+  ul.tight li { margin: 5px 0; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cols.wide-right { grid-template-columns: 5fr 7fr; }
+
+  /* ---- flow rows (slide 2) ---- */
+  .flowrow { margin: 0 0 18px; }
+  .flowrow > h3 { display: flex; align-items: center; gap: 10px; }
+  .flowrow .badge {
+    font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+  .flow .step {
+    flex: 1 1 0; min-width: 120px;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; background: var(--bg);
+    font-size: 14px; line-height: 1.5;
+  }
+  .flow .step b { display: block; font-size: 14.5px; }
+  .flow .step small { color: var(--muted); font-size: 12px; }
+  .flow .step.added { border: 2px solid var(--accent); background: var(--accent-soft); }
+  .flow .sep { align-self: center; color: var(--muted); font-size: 20px; }
+  .flow .step.same { border-style: dashed; }
+
+  /* ---- before / after boxes ---- */
+  .ba { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; }
+  .ba .box { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--bg); }
+  .ba .box.was { border-color: var(--bad-line); background: var(--bad-bg); color: var(--bad-ink); }
+  .ba .box.now { border-color: var(--accent); background: var(--accent-soft); }
+  .ba .tag {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    padding: 2px 10px; border-radius: 999px; margin-bottom: 8px; border: 1px solid currentColor;
+  }
+  .ba .box .tag { color: var(--muted); }
+  .ba .box.was .tag { color: var(--bad-ink); }
+  .ba .box.now .tag { color: var(--accent); }
+  .ba .arrow { align-self: center; font-size: 26px; color: var(--muted); }
+  .ba .box p { margin: 4px 0; font-size: 15px; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 12px 0 4px; }
+  .stat { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--bg); }
+  .stat .n { font-size: 30px; font-weight: 700; line-height: 1.2; }
+  .stat .l { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  table.mini { border-collapse: collapse; width: 100%; font-size: 15px; }
+  table.mini th, table.mini td { border-bottom: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  table.mini th { color: var(--muted); font-weight: 700; font-size: 13px; }
+  table.mini td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.mini caption { text-align: left; caption-side: top; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figcaption { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
+
+  .note {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 14px 0 0; font-size: 15px;
+  }
+  .callout {
+    border: 1px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-ink);
+    border-radius: 10px; padding: 12px 16px; margin: 14px 0 0; font-size: 15px;
+  }
+  .note p:first-child, .callout p:first-child { margin-top: 0; }
+  .note p:last-child, .callout p:last-child { margin-bottom: 0; }
+
+  .pill { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .pill-1 { color: var(--p1); } .pill-2 { color: var(--p2); } .pill-3 { color: var(--p3); }
+
+  /* ---- controls ---- */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--card);
+    border-top: 1px solid var(--line); padding: 10px 20px;
+    display: flex; align-items: center; gap: 12px; justify-content: center; z-index: 10;
+  }
+  .bar button {
+    font: inherit; font-size: 14px; padding: 7px 16px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--accent); cursor: pointer;
+  }
+  .bar button:hover { background: var(--accent-soft); }
+  .bar button:disabled { color: var(--muted); cursor: default; background: var(--card); }
+  .bar button:focus-visible, .deck a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .counter { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: center; }
+  .hint { font-size: 12.5px; color: var(--muted); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  body.overview .deck {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px; max-width: 1500px;
+  }
+  body.overview .slide { display: flex !important; padding: 18px 20px; font-size: 11px; cursor: pointer; }
+  body.overview .slide h1 { font-size: 17px; }
+  body.overview .slide h2 { font-size: 15px; }
+  body.overview .slide .stat .n { font-size: 17px; }
+  body.overview .slide .lead,
+  body.overview .slide ul.pts,
+  body.overview .slide table.mini,
+  body.overview .slide .flow .step,
+  body.overview .slide .ba .box p { font-size: 11px; }
+  body.overview .slide figure { display: none; }
+  body.overview .slide.current { outline: 3px solid var(--accent); }
+
+  @media (max-width: 760px) {
+    .slide { aspect-ratio: auto; padding: 26px 22px; }
+    h1 { font-size: 25px; } h2 { font-size: 20px; }
+    .cols, .cols.wide-right { grid-template-columns: 1fr; gap: 18px; }
+    .ba { grid-template-columns: 1fr; }
+    .ba .arrow { transform: rotate(90deg); }
+    .stats { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; }
+    .flow .sep { transform: rotate(90deg); align-self: flex-start; }
+  }
+
+  @media print {
+    .bar { display: none; }
+    body { background: #fff; }
+    .deck { max-width: none; padding: 0; }
+    .slide {
+      display: flex !important; aspect-ratio: auto; border: none; border-radius: 0;
+      page-break-after: always; break-after: page; min-height: 96vh;
+    }
+    .slide figure { display: block; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .slide { animation: fade .18s ease-out; }
+    @keyframes fade { from { opacity: .4 } to { opacity: 1 } }
+  }
+</style>
+</head>
+<body>
+
+<main class="deck" id="deck">
+
+  <!-- 1 -->
+  <section class="slide" aria-label="1枚目 タイトル">
+    <p class="eyebrow">移行方式の比較検証</p>
+    <h1>移行作業はこう変わる<br>前回（佐賀市）との違い</h1>
+    <p class="lead">同じページを3つのやり方で作業し、かかった時間と品質を比べます。<br>この資料は、実際に作業するみなさん向けに「何が変わるのか」をまとめたものです。</p>
+    <p class="fine">対象ツール: アクセシビリティ候補レビュー（goal2-app）／詳しい手順は <a href="/verification-guide.html">検証作業ガイド</a></p>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" aria-label="2枚目 一番の違い">
+    <p class="eyebrow">一番の違い</p>
+    <h2>人が目視で確認するタイミングが、1つ前になる</h2>
+    <p class="sub">AIを使うことは前回も同じです。変わるのは「AIの結果を、取り込む前に人が確認するかどうか」です。</p>
+
+    <div class="flowrow">
+      <h3><span class="badge">前回（佐賀市）</span></h3>
+      <div class="flow">
+        <div class="step"><b>AIが最適化する</b><small>AIがアクセシビリティ対応済みのHTMLを作る</small></div>
+        <div class="sep" aria-hidden="true">→</div>
+        <div class="step"><b>取り込む</b><small>そのHTMLをCMSに取り込む</small></div>
+        <div class="sep" aria-hidden="true">→</div>
+        <div class="step same"><b>人が目視で確認しながら作業</b><small>取り込んだ後に確認する</small></div>
+      </div>
+    </div>
+
+    <div class="flowrow">
+      <h3><span class="badge">今回</span></h3>
+      <div class="flow">
+        <div class="step"><b>AIが提案する</b><small>AIは修正候補を出すところまで</small></div>
+        <div class="sep" aria-hidden="true">→</div>
+        <div class="step added"><b>人が目視で確認して<br>最適化HTMLを作る</b><small>この工程が増える</small></div>
+        <div class="sep" aria-hidden="true">→</div>
+        <div class="step"><b>取り込む</b><small>人が確認したHTMLを取り込む</small></div>
+        <div class="sep" aria-hidden="true">→</div>
+        <div class="step same"><b>人が目視で確認しながら作業</b><small>ここは前回と同じ</small></div>
+      </div>
+    </div>
+
+    <div class="note"><p>増えるのは<strong>青い枠の1工程だけ</strong>です。取り込んだ後の作業は、これまでどおりです。</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" aria-label="3枚目 なぜ変えるのか">
+    <p class="eyebrow">なぜ変えるのか</p>
+    <h2>前回は「無駄な修正」が発生していた</h2>
+    <p class="sub">AIの結果をそのまま取り込んでいたため、良し悪しに気づくのが取り込んだ後になっていました。</p>
+    <div class="cols">
+      <div>
+        <h3>前回起きていたこと</h3>
+        <div class="ba" style="grid-template-columns:1fr; gap:10px">
+          <div class="box was">
+            <span class="tag">直しすぎ・間違い</span>
+            <p>AIが直した結果を、<strong>最適化される前の状態に戻す</strong>作業が発生した</p>
+          </div>
+          <div class="box was">
+            <span class="tag">漏れ</span>
+            <p>AIが<strong>拾えていなかった箇所</strong>を、後から探して直す必要があった</p>
+          </div>
+        </div>
+        <p class="fine">どちらも、取り込んでから気づいたために起きた手戻りです。</p>
+      </div>
+      <div>
+        <h3>今回はどうなるか</h3>
+        <div class="ba" style="grid-template-columns:1fr; gap:10px">
+          <div class="box now">
+            <span class="tag">直しすぎ・間違い</span>
+            <p>取り込む前に<strong>「却下」を選ぶだけ</strong>で済む。CMS上で戻す作業は発生しない</p>
+          </div>
+          <div class="box now">
+            <span class="tag">漏れ</span>
+            <p>候補一覧・miChecker相当チェック・「注意」欄で、<strong>作業中に気づける</strong></p>
+          </div>
+        </div>
+        <p class="fine">CMSに入れる前に片が付くので、やり直しが減ります。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" aria-label="4枚目 前回の規模感">
+    <p class="eyebrow">規模感</p>
+    <h2>1ページあたり7〜8件を判断することになる</h2>
+    <p class="sub">前回の佐賀市では、51ページに384件の修正が入っていました。今回はこれを、取り込む前に1件ずつ判断します。</p>
+    <div class="cols">
+      <div>
+        <div class="stats">
+          <div class="stat"><div class="n">51</div><div class="l">ページ</div></div>
+          <div class="stat"><div class="n">384</div><div class="l">修正</div></div>
+          <div class="stat"><div class="n">7.5</div><div class="l">1ページ平均</div></div>
+        </div>
+        <div class="note">
+          <p>そのまま使えた修正は<strong>4割ほど</strong>で、半分近くは<strong>文言の調整</strong>が入っています。AIの案をそのまま通せるとは限りません。</p>
+        </div>
+      </div>
+      <div>
+        <table class="mini">
+          <caption>多かった修正の種類</caption>
+          <thead><tr><th>種類</th><th class="num">件数</th></tr></thead>
+          <tbody>
+            <tr><td>レイアウト目的の表</td><td class="num">106</td></tr>
+            <tr><td>見出しの階層</td><td class="num">93</td></tr>
+            <tr><td>画像の代替テキスト</td><td class="num">90</td></tr>
+            <tr><td>表のキャプション</td><td class="num">64</td></tr>
+            <tr><td>箇条書き</td><td class="num">18</td></tr>
+            <tr><td>リンクの文言</td><td class="num">13</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="fine">※ 佐賀市の旧HTMLと完成HTMLの差分から機械的に集計した数字です。作業記録そのものではありません。</p>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" aria-label="5枚目 今回やること">
+    <p class="eyebrow">今回やること</p>
+    <h2>同じページを、3つのやり方で作業して比べる</h2>
+    <p class="sub">グループごとに担当するやり方が決まっています。担当は固定で、途中で入れ替わりません。</p>
+    <table class="mini">
+      <thead><tr><th>グループ</th><th>担当するやり方</th><th>やること</th></tr></thead>
+      <tbody>
+        <tr><td>グループ1</td><td><span class="pill pill-1">通常移行</span></td><td>これまでどおりの移行作業。候補レビューは使いません。</td></tr>
+        <tr><td>グループ2</td><td><span class="pill pill-2">AI移行</span></td><td>候補レビューで、移行ルール全体にもとづく候補を確認して直します。</td></tr>
+        <tr><td>グループ3</td><td><span class="pill pill-3">miChecker移行</span></td><td>候補レビューで、miCheckerが指摘する箇所だけを直します。</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <p>比べるのは <strong>かかった時間</strong> と <strong>できあがりの品質</strong> です。速さだけを競うものではないので、いつもどおりの丁寧さで作業してください。</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" aria-label="6枚目 作業の流れ">
+    <p class="eyebrow">作業の流れ（グループ2・3）</p>
+    <h2>増えるのは、真ん中の2工程</h2>
+    <div class="flow" style="margin:14px 0 4px">
+      <div class="step"><b>1. CMS解析</b><small>取込ツールで本文のソースを取り出す</small></div>
+      <div class="sep" aria-hidden="true">→</div>
+      <div class="step added"><b>2. 候補レビューに入力</b><small>取り出したソースを貼り付ける</small></div>
+      <div class="sep" aria-hidden="true">→</div>
+      <div class="step added"><b>3. 候補を判断する</b><small>1件ずつ確認して最終HTMLを得る</small></div>
+      <div class="sep" aria-hidden="true">→</div>
+      <div class="step"><b>4. 取込ツールへ戻す</b><small>最終HTMLを貼り付ける</small></div>
+      <div class="sep" aria-hidden="true">→</div>
+      <div class="step"><b>5. CMS取込・移行</b><small>これまでどおりの作業</small></div>
+    </div>
+    <div class="cols" style="margin-top:16px">
+      <div class="callout">時間は<strong>①CMS解析／②候補レビュー／③CMS取込・移行</strong>の3つに分けて記録してください。</div>
+      <div class="note"><p>1と4・5は、これまでのCMS作業と同じです。詳しい画面操作は <a href="/verification-guide.html#s4">検証作業ガイドの4章</a> にあります。</p></div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" aria-label="7枚目 候補が出る">
+    <p class="eyebrow">候補レビューの画面 1</p>
+    <h2>直すべき箇所が、一覧に出てくる</h2>
+    <div class="cols wide-right">
+      <div>
+        <p class="lead">本文HTMLを貼り付けて「候補生成」を押すと、修正候補が並びます。</p>
+        <ul class="pts">
+          <li>画像の代替テキスト、見出し、リンク文言、表の構造などを拾います</li>
+          <li>もとになっているのは、これまでのマニュアルを整理した<strong>移行ルール67件</strong></li>
+          <li>同じ箇所に直し方が複数あるときは、まとめて並びます</li>
+        </ul>
+        <div class="callout">候補が0件のこともあります。その場合も「注意」欄は必ず確認してください。</div>
+      </div>
+      <figure>
+        <img src="/images/verification/03-candidates-kb.jpg" alt="候補生成後の画面。左に修正候補一覧、中央に修正内容の詳細、右にプレビューが表示されている。">
+        <figcaption>左＝候補一覧／中央＝詳細／右＝プレビュー</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" aria-label="8枚目 4つのボタンで判断する">
+    <p class="eyebrow">候補レビューの画面 2</p>
+    <h2>4つのボタンで判断していく</h2>
+    <div class="cols wide-right">
+      <div>
+        <table class="mini">
+          <thead><tr><th>ボタン</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr><td><strong>採用</strong></td><td>提示された修正をそのまま使う</td></tr>
+            <tr><td><strong>文言を調整</strong></td><td>自分で直してから使う</td></tr>
+            <tr><td><strong>却下</strong></td><td>この修正は不要と判断する</td></tr>
+            <tr><td><strong>要確認</strong></td><td>自分では決めない。上長・SVへ回す</td></tr>
+          </tbody>
+        </table>
+        <div class="note"><p><strong>「却下」がこの検証の要です。</strong>AIが直しすぎている・間違っていると思ったら、ここで落とせます。取り込んだ後に戻す必要はありません。</p></div>
+        <div class="callout">判断できないものは無理に決めず「要確認」。安全側に倒してください。</div>
+      </div>
+      <figure>
+        <img src="/images/verification/05-detail-pane.jpg" alt="修正ペイン。採用・文言を調整・却下・要確認のボタンと、この候補で変わること、修正方法、見た目の比較が表示されている。">
+        <figcaption>判断ボタンと、修正前後の見た目の比較</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" aria-label="9枚目 見た目で比べられる">
+    <p class="eyebrow">候補レビューの画面 3</p>
+    <h2>HTMLが読めなくても判断できる</h2>
+    <p class="sub">候補ごとに「この候補で変わること」と、修正前・修正後の見た目が並びます。タグを読まなくても違いが分かります。</p>
+    <div class="cols wide-right">
+      <div>
+        <ul class="pts">
+          <li>右のプレビューで、いま見ている候補の箇所がハイライトされます</li>
+          <li>表の直し方が複数あるときは、切り替えて見比べられます</li>
+          <li>「（AI判定）」「（AI提案）」と付いた候補は、<strong>内容が実態に合っているか必ず人が確認</strong>してから採用します</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="/images/verification/04-candidate-pane.jpg" alt="修正候補一覧のペイン。候補がカードで並び、一部は「同じ箇所の候補・3件」としてグループ化されている。">
+        <figcaption>同じ箇所に複数の直し方があるときはグループで並ぶ</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" aria-label="10枚目 miCheckerが作業中に分かる">
+    <p class="eyebrow">漏れに気づくしくみ</p>
+    <h2>miCheckerの指摘が、作業中に分かる</h2>
+    <div class="cols wide-right">
+      <div>
+        <div class="ba" style="grid-template-columns:1fr; gap:10px">
+          <div class="box was">
+            <span class="tag">前回</span>
+            <p>取り込んだ後に検査 → 指摘が出たら戻って直す</p>
+          </div>
+          <div class="box now">
+            <span class="tag">今回</span>
+            <p>作業中の画面に「miChecker相当チェック結果」が出る</p>
+          </div>
+        </div>
+        <p style="margin-top:14px">公式の判定エンジンを移植したものが動いています。どのチェックIDが本文のどこに当たっているかを、表で確認できます。</p>
+      </div>
+      <figure>
+        <img src="/images/verification/10-michecker-engine.jpg" alt="miChecker相当チェック結果のパネル。種別・チェックID・該当箇所・公式メッセージ・対応する移行ルール・操作の表が表示されている。">
+        <figcaption>種別・チェックID・該当箇所・公式メッセージ・対応する移行ルール</figcaption>
+      </figure>
+    </div>
+    <p class="fine">※ グループ3では、この判定が公式miCheckerと一致するかを別途確認します（この確認の時間は計測に含めません）。</p>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" aria-label="11枚目 判断が記録に残る">
+    <p class="eyebrow">もう1つの違い</p>
+    <h2>「なぜそう直したか」が残る</h2>
+    <div class="cols wide-right">
+      <div>
+        <p class="lead">全候補を判断し終えると、出力欄から3つを取り出せます。</p>
+        <ul class="pts">
+          <li><strong>最終HTML</strong> — CMSに貼り付けるHTML</li>
+          <li><strong>注意</strong> — HTMLには反映されないが、登録時に人が確認すべきこと</li>
+          <li><strong>証跡</strong> — 誰が・いつ・どの候補を・どう判断したか（JSON / CSV）</li>
+        </ul>
+        <div class="note"><p>却下した理由も残るため、「なぜAIの案を使わなかったか」を後から説明できます。前回はここが手元の記録に留まっていました。</p></div>
+        <div class="callout">証跡は必ず保存してください。</div>
+      </div>
+      <figure>
+        <img src="/images/verification/06-output.jpg" alt="出力セクション。左に最終HTML、中央に注意、右に証跡JSONとJSONコピー・CSVボタンが並ぶ。">
+        <figcaption>最終HTML／注意／証跡（JSON・CSV）</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" aria-label="12枚目 変わらない点とお願い">
+    <p class="eyebrow">まとめ</p>
+    <h2>変わらないこと／始める前に</h2>
+    <div class="cols">
+      <div>
+        <h3>変わりません</h3>
+        <ul class="tight">
+          <li>取り込んだ後に、人が目視で確認しながら進める作業</li>
+          <li>CMSの取込作業（移行管理IDで検索 → 取り込み範囲を編集 → 登録）</li>
+          <li>行政情報の中身を判断する責任は人にあること</li>
+        </ul>
+        <div class="callout" style="margin-top:12px">サンプル投入は練習用のダミーデータです。本番の移行作業には使わないでください。</div>
+      </div>
+      <div>
+        <h3>始める前に</h3>
+        <ul class="tight">
+          <li><strong>自分の担当するやり方</strong>を確認する（グループ1／2／3）</li>
+          <li><strong>時間を3つに分けて記録</strong>する（①解析 ②候補レビュー ③取込・移行）</li>
+          <li><strong>担当ページと移行管理ID</strong>を移行管理シートで確認する</li>
+          <li>迷ったら「要確認」。<strong>速さより、いつもどおりの丁寧さ</strong></li>
+        </ul>
+        <div class="note" style="margin-top:12px"><p>操作の手順は <a href="/verification-guide.html">検証作業ガイド</a> にまとめています。</p></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="bar" aria-label="スライド操作">
+  <button type="button" id="prev">← 前へ</button>
+  <span class="counter" id="counter"></span>
+  <button type="button" id="next">次へ →</button>
+  <button type="button" id="grid" aria-pressed="false">一覧</button>
+  <span class="hint">← → キーでも移動できます</span>
+</nav>
+<p aria-live="polite" class="sr" id="live"></p>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var deck = document.getElementById('deck');
+  var prev = document.getElementById('prev');
+  var next = document.getElementById('next');
+  var grid = document.getElementById('grid');
+  var counter = document.getElementById('counter');
+  var live = document.getElementById('live');
+  var i = 0;
+  var overview = false;
+
+  function render() {
+    slides.forEach(function (s, n) {
+      s.classList.toggle('current', n === i);
+      if (overview || n === i) s.removeAttribute('hidden');
+      else s.setAttribute('hidden', '');
+    });
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    prev.disabled = i === 0;
+    next.disabled = i === slides.length - 1;
+    live.textContent = (i + 1) + '枚目、全' + slides.length + '枚';
+    if (location.hash !== '#' + (i + 1)) history.replaceState(null, '', '#' + (i + 1));
+  }
+
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    if (overview) setOverview(false);
+    render();
+    deck.scrollIntoView({ block: 'start' });
+  }
+
+  function setOverview(on) {
+    overview = on;
+    document.body.classList.toggle('overview', on);
+    grid.setAttribute('aria-pressed', String(on));
+    grid.textContent = on ? 'スライド表示' : '一覧';
+    render();
+  }
+
+  prev.addEventListener('click', function () { go(i - 1); });
+  next.addEventListener('click', function () { go(i + 1); });
+  grid.addEventListener('click', function () { setOverview(!overview); });
+
+  slides.forEach(function (s, n) {
+    s.addEventListener('click', function () { if (overview) go(n); });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(i + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(i - 1); e.preventDefault(); }
+    else if (e.key === 'Home') { go(0); e.preventDefault(); }
+    else if (e.key === 'End') { go(slides.length - 1); e.preventDefault(); }
+    else if (e.key === 's' || e.key === 'S') { setOverview(!overview); e.preventDefault(); }
+    else if (e.key === 'Escape' && overview) { setOverview(false); e.preventDefault(); }
+  });
+
+  var start = parseInt((location.hash || '').slice(1), 10);
+  if (start >= 1 && start <= slides.length) i = start - 1;
+  render();
+
+  window.addEventListener('beforeprint', function () {
+    slides.forEach(function (s) { s.removeAttribute('hidden'); });
+  });
+  window.addEventListener('afterprint', render);
+})();
+</script>
+</body>
+</html>
