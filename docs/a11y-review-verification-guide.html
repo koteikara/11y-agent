@@ -29,7 +29,10 @@ ul.clean{margin:12px 0; padding-left:0; list-style:none} ul.clean>li{position:re
  
 footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted); font-size:13px} footer .wrap{display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px}
  
-/* responsive / @media (max-width:760px){ .masthead h1{font-size:26px} .track{grid-template-columns:1fr} .toc ol{grid-template-columns:1fr} .lane{grid-template-columns:38px 1fr; } .lane .tag{grid-column:2; justify-self:start; margin-top:2px} .flow{grid-template-columns:1fr 1fr} .flow .step::after{content:"↓"; right:auto; left:50%; top:auto; bottom:-13px; transform:translateX(-50%)} .flow .step:nth-child(2n)::after{content:"↓"} } @media print{ .masthead::after,.track,.toc{display:none} body{font-size:12px} .masthead{color:#000;background:#fff;border-bottom:2px solid #000} .kicker,.lede,.meta-row div{color:#000!important} figure{break-inside:avoid} section{break-inside:auto} a.inline,.meta-row a{color:#000; text-decoration:underline} } @media (prefers-reduced-motion:no-preference){ .masthead .wrap>{animation:rise .6s cubic-bezier(.2,.7,.3,1) both} .masthead h1{animation-delay:.05s} .lede{animation-delay:.1s} .meta-row{animation-delay:.15s} .track{animation-delay:.2s} @keyframes rise{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}} } </style>
+/* ---------- side navigation ---------- */ .sidenav{display:none} @media (min-width:1440px){ .sidenav{ display:block; position:fixed; top:0; left:16px; width:200px; max-height:100vh; overflow-y:auto; padding:26px 8px 40px; } .sidenav .sn-h{font-family:var(--mono); font-size:10.5px; letter-spacing:.18em; color:var(--muted); margin:0 0 12px; padding-left:12px} .sidenav ol{list-style:none; counter-reset:sn; margin:0; padding:0} .sidenav li{counter-increment:sn} .sidenav a{ display:flex; gap:9px; align-items:baseline; padding:7px 10px 7px 12px; text-decoration:none; color:var(--ink-soft); font-size:12.5px; line-height:1.5; border-left:2px solid var(--line); } .sidenav a::before{content:counter(sn,decimal-leading-zero); font-family:var(--mono); font-size:10.5px; color:var(--muted); flex:none} .sidenav a:hover{color:var(--brand); border-left-color:var(--brand-tint); background:var(--tint)} .sidenav a[aria-current]{color:var(--brand); font-weight:700; border-left-color:var(--brand); background:var(--brand-tint)} .sidenav a[aria-current]::before{color:var(--brand)} .sidenav a:focus-visible{outline:2px solid var(--brand); outline-offset:-2px} .sidenav.at-top{opacity:0; visibility:hidden} } .sidenav{transition:opacity .18s ease} @media (prefers-reduced-motion:reduce){ .sidenav{transition:none} } @media (min-width:1700px){ .sidenav{width:250px; left:32px} .sidenav a{font-size:13px} }
+@media (prefers-reduced-motion:no-preference){ html{scroll-behavior:smooth} }
+
+/* responsive / @media (max-width:760px){ .masthead h1{font-size:26px} .track{grid-template-columns:1fr} .toc ol{grid-template-columns:1fr} .lane{grid-template-columns:38px 1fr; } .lane .tag{grid-column:2; justify-self:start; margin-top:2px} .flow{grid-template-columns:1fr 1fr} .flow .step::after{content:"↓"; right:auto; left:50%; top:auto; bottom:-13px; transform:translateX(-50%)} .flow .step:nth-child(2n)::after{content:"↓"} } @media print{ .masthead::after,.track,.toc,.sidenav{display:none} body{font-size:12px} .masthead{color:#000;background:#fff;border-bottom:2px solid #000} .kicker,.lede,.meta-row div{color:#000!important} figure{break-inside:avoid} section{break-inside:auto} a.inline,.meta-row a{color:#000; text-decoration:underline} } @media (prefers-reduced-motion:no-preference){ .masthead .wrap>{animation:rise .6s cubic-bezier(.2,.7,.3,1) both} .masthead h1{animation-delay:.05s} .lede{animation-delay:.1s} .meta-row{animation-delay:.15s} .track{animation-delay:.2s} @keyframes rise{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}} } </style>
  </head> <body> <header class="masthead"> <div class="wrap"> <p class="kicker">Accessibility Migration · Verification Protocol</p> <h1>アクセシビリティ候補レビュー<br><span class="thin">を用いた移行方式の比較検証 手順書</span></h1> <p class="lede">同一ページを3つの方式で移行し、<strong style="color:#fff">所要時間</strong>と<strong style="color:#fff">品質（アクセシビリティ）</strong>を比較・検証するための作業手順書です。作業者（オペレーター）と評価担当が、開発の専門知識なしで読み進められる形にまとめています。</p> 
 
 <div class="track" aria-label="検証の全体像">
@@ -50,12 +53,13 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 <div class="meta-row">
   <div>対象アプリ&nbsp; <b>アクセシビリティ候補レビュー（Goal2 PoC）</b></div>
   <div>実行URL&nbsp; <a class="mono" href="https://goal2-a11y-review-700549743482.asia-northeast1.run.app/">goal2-a11y-review-…run.app</a></div>
-  <div>版&nbsp; <b>v1.1</b></div>
+  <div>移行管理シート&nbsp; <a class="mono" href="https://docs.google.com/spreadsheets/d/1zFZrD5sK0_Aw2jCtCejXMsgsWvHw10eAQNlPQqqfGzk/edit?usp=sharing">Google スプレッドシート</a></div>
+  <div>版&nbsp; <b>v1.2</b></div>
   <div>用途&nbsp; <b>比較検証（人手 vs. AI支援）</b></div>
 </div>
 
 
- </div> </header> <div class="wrap"> <nav class="toc" aria-label="目次"> <h2>目次</h2> <ol> <li><a href="#s1"><span>検証の目的と全体像</span></a></li> <li><a href="#s2"><span>作業の全体フロー（方式2・3共通）</span></a></li> <li><a href="#s3"><span>事前準備と共通ルール</span></a></li> <li><a href="#s4"><span>方式1: 通常移行</span></a></li> <li><a href="#s5"><span>方式2: AI移行（詳細手順）</span></a></li> <li><a href="#s6"><span>方式3: miChecker移行 と 同一性検証</span></a></li> <li><a href="#s7"><span>補助: 本文抽出画面の使い方</span></a></li> <li><a href="#s8"><span>計測・記録項目</span></a></li> <li><a href="#s9"><span>注意点・よくある質問</span></a></li> <li><a href="#s10"><span>付録: 用語集・画面一覧</span></a></li> </ol> </nav> </div> <main class="wrap"> <!-- ============ 1 ============ --> <section id="s1"> <div class="sec-head"><span class="sec-no">01</span><h2 class="sec-title">検証の目的と全体像</h2></div> <p class="sec-intro">本検証では、<strong>まったく同じ移行対象ページ</strong>を3つの方式で処理し、それぞれの<strong>所要時間</strong>と<strong>成果物の品質</strong>を記録して比較します。ねらいは、従来の「全ページ手動確認」に対して、AI支援を加えた方式がどれだけ効率と品質に寄与するかを、数字で確かめることです。</p> 
+ </div> </header> <nav class="sidenav" aria-label="セクションナビゲーション"> <p class="sn-h">CONTENTS</p> <ol> <li><a href="#s1"><span>検証の目的と全体像</span></a></li> <li><a href="#s2"><span>作業の全体フロー</span></a></li> <li><a href="#s3"><span>事前準備と共通ルール</span></a></li> <li><a href="#s4"><span>方式1: 通常移行</span></a></li> <li><a href="#s5"><span>方式2: AI移行</span></a></li> <li><a href="#s6"><span>方式3: miChecker移行</span></a></li> <li><a href="#s7"><span>CMSでの操作手順</span></a></li> <li><a href="#s8"><span>補助: 本文抽出画面</span></a></li> <li><a href="#s9"><span>計測・記録項目</span></a></li> <li><a href="#s10"><span>注意点・よくある質問</span></a></li> <li><a href="#s11"><span>付録: 用語集・画面一覧</span></a></li> </ol> </nav> <div class="wrap"> <nav class="toc" aria-label="目次"> <h2>目次</h2> <ol> <li><a href="#s1"><span>検証の目的と全体像</span></a></li> <li><a href="#s2"><span>作業の全体フロー（方式2・3共通）</span></a></li> <li><a href="#s3"><span>事前準備と共通ルール</span></a></li> <li><a href="#s4"><span>方式1: 通常移行</span></a></li> <li><a href="#s5"><span>方式2: AI移行（詳細手順）</span></a></li> <li><a href="#s6"><span>方式3: miChecker移行 と 同一性検証</span></a></li> <li><a href="#s7"><span>CMSでの操作手順（データ取込）</span></a></li> <li><a href="#s8"><span>補助: 本文抽出画面の使い方</span></a></li> <li><a href="#s9"><span>計測・記録項目</span></a></li> <li><a href="#s10"><span>注意点・よくある質問</span></a></li> <li><a href="#s11"><span>付録: 用語集・画面一覧</span></a></li> </ol> </nav> </div> <main class="wrap"> <!-- ============ 1 ============ --> <section id="s1"> <div class="sec-head"><span class="sec-no">01</span><h2 class="sec-title">検証の目的と全体像</h2></div> <p class="sec-intro">本検証では、<strong>まったく同じ移行対象ページ</strong>を3つの方式で処理し、それぞれの<strong>所要時間</strong>と<strong>成果物の品質</strong>を記録して比較します。ねらいは、従来の「全ページ手動確認」に対して、AI支援を加えた方式がどれだけ効率と品質に寄与するかを、数字で確かめることです。</p> 
 
 <h3>3つの方式</h3>
 <table class="tbl">
@@ -69,7 +73,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 
 <div class="call rec">
   <div class="h">記録するもの（各方式で共通）</div>
-  <p>① 作業の<strong>所要時間</strong>（フェーズごと）、② 成果物の<strong>品質</strong>（アクセシビリティ上の検出漏れ・誤り、miChecker指摘の残存数）。詳しい記録項目は <a class="inline" href="#s8">8. 計測・記録項目</a> にまとめています。</p>
+  <p>① 作業の<strong>所要時間</strong>（フェーズごと）、② 成果物の<strong>品質</strong>（アクセシビリティ上の検出漏れ・誤り、miChecker指摘の残存数）。詳しい記録項目は <a class="inline" href="#s9">9. 計測・記録項目</a> にまとめています。</p>
 </div>
 
 
@@ -84,14 +88,14 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 </div>
 
 <ul class="clean">
-  <li><strong>STEP 1（CMS解析）</strong>: CMSの取込ツールで、ヘッダー・ナビ・フッターなどを除いた<strong>本文（コンテンツ）部分のみ</strong>のソースコードを生成します。</li>
+  <li><strong>STEP 1（CMS解析）</strong>: CMSの取込ツールで、ヘッダー・ナビ・フッターなどを除いた<strong>本文（コンテンツ）部分のみ</strong>のソースコードを生成します。CMS側の画面操作は <a class="inline" href="#s7">7. CMSでの操作手順</a> を参照してください。</li>
   <li><strong>STEP 2〜3（このアプリの作業）</strong>: 出力されたソースコードを「アクセシビリティ候補レビュー」に入力し、修正候補を判断して<strong>最適化された最終HTML</strong>を取得します。</li>
-  <li><strong>STEP 4〜5（CMS側の作業）</strong>: 最適化後のソースコードをCMSの取込ツールへ戻し、CMSで取り込んだうえで、移行に必要な残りの作業を実施します。</li>
+  <li><strong>STEP 4〜5（CMS側の作業）</strong>: 最適化後のソースコードをCMSの取込ツールへ戻し、CMSで取り込んだうえで、移行に必要な残りの作業を実施します（<a class="inline" href="#s7">7. CMSでの操作手順</a>）。</li>
 </ul>
 
 <div class="call tip">
   <div class="h">STEP 1 の代替・補助</div>
-  <p>取込ツールでの本文抽出が難しい場合は、本アプリの <a class="inline" href="#s7">本文抽出画面</a> で旧ページから本文候補を切り出し、そのまま候補レビューへ引き継ぐこともできます。</p>
+  <p>取込ツールでの本文抽出が難しい場合は、本アプリの <a class="inline" href="#s8">本文抽出画面</a> で旧ページから本文候補を切り出し、そのまま候補レビューへ引き継ぐこともできます。</p>
 </div>
 
 
@@ -121,7 +125,8 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
   <tbody>
     <tr><td class="k">オペレーターの3グループ分け</td><td>BPO</td><td>方式1・方式2・方式3を<strong>別々のグループ</strong>が担当します。同じ人が同じページを続けて作業すると内容を覚えてしまい、2回目以降の時間が短く出るためです。</td></tr>
     <tr><td class="k">CMS側の3系統の準備</td><td>戦略G</td><td><strong>通常取込</strong>（方式1用）、<strong>解析まで①</strong>（AI移行用）、<strong>解析まで②</strong>（miChecker移行用）を、あらかじめCMS上に用意しておきます。</td></tr>
-    <tr><td class="k">記録用スプレッドシート</td><td>検証責任者</td><td>時間と品質を記録する共有シート。列は <a class="inline" href="#s8">8. 計測・記録項目</a> の表に合わせて作ります。作業中はこのシートに直接記入します。</td></tr>
+    <tr><td class="k">移行管理シート</td><td>戦略G</td><td>対象ページ・移行管理ID・CMS登録先を管理する共有シートです。担当ページと移行管理IDは、作業前にここで確認します。<br><a class="inline" href="https://docs.google.com/spreadsheets/d/1zFZrD5sK0_Aw2jCtCejXMsgsWvHw10eAQNlPQqqfGzk/edit?usp=sharing">移行管理シートを開く（Google スプレッドシート）</a></td></tr>
+    <tr><td class="k">記録用スプレッドシート</td><td>検証責任者</td><td>時間と品質を記録する共有シート。列は <a class="inline" href="#s9">9. 計測・記録項目</a> の表に合わせて作ります。作業中はこのシートに直接記入します。</td></tr>
   </tbody>
 </table>
 
@@ -157,7 +162,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 <ul class="clean">
   <li>いつもの移行手順で作業を進めます（ツールの追加操作なし）。</li>
   <li><strong>所要時間</strong>を記録します（開始・終了時刻）。</li>
-  <li>完成したページは、方式2・3と<strong>同じ基準で品質評価</strong>にかけます（<a class="inline" href="#s8">8章</a>）。</li>
+  <li>完成したページは、方式2・3と<strong>同じ基準で品質評価</strong>にかけます（<a class="inline" href="#s9">9章</a>）。</li>
 </ul>
 <div class="call rec"><div class="h">記録</div><p>対象ページ・担当者・開始／終了時刻・所要時間。これが他方式との比較の<strong>基準値</strong>になります。</p></div>
 
@@ -172,7 +177,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
   </li>
   <li>
     <div class="st-t">ページ情報と本文HTMLを入力する</div>
-    <p>上部の欄に<strong>ページ名 / 旧URL / CMS登録先 / 作業者</strong>を入力し、「本文HTML」欄に、STEP 1（CMS解析）で抽出した<strong>本文のソースコード</strong>を貼り付けます。</p>
+    <p>上部の欄に<strong>ページ名 / 旧URL / CMS登録先 / 作業者</strong>を入力します（ページ名・旧URL・CMS登録先は <a class="inline" href="https://docs.google.com/spreadsheets/d/1zFZrD5sK0_Aw2jCtCejXMsgsWvHw10eAQNlPQqqfGzk/edit?usp=sharing">移行管理シート</a> の値に合わせます）。続けて「本文HTML」欄に、STEP 1（CMS解析）で抽出した<strong>本文のソースコード</strong>を貼り付けます。</p>
     <figure><img src="images/a11y-review-guide/fig-5-2.png" alt="候補レビューの入力画面。ページ名・旧URL・CMS登録先・作業者の欄と、本文HTMLの貼り付け欄、候補生成ボタン" /><figcaption><span class="fig-k">図 5-2</span>入力画面。ページ情報を入れ、本文HTMLを貼り付ける。</figcaption></figure>
   </li>
   <li>
@@ -270,7 +275,48 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 </div>
 
 
- </section> <!-- ============ 7 ============ --> <section id="s7"> <div class="sec-head"><span class="sec-no">07</span><h2 class="sec-title">補助: 本文抽出画面の使い方</h2></div> <p class="sec-intro">CMS取込ツールでの本文抽出（全体フロー STEP 1）が難しいときは、本アプリの<strong>「本文抽出」画面</strong>で、旧ページ全体のHTMLから本文（コンテンツ）部分を切り出せます。上部メニューの「本文抽出」から開きます。</p> <figure><img src="images/a11y-review-guide/fig-7-1.png" alt="本文抽出画面。旧ページURLまたは全体HTMLの入力、候補抽出ボタン、本文候補一覧" /><figcaption><span class="fig-k">図 7-1</span>「本文抽出」画面。旧ページから本文候補を切り出す。</figcaption></figure> <ul class="clean"> <li>旧ページの<strong>URLを入力して取得</strong>するか、旧ページ<strong>全体のHTMLを貼り付け</strong>ます。</li> <li>「<strong>候補抽出</strong>」を押すと、パンくず・ページトップ・お問い合わせなどのテンプレート部分を除いた<strong>本文候補</strong>が、確からしい順に表示されます。</li> <li>候補ごとに、本文量・見出し／表／画像の数などの抽出根拠と、元ページ内での位置プレビューを確認できます。</li> <li>「<strong>候補レビューへ渡す</strong>」で、選んだ本文HTMLをそのまま方式2・3の入力画面へ引き継げます。</li> </ul> <div class="call warn"><div class="h">注意</div><p>認証が必要な旧サイトや社内ネットワーク限定のサイトは、URL取得できません。その場合は全体HTMLを貼り付けて使います。</p></div> </section> <!-- ============ 8 ============ --> <section id="s8"> <div class="sec-head"><span class="sec-no">08</span><h2 class="sec-title">計測・記録項目</h2></div> <p class="sec-intro">比較の精度は記録の丁寧さで決まります。方式ごと・ページごとに、下の項目をそろえて残してください。</p> 
+ </section> <!-- ============ 7 ============ --> <section id="s7"> <div class="sec-head"><span class="sec-no">07</span><h2 class="sec-title">CMSでの操作手順（データ取込）</h2></div> <p class="sec-intro">全体フローの <strong>STEP 1（CMS解析）</strong> と <strong>STEP 4〜5（取込ツールへ戻す・CMS取込）</strong> で使う、CMS側の操作手順です。対象サイトは <code>https://cms.migrate4.smart-lgov.jp/smartcms/</code> です。</p>
+
+<div class="call warn">
+  <div class="h">この章はプレビュー版です</div>
+  <p>現時点では、<strong>CMSへのログインから「ページ一括登録」画面を開くまで</strong>を記載しています。以降（CSVアップロード、取込結果の確認、解析済ページ一括処理など）は、操作を進めながら順次追記します。最終版は、各手順にスクリーンショットを添えたWord文書としても配布する予定です。</p>
+</div>
+
+<ol class="steps">
+  <li>
+    <div class="st-t">CMSにログインし、ページビュー画面を表示する</div>
+    <p>ログインすると、トップの「<strong>ページビュー</strong>」画面が表示されます。フォルダごとにコンテンツが一覧表示されます。</p>
+  </li>
+  <li>
+    <div class="st-t">「サイト管理（for SuperUser）」画面を開く</div>
+    <p>画面右上のメニューから「<strong>サイト管理</strong>」を開きます。「サイト情報」「お知らせ管理」「グループ・ユーザ管理」「組織変更支援」「キーワード管理」「<strong>コンテンツ移行管理</strong>」などの管理メニューが並びます。</p>
+  </li>
+  <li>
+    <div class="st-t">「コンテンツ移行管理」＞「ページ一括登録」タブを開く</div>
+    <p>「コンテンツ移行管理」から該当メニューを選び、「<strong>ページ一括登録</strong>」タブを表示します。この画面の「<strong>CSVアップロード</strong>」でデータを取り込みます。</p>
+    <table class="tbl">
+      <thead><tr><th>タブ</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="k">カテゴリ一括登録</td><td>カテゴリをまとめて登録する。</td></tr>
+        <tr><td class="k">ページ一括登録</td><td><strong>本検証で使うタブ。</strong>CSVアップロードでページをまとめて登録する。</td></tr>
+        <tr><td class="k">ショートカット一括登録</td><td>ショートカットをまとめて登録する。</td></tr>
+        <tr><td class="k">解析済ページ一括処理</td><td>解析済みのページをまとめて処理する。</td></tr>
+      </tbody>
+    </table>
+  </li>
+  <li>
+    <div class="st-t">移行管理IDで検索する</div>
+    <p>「<strong>移行管理ID</strong>」欄に対象のID（例: <code>aitest-</code>）を入力し、「<strong>検索する</strong>」を押します。まだ取り込んでいない状態では「該当するデータはありません。」と表示されます。</p>
+    <p>移行管理IDと対象ページの対応は <a class="inline" href="https://docs.google.com/spreadsheets/d/1zFZrD5sK0_Aw2jCtCejXMsgsWvHw10eAQNlPQqqfGzk/edit?usp=sharing">移行管理シート</a> で管理しています。方式ごとにIDを取り違えないよう、シートで確認してから検索してください。</p>
+  </li>
+</ol>
+
+<div class="call tip">
+  <div class="h">計測との関係</div>
+  <p>この章の操作は、時間計測ではフェーズ<strong>①CMS解析</strong>（取込前の準備）と<strong>③CMS取込・移行</strong>に当たります。区切りの定義は <a class="inline" href="#s3">3. 事前準備と共通ルール</a> を参照してください。</p>
+</div>
+
+ </section> <!-- ============ 8 ============ --> <section id="s8"> <div class="sec-head"><span class="sec-no">08</span><h2 class="sec-title">補助: 本文抽出画面の使い方</h2></div> <p class="sec-intro">CMS取込ツールでの本文抽出（全体フロー STEP 1）が難しいときは、本アプリの<strong>「本文抽出」画面</strong>で、旧ページ全体のHTMLから本文（コンテンツ）部分を切り出せます。上部メニューの「本文抽出」から開きます。</p> <figure><img src="images/a11y-review-guide/fig-7-1.png" alt="本文抽出画面。旧ページURLまたは全体HTMLの入力、候補抽出ボタン、本文候補一覧" /><figcaption><span class="fig-k">図 7-1</span>「本文抽出」画面。旧ページから本文候補を切り出す。</figcaption></figure> <ul class="clean"> <li>旧ページの<strong>URLを入力して取得</strong>するか、旧ページ<strong>全体のHTMLを貼り付け</strong>ます。</li> <li>「<strong>候補抽出</strong>」を押すと、パンくず・ページトップ・お問い合わせなどのテンプレート部分を除いた<strong>本文候補</strong>が、確からしい順に表示されます。</li> <li>候補ごとに、本文量・見出し／表／画像の数などの抽出根拠と、元ページ内での位置プレビューを確認できます。</li> <li>「<strong>候補レビューへ渡す</strong>」で、選んだ本文HTMLをそのまま方式2・3の入力画面へ引き継げます。</li> </ul> <div class="call warn"><div class="h">注意</div><p>認証が必要な旧サイトや社内ネットワーク限定のサイトは、URL取得できません。その場合は全体HTMLを貼り付けて使います。</p></div> </section> <!-- ============ 9 ============ --> <section id="s9"> <div class="sec-head"><span class="sec-no">09</span><h2 class="sec-title">計測・記録項目</h2></div> <p class="sec-intro">比較の精度は記録の丁寧さで決まります。方式ごと・ページごとに、下の項目をそろえて残してください。</p> 
 
 <h3>時間・作業量の記録</h3>
 <table class="tbl rec-tpl">
@@ -298,7 +344,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 <div class="call rec"><div class="h">証跡の保存</div><p>方式2・3では、出力欄の証跡（JSON / CSV）を必ずダウンロードし、対象ページ・方式が分かる名前で保管してください。後からの分析・再現の土台になります。</p></div>
 
 
- </section> <!-- ============ 9 ============ --> <section id="s9"> <div class="sec-head"><span class="sec-no">09</span><h2 class="sec-title">注意点・よくある質問</h2></div> <table class="tbl"> <thead><tr><th style="width:38%">状況</th><th>対応</th></tr></thead> <tbody> <tr><td class="k">「AIで確認中」が長い</td><td>ページの内容量によっては数十秒かかります。半透明表示が消えるまで待ちます。数分待っても終わらなければ担当者へ連絡します。</td></tr> <tr><td class="k">AIの提案は信じてよい？</td><td>いいえ。「（AI判定）」等の注記が付いた候補は、内容が実態に合うか<strong>必ず人が確認</strong>してから採用します。疑問があれば「要確認」。</td></tr> <tr><td class="k">サンプルのまま作業してしまった</td><td>サンプルは練習用ダミーです。本番には使いません。「リセット」で入力欄をクリアしてやり直します。</td></tr> <tr><td class="k">候補が1件も出ない</td><td>本文に明らかな問題がなければ0件のこともあります。ただし「注意」欄に確認事項が出る場合があるので、出力欄は必ず確認します。</td></tr> <tr><td class="k">出力してよいか分からない</td><td>候補一覧の右上が<strong>「完了可」</strong>になっているか確認します。<strong>未完了のまま出力しない</strong>でください。</td></tr> <tr><td class="k">迷って手が止まる</td><td>無理に採用・却下せず「要確認」にします。安全側に倒すのが原則です。</td></tr> </tbody> </table> </section> <!-- ============ 10 ============ --> <section id="s10"> <div class="sec-head"><span class="sec-no">10</span><h2 class="sec-title">付録: 用語集・画面一覧</h2></div> 
+ </section> <!-- ============ 10 ============ --> <section id="s10"> <div class="sec-head"><span class="sec-no">10</span><h2 class="sec-title">注意点・よくある質問</h2></div> <table class="tbl"> <thead><tr><th style="width:38%">状況</th><th>対応</th></tr></thead> <tbody> <tr><td class="k">「AIで確認中」が長い</td><td>ページの内容量によっては数十秒かかります。半透明表示が消えるまで待ちます。数分待っても終わらなければ担当者へ連絡します。</td></tr> <tr><td class="k">AIの提案は信じてよい？</td><td>いいえ。「（AI判定）」等の注記が付いた候補は、内容が実態に合うか<strong>必ず人が確認</strong>してから採用します。疑問があれば「要確認」。</td></tr> <tr><td class="k">サンプルのまま作業してしまった</td><td>サンプルは練習用ダミーです。本番には使いません。「リセット」で入力欄をクリアしてやり直します。</td></tr> <tr><td class="k">候補が1件も出ない</td><td>本文に明らかな問題がなければ0件のこともあります。ただし「注意」欄に確認事項が出る場合があるので、出力欄は必ず確認します。</td></tr> <tr><td class="k">出力してよいか分からない</td><td>候補一覧の右上が<strong>「完了可」</strong>になっているか確認します。<strong>未完了のまま出力しない</strong>でください。</td></tr> <tr><td class="k">迷って手が止まる</td><td>無理に採用・却下せず「要確認」にします。安全側に倒すのが原則です。</td></tr> </tbody> </table> </section> <!-- ============ 11 ============ --> <section id="s11"> <div class="sec-head"><span class="sec-no">11</span><h2 class="sec-title">付録: 用語集・画面一覧</h2></div> 
 
 <h3>用語集</h3>
 <table class="tbl">
@@ -317,11 +363,44 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
   <thead><tr><th>メニュー</th><th>役割</th><th>本書での参照</th></tr></thead>
   <tbody>
     <tr><td class="k">候補レビュー</td><td>本文HTMLを入力し、修正候補を判断して最終HTMLを出力する（本検証の中心）。</td><td class="mono">§5 / §6</td></tr>
-    <tr><td class="k">本文抽出</td><td>旧ページ全体HTMLから本文（コンテンツ）部分を切り出す。</td><td class="mono">§7</td></tr>
+    <tr><td class="k">本文抽出</td><td>旧ページ全体HTMLから本文（コンテンツ）部分を切り出す。</td><td class="mono">§8</td></tr>
     <tr><td class="k">miChecker結果比較</td><td>ツールの判定と公式miCheckerの結果を突き合わせる（同一性検証）。</td><td class="mono">§6</td></tr>
     <tr><td class="k">一括最適化</td><td>複数ページをまとめて処理する画面（本検証では未使用）。</td><td class="mono">—</td></tr>
   </tbody>
 </table>
 
 
- </section> </main> <footer> <div class="wrap"> <div>アクセシビリティ候補レビュー ｜ 移行方式の比較検証 手順書 · v1.1</div> <div>対象アプリ: Goal2 A11y Review（PoC）</div> </div> </footer> </body> </html>
+ </section> </main> <footer> <div class="wrap"> <div>アクセシビリティ候補レビュー ｜ 移行方式の比較検証 手順書 · v1.2</div> <div>対象アプリ: Goal2 A11y Review（PoC）</div> </div> </footer> <script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidenav a'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {};
+  links.forEach(function(a){ byId[a.getAttribute('href').slice(1)] = a; });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main section'));
+  var visible = Object.create(null);
+  function refresh(){
+    for (var i = 0; i < sections.length; i++) {
+      if (visible[sections[i].id]) {
+        links.forEach(function(a){ a.removeAttribute('aria-current'); });
+        if (byId[sections[i].id]) byId[sections[i].id].setAttribute('aria-current', 'true');
+        return;
+      }
+    }
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ visible[e.target.id] = e.isIntersecting; });
+    refresh();
+  }, { rootMargin: '-12% 0px -68% 0px' });
+  sections.forEach(function(s){ io.observe(s); });
+
+  // the rail sits over the dark masthead at the top of the page, so keep it hidden there
+  var rail = document.querySelector('.sidenav');
+  var masthead = document.querySelector('.masthead');
+  if (rail && masthead) {
+    rail.classList.add('at-top');
+    new IntersectionObserver(function(entries){
+      rail.classList.toggle('at-top', entries[0].isIntersecting);
+    }, { rootMargin: '-64px 0px 0px 0px' }).observe(masthead);
+  }
+})();
+</script> </body> </html>
