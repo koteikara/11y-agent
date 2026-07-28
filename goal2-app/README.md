@@ -6,7 +6,7 @@ Goal 2の最小実行画面です。CMS登録予定の本文HTML断片を貼り�
 
 実際に画面を操作する作業者向けの操作マニュアルは [WORKER_GUIDE.md](WORKER_GUIDE.md) を参照してください。
 
-3パターン(通常移行 / AI移行 / miChecker移行)の比較検証を進めるための作業手順書は、アプリ内の `/verification-guide.html` でホストしています(実体は `public/verification-guide.html`、画面キャプチャは `public/images/verification/`)。各画面のナビゲーションの「検証ガイド」から開けます。
+3パターン(通常移行 / AI移行 / miChecker移行)の比較検証を進めるための作業手順書は、リポジトリの [`docs/a11y-review-verification-guide.html`](../docs/a11y-review-verification-guide.html) です(画面キャプチャは `docs/images/a11y-review-guide/`)。ブラウザでファイルを開いて参照します。
 
 ## Scope
 

@@ -115,7 +115,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 
 <div class="call warn">
   <div class="h">学習効果を避けるための注意</div>
-  <p>同じオペレーターが<strong>同一ページを複数の方式で続けて作業する</strong>と、2回目以降は内容を覚えてしまい、時間が実際より短く出ます。方式ごとに担当を分ける、または対象ページを分ける運用にしてください（割り当ては検証責任者の指示に従います）。</p>
+  <p>同じオペレーターが<strong>同一ページを複数の方式で続けて作業する</strong>と、2回目以降は内容を覚えてしまい、時間が実際より短く出ます。そのため、方式ごとに担当グループを固定します（次の「実施体制と事前に用意するもの」を参照）。</p>
 </div>
 
 <h3>実施体制と事前に用意するもの</h3>
@@ -123,12 +123,23 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 <table class="tbl">
   <thead><tr><th style="width:24%">用意するもの</th><th>担当</th><th>内容</th></tr></thead>
   <tbody>
-    <tr><td class="k">オペレーターの3グループ分け</td><td>BPO</td><td>方式1・方式2・方式3を<strong>別々のグループ</strong>が担当します。同じ人が同じページを続けて作業すると内容を覚えてしまい、2回目以降の時間が短く出るためです。</td></tr>
+    <tr><td class="k">オペレーターの3グループ分け</td><td>BPO</td><td>方式1・方式2・方式3を、それぞれ<strong>別のグループ</strong>が担当します。担当する方式は固定し、ローテーションはしません（対応は下の表）。</td></tr>
     <tr><td class="k">CMS側の3系統の準備</td><td>戦略G</td><td><strong>通常取込</strong>（方式1用）、<strong>解析まで①</strong>（AI移行用）、<strong>解析まで②</strong>（miChecker移行用）を、あらかじめCMS上に用意しておきます。</td></tr>
     <tr><td class="k">移行管理シート</td><td>戦略G</td><td>対象ページ・移行管理ID・CMS登録先を管理する共有シートです。担当ページと移行管理IDは、作業前にここで確認します。<br><a class="inline" href="https://docs.google.com/spreadsheets/d/1zFZrD5sK0_Aw2jCtCejXMsgsWvHw10eAQNlPQqqfGzk/edit?usp=sharing">移行管理シートを開く（Google スプレッドシート）</a></td></tr>
     <tr><td class="k">記録用スプレッドシート</td><td>検証責任者</td><td>時間と品質を記録する共有シート。列は <a class="inline" href="#s9">9. 計測・記録項目</a> の表に合わせて作ります。作業中はこのシートに直接記入します。</td></tr>
   </tbody>
 </table>
+
+<h4>グループ・方式・CMS準備物の対応</h4>
+<table class="tbl">
+  <thead><tr><th>グループ</th><th>担当する方式</th><th>使うCMSの準備物</th></tr></thead>
+  <tbody>
+    <tr><td class="k">グループ1</td><td><span class="pill p1"><span class="dot"></span>方式1: 通常移行</span></td><td>通常取込</td></tr>
+    <tr><td class="k">グループ2</td><td><span class="pill p2"><span class="dot"></span>方式2: AI移行</span></td><td>解析まで①（AI移行用）</td></tr>
+    <tr><td class="k">グループ3</td><td><span class="pill p3"><span class="dot"></span>方式3: miChecker移行</span></td><td>解析まで②（miChecker移行用）</td></tr>
+  </tbody>
+</table>
+<p class="note-sm">※ 所要時間の差には、グループごとの習熟度の差も含まれます。集計するときはこの点を踏まえて読んでください。</p>
 
 <h4>対象ページ数の考え方</h4>
 <ul class="clean">
@@ -154,6 +165,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
   </tbody>
 </table>
 <p class="note-sm">※ 方式1（通常移行）は①〜③をフェーズ分けせず、全体の所要時間だけでも構いません（従来手順に合わせてください）。</p>
+<p class="note-sm">※ 方式3の<a class="inline" href="#s6">miChecker本体との同一性検証</a>は移行作業ではないため、所要時間の計測には含めません。</p>
 
 
  </section> <!-- ============ 4 ============ --> <section id="s4"> <div class="sec-head"><span class="sec-no">04</span><h2 class="sec-title">方式1: 通常移行</h2></div> <div class="pat-banner p1"><span class="bignum">1</span><div><div class="t">通常移行 &nbsp;<span class="pill p1" style="font-size:12px"><span class="dot"></span>基準</span></div><div class="s">これまでの移行作業をそのまま実施します。候補レビューは使いません。</div></div></div> 
@@ -272,6 +284,7 @@ footer{border-top:1px solid var(--line); padding:30px 0 60px; color:var(--muted)
 <div class="call rec">
   <div class="h">同一性検証で記録</div>
   <p>ツールの判定と公式miCheckerの判定で<strong>一致した項目／食い違った項目</strong>を記録します。食い違いがあれば、チェックID・該当箇所・どちらが何を出したかを控えて検証責任者へ報告してください。この一致度が、方式3の結果を信頼してよいかの根拠になります。</p>
+  <p>なお、この同一性検証は移行作業ではないため、<strong>所要時間の計測には含めません</strong>。</p>
 </div>
 
 
