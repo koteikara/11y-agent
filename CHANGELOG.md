@@ -147,6 +147,20 @@
 - 検証: Playwrightでファイルを開き、図9点がすべて読み込まれること、横スクロールが発生しないこと、10セクションが揃うことを確認した。
 - 関連ファイル: `docs/a11y-review-verification-guide.html`, `docs/images/a11y-review-guide/*.png`
 
+## 2026-07-27: 入れ子テーブルの行を親の行として二重処理する不具合と、はみ出したcolspanの複製を修正
+
+- 背景・目的: 実データ(安城市 碧海山古墳のページ)で、レイアウト表を解体すると、同じ内容が「表のまま」と「解体後」の2通りで最終HTMLに残り、解体後の断片が本文末尾(所在地セクションの後、Googleマップリンクの前)という無関係な位置へ置かれると報告を受けた。ローカルで再現し、原因を特定して修正した。
+- 原因1(内容の重複): `table.querySelectorAll("tr")` は子孫すべての`tr`を返すため、セルの中に表がある場合、内側の表の行まで親の行として処理していた。`decomposeLayoutTable()`が外側のレイアウト表を解体する際、自分の1行に加えて入れ子の表の4行を自分の行として処理し、その結果を変換後HTMLの末尾へ追加していた。候補1件の中で完結した不具合であり、複数候補の競合ではない。
+- 原因2(内容の複製): 2列の表の一部の行だけが`colspan="2"`になっている場合(元データの`colspan`が列数を超えている)、`buildExpandedTableGrid()`が3列目まで展開し、`buildFlattenedTableHtml()`がその列にもセルの内容を出力していた。結果として「円墳」が2回書かれ、他の行には空セルが生まれていた。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `ownTableRows(table)`を追加し、行を数える・並べる・展開する処理をすべてこれに通した(`dataTableProfile` / `tableLayoutSignals` / `decomposeLayoutTable` / `firstMergedCellInfo` / `buildMergedLinkRepeatedAcrossCellsHtml` / `buildExpandedTableGrid` / `tableWithRowRemoved`)。`classifyNaiveTableStructure`は入れ子を`"nested"`として早期returnするため対象外(miChecker本体の挙動に合わせている)。
+  - `computeTableGridShape()`の末尾列の切り詰め条件に「その列から始まるセル(isOrigin)が全行に1つも無い」場合を追加した。colspanが表の実際の列数をはみ出してできた列を切り詰める。本物のcolspan(3列の表で2列にまたがるセル)は、他の行にその列から始まるセルがあるため切り詰めない。
+- 追加(`goal2-app/test/table-nesting/run-table-tests.js`): 回帰テスト7項目。`test/michecker-parity/`と同じ理由で`npm test`には組み込まず、Playwrightで実際のアプリを動かして検証する(`npm run test:table-nesting`)。入れ子の内容が重複しないこと、最終HTMLに断片が追記されないこと、はみ出したcolspanで内容が複製されず空セルも生まれないこと、本物のcolspanは列数を保ち各列へ値が入ることを確認する。
+- 検証: `node test/run-tests.js` 正常終了、`node test/michecker-parity/run-parity-tests.js` 223/223 passed、新規テスト 7/7 passed。報告のあったソースを画面へ投入し、「全件チェック→一括採用」で末尾の重複断片が消えることを確認した。
+- 残件: 同じ表に「レイアウト表として解体」と「データ表として整える」が排他にならず並ぶこと、一括採用が競合候補を同時に採用すること、`<ikkr_textcenter>`などのCMS独自タグや`align`属性・空段落が残ることは未対応。
+- 関連ファイル: `goal2-app/public/app.js`, `goal2-app/test/table-nesting/run-table-tests.js`, `goal2-app/package.json`
+- 関連PR/コミット: (このコミット)
+
 ## 2026-07-27: 記録用スプレッドシートのGASを3パターン検証の記録に合わせて改修
 
 - 背景・目的: 記録用スプレッドシートを「自治体 × 3パターン」でシートに分け、見出しを2行目に置く構成に変更する。あわせて、これまで1区間だった計測を「ツール作業」と「CMS作業」に分け、合算できるようにする。

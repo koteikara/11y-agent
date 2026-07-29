@@ -8,6 +8,7 @@
     "start": "node server.js",
     "test": "node test/run-tests.js",
     "test:michecker-parity": "node test/michecker-parity/run-parity-tests.js",
+    "test:table-nesting": "node test/table-nesting/run-table-tests.js",
     "test:saga-gold": "node tools/evaluate-saga-gold.js",
     "learn:saga-gold": "node tools/learn-saga-gold-hints.js",
     "agents:dataset": "node tools/build-agents-cli-dataset.js --pretty",

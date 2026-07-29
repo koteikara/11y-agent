@@ -3491,11 +3491,24 @@
       return null;
     }
     let maxColumns = grid.reduce((max, row) => Math.max(max, row.length), 0);
-    // 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して書かれていると
-    // (実データで確認済み)、buildExpandedTableGridがその余剰セルを新しい列として展開してしまう。
-    // 全行にわたって完全に空の末尾列は情報を持たないため切り詰める(先頭・中間の空セルは
-    // 位置関係の情報を持ちうるため対象外。末尾のみ)。
-    while (maxColumns > 0 && grid.every((row) => !row[maxColumns - 1]?.text)) {
+    // 末尾列を切り詰める条件は2つ。どちらも「その列は情報を持たない」ことを意味する
+    // (先頭・中間の空セルは位置関係の情報を持ちうるため対象外。末尾のみ)。
+    //
+    // 1. 全行で空: 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して
+    //    書かれていると(実データで確認済み)、buildExpandedTableGridがその余剰セルを新しい
+    //    列として展開してしまう。
+    // 2. 全行でcolspanの続き(isOriginでない): その列から始まるセルが1つも無いということは、
+    //    colspanが表の実際の列数をはみ出してできた列である。実データ(安城市の史跡ページ)に
+    //    2列の表の2行目だけが<td colspan="2">になっている例があり、展開すると3列目ができて
+    //    セルの内容が複製され(「円墳」が2回)、1行目には空セルが生まれていた。はみ出した分を
+    //    切り詰めることで、元の列数のまま結合だけを解除する。
+    while (
+      maxColumns > 0 &&
+      grid.every((row) => {
+        const item = row[maxColumns - 1];
+        return !item?.text || !item.isOrigin;
+      })
+    ) {
       maxColumns -= 1;
     }
     const firstRowIsHeaderRow = maxColumns > 0 && Boolean(grid[0]?.length) && grid[0].slice(0, maxColumns).every((item) => item?.isHeader);
@@ -3908,8 +3921,18 @@
     return "low";
   }
 
+  // 入れ子テーブルの行を親テーブルの行として扱わないための共通ヘルパー。
+  // table.querySelectorAll("tr")は子孫すべてのtrを返すため、セルの中に表がある場合、
+  // 内側の表の行まで親の行として処理してしまう。実データ(安城市の史跡ページ)で、
+  // レイアウト表の解体(decomposeLayoutTable)が内側の表の行を自分の行として二重に
+  // 出力し、同じ内容が「表のまま」と「解体後」の2通りで最終HTMLへ残る事象が出た。
+  // 行を数える・並べる・展開する処理は、すべてこのヘルパーを通す。
+  function ownTableRows(table) {
+    return [...table.querySelectorAll("tr")].filter((row) => row.closest("table") === table);
+  }
+
   function dataTableProfile(table) {
-    const rows = [...table.querySelectorAll("tr")].map((row) =>
+    const rows = ownTableRows(table).map((row) =>
       [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName))
     );
     const nonEmptyRows = rows.filter((row) => row.length > 0);
@@ -4400,7 +4423,7 @@
   }
 
   function tableLayoutSignals(table) {
-    const rows = [...table.querySelectorAll("tr")];
+    const rows = ownTableRows(table);
     const maxCells = rows.reduce((max, row) => {
       const count = [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName)).length;
       return Math.max(max, count);
@@ -5557,7 +5580,7 @@
       template.content.appendChild(heading);
     }
 
-    table.querySelectorAll("tr").forEach((row) => {
+    ownTableRows(table).forEach((row) => {
       const drafts = [...row.children]
         .filter((cell) => ["TD", "TH"].includes(cell.tagName))
         .map((cell) => tableCellDraft(cell, imageContexts))
@@ -5683,7 +5706,7 @@
   function firstMergedCellInfo(table) {
     const cell = table.querySelector("[rowspan], [colspan]");
     const row = cell?.closest("tr");
-    const rows = [...table.querySelectorAll("tr")];
+    const rows = ownTableRows(table);
     const rowIndex = row ? rows.indexOf(row) : -1;
     const text = normalizeText(cell?.textContent || "");
     if (!cell || !row || rowIndex < 0 || !text) {
@@ -5721,7 +5744,7 @@
     const clone = table.cloneNode(true);
     stripInternalAttributes(clone);
     stripFormatting(clone);
-    const clonedRow = [...clone.querySelectorAll("tr")][info.rowIndex];
+    const clonedRow = ownTableRows(clone)[info.rowIndex];
     const cellIndex = [...info.row.children].indexOf(info.cell);
     const clonedCell = clonedRow?.children[cellIndex];
     if (!clonedRow || !clonedCell) {
@@ -5916,7 +5939,7 @@
 
   function buildExpandedTableGrid(table) {
     const grid = [];
-    [...table.querySelectorAll("tr")].forEach((row, rowIndex) => {
+    ownTableRows(table).forEach((row, rowIndex) => {
       grid[rowIndex] ||= [];
       let columnIndex = 0;
       [...row.children]
@@ -6019,7 +6042,7 @@
     const clone = table.cloneNode(true);
     stripInternalAttributes(clone);
     stripFormatting(clone);
-    const rows = [...clone.querySelectorAll("tr")];
+    const rows = ownTableRows(clone);
     rows[rowIndex]?.remove();
     return clone;
   }
