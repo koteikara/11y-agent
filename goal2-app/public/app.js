@@ -35,6 +35,10 @@
     "table.format-clear",
     "table.caption",
     "table.layout-table",
+    // 表を丸ごと置き換える手段(M2 意味単位ごとの分割 / M4 結合セルの解除)。この2つを
+    // 登録し忘れていたため、同じ表に対する table.layout-table と table.simple-structure が
+    // 両方とも採用され、最終HTMLが適用順で決まる状態になっていた。
+    "table.simple-structure",
     "table.cell-merge-layout",
     "table.cell-merge-heading",
     "table.cell-merge-summary",
@@ -47,6 +51,7 @@
     "image.image-text-layout",
     "table.caption",
     "table.layout-table",
+    "table.simple-structure",
     "table.cell-merge-layout",
     "table.cell-merge-heading",
     "table.cell-merge-summary",
@@ -2376,6 +2381,30 @@
         );
       }
 
+      if (alt !== null && !isGenericAlt(alt) && isSerialOrFilenameAlt(alt, img)) {
+        const clone = img.cloneNode(true);
+        const suggestedAlt = aiNameDraftForAlt?.name || caption || "画像内容を具体的に入力";
+        clone.setAttribute("alt", suggestedAlt);
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.alt-text",
+            element: img,
+            message: "画像の代替テキストが連番・ファイル名になっています。",
+            reason: aiNameDraftForAlt
+              ? `「${alt}」は画像の内容を説明していません。AI画像名候補「${aiNameDraftForAlt.name}」を下書きとして提示します。`
+              : caption
+                ? `「${alt}」は画像の内容を説明していません。近接するキャプションの文言を候補にします。`
+                : `「${alt}」は画像の内容を説明していません。画像の内容が分かる文言に書き直します。`,
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "alt", value: suggestedAlt },
+            confidence: aiNameDraftForAlt ? aiNameDraftForAlt.confidence : "low",
+            requiresHumanReview: true,
+            aiDraft: aiNameDraftForAlt,
+            llmContext: { caption },
+          })
+        );
+      }
+
       if (alt !== null && caption && normalizeText(caption) === normalizeText(alt)) {
         const clone = img.cloneNode(true);
         clone.setAttribute("alt", "");
@@ -3491,11 +3520,24 @@
       return null;
     }
     let maxColumns = grid.reduce((max, row) => Math.max(max, row.length), 0);
-    // 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して書かれていると
-    // (実データで確認済み)、buildExpandedTableGridがその余剰セルを新しい列として展開してしまう。
-    // 全行にわたって完全に空の末尾列は情報を持たないため切り詰める(先頭・中間の空セルは
-    // 位置関係の情報を持ちうるため対象外。末尾のみ)。
-    while (maxColumns > 0 && grid.every((row) => !row[maxColumns - 1]?.text)) {
+    // 末尾列を切り詰める条件は2つ。どちらも「その列は情報を持たない」ことを意味する
+    // (先頭・中間の空セルは位置関係の情報を持ちうるため対象外。末尾のみ)。
+    //
+    // 1. 全行で空: 元のtable内で、rowspanが既にカバーしている位置に不要な空td/thが重複して
+    //    書かれていると(実データで確認済み)、buildExpandedTableGridがその余剰セルを新しい
+    //    列として展開してしまう。
+    // 2. 全行でcolspanの続き(isOriginでない): その列から始まるセルが1つも無いということは、
+    //    colspanが表の実際の列数をはみ出してできた列である。実データ(安城市の史跡ページ)に
+    //    2列の表の2行目だけが<td colspan="2">になっている例があり、展開すると3列目ができて
+    //    セルの内容が複製され(「円墳」が2回)、1行目には空セルが生まれていた。はみ出した分を
+    //    切り詰めることで、元の列数のまま結合だけを解除する。
+    while (
+      maxColumns > 0 &&
+      grid.every((row) => {
+        const item = row[maxColumns - 1];
+        return !item?.text || !item.isOrigin;
+      })
+    ) {
       maxColumns -= 1;
     }
     const firstRowIsHeaderRow = maxColumns > 0 && Boolean(grid[0]?.length) && grid[0].slice(0, maxColumns).every((item) => item?.isHeader);
@@ -3893,6 +3935,16 @@
   // 判定しなかった表にも選択肢として提示できるようにする(確信度はplanTableTreatments()側で
   // lowに下げる。shouldPreserveAsDataTable()自体は他の判定で引き続き使われるため変更しない)。
   function canOfferDataTableSemanticsMethod(table) {
+    // セルの中に見出しがある表には、データ表向けの手段(キャプション・列見出し・行見出し・
+    // scope属性の追加)を出さない。見出しはページの節を区切るものなので、それをセルに入れている
+    // 表はページの段組みであり、行と列の関係を持つデータ表ではない。実データ(安城市の史跡ページ)で、
+    // 左右のセルに<h2>概要</h2>と<h2>所在地</h2>を入れた2カラムのレイアウト表に対して、全セルの
+    // テキストを連結したキャプションと<th scope="row">を付ける案が並んでいた。
+    // isLikelyLayoutTable()はここでは使わない。border="0"とセル内のブロック要素だけで成立するため、
+    // 「遺跡番号 / 541031」のような正当な2列のデータ表まで対象になってしまう。
+    if (hasHeadingInsideTableCells(table)) {
+      return false;
+    }
     const profile = dataTableProfile(table);
     if ((profile.rows.length < 2 && !isSingleRecordContactDataTableProfile(profile)) || profile.maxCells < 2) {
       return false;
@@ -3908,8 +3960,27 @@
     return "low";
   }
 
+  // 入れ子テーブルの行を親テーブルの行として扱わないための共通ヘルパー。
+  // table.querySelectorAll("tr")は子孫すべてのtrを返すため、セルの中に表がある場合、
+  // 内側の表の行まで親の行として処理してしまう。実データ(安城市の史跡ページ)で、
+  // レイアウト表の解体(decomposeLayoutTable)が内側の表の行を自分の行として二重に
+  // 出力し、同じ内容が「表のまま」と「解体後」の2通りで最終HTMLへ残る事象が出た。
+  // 行を数える・並べる・展開する処理は、すべてこのヘルパーを通す。
+  function ownTableRows(table) {
+    return [...table.querySelectorAll("tr")].filter((row) => row.closest("table") === table);
+  }
+
+  // 自分のセル(入れ子の表のセルは除く)に見出しを含むか。ページの段組みに使われている表の目印。
+  function hasHeadingInsideTableCells(table) {
+    return ownTableRows(table).some((row) =>
+      [...row.children].some(
+        (cell) => ["TD", "TH"].includes(cell.tagName) && cell.querySelector("h1,h2,h3,h4,h5,h6")
+      )
+    );
+  }
+
   function dataTableProfile(table) {
-    const rows = [...table.querySelectorAll("tr")].map((row) =>
+    const rows = ownTableRows(table).map((row) =>
       [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName))
     );
     const nonEmptyRows = rows.filter((row) => row.length > 0);
@@ -4400,7 +4471,7 @@
   }
 
   function tableLayoutSignals(table) {
-    const rows = [...table.querySelectorAll("tr")];
+    const rows = ownTableRows(table);
     const maxCells = rows.reduce((max, row) => {
       const count = [...row.children].filter((cell) => ["TD", "TH"].includes(cell.tagName)).length;
       return Math.max(max, count);
@@ -5557,7 +5628,7 @@
       template.content.appendChild(heading);
     }
 
-    table.querySelectorAll("tr").forEach((row) => {
+    ownTableRows(table).forEach((row) => {
       const drafts = [...row.children]
         .filter((cell) => ["TD", "TH"].includes(cell.tagName))
         .map((cell) => tableCellDraft(cell, imageContexts))
@@ -5683,7 +5754,7 @@
   function firstMergedCellInfo(table) {
     const cell = table.querySelector("[rowspan], [colspan]");
     const row = cell?.closest("tr");
-    const rows = [...table.querySelectorAll("tr")];
+    const rows = ownTableRows(table);
     const rowIndex = row ? rows.indexOf(row) : -1;
     const text = normalizeText(cell?.textContent || "");
     if (!cell || !row || rowIndex < 0 || !text) {
@@ -5721,7 +5792,7 @@
     const clone = table.cloneNode(true);
     stripInternalAttributes(clone);
     stripFormatting(clone);
-    const clonedRow = [...clone.querySelectorAll("tr")][info.rowIndex];
+    const clonedRow = ownTableRows(clone)[info.rowIndex];
     const cellIndex = [...info.row.children].indexOf(info.cell);
     const clonedCell = clonedRow?.children[cellIndex];
     if (!clonedRow || !clonedCell) {
@@ -5916,7 +5987,7 @@
 
   function buildExpandedTableGrid(table) {
     const grid = [];
-    [...table.querySelectorAll("tr")].forEach((row, rowIndex) => {
+    ownTableRows(table).forEach((row, rowIndex) => {
       grid[rowIndex] ||= [];
       let columnIndex = 0;
       [...row.children]
@@ -6019,7 +6090,7 @@
     const clone = table.cloneNode(true);
     stripInternalAttributes(clone);
     stripFormatting(clone);
-    const rows = [...clone.querySelectorAll("tr")];
+    const rows = ownTableRows(clone);
     rows[rowIndex]?.remove();
     return clone;
   }
@@ -6698,6 +6769,37 @@
     };
     state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
     resolveSupersededTableCandidates(candidate);
+    resolveAlternativeMethodCandidates(candidate);
+  }
+
+  // 同じtarget.node_idを持つ候補は、1箇所に対する「代替手段」として画面に並ぶ(renderCandidatesの
+  // グループ表示・詳細ペインの修正方法一覧)。1つを採用した時点で残りは選ばれなかった手段なので、
+  // 未処理のまま残さず自動解決する。
+  // 残していると、一括採用が同じ箇所へ2つ以上のパッチを当ててしまう。どの候補も変換後HTMLを
+  // 「元の要素」から作っているため、後から当てた方が前の修正を丸ごと上書きし、出力が適用順で
+  // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
+  function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
+    if (!["accepted", "edited"].includes(candidate.decision.status)) {
+      return;
+    }
+    const decidedAt = new Date().toISOString();
+    candidates.forEach((other) => {
+      if (other === candidate || other.decision.status) {
+        return;
+      }
+      if (other.target.node_id !== candidate.target.node_id) {
+        return;
+      }
+      other.status = "conflicted";
+      other.decision = {
+        status: "conflicted",
+        reason: "同じ箇所で別の修正方法を採用したため自動解決",
+        actor: "AGENT",
+        decided_at: decidedAt,
+        after_html: null,
+      };
+      state.bulkSelectedCandidateIds.delete(other.candidate_id);
+    });
   }
 
   function toggleBulkSelection() {
@@ -6788,7 +6890,7 @@
     });
   }
 
-  function resolveSupersededTableCandidates(candidate) {
+  function resolveSupersededTableCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
       return;
     }
@@ -6797,7 +6899,7 @@
     }
 
     const decidedAt = new Date().toISOString();
-    state.candidates.forEach((other) => {
+    candidates.forEach((other) => {
       if (other === candidate) {
         return;
       }
@@ -9371,6 +9473,33 @@
     return /^(画像|写真|イメージ|image|photo)$/.test(text) || /^(.*の)?写真$/.test(text);
   }
 
+  // 連番・ファイル名だけの代替テキスト(実データ: alt="碧海山古墳002")。画像の内容を説明していないため
+  // 未設定・汎用語と同じく書き直しの対象にする。isGenericAltが拾う分類語とは重ならない。
+  // 誤検出を避けるため、末尾の連番は「数字の前が2文字以上」または「4桁以上」の場合のみ拾う
+  // (「図1」のような短い図版番号は対象外)。
+  function isSerialOrFilenameAlt(alt, img) {
+    const text = normalizeText(alt);
+    if (!text) {
+      return false;
+    }
+    if (/\.(?:jpe?g|png|gif|webp|svg|bmp)$/i.test(text)) {
+      return true;
+    }
+    if (/^[0-9０-９]+$/.test(text)) {
+      return true;
+    }
+    if (/^(?:img|image|photo|pic|picture|dsc|dscn|fig|figure|no)[-_ ]?[0-9]+$/i.test(text)) {
+      return true;
+    }
+    const fileName = (img?.getAttribute("src") || "").split("/").pop() || "";
+    const fileBase = fileName.replace(/\.[a-z0-9]+$/i, "");
+    if (fileName && (text === fileName || (fileBase && text === fileBase))) {
+      return true;
+    }
+    const serial = text.match(/^(\S*?\D)([0-9０-９]{2,})$/);
+    return Boolean(serial && (serial[1].length >= 2 || serial[2].length >= 4));
+  }
+
   // miChecker C_25.3: 表の内容を特定しない汎用語のみで構成されたcaptionを検出する。
   // 「対象者一覧」のように具体的な語を伴うcaptionは対象外にする(完全一致のみ)。
   function isGenericTableCaptionText(text) {
@@ -9758,12 +9887,72 @@
   // 表判定の信号に使うヒューリスティックがあるため、削除を検出より前に行うと壊れる)。
   // classは無条件削除。idはページ内アンカーやARIA属性等で実際に参照されているものだけ残す
   // (参照元のリンク自体はlink.in-page-anchorルール等で別途人間確認の対象になる)。
+  // CMSが独自に出力する非標準タグ。HTMLの仕様に無く、そのままCMSへ戻すと不正なマークアップに
+  // なるため、最終HTMLでは中身を残して外側のタグだけ外す(実データ: 安城市の<ikkr_textcenter>)。
+  const CMS_PROPRIETARY_TAG_PATTERN = /^IKKR_/;
+
+  // 見た目の指定に使う廃止属性。移行後のHTMLに残す理由が無いため最終HTMLから落とす。
+  // width/heightは画像の表示サイズとして意味を持ちうるので対象外(image.display-widthの注意で扱う)。
+  const DEPRECATED_PRESENTATION_ATTRIBUTES = [
+    "align",
+    "valign",
+    "border",
+    "cellpadding",
+    "cellspacing",
+    "bgcolor",
+    "background",
+    "hspace",
+    "vspace",
+    "nowrap",
+  ];
+
   function stripMigrationUnneededAttributes(root) {
     const referencedIds = collectReferencedIds(root);
     root.querySelectorAll("[class]").forEach((element) => element.removeAttribute("class"));
     root.querySelectorAll("[id]").forEach((element) => {
       if (!referencedIds.has(element.id)) {
         element.removeAttribute("id");
+      }
+    });
+
+    DEPRECATED_PRESENTATION_ATTRIBUTES.forEach((name) => {
+      root.querySelectorAll(`[${name}]`).forEach((element) => element.removeAttribute(name));
+    });
+
+    // CMS独自タグは内側から外していく(入れ子になっていても取りこぼさない)。
+    [...root.querySelectorAll("*")]
+      .filter((element) => CMS_PROPRIETARY_TAG_PATTERN.test(element.tagName))
+      .reverse()
+      .forEach((element) => element.replaceWith(...element.childNodes));
+
+    stripLayoutOnlyParagraphs(root);
+    trimLeadingSpaceInTextBlocks(root);
+  }
+
+  // レイアウト目的で置かれた空段落(&nbsp;や空白だけの<p>)を落とす。画像・リンクなど中身のある
+  // 要素を含む段落は対象外。
+  function stripLayoutOnlyParagraphs(root) {
+    root.querySelectorAll("p").forEach((paragraph) => {
+      if (paragraph.querySelector("img, a, iframe, input, select, textarea, button, table, br")) {
+        return;
+      }
+      if (normalizeText(paragraph.textContent.replace(/ /g, " "))) {
+        return;
+      }
+      paragraph.remove();
+    });
+  }
+
+  // 見出し・段落の先頭に残った&nbsp;や全角スペースによる字下げを落とす。文中の空白は触らない。
+  function trimLeadingSpaceInTextBlocks(root) {
+    root.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,td,th,caption").forEach((block) => {
+      const first = block.firstChild;
+      if (!first || first.nodeType !== Node.TEXT_NODE) {
+        return;
+      }
+      const trimmed = first.nodeValue.replace(/^[\s 　]+/, "");
+      if (trimmed !== first.nodeValue) {
+        first.nodeValue = trimmed;
       }
     });
   }
@@ -9854,6 +10043,10 @@
           after_html: null,
         };
         accepted += 1;
+        // 画面側の採用(applyCandidateDecision)と同じ競合解決を通す。通していなかったため、
+        // 同じ箇所の代替手段がすべて採用され、出力が適用順で決まっていた。
+        resolveSupersededTableCandidates(candidate, candidates);
+        resolveAlternativeMethodCandidates(candidate, candidates);
       });
       return accepted;
     },
