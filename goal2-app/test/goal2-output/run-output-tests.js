@@ -253,6 +253,40 @@ async function main() {
       check("プレビューが置換対象の文字だけを強調する", mark === "22m", `ハイライト=${JSON.stringify(mark)}`);
     }
 
+    // 9. 表の中にある表を、解体後も表のまま残して修正できる
+    const NESTED_IN_LAYOUT = `<table border="0"><tbody><tr>
+      <td><table border="1"><tbody>
+        <tr><td><p>市指定史跡</p></td></tr>
+        <tr><td><table border="0"><tbody>
+          <tr><td>遺跡番号</td><td>541031</td></tr>
+          <tr><td>墳丘</td><td>円墳</td></tr>
+        </tbody></table></td></tr>
+      </tbody></table><h2>概要</h2><p>本文</p></td>
+      <td><h2>所在地</h2><p>安城市</p></td>
+    </tr></tbody></table>`;
+
+    const nestedOut = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return window.goal2Engine.buildFinalHtml(h, res.candidates);
+    }, NESTED_IN_LAYOUT);
+
+    check(
+      "解体しても入れ子の表が表として残る",
+      /<table[\s>]/.test(nestedOut) && /遺跡番号/.test(nestedOut) && /541031/.test(nestedOut),
+      nestedOut.replace(/\s+/g, " ").slice(0, 240)
+    );
+    check(
+      "入れ子の表を見出しのテキストへ潰さない",
+      !/<h[1-6][^>]*>[^<]*遺跡番号[^<]*541031/.test(nestedOut),
+      nestedOut.replace(/\s+/g, " ").slice(0, 240)
+    );
+    check(
+      "行と列の対応が失われない",
+      /遺跡番号[\s\S]{0,80}541031/.test(nestedOut) && /墳丘[\s\S]{0,80}円墳/.test(nestedOut),
+      nestedOut.replace(/\s+/g, " ").slice(0, 240)
+    );
+
     // 6. 連番・ファイル名だけの代替テキストを検出する
     const altCases = [
       ['<p><img src="/a/hekikaikofuns.jpg" alt="碧海山古墳002"></p>', "連番付きのalt", true],

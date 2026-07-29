@@ -5675,7 +5675,7 @@
         draft.text &&
         draft.text.length <= 40 &&
         !/[。！？!?、，,]$/.test(draft.text) &&
-        !/<(?:a|img|iframe|input|select|textarea|button)\b/i.test(draft.html || "")
+        !/<(?:a|img|iframe|input|select|textarea|button|table)\b/i.test(draft.html || "")
     );
   }
 
@@ -6365,7 +6365,13 @@
   }
 
   function isContentBlockElement(node) {
-    return ["P", "UL", "OL", "DL", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "FIGURE"].includes(node.tagName);
+    // TABLEを含める。含めないと、セルの中にある表が「インラインの中身」として扱われ、
+    // 親の表を解体したときにセル全体が1つの見出しへ潰れて、表の行と列の対応が失われる
+    // (実データ: 安城市の史跡ページで「遺跡番号 541031 墳 丘 円墳」という見出しになっていた)。
+    // 表として出しておけば、その表に対する候補(キャプション・行見出し・フラット化)を続けて使える。
+    return ["P", "UL", "OL", "DL", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "FIGURE", "TABLE"].includes(
+      node.tagName
+    );
   }
 
   function makeCandidate(options) {
@@ -6642,7 +6648,26 @@
     if (replacement.childNodes.length === 1 && replacement.firstElementChild) {
       replacement.firstElementChild.setAttribute("data-goal2-node-id", nodeId);
     }
+    // 置き換え前に中にあった表のIDを、置き換え後の同じ並びの表へ引き継ぐ。表を解体しても
+    // セルの中にあった表はそのまま残るため、その表に対する候補(キャプション・フラット化など)を
+    // 続けて適用できるようにする。引き継がないと対象を見つけられず、入れ子の表が誰も直さないまま残る。
+    const nestedIds = [...target.querySelectorAll("table")].map((table) =>
+      table.getAttribute("data-goal2-node-id")
+    );
+    const inserted = [...replacement.childNodes];
     target.replaceWith(replacement);
+    if (nestedIds.length) {
+      const insertedTables = inserted.flatMap((node) =>
+        node.nodeType === Node.ELEMENT_NODE
+          ? [...(node.matches("table") ? [node] : []), ...node.querySelectorAll("table")]
+          : []
+      );
+      insertedTables.forEach((table, index) => {
+        if (nestedIds[index] && !table.hasAttribute("data-goal2-node-id")) {
+          table.setAttribute("data-goal2-node-id", nestedIds[index]);
+        }
+      });
+    }
   }
 
   function currentTargetHtml(candidate) {
@@ -6994,6 +7019,14 @@
         return;
       }
 
+      // 表の中にある表への候補は、親の表を解体しても対象がそのまま残ることがある(セルの中身は
+      // そのまま出力されるため)。以前は「変換後HTMLで再評価する」として一律に自動解決していたが、
+      // 再評価は行われず、入れ子の表が誰も直さないまま最終HTMLへ残っていた。対象が変換後HTMLに
+      // 残っている場合は未処理のままにして、作業者が対処できるようにする。
+      if (isDescendantCandidate && !isSameTableCandidate && survivesInAncestorOutput(candidate, other)) {
+        return;
+      }
+
       // 表関連(th/scope・キャプション・セル結合など)の候補は、表の構造変換で意味がなくなるため自動解決。
       other.status = "conflicted";
       other.decision = {
@@ -7058,6 +7091,19 @@
     }
     ancestor.decision.after_html = current.split(before).join(after);
     return true;
+  }
+
+  // 親の変換後HTMLに、その候補が指す要素がそのまま残っているか。表を解体してもセルの中身は
+  // そのまま出力されるため、中にあった表は形を変えずに残る。空白の入り方だけが違うことがあるので
+  // 詰めてから比べる。
+  function survivesInAncestorOutput(ancestor, descendant) {
+    const output = ancestor.decision?.after_html ?? ancestor.proposal?.after_html;
+    const snippet = descendant?.proposal?.before_html || descendant?.target?.snippet || "";
+    if (typeof output !== "string" || !snippet) {
+      return false;
+    }
+    const compact = (html) => String(html).replace(/\s+/g, "");
+    return compact(output).includes(compact(snippet));
   }
 
   function isTableStructuralCandidate(candidate) {
