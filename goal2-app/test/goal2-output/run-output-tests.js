@@ -61,6 +61,16 @@ const PLAIN_DATA_TABLE = `
 </tbody></table>
 `;
 
+// 1つの段落に、要素ごと差し替える修正(装飾タグの解除)と、要素を残す修正(単位の言い換え・
+// 単語内空白の除去)が同居する例。全角空白は&nbsp;を挟む形にして直列化の差も踏む。
+const MULTI_FIX_PARAGRAPH = `<p><tt>全　長&nbsp;&nbsp;：&nbsp; 南北約22m、東西17.5m<br>高　さ&nbsp;&nbsp;：&nbsp; 約4m</tt></p>`;
+
+// 同じ段落を表の中に置いたもの(表構造候補の変換後HTMLへ畳み込まれる経路)
+const MULTI_FIX_IN_TABLE = `<table border="0"><tbody><tr>
+  <td><h2>概要</h2>${MULTI_FIX_PARAGRAPH}</td>
+  <td><h2>所在地</h2><p>安城市</p></td>
+</tr></tbody></table>`;
+
 const DIRTY_MARKUP = `
 <div align="left">
   <ikkr_textcenter><p align="center"><strong>市指定史跡</strong></p></ikkr_textcenter>
@@ -151,6 +161,48 @@ async function main() {
       "画像を含む段落は残す",
       /<img[^>]+alt="現地の様子"/.test(finalHtml),
       finalHtml.slice(0, 400)
+    );
+
+    // 7. 同じ要素への複数の修正が、すべて最終HTMLへ反映される
+    const applyAllText = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        res.candidates.forEach((c) => {
+          if (c.rule_id.startsWith("text.")) {
+            c.decision = { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null };
+          }
+        });
+        return window.goal2Engine.buildFinalHtml(h, res.candidates);
+      }, html);
+
+    const plainFixed = await applyAllText(MULTI_FIX_PARAGRAPH);
+    check(
+      "同じ段落の単位の言い換えがすべて反映される",
+      /22メートル/.test(plainFixed) && /17\.5メートル/.test(plainFixed) && /4メートル/.test(plainFixed),
+      plainFixed
+    );
+    check(
+      "同じ段落の単語内空白の除去がすべて反映される",
+      /全長/.test(plainFixed) && /高さ/.test(plainFixed),
+      plainFixed
+    );
+    check("装飾タグの解除も反映される", !/<tt>/i.test(plainFixed), plainFixed);
+
+    // 表の中でも、表構造候補を採用したときに同じ修正が残る
+    const inTableFixed = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return window.goal2Engine.buildFinalHtml(h, res.candidates);
+    }, MULTI_FIX_IN_TABLE);
+    check(
+      "表を解体しても段落内の修正が失われない",
+      /22メートル/.test(inTableFixed) && /17\.5メートル/.test(inTableFixed) && /4メートル/.test(inTableFixed),
+      inTableFixed
+    );
+    check(
+      "表を解体しても単語内空白の除去が失われない",
+      /全長/.test(inTableFixed) && /高さ/.test(inTableFixed),
+      inTableFixed
     );
 
     // 6. 連番・ファイル名だけの代替テキストを検出する

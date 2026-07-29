@@ -6473,7 +6473,23 @@
       ["accepted", "edited"].includes(candidate.decision.status)
     );
 
+    // 同じ要素を指す候補は、要素を残すパッチ(単位の言い換え・単語内空白の除去など)を先に、
+    // 要素ごと差し替えるパッチ(装飾タグの解除など)を後に当てる。逆順だと、先に要素が消えて
+    // data-goal2-node-idが失われ、後続のパッチが対象を見つけられず黙って捨てられる。
+    // 実データ(安城市の史跡ページ)で、<tt>の解除が先に当たったために同じ段落の
+    // 「22m→22メートル」「全　長→全長」がすべて反映されなかった。
+    const groups = new Map();
     decided.forEach((candidate) => {
+      const nodeId = candidate.target.node_id;
+      if (!groups.has(nodeId)) groups.set(nodeId, []);
+      groups.get(nodeId).push(candidate);
+    });
+    const ordered = [...groups.values()].flatMap((group) => [
+      ...group.filter((candidate) => !isElementReplacingCandidate(candidate)),
+      ...group.filter((candidate) => isElementReplacingCandidate(candidate)),
+    ]);
+
+    ordered.forEach((candidate) => {
       if (candidate.decision.status === "edited") {
         replaceTarget(fragment.content, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
         return;
@@ -6496,6 +6512,27 @@
         element.replaceWith(...element.childNodes);
       }
     );
+  }
+
+  // 対象要素そのものを消す・差し替えるパッチかどうか。これらを当てると要素と一緒に
+  // data-goal2-node-idも消えるため、同じ要素を指す他の候補が対象を見つけられなくなる。
+  const ELEMENT_REPLACING_PATCH_TYPES = new Set([
+    "unwrap-element",
+    "remove-element",
+    "rename-element",
+    "merge-following-note",
+    "replace-paragraph-sequence",
+  ]);
+
+  function isElementReplacingCandidate(candidate) {
+    if (candidate.decision?.selected_method_id && candidate.decision.selected_method_id !== candidate.candidate_id) {
+      return true;
+    }
+    const patch = candidate.proposal.patch;
+    if (!patch) {
+      return true;
+    }
+    return ELEMENT_REPLACING_PATCH_TYPES.has(patch.type);
   }
 
   function applyCandidatePatch(root, candidate) {
@@ -6772,14 +6809,20 @@
     resolveAlternativeMethodCandidates(candidate);
   }
 
-  // 同じtarget.node_idを持つ候補は、1箇所に対する「代替手段」として画面に並ぶ(renderCandidatesの
-  // グループ表示・詳細ペインの修正方法一覧)。1つを採用した時点で残りは選ばれなかった手段なので、
-  // 未処理のまま残さず自動解決する。
-  // 残していると、一括採用が同じ箇所へ2つ以上のパッチを当ててしまう。どの候補も変換後HTMLを
+  // 同じtarget.node_idを持ち、どちらも要素ごと差し替える候補は、1箇所に対する「代替手段」である。
+  // 1つを採用した時点で残りは選ばれなかった手段なので、未処理のまま残さず自動解決する。
+  // 残していると、一括採用が同じ箇所へ2つ以上の置き換えを当ててしまう。どの候補も変換後HTMLを
   // 「元の要素」から作っているため、後から当てた方が前の修正を丸ごと上書きし、出力が適用順で
   // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
+  //
+  // 一方、同じ要素に対する「単位の言い換え」「単語内空白の除去」のように要素を残すパッチは、
+  // 1つの段落に何件あっても互いに独立して当たる(rebuildWorkingHtmlForが要素を残すパッチを
+  // 先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
   function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
+      return;
+    }
+    if (!isElementReplacingCandidate(candidate)) {
       return;
     }
     const decidedAt = new Date().toISOString();
@@ -6788,6 +6831,9 @@
         return;
       }
       if (other.target.node_id !== candidate.target.node_id) {
+        return;
+      }
+      if (!isElementReplacingCandidate(other)) {
         return;
       }
       other.status = "conflicted";
@@ -6899,7 +6945,13 @@
     }
 
     const decidedAt = new Date().toISOString();
-    candidates.forEach((other) => {
+    // 要素ごと差し替える候補(装飾タグの解除など)を先に畳み込む。文字列置換より後にすると、
+    // 先の置換で中身が変わっているため「元の要素」が見つからず畳み込めなくなる。
+    const ordered = [
+      ...candidates.filter((other) => isElementReplacingCandidate(other)),
+      ...candidates.filter((other) => !isElementReplacingCandidate(other)),
+    ];
+    ordered.forEach((other) => {
       if (other === candidate) {
         return;
       }
@@ -6960,14 +7012,48 @@
   // 採用済みの表構造候補(ancestor)の変換後HTMLへ、表内の内容修正候補(descendant)の修正を畳み込む。
   // descendant の before_html が変換後HTMLに現れる場合のみ、after_html へ置換する(現れない場合は
   // 畳み込めないため false を返す)。
+  // テキストをHTMLの直列化と同じ表記へ揃える(&・<・>・NBSPなど)。
+  function serializeTextForHtml(text) {
+    const holder = document.createElement("div");
+    holder.textContent = String(text ?? "");
+    return holder.innerHTML;
+  }
+
   function foldDescendantFixIntoAncestor(ancestor, descendant) {
-    const before = descendant.proposal?.before_html || "";
-    const after = descendant.proposal?.after_html || "";
-    if (!before || !after || before === after) {
+    // 変換後HTMLが未設定の場合は、候補が持つ変換後HTMLを起点にする。ヘッドレス経路
+    // (goal2Engine.autoAcceptSafe)は decision.after_html を null のまま採用するため、
+    // これが無いと畳み込みが一度も成立しなかった。
+    if (!ancestor.decision) {
       return false;
     }
-    const current = ancestor.decision?.after_html;
-    if (typeof current !== "string" || !current.includes(before)) {
+    if (typeof ancestor.decision.after_html !== "string") {
+      const fallback = ancestor.proposal?.after_html;
+      if (typeof fallback !== "string") {
+        return false;
+      }
+      ancestor.decision.after_html = fallback;
+    }
+    const current = ancestor.decision.after_html;
+
+    // 文字列置換のパッチ(単位の言い換え・単語内空白の除去など)は、置換する部分だけを畳み込む。
+    // 要素まるごとの before/after で畳み込むと、同じ要素に複数の修正があるとき2件目以降が
+    // 「元の要素」を見つけられず(1件目で書き換わっているため)捨てられていた。
+    const patch = descendant.proposal?.patch;
+    if (patch?.type === "replace-text" && typeof patch.before === "string" && patch.before && patch.before !== patch.after) {
+      // パッチが持つのはDOMのテキスト(実際のNBSP文字など)、畳み込み先は直列化されたHTML
+      // (&nbsp; 等の実体参照)。同じ直列化を通してから突き合わせないと、単語内の全角空白の除去の
+      // ように&nbsp;を含む修正が一致せず、黙って捨てられる。
+      const before = serializeTextForHtml(patch.before);
+      const after = serializeTextForHtml(patch.after);
+      if (before && current.includes(before)) {
+        ancestor.decision.after_html = current.split(before).join(after);
+        return true;
+      }
+    }
+
+    const before = descendant.proposal?.before_html || "";
+    const after = descendant.proposal?.after_html || "";
+    if (!before || !after || before === after || !current.includes(before)) {
       return false;
     }
     ancestor.decision.after_html = current.split(before).join(after);
