@@ -61,6 +61,16 @@ const PLAIN_DATA_TABLE = `
 </tbody></table>
 `;
 
+// 1つの段落に、要素ごと差し替える修正(装飾タグの解除)と、要素を残す修正(単位の言い換え・
+// 単語内空白の除去)が同居する例。全角空白は&nbsp;を挟む形にして直列化の差も踏む。
+const MULTI_FIX_PARAGRAPH = `<p><tt>全　長&nbsp;&nbsp;：&nbsp; 南北約22m、東西17.5m<br>高　さ&nbsp;&nbsp;：&nbsp; 約4m</tt></p>`;
+
+// 同じ段落を表の中に置いたもの(表構造候補の変換後HTMLへ畳み込まれる経路)
+const MULTI_FIX_IN_TABLE = `<table border="0"><tbody><tr>
+  <td><h2>概要</h2>${MULTI_FIX_PARAGRAPH}</td>
+  <td><h2>所在地</h2><p>安城市</p></td>
+</tr></tbody></table>`;
+
 const DIRTY_MARKUP = `
 <div align="left">
   <ikkr_textcenter><p align="center"><strong>市指定史跡</strong></p></ikkr_textcenter>
@@ -152,6 +162,96 @@ async function main() {
       /<img[^>]+alt="現地の様子"/.test(finalHtml),
       finalHtml.slice(0, 400)
     );
+
+    // 7. 同じ要素への複数の修正が、すべて最終HTMLへ反映される
+    const applyAllText = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        res.candidates.forEach((c) => {
+          if (c.rule_id.startsWith("text.")) {
+            c.decision = { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null };
+          }
+        });
+        return window.goal2Engine.buildFinalHtml(h, res.candidates);
+      }, html);
+
+    const plainFixed = await applyAllText(MULTI_FIX_PARAGRAPH);
+    check(
+      "同じ段落の単位の言い換えがすべて反映される",
+      /22メートル/.test(plainFixed) && /17\.5メートル/.test(plainFixed) && /4メートル/.test(plainFixed),
+      plainFixed
+    );
+    check(
+      "同じ段落の単語内空白の除去がすべて反映される",
+      /全長/.test(plainFixed) && /高さ/.test(plainFixed),
+      plainFixed
+    );
+    check("装飾タグの解除も反映される", !/<tt>/i.test(plainFixed), plainFixed);
+
+    // 表の中でも、表構造候補を採用したときに同じ修正が残る
+    const inTableFixed = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return window.goal2Engine.buildFinalHtml(h, res.candidates);
+    }, MULTI_FIX_IN_TABLE);
+    check(
+      "表を解体しても段落内の修正が失われない",
+      /22メートル/.test(inTableFixed) && /17\.5メートル/.test(inTableFixed) && /4メートル/.test(inTableFixed),
+      inTableFixed
+    );
+    check(
+      "表を解体しても単語内空白の除去が失われない",
+      /全長/.test(inTableFixed) && /高さ/.test(inTableFixed),
+      inTableFixed
+    );
+
+    // 8. 画面表示: 同じ段落の独立した修正を「代替手段」として見せない
+    await page.fill("#htmlInput", MULTI_FIX_PARAGRAPH);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4000);
+
+    const listing = await page.evaluate(() =>
+      [...document.querySelectorAll(".candidate-list .candidate-group")].map((node) => ({
+        label: node.querySelector(".candidate-group-label")?.textContent.trim() || "",
+        titles: [...node.querySelectorAll(".candidate-title")].map((t) => t.textContent.trim()),
+        badges: [...node.querySelectorAll(".candidate-alt-badge")].length,
+      }))
+    );
+    const fixGroup = listing.find((g) => g.label.startsWith("同じ箇所の修正"));
+    check("独立した修正は代替手段として並べない", Boolean(fixGroup), JSON.stringify(listing));
+    check(
+      "独立した修正に代替手段のバッジを付けない",
+      fixGroup ? fixGroup.badges === 0 : false,
+      JSON.stringify(fixGroup)
+    );
+    check(
+      "候補のタイトルで置換内容を見分けられる",
+      Boolean(fixGroup && fixGroup.titles.some((t) => /22m\s*→\s*22メートル/.test(t))),
+      JSON.stringify(fixGroup && fixGroup.titles)
+    );
+
+    // 単位の候補を選ぶと、修正方法は自分1件だけになる
+    const picked = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+        /単位の表記：22m/.test(b.textContent)
+      );
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("単位の候補を選択できる", picked, "候補が見つからない");
+    if (picked) {
+      await page.waitForTimeout(1200);
+      const note = (await page.textContent(".fix-method-note").catch(() => "")) || "";
+      check("独立した修正を選んでも他の修正が選択肢に出ない", /1件です/.test(note), note.replace(/\s+/g, " "));
+
+      const mark = await page.evaluate(() => {
+        const doc = document.getElementById("previewFrame").contentDocument;
+        const m = doc && doc.querySelector("mark.goal2-highlight");
+        return m ? m.textContent : null;
+      });
+      check("プレビューが置換対象の文字だけを強調する", mark === "22m", `ハイライト=${JSON.stringify(mark)}`);
+    }
 
     // 6. 連番・ファイル名だけの代替テキストを検出する
     const altCases = [

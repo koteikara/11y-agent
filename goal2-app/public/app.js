@@ -6473,7 +6473,23 @@
       ["accepted", "edited"].includes(candidate.decision.status)
     );
 
+    // 同じ要素を指す候補は、要素を残すパッチ(単位の言い換え・単語内空白の除去など)を先に、
+    // 要素ごと差し替えるパッチ(装飾タグの解除など)を後に当てる。逆順だと、先に要素が消えて
+    // data-goal2-node-idが失われ、後続のパッチが対象を見つけられず黙って捨てられる。
+    // 実データ(安城市の史跡ページ)で、<tt>の解除が先に当たったために同じ段落の
+    // 「22m→22メートル」「全　長→全長」がすべて反映されなかった。
+    const groups = new Map();
     decided.forEach((candidate) => {
+      const nodeId = candidate.target.node_id;
+      if (!groups.has(nodeId)) groups.set(nodeId, []);
+      groups.get(nodeId).push(candidate);
+    });
+    const ordered = [...groups.values()].flatMap((group) => [
+      ...group.filter((candidate) => !isElementReplacingCandidate(candidate)),
+      ...group.filter((candidate) => isElementReplacingCandidate(candidate)),
+    ]);
+
+    ordered.forEach((candidate) => {
       if (candidate.decision.status === "edited") {
         replaceTarget(fragment.content, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
         return;
@@ -6496,6 +6512,27 @@
         element.replaceWith(...element.childNodes);
       }
     );
+  }
+
+  // 対象要素そのものを消す・差し替えるパッチかどうか。これらを当てると要素と一緒に
+  // data-goal2-node-idも消えるため、同じ要素を指す他の候補が対象を見つけられなくなる。
+  const ELEMENT_REPLACING_PATCH_TYPES = new Set([
+    "unwrap-element",
+    "remove-element",
+    "rename-element",
+    "merge-following-note",
+    "replace-paragraph-sequence",
+  ]);
+
+  function isElementReplacingCandidate(candidate) {
+    if (candidate.decision?.selected_method_id && candidate.decision.selected_method_id !== candidate.candidate_id) {
+      return true;
+    }
+    const patch = candidate.proposal.patch;
+    if (!patch) {
+      return true;
+    }
+    return ELEMENT_REPLACING_PATCH_TYPES.has(patch.type);
   }
 
   function applyCandidatePatch(root, candidate) {
@@ -6772,14 +6809,20 @@
     resolveAlternativeMethodCandidates(candidate);
   }
 
-  // 同じtarget.node_idを持つ候補は、1箇所に対する「代替手段」として画面に並ぶ(renderCandidatesの
-  // グループ表示・詳細ペインの修正方法一覧)。1つを採用した時点で残りは選ばれなかった手段なので、
-  // 未処理のまま残さず自動解決する。
-  // 残していると、一括採用が同じ箇所へ2つ以上のパッチを当ててしまう。どの候補も変換後HTMLを
+  // 同じtarget.node_idを持ち、どちらも要素ごと差し替える候補は、1箇所に対する「代替手段」である。
+  // 1つを採用した時点で残りは選ばれなかった手段なので、未処理のまま残さず自動解決する。
+  // 残していると、一括採用が同じ箇所へ2つ以上の置き換えを当ててしまう。どの候補も変換後HTMLを
   // 「元の要素」から作っているため、後から当てた方が前の修正を丸ごと上書きし、出力が適用順で
   // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
+  //
+  // 一方、同じ要素に対する「単位の言い換え」「単語内空白の除去」のように要素を残すパッチは、
+  // 1つの段落に何件あっても互いに独立して当たる(rebuildWorkingHtmlForが要素を残すパッチを
+  // 先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
   function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
+      return;
+    }
+    if (!isElementReplacingCandidate(candidate)) {
       return;
     }
     const decidedAt = new Date().toISOString();
@@ -6788,6 +6831,9 @@
         return;
       }
       if (other.target.node_id !== candidate.target.node_id) {
+        return;
+      }
+      if (!isElementReplacingCandidate(other)) {
         return;
       }
       other.status = "conflicted";
@@ -6899,7 +6945,13 @@
     }
 
     const decidedAt = new Date().toISOString();
-    candidates.forEach((other) => {
+    // 要素ごと差し替える候補(装飾タグの解除など)を先に畳み込む。文字列置換より後にすると、
+    // 先の置換で中身が変わっているため「元の要素」が見つからず畳み込めなくなる。
+    const ordered = [
+      ...candidates.filter((other) => isElementReplacingCandidate(other)),
+      ...candidates.filter((other) => !isElementReplacingCandidate(other)),
+    ];
+    ordered.forEach((other) => {
       if (other === candidate) {
         return;
       }
@@ -6960,14 +7012,48 @@
   // 採用済みの表構造候補(ancestor)の変換後HTMLへ、表内の内容修正候補(descendant)の修正を畳み込む。
   // descendant の before_html が変換後HTMLに現れる場合のみ、after_html へ置換する(現れない場合は
   // 畳み込めないため false を返す)。
+  // テキストをHTMLの直列化と同じ表記へ揃える(&・<・>・NBSPなど)。
+  function serializeTextForHtml(text) {
+    const holder = document.createElement("div");
+    holder.textContent = String(text ?? "");
+    return holder.innerHTML;
+  }
+
   function foldDescendantFixIntoAncestor(ancestor, descendant) {
-    const before = descendant.proposal?.before_html || "";
-    const after = descendant.proposal?.after_html || "";
-    if (!before || !after || before === after) {
+    // 変換後HTMLが未設定の場合は、候補が持つ変換後HTMLを起点にする。ヘッドレス経路
+    // (goal2Engine.autoAcceptSafe)は decision.after_html を null のまま採用するため、
+    // これが無いと畳み込みが一度も成立しなかった。
+    if (!ancestor.decision) {
       return false;
     }
-    const current = ancestor.decision?.after_html;
-    if (typeof current !== "string" || !current.includes(before)) {
+    if (typeof ancestor.decision.after_html !== "string") {
+      const fallback = ancestor.proposal?.after_html;
+      if (typeof fallback !== "string") {
+        return false;
+      }
+      ancestor.decision.after_html = fallback;
+    }
+    const current = ancestor.decision.after_html;
+
+    // 文字列置換のパッチ(単位の言い換え・単語内空白の除去など)は、置換する部分だけを畳み込む。
+    // 要素まるごとの before/after で畳み込むと、同じ要素に複数の修正があるとき2件目以降が
+    // 「元の要素」を見つけられず(1件目で書き換わっているため)捨てられていた。
+    const patch = descendant.proposal?.patch;
+    if (patch?.type === "replace-text" && typeof patch.before === "string" && patch.before && patch.before !== patch.after) {
+      // パッチが持つのはDOMのテキスト(実際のNBSP文字など)、畳み込み先は直列化されたHTML
+      // (&nbsp; 等の実体参照)。同じ直列化を通してから突き合わせないと、単語内の全角空白の除去の
+      // ように&nbsp;を含む修正が一致せず、黙って捨てられる。
+      const before = serializeTextForHtml(patch.before);
+      const after = serializeTextForHtml(patch.after);
+      if (before && current.includes(before)) {
+        ancestor.decision.after_html = current.split(before).join(after);
+        return true;
+      }
+    }
+
+    const before = descendant.proposal?.before_html || "";
+    const after = descendant.proposal?.after_html || "";
+    if (!before || !after || before === after || !current.includes(before)) {
       return false;
     }
     ancestor.decision.after_html = current.split(before).join(after);
@@ -7710,27 +7796,40 @@
       while (runEnd + 1 < candidates.length && candidates[runEnd + 1].target.node_id === candidate.target.node_id) {
         runEnd += 1;
       }
-      const groupSize = runEnd - index + 1;
-      const host = groupSize > 1 ? document.createElement("div") : els.candidateList;
-      if (groupSize > 1) {
-        host.className = "candidate-group";
-        host.setAttribute("role", "group");
-        host.setAttribute("aria-label", `同じ箇所の候補、${groupSize}件`);
-        const label = document.createElement("div");
-        label.className = "candidate-group-label";
-        label.textContent = `同じ箇所の候補・${groupSize}件`;
-        host.appendChild(label);
-      }
-      for (let i = index; i <= runEnd; i += 1) {
-        const row = buildCandidateRow(candidates[i]);
-        host.appendChild(row);
-        if (candidates[i].candidate_id === state.selectedCandidateId) {
-          selectedButton = row.querySelector("button");
+      const run = candidates.slice(index, runEnd + 1);
+      // 同じ要素を指す候補でも、性質が違うものを一緒に見せない。要素ごと差し替える候補は
+      // 「いずれか1つを選ぶ」代替手段、要素を残す候補は「どれも必要」な独立した修正。
+      const buckets = [
+        { items: run.filter((item) => isElementReplacingCandidate(item)), label: "同じ箇所の代替手段" },
+        { items: run.filter((item) => !isElementReplacingCandidate(item)), label: "同じ箇所の修正" },
+      ];
+
+      buckets.forEach(({ items, label }) => {
+        if (!items.length) {
+          return;
         }
-      }
-      if (groupSize > 1) {
-        els.candidateList.appendChild(host);
-      }
+        const grouped = items.length > 1;
+        const host = grouped ? document.createElement("div") : els.candidateList;
+        if (grouped) {
+          host.className = "candidate-group";
+          host.setAttribute("role", "group");
+          host.setAttribute("aria-label", `${label}、${items.length}件`);
+          const labelElement = document.createElement("div");
+          labelElement.className = "candidate-group-label";
+          labelElement.textContent = `${label}・${items.length}件`;
+          host.appendChild(labelElement);
+        }
+        items.forEach((item) => {
+          const row = buildCandidateRow(item);
+          host.appendChild(row);
+          if (item.candidate_id === state.selectedCandidateId) {
+            selectedButton = row.querySelector("button");
+          }
+        });
+        if (grouped) {
+          els.candidateList.appendChild(host);
+        }
+      });
       index = runEnd + 1;
     }
 
@@ -7752,7 +7851,25 @@
     if (candidate.rule_id && candidate.rule_id.startsWith("table.cell-merge-") && candidate.issue?.message) {
       return candidate.issue.message.replace(/[。.]+$/, "");
     }
-    return candidate.rule.title;
+    // 1つの段落に同じルールの候補が複数あると、ルール名だけでは見分けがつかない
+    // (「単位の表記」が3件並ぶなど)。文字列置換の候補は、置き換える文字を添えて区別する。
+    const change = textPatchChangeLabel(candidate);
+    return change ? `${candidate.rule.title}：${change}` : candidate.rule.title;
+  }
+
+  // 文字列置換のパッチから「22m → 22メートル」のような短いラベルを作る。
+  function textPatchChangeLabel(candidate) {
+    const patch = candidate?.proposal?.patch;
+    if (!patch || patch.type !== "replace-text") {
+      return "";
+    }
+    const before = patch.before instanceof RegExp ? "" : normalizeText(String(patch.before ?? "")).replace(/\u00a0/g, " ");
+    const after = normalizeText(String(patch.after ?? "")).replace(/\u00a0/g, " ");
+    if (!before || before === after) {
+      return "";
+    }
+    const clip = (text) => (text.length > 24 ? `${text.slice(0, 24)}…` : text);
+    return after ? `${clip(before)} → ${clip(after)}` : `${clip(before)} を削除`;
   }
 
   function buildCandidateRow(candidate) {
@@ -7777,7 +7894,7 @@
       }
       renderBulkControls();
     });
-    const siblingCount = candidatesForSameTarget(candidate).length;
+    const siblingCount = alternativeMethodCandidates(candidate).length;
     button.type = "button";
     button.className = `candidate-item ${status}`;
     button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
@@ -7847,7 +7964,7 @@
 
     els.detailSubtitle.textContent = `${candidate.candidate_id} / ${candidate.rule_id}`;
     els.candidateDetail.className = "detail-block";
-    const fixMethodCandidates = candidatesForSameTarget(candidate);
+    const fixMethodCandidates = alternativeMethodCandidates(candidate);
     const chosenMethodCandidate = activeFixMethodCandidate(candidate);
     const chosenMethodId = chosenMethodCandidate.candidate_id;
     // Use the currently chosen method (not always the primary/default candidate) so "この候補で
@@ -8197,8 +8314,25 @@
     return state.candidates.filter((other) => other.target.node_id === candidate.target.node_id);
   }
 
+  // 同じ箇所に対する「代替手段」。要素ごと差し替える候補どうしだけが互いの代替手段になる。
+  // 1つの段落にある単位の言い換えや単語内空白の除去は、要素を残したまま別々の箇所を直すため、
+  // 選択肢ではなくそれぞれ独立した修正として扱う(まとめて採用しても互いに打ち消さない)。
+  function alternativeMethodCandidates(candidate) {
+    if (!candidate) return [];
+    if (!isElementReplacingCandidate(candidate)) {
+      return [candidate];
+    }
+    return candidatesForSameTarget(candidate).filter((other) => isElementReplacingCandidate(other));
+  }
+
+  // 同じ要素を直す、独立した修正(単位の言い換えなど)。代替手段ではない。
+  function independentFixCandidates(candidate) {
+    if (!candidate || isElementReplacingCandidate(candidate)) return [];
+    return candidatesForSameTarget(candidate).filter((other) => !isElementReplacingCandidate(other));
+  }
+
   function activeFixMethodCandidate(candidate) {
-    const methods = candidatesForSameTarget(candidate);
+    const methods = alternativeMethodCandidates(candidate);
     if (state.selectedFixMethodId) {
       const selected = methods.find((method) => method.candidate_id === state.selectedFixMethodId);
       if (selected) {
@@ -8455,6 +8589,45 @@
     });
   }
 
+  // 文字列置換の候補は、要素まるごとではなく置き換える文字だけを強調する。1つの段落に
+  // 「22m」が3件あるような場合に、どれを直す候補なのかがプレビューで分かるようにするため。
+  // 一致するテキストが見つからないとき(既に修正済みなど)はfalseを返し、呼び出し元が
+  // 従来どおり要素をハイライトする。
+  function highlightPatchedTextInElement(element, candidate) {
+    const patch = candidate?.proposal?.patch;
+    if (!patch || patch.type !== "replace-text" || !patch.before) {
+      return false;
+    }
+    const isRegex = patch.before instanceof RegExp;
+    for (const node of textNodes(element)) {
+      const value = node.nodeValue || "";
+      let index = -1;
+      let length = 0;
+      if (isRegex) {
+        patch.before.lastIndex = 0;
+        const match = value.match(patch.before);
+        if (match && match.index != null) {
+          index = match.index;
+          length = match[0].length;
+        }
+      } else {
+        index = value.indexOf(patch.before);
+        length = patch.before.length;
+      }
+      if (index < 0 || length <= 0) {
+        continue;
+      }
+      const matched = node.splitText(index);
+      matched.splitText(length);
+      const mark = document.createElement("mark");
+      mark.className = "goal2-highlight";
+      matched.replaceWith(mark);
+      mark.appendChild(matched);
+      return true;
+    }
+    return false;
+  }
+
   function buildPreviewHtml() {
     const html = state.workingHtml || cleanHtml(state.sourceHtml);
     const template = document.createElement("template");
@@ -8463,7 +8636,7 @@
     const candidate = selectedCandidate();
     if (candidate) {
       const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
-      if (target) {
+      if (target && !highlightPatchedTextInElement(target, candidate)) {
         target.classList.add("goal2-highlight");
       }
     }
@@ -8483,6 +8656,7 @@
       h6::before{content:"H6"}
       table{border-collapse:collapse;margin:1em 0;max-width:100%}td,th{border:1px solid #98a5b3;padding:6px 8px}caption{text-align:left;font-weight:700;margin-bottom:6px}
       img{max-width:100%;height:auto}.goal2-highlight{outline:3px solid #d89216;outline-offset:3px;background:#fff7df;scroll-margin:24px}
+      mark.goal2-highlight{color:inherit;outline-offset:1px;padding:0 1px;border-radius:2px}
       a{color:#0f5f87}
     </style></head><body>${previewHtml || "<p>HTMLを入力してください。</p>"}</body></html>`;
   }
