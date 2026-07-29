@@ -205,6 +205,54 @@ async function main() {
       inTableFixed
     );
 
+    // 8. 画面表示: 同じ段落の独立した修正を「代替手段」として見せない
+    await page.fill("#htmlInput", MULTI_FIX_PARAGRAPH);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4000);
+
+    const listing = await page.evaluate(() =>
+      [...document.querySelectorAll(".candidate-list .candidate-group")].map((node) => ({
+        label: node.querySelector(".candidate-group-label")?.textContent.trim() || "",
+        titles: [...node.querySelectorAll(".candidate-title")].map((t) => t.textContent.trim()),
+        badges: [...node.querySelectorAll(".candidate-alt-badge")].length,
+      }))
+    );
+    const fixGroup = listing.find((g) => g.label.startsWith("同じ箇所の修正"));
+    check("独立した修正は代替手段として並べない", Boolean(fixGroup), JSON.stringify(listing));
+    check(
+      "独立した修正に代替手段のバッジを付けない",
+      fixGroup ? fixGroup.badges === 0 : false,
+      JSON.stringify(fixGroup)
+    );
+    check(
+      "候補のタイトルで置換内容を見分けられる",
+      Boolean(fixGroup && fixGroup.titles.some((t) => /22m\s*→\s*22メートル/.test(t))),
+      JSON.stringify(fixGroup && fixGroup.titles)
+    );
+
+    // 単位の候補を選ぶと、修正方法は自分1件だけになる
+    const picked = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+        /単位の表記：22m/.test(b.textContent)
+      );
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("単位の候補を選択できる", picked, "候補が見つからない");
+    if (picked) {
+      await page.waitForTimeout(1200);
+      const note = (await page.textContent(".fix-method-note").catch(() => "")) || "";
+      check("独立した修正を選んでも他の修正が選択肢に出ない", /1件です/.test(note), note.replace(/\s+/g, " "));
+
+      const mark = await page.evaluate(() => {
+        const doc = document.getElementById("previewFrame").contentDocument;
+        const m = doc && doc.querySelector("mark.goal2-highlight");
+        return m ? m.textContent : null;
+      });
+      check("プレビューが置換対象の文字だけを強調する", mark === "22m", `ハイライト=${JSON.stringify(mark)}`);
+    }
+
     // 6. 連番・ファイル名だけの代替テキストを検出する
     const altCases = [
       ['<p><img src="/a/hekikaikofuns.jpg" alt="碧海山古墳002"></p>', "連番付きのalt", true],

@@ -7796,27 +7796,40 @@
       while (runEnd + 1 < candidates.length && candidates[runEnd + 1].target.node_id === candidate.target.node_id) {
         runEnd += 1;
       }
-      const groupSize = runEnd - index + 1;
-      const host = groupSize > 1 ? document.createElement("div") : els.candidateList;
-      if (groupSize > 1) {
-        host.className = "candidate-group";
-        host.setAttribute("role", "group");
-        host.setAttribute("aria-label", `同じ箇所の候補、${groupSize}件`);
-        const label = document.createElement("div");
-        label.className = "candidate-group-label";
-        label.textContent = `同じ箇所の候補・${groupSize}件`;
-        host.appendChild(label);
-      }
-      for (let i = index; i <= runEnd; i += 1) {
-        const row = buildCandidateRow(candidates[i]);
-        host.appendChild(row);
-        if (candidates[i].candidate_id === state.selectedCandidateId) {
-          selectedButton = row.querySelector("button");
+      const run = candidates.slice(index, runEnd + 1);
+      // 同じ要素を指す候補でも、性質が違うものを一緒に見せない。要素ごと差し替える候補は
+      // 「いずれか1つを選ぶ」代替手段、要素を残す候補は「どれも必要」な独立した修正。
+      const buckets = [
+        { items: run.filter((item) => isElementReplacingCandidate(item)), label: "同じ箇所の代替手段" },
+        { items: run.filter((item) => !isElementReplacingCandidate(item)), label: "同じ箇所の修正" },
+      ];
+
+      buckets.forEach(({ items, label }) => {
+        if (!items.length) {
+          return;
         }
-      }
-      if (groupSize > 1) {
-        els.candidateList.appendChild(host);
-      }
+        const grouped = items.length > 1;
+        const host = grouped ? document.createElement("div") : els.candidateList;
+        if (grouped) {
+          host.className = "candidate-group";
+          host.setAttribute("role", "group");
+          host.setAttribute("aria-label", `${label}、${items.length}件`);
+          const labelElement = document.createElement("div");
+          labelElement.className = "candidate-group-label";
+          labelElement.textContent = `${label}・${items.length}件`;
+          host.appendChild(labelElement);
+        }
+        items.forEach((item) => {
+          const row = buildCandidateRow(item);
+          host.appendChild(row);
+          if (item.candidate_id === state.selectedCandidateId) {
+            selectedButton = row.querySelector("button");
+          }
+        });
+        if (grouped) {
+          els.candidateList.appendChild(host);
+        }
+      });
       index = runEnd + 1;
     }
 
@@ -7838,7 +7851,25 @@
     if (candidate.rule_id && candidate.rule_id.startsWith("table.cell-merge-") && candidate.issue?.message) {
       return candidate.issue.message.replace(/[。.]+$/, "");
     }
-    return candidate.rule.title;
+    // 1つの段落に同じルールの候補が複数あると、ルール名だけでは見分けがつかない
+    // (「単位の表記」が3件並ぶなど)。文字列置換の候補は、置き換える文字を添えて区別する。
+    const change = textPatchChangeLabel(candidate);
+    return change ? `${candidate.rule.title}：${change}` : candidate.rule.title;
+  }
+
+  // 文字列置換のパッチから「22m → 22メートル」のような短いラベルを作る。
+  function textPatchChangeLabel(candidate) {
+    const patch = candidate?.proposal?.patch;
+    if (!patch || patch.type !== "replace-text") {
+      return "";
+    }
+    const before = patch.before instanceof RegExp ? "" : normalizeText(String(patch.before ?? "")).replace(/\u00a0/g, " ");
+    const after = normalizeText(String(patch.after ?? "")).replace(/\u00a0/g, " ");
+    if (!before || before === after) {
+      return "";
+    }
+    const clip = (text) => (text.length > 24 ? `${text.slice(0, 24)}…` : text);
+    return after ? `${clip(before)} → ${clip(after)}` : `${clip(before)} を削除`;
   }
 
   function buildCandidateRow(candidate) {
@@ -7863,7 +7894,7 @@
       }
       renderBulkControls();
     });
-    const siblingCount = candidatesForSameTarget(candidate).length;
+    const siblingCount = alternativeMethodCandidates(candidate).length;
     button.type = "button";
     button.className = `candidate-item ${status}`;
     button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
@@ -7933,7 +7964,7 @@
 
     els.detailSubtitle.textContent = `${candidate.candidate_id} / ${candidate.rule_id}`;
     els.candidateDetail.className = "detail-block";
-    const fixMethodCandidates = candidatesForSameTarget(candidate);
+    const fixMethodCandidates = alternativeMethodCandidates(candidate);
     const chosenMethodCandidate = activeFixMethodCandidate(candidate);
     const chosenMethodId = chosenMethodCandidate.candidate_id;
     // Use the currently chosen method (not always the primary/default candidate) so "この候補で
@@ -8283,8 +8314,25 @@
     return state.candidates.filter((other) => other.target.node_id === candidate.target.node_id);
   }
 
+  // 同じ箇所に対する「代替手段」。要素ごと差し替える候補どうしだけが互いの代替手段になる。
+  // 1つの段落にある単位の言い換えや単語内空白の除去は、要素を残したまま別々の箇所を直すため、
+  // 選択肢ではなくそれぞれ独立した修正として扱う(まとめて採用しても互いに打ち消さない)。
+  function alternativeMethodCandidates(candidate) {
+    if (!candidate) return [];
+    if (!isElementReplacingCandidate(candidate)) {
+      return [candidate];
+    }
+    return candidatesForSameTarget(candidate).filter((other) => isElementReplacingCandidate(other));
+  }
+
+  // 同じ要素を直す、独立した修正(単位の言い換えなど)。代替手段ではない。
+  function independentFixCandidates(candidate) {
+    if (!candidate || isElementReplacingCandidate(candidate)) return [];
+    return candidatesForSameTarget(candidate).filter((other) => !isElementReplacingCandidate(other));
+  }
+
   function activeFixMethodCandidate(candidate) {
-    const methods = candidatesForSameTarget(candidate);
+    const methods = alternativeMethodCandidates(candidate);
     if (state.selectedFixMethodId) {
       const selected = methods.find((method) => method.candidate_id === state.selectedFixMethodId);
       if (selected) {
@@ -8541,6 +8589,45 @@
     });
   }
 
+  // 文字列置換の候補は、要素まるごとではなく置き換える文字だけを強調する。1つの段落に
+  // 「22m」が3件あるような場合に、どれを直す候補なのかがプレビューで分かるようにするため。
+  // 一致するテキストが見つからないとき(既に修正済みなど)はfalseを返し、呼び出し元が
+  // 従来どおり要素をハイライトする。
+  function highlightPatchedTextInElement(element, candidate) {
+    const patch = candidate?.proposal?.patch;
+    if (!patch || patch.type !== "replace-text" || !patch.before) {
+      return false;
+    }
+    const isRegex = patch.before instanceof RegExp;
+    for (const node of textNodes(element)) {
+      const value = node.nodeValue || "";
+      let index = -1;
+      let length = 0;
+      if (isRegex) {
+        patch.before.lastIndex = 0;
+        const match = value.match(patch.before);
+        if (match && match.index != null) {
+          index = match.index;
+          length = match[0].length;
+        }
+      } else {
+        index = value.indexOf(patch.before);
+        length = patch.before.length;
+      }
+      if (index < 0 || length <= 0) {
+        continue;
+      }
+      const matched = node.splitText(index);
+      matched.splitText(length);
+      const mark = document.createElement("mark");
+      mark.className = "goal2-highlight";
+      matched.replaceWith(mark);
+      mark.appendChild(matched);
+      return true;
+    }
+    return false;
+  }
+
   function buildPreviewHtml() {
     const html = state.workingHtml || cleanHtml(state.sourceHtml);
     const template = document.createElement("template");
@@ -8549,7 +8636,7 @@
     const candidate = selectedCandidate();
     if (candidate) {
       const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
-      if (target) {
+      if (target && !highlightPatchedTextInElement(target, candidate)) {
         target.classList.add("goal2-highlight");
       }
     }
@@ -8569,6 +8656,7 @@
       h6::before{content:"H6"}
       table{border-collapse:collapse;margin:1em 0;max-width:100%}td,th{border:1px solid #98a5b3;padding:6px 8px}caption{text-align:left;font-weight:700;margin-bottom:6px}
       img{max-width:100%;height:auto}.goal2-highlight{outline:3px solid #d89216;outline-offset:3px;background:#fff7df;scroll-margin:24px}
+      mark.goal2-highlight{color:inherit;outline-offset:1px;padding:0 1px;border-radius:2px}
       a{color:#0f5f87}
     </style></head><body>${previewHtml || "<p>HTMLを入力してください。</p>"}</body></html>`;
   }
