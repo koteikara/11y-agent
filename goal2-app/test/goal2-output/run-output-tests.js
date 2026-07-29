@@ -287,6 +287,59 @@ async function main() {
       nestedOut.replace(/\s+/g, " ").slice(0, 240)
     );
 
+    // 10. データ表への提案の質
+    const KV_TABLE = `<table border="0"><tbody>
+      <tr><td>遺跡番号</td><td>541031</td></tr>
+      <tr><td>墳　丘</td><td colspan="2">円墳</td></tr>
+    </tbody></table>`;
+    const GENERIC_HEADER_TABLE = `<table border="0"><tbody>
+      <tr><td>項目</td><td>内容</td></tr>
+      <tr><td>受付時間</td><td>午前8時30分から</td></tr>
+      <tr><td>担当課</td><td>市民課</td></tr>
+    </tbody></table>`;
+
+    const semanticsHtml = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        const c = res.candidates.find((x) => x.rule_id === "table.caption");
+        return c ? c.proposal.after_html : "";
+      }, html);
+
+    const kv = await semanticsHtml(KV_TABLE);
+    check("ラベル/値の表を見出し行と誤判定しない", !/<thead/i.test(kv), kv.replace(/\s+/g, " ").slice(0, 200));
+    check("ラベル/値の表の1列目を行見出しにする", /scope="row"/.test(kv), kv.replace(/\s+/g, " ").slice(0, 200));
+    check("列数を超えたcolspanを落とす", !/colspan/i.test(kv), kv.replace(/\s+/g, " ").slice(0, 200));
+
+    const generic = await semanticsHtml(GENERIC_HEADER_TABLE);
+    check("項目/内容の表は見出し行として扱う", /<thead/i.test(generic), generic.replace(/\s+/g, " ").slice(0, 200));
+
+    // 2文字語の均等割り付け
+    const spacingCases = [
+      ["<p>墳　丘</p>", "2文字語の均等割り付け", true],
+      ["<p>氏　名</p>", "氏名", true],
+      ["<p>東京　大阪</p>", "語と語の区切りは対象外", false],
+      ["<p>本文　です</p>", "2文字語+全角空白は対象外", false],
+    ];
+    for (const [html, label, expected] of spacingCases) {
+      const hit = await page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        return res.candidates.some((c) => c.rule_id === "text.spaced-characters");
+      }, html);
+      check(`文字間空白の検出: ${label}`, hit === expected, `検出=${hit} 期待=${expected}`);
+    }
+
+    // 表のセルの修正が、入れ子の表を採用しても残る
+    const cellFixed = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return window.goal2Engine.buildFinalHtml(h, res.candidates);
+    }, `<table border="0"><tbody><tr><td><table border="1"><tbody><tr><td>遺跡番号</td><td>541031</td></tr><tr><td>墳　丘</td><td>円墳</td></tr></tbody></table><h2>概要</h2><p>本文</p></td><td><h2>所在地</h2><p>安城市</p></td></tr></tbody></table>`);
+    check(
+      "入れ子の表でもセル内の文字間空白が詰まる",
+      /墳丘/.test(cellFixed) && !/墳　丘/.test(cellFixed),
+      cellFixed.replace(/\s+/g, " ").slice(0, 240)
+    );
+
     // 6. 連番・ファイル名だけの代替テキストを検出する
     const altCases = [
       ['<p><img src="/a/hekikaikofuns.jpg" alt="碧海山古墳002"></p>', "連番付きのalt", true],

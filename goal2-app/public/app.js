@@ -4043,6 +4043,33 @@
     return /⇨|⇒|→|->/.test(text);
   }
 
+  // 表の列数を超えるcolspanを詰める。元データのcolspanが列数を超えている表(2列なのに
+  // colspan="2")をそのまま出すと、存在しない列を占有したままになる。構造を整える手段なのに
+  // 不整合が残るため、ここで落とす。フラット化の手段(computeTableGridShape)と同じ考え方。
+  function clampOverflowingColspans(tableElement, maxColumns) {
+    if (!maxColumns || maxColumns < 1) {
+      return;
+    }
+    ownTableRows(tableElement).forEach((row) => {
+      let column = 0;
+      [...row.children].forEach((cell) => {
+        if (!["TD", "TH"].includes(cell.tagName)) {
+          return;
+        }
+        const span = Math.max(1, Number.parseInt(cell.getAttribute("colspan") || "1", 10) || 1);
+        const remaining = Math.max(1, maxColumns - column);
+        if (span > remaining) {
+          if (remaining > 1) {
+            cell.setAttribute("colspan", String(remaining));
+          } else {
+            cell.removeAttribute("colspan");
+          }
+        }
+        column += Math.min(span, remaining);
+      });
+    });
+  }
+
   function buildDataTableSemanticsHtml(table) {
     const profile = dataTableProfile(table);
     const output = document.createElement("table");
@@ -4069,6 +4096,7 @@
         tbody.appendChild(row);
       });
       output.appendChild(tbody);
+      clampOverflowingColspans(output, profile.maxCells);
       return cleanHtml(output.outerHTML);
     }
 
@@ -4082,6 +4110,7 @@
         tbody.appendChild(row);
       });
       output.appendChild(tbody);
+      clampOverflowingColspans(output, profile.maxCells);
       return cleanHtml(output.outerHTML);
     }
 
@@ -4181,9 +4210,26 @@
 
   function isKeyValueDataTableProfile(profile) {
     if (profile.hasThead || profile.maxCells !== 2 || profile.rows.length < 2) return false;
-    if (profile.firstRowHeaderLike) return false;
+    if (profile.firstRowHeaderLike && !hasLabelColumnLayout(profile)) return false;
     const labelRows = profile.rows.filter((row) => isHeaderLikeTableCell(row[0])).length;
     return labelRows >= Math.ceil(profile.rows.length * 0.6);
+  }
+
+  // 2列で、どの行も1列目がラベルらしい表。1行目も「ラベル: 値」のデータ行として扱う。
+  // profile.firstRowHeaderLikeは「短いテキストが並ぶ」だけで立つため、値が短いだけの1行目
+  // (遺跡番号 / 541031)まで見出し行と判定してしまう。「項目 / 内容」のような定型の見出し語が
+  // 並ぶときだけ見出し行とみなす。
+  function hasLabelColumnLayout(profile) {
+    const firstRow = profile.rows[0] || [];
+    if (profile.maxCells !== 2 || firstRow.length !== 2) {
+      return false;
+    }
+    if (!profile.rows.every((row) => row[0] && isHeaderLikeTableCell(row[0]))) {
+      return false;
+    }
+    const key = normalizeText(firstRow[0]?.textContent || "");
+    const value = normalizeText(firstRow[1]?.textContent || "");
+    return Boolean(key && value && !looksLikeGenericTableHeaderPair(key, value));
   }
 
   function isRowHeaderOnlyDataTableProfile(profile) {
@@ -6986,9 +7032,12 @@
       // この修正を畳み込むことで、採用順に関わらず出力に修正が反映されるようにする。
       const isContentDescendant = isDescendantCandidate && !other.rule_id.startsWith("table.");
 
-      // 既に採用済みの内容修正候補: 表を丸ごと置換する変換後HTMLが、この修正を上書きして消してしまう
-      // ため、変換後HTMLへ畳み込んでおく(候補自体の状態は変えない)。
-      if (isContentDescendant && ["accepted", "edited"].includes(other.decision.status)) {
+      // 既に解決済みの内容修正候補: 表を丸ごと置換する変換後HTMLが、この修正を上書きして消して
+      // しまうため、変換後HTMLへ畳み込んでおく(候補自体の状態は変えない)。
+      // conflictedも対象にする。入れ子の表では外側→内側の順に採用されるため、外側へ畳み込んだ
+      // 時点でconflictedになった修正が、後から採用した内側の変換後HTML(元の要素から作られる)で
+      // 消えていた(実データ: 表のセルの「墳　丘」が詰められないまま残っていた)。
+      if (isContentDescendant && ["accepted", "edited", "conflicted"].includes(other.decision.status)) {
         foldDescendantFixIntoAncestor(candidate, other);
         return;
       }
@@ -9303,8 +9352,27 @@
   const SPACED_CHARACTERS_PATTERN = /(?:[^\s][ \t　 ]+){2,}[^\s]/g;
   const SPACED_CHARACTERS_CJK = /[぀-ヿ㐀-鿿豈-﫿]/;
 
+  // 「墳　丘」「氏　名」のように、2文字の語を1文字ずつ空けて幅を揃えた表記。上のパターンは
+  // 3つ以上の並びだけを対象にするため拾えなかったが、実データの表でよく出る。両側が単独の
+  // 漢字・かなで、その外側に別の漢字・かなが続かない場合だけを対象にする。この条件が無いと
+  // 「東京　大阪」のような語と語の区切りまで詰めてしまう。
+  const SPACED_PAIR_PATTERN =
+    /(?<![぀-ヿ㐀-鿿豈-﫿])[぀-ヿ㐀-鿿豈-﫿](?:　|\u00a0| {2,})[぀-ヿ㐀-鿿豈-﫿](?![぀-ヿ㐀-鿿豈-﫿])/g;
+
   function findSpacedCharacterMatches(text) {
-    return findMatches(text, SPACED_CHARACTERS_PATTERN).filter((match) => SPACED_CHARACTERS_CJK.test(match.text));
+    const matches = findMatches(text, SPACED_CHARACTERS_PATTERN).filter((match) =>
+      SPACED_CHARACTERS_CJK.test(match.text)
+    );
+    // 3つ以上の並びとして既に拾った範囲と重なるものは足さない(同じ箇所に2つの候補が出て、
+    // 後から当てた方が対象を見つけられなくなるため)。
+    const overlaps = (index, length) =>
+      matches.some((match) => index < match.index + match.text.length && match.index < index + length);
+    findMatches(text, SPACED_PAIR_PATTERN).forEach((match) => {
+      if (!overlaps(match.index, match.text.length)) {
+        matches.push(match);
+      }
+    });
+    return matches;
   }
 
   function collapseSpacedCharacters(value) {
