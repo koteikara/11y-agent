@@ -340,6 +340,58 @@ async function main() {
       cellFixed.replace(/\s+/g, " ").slice(0, 240)
     );
 
+    // 11. 確認不要の候補をまとめて採用する
+    const BULK_SOURCE = `<div>
+      <p>受付は１階のＡ窓口です。</p>
+      <p>電話は１２３４５６です。</p>
+      <p><font size="3">案内</font></p>
+      <p>会場まで22m</p>
+      <p><a href="/a.pdf">申請書（PDF：76KB）</a></p>
+      <p><img src="/a/x.jpg" alt="現地の様子"></p>
+    </div>`;
+
+    // 直前の候補生成で入力欄が畳まれているので開いてから入れ直す
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
+    await page.fill("#htmlInput", BULK_SOURCE);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4500);
+
+    const label = (await page.textContent("#bulkAcceptReviewFreeButton")).trim();
+    check("確認不要の件数をボタンに出す", /確認不要の\d+件をまとめて採用/.test(label), label);
+
+    const beforeSummary = await page.textContent("#candidateSummary");
+    await page.click("#bulkAcceptReviewFreeButton");
+    await page.waitForTimeout(2000);
+
+    const status = (await page.textContent("#bulkActionStatus")).replace(/\s+/g, " ");
+    check("採用したルールの内訳を出す", /確認不要の\d+件を採用しました（.+）。/.test(status), status);
+    check(
+      "採用後は未処理が減る",
+      beforeSummary !== (await page.textContent("#candidateSummary")),
+      `${beforeSummary} → ${await page.textContent("#candidateSummary")}`
+    );
+    check(
+      "採用しきったらボタンを無効にする",
+      (await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) !== null,
+      "まだ有効のまま"
+    );
+
+    await page.evaluate(() => {
+      document.querySelector(".output-drawer").open = true;
+    });
+    await page.waitForTimeout(400);
+    const bulkFinal = await page.inputValue("#finalHtml");
+    check("全角英数字がまとめて半角になる", !/[Ａ-Ｚａ-ｚ０-９]/.test(bulkFinal), bulkFinal.slice(0, 200));
+    check(
+      "確認が要る候補は採用しない",
+      /alt="現地の様子"/.test(bulkFinal),
+      bulkFinal.slice(0, 300)
+    );
+
     // 6. 連番・ファイル名だけの代替テキストを検出する
     const altCases = [
       ['<p><img src="/a/hekikaikofuns.jpg" alt="碧海山古墳002"></p>', "連番付きのalt", true],

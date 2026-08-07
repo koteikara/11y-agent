@@ -147,6 +147,18 @@
 - 検証: Playwrightでファイルを開き、図9点がすべて読み込まれること、横スクロールが発生しないこと、10セクションが揃うことを確認した。
 - 関連ファイル: `docs/a11y-review-verification-guide.html`, `docs/images/a11y-review-guide/*.png`
 
+## 2026-07-29: 確認不要の候補をまとめて採用できるようにした
+
+- 背景・目的: 「半角英数字の書き換えについて1箇所ごとに処理するのは面倒」との指摘。`text.alphanumeric`(全角英数字→半角)は出現箇所ごとに候補が出るため、1件ずつ採用すると箇所の数だけ手間がかかる。内蔵サンプルでは全角英数字だけで15件、安城市の表サンプルでは55件中21件が人の確認を要しない候補だった。
+- 主な変更内容:
+  - `public/index.html` / `public/app.js`: 修正候補の一括操作に「確認不要をまとめて採用」ボタンを追加。`requires_human_review === false` かつ採用可能な未処理候補だけを一括採用する。ボタンには対象件数を出し、採用後は「確認不要の21件を採用しました（見出し階層の順守 1件、ファイルの表示テキスト 12件、全角英数字 8件）。」のようにルール別の内訳を表示する。
+  - 既存の「チェックを一括採用」は、チェックした候補をすべて採用する動作のまま変更していない。判断が要る候補(文言・表の構造・代替テキストなど)は新しいボタンの対象外。
+  - `public/styles.css`: 一括操作の行が折り返すようにした。候補ペインは幅が狭く、ボタンが2つ並ぶとラベルが1文字ずつ縦に組まれていた。
+- 対象になるルール(`requires_human_review: false`): `text.alphanumeric` / `text.currency-notation` / `text.unit-notation` / `text.decoration-lines` / `text.font-size` / `text.bold` / `text.background-color` / `text.list` / `html-structure.deprecated-elements` / `html-structure.heading-order` / `html-structure.heading-link-only` / `html-structure.embedded-script-behavior` / `table.format-clear` / `image.caption` / `file.file-display-text`
+- 検証: `goal2-app/test/goal2-output/run-output-tests.js`に6項目を追加(計44項目)。件数表示、内訳の表示、採用後にボタンが無効になること、全角英数字がまとめて半角になること、確認が要る候補(画像のalt)は採用されないことを確認。`node test/run-tests.js` 正常終了、miChecker parity 223/223、`test/table-nesting/` 7/7。
+- 関連ファイル: `goal2-app/public/app.js`, `goal2-app/public/index.html`, `goal2-app/public/styles.css`, `goal2-app/test/goal2-output/run-output-tests.js`
+- 関連PR/コミット: (このコミット)
+
 ## 2026-07-29: データ表への提案の質を改善(見出し行の誤判定・はみ出しcolspan・2文字語の空白)
 
 - 背景・目的: 入れ子の表が直せるようになった後に残っていた、検出・提案側の精度の問題3件。

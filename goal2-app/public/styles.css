@@ -919,7 +919,16 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+/* 候補ペインは幅が狭い。折り返さずに並べようとすると、ボタンのラベルが1文字ずつ
+   縦に組まれてしまうため、入りきらないボタンは行を折って横幅いっぱいに置く。 */
+.bulk-actions-row button {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .bulk-select-all {

@@ -478,6 +478,7 @@
     appMain: document.getElementById("appMain"),
     bulkSelectAll: document.getElementById("bulkSelectAll"),
     bulkAcceptButton: document.getElementById("bulkAcceptButton"),
+    bulkAcceptReviewFreeButton: document.getElementById("bulkAcceptReviewFreeButton"),
     bulkActionStatus: document.getElementById("bulkActionStatus"),
     candidateList: document.getElementById("candidateList"),
     previewFrame: document.getElementById("previewFrame"),
@@ -560,6 +561,7 @@
     els.micheckerEngineTableBody?.addEventListener("click", handleMicheckerEngineTableClick);
     els.bulkSelectAll.addEventListener("change", toggleBulkSelection);
     els.bulkAcceptButton.addEventListener("click", bulkAcceptSelected);
+    els.bulkAcceptReviewFreeButton?.addEventListener("click", bulkAcceptReviewFree);
     els.acceptButton.addEventListener("click", () => decide("accepted"));
     els.editAcceptButton.addEventListener("click", toggleQuickEditPanel);
     els.rejectButton.addEventListener("click", () => decide("rejected"));
@@ -6964,6 +6966,48 @@
     renderAll();
   }
 
+  // 人の確認が要らない候補(全角英数字→半角、通貨記号、単位の言い換え、装飾タグの解除など)。
+  // 1件ずつ採用していくと箇所の数だけ手間がかかるため、まとめて採用できるようにする。
+  // 文言や表の構造のように判断が要る候補は対象にしない。
+  function isReviewFreeCandidate(candidate) {
+    return Boolean(candidate && candidate.proposal.requires_human_review === false);
+  }
+
+  function reviewFreeAcceptableCandidates() {
+    return unresolvedCandidates().filter(
+      (candidate) => isReviewFreeCandidate(candidate) && canBulkAcceptCandidate(candidate)
+    );
+  }
+
+  function bulkAcceptReviewFree() {
+    const targets = reviewFreeAcceptableCandidates();
+    if (!targets.length) {
+      state.bulkActionMessage = "確認不要の未処理候補はありません。";
+      renderAll();
+      return;
+    }
+
+    const ruleCounts = new Map();
+    targets.forEach((candidate) => {
+      if (candidate.decision.status) {
+        return;
+      }
+      applyCandidateDecision(candidate, "accepted", "確認不要の候補をまとめて採用", candidate.proposal.after_html);
+      const title = candidate.rule.title;
+      ruleCounts.set(title, (ruleCounts.get(title) || 0) + 1);
+    });
+
+    const accepted = [...ruleCounts.values()].reduce((sum, count) => sum + count, 0);
+    pruneBulkSelection();
+    state.workingHtml = rebuildWorkingHtml();
+    if (accepted > 0 && selectedCandidate()?.decision.status) {
+      moveToNextUnresolvedCandidate(state.selectedCandidateId);
+    }
+    const breakdown = [...ruleCounts.entries()].map(([title, count]) => `${title} ${count}件`).join("、");
+    state.bulkActionMessage = `確認不要の${accepted}件を採用しました（${breakdown}）。`;
+    renderAll();
+  }
+
   function canBulkAcceptCandidate(candidate) {
     return Boolean(candidate && !candidate.decision.status && !acceptDisabledReason(candidate));
   }
@@ -8024,6 +8068,17 @@
     els.bulkAcceptButton.disabled = acceptableCount === 0;
     els.bulkAcceptButton.textContent =
       acceptableCount > 0 ? `チェック${acceptableCount}件を一括採用` : "チェックを一括採用";
+
+    if (els.bulkAcceptReviewFreeButton) {
+      const reviewFreeCount = reviewFreeAcceptableCandidates().length;
+      els.bulkAcceptReviewFreeButton.disabled = reviewFreeCount === 0;
+      els.bulkAcceptReviewFreeButton.textContent =
+        reviewFreeCount > 0 ? `確認不要の${reviewFreeCount}件をまとめて採用` : "確認不要をまとめて採用";
+      els.bulkAcceptReviewFreeButton.title =
+        reviewFreeCount > 0
+          ? "全角英数字・単位・装飾タグなど、人の確認が要らない候補だけを採用します。"
+          : "";
+    }
 
     if (state.bulkActionMessage) {
       els.bulkActionStatus.textContent = state.bulkActionMessage;
