@@ -2328,11 +2328,22 @@
     return noticeRuleIds.has(item.rule_id);
   }
 
-  // 装飾アイコンでよく使う語。語の直後は区切り(_ -)か拡張子の . に限る。境界を見ないと
-  // 「document_scan.jpg」が doc に、「markets.jpg」が mark に当たり、内容のある写真を
-  // ファイル名だけで装飾と判定してしまう。
-  const DECORATIVE_ICON_SRC_PATTERN =
-    /(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|pdf|xlsx?|excel|docx?|word|ppt|file|mail|tel|new|ext|external|link|window)(?:[_-][\w-]*)?\.(gif|png|svg|jpg)$/i;
+  // 装飾アイコンでよく使う語。語の強さで3群に分け、群ごとに許す形を変える。
+  //
+  //   強い語     アイコンにしか使わない語。接頭辞・接尾辞どちらも可(icon_excel.gif、pdf_icon.gif)
+  //   ファイル種別 基底名そのものか、数字だけを伴う形(pdf.gif、pdf16.gif)。.jpg はサムネイルの
+  //              可能性が高いので外す
+  //   一般語     基底名そのものだけ。^ か / の直後に限る(new.gif は可、photo_new.jpg は不可)
+  //
+  // 語のあとの区切りを無条件に許すと、区切り付きの内容画像がファイル名だけで装飾になる。
+  // pdf_thumbnail.jpg(チラシPDFのサムネイル)や new_building.jpg(新庁舎の写真)は自治体
+  // サイトに普通にある名前で、確認不要で alt="" にしてはいけない。
+  const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
+    "(?:(?:^|[\\/_-])(?:icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|btn|button)(?:[_-][\\w-]*)?\\.(?:gif|png|svg|jpg)" +
+      "|(?:^|[\\/_-])(?:pdf|xlsx?|excel|docx?|word|ppt)\\d{0,3}\\.(?:gif|png|svg)" +
+      "|(?:^|\\/)(?:new|mail|tel|link|ext|external|window|file)\\d{0,3}\\.(?:gif|png|svg))$",
+    "i"
+  );
 
   // 装飾目的のアイコン画像と判断した根拠を返す。判断できないときは null。
   // alt="" は装飾画像として正しい状態で、miCheckerも指摘しないため、こうした画像には

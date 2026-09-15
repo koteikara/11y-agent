@@ -437,17 +437,29 @@ CMSが出すHTMLでは寸法の無い画像が普通にあるため、この根�
 
 `alt=""` のときに候補を出さない扱いは、3つの根拠で共通にする（既にある状態を悪くしない）。
 
-ファイル名の判定は次のとおり。
+ファイル名の判定は、語の強さで3群に分け、群ごとに許す形を変える。
+
+| 群 | 語 | 許す形 | 拡張子 |
+| --- | --- | --- | --- |
+| 強い語 | `icon` `ico` `arrow` `bullet` `shim` `spacer` `blank` `dot` `mark` `btn` `button` | 接頭辞・接尾辞どちらも可（`icon_excel.gif`、`pdf_icon.gif`） | gif/png/svg/jpg |
+| ファイル種別の語 | `pdf` `xls` `xlsx` `excel` `doc` `docx` `word` `ppt` | 基底名そのもの、または数字だけを伴う（`pdf.gif`、`pdf16.gif`） | gif/png/svg |
+| 一般語 | `new` `mail` `tel` `link` `ext` `external` `window` `file` | 基底名そのものだけ。`^` か `/` の直後に限る（`new.gif` は可、`photo_new.jpg` は不可） | gif/png/svg |
 
 ```js
-/(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|pdf|xlsx?|excel|docx?|word|ppt|file|mail|tel|new|ext|external|link|window)(?:[_-][\w-]*)?\.(gif|png|svg|jpg)$/i
+const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
+  "(?:(?:^|[\\/_-])(?:icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|btn|button)(?:[_-][\\w-]*)?\\.(?:gif|png|svg|jpg)" +
+    "|(?:^|[\\/_-])(?:pdf|xlsx?|excel|docx?|word|ppt)\\d{0,3}\\.(?:gif|png|svg)" +
+    "|(?:^|\\/)(?:new|mail|tel|link|ext|external|window|file)\\d{0,3}\\.(?:gif|png|svg))$",
+  "i"
+);
 ```
 
-ファイル種別アイコンでよく使う語を足してあるため、`pdf.gif` のような寸法の無いアイコンも `"filename"` に入り、確認不要のまま扱える。
+群を分ける理由は、語を足すほどファイル名だけでの誤判定が増えるためである。
+すべての語に「語のあとは区切りが来れば何でも可」を許すと、`pdf_thumbnail.jpg`（チラシPDFのサムネイル）や `new_building.jpg`（新庁舎の写真）といった、自治体サイトに普通にある名前の内容画像が `"filename"` に入り、確認不要で `alt=""` になる。
+ファイル種別の語で `.jpg` を外しているのも同じ理由で、`.jpg` のファイル種別アイコンは稀で、サムネイルの可能性の方が高い。
 
-語の直後は区切り（`_` `-`）か拡張子の `.` に限る。
-`[\w-]*` のように境界を見ないと、`document_scan.jpg` が `doc` に、`markets.jpg` が `mark` に当たり、内容のある写真をファイル名だけで装飾と判定してしまう。
-語を足すほどこの誤判定は増えるため、境界の条件は語の追加とセットで必要である。
+`ext_link.gif`（外部リンクのアイコン）はこの判定では拾えず、根拠 `"link-context"`（確認必要）に落ちる。
+`alt=""` の提案自体は出るため、実害は確認が1回増えることだけである。
 
 規則は `alt` の値で分ける。
 
@@ -471,7 +483,8 @@ CMSが出すHTMLでは寸法の無い画像が普通にあるため、この根�
 - `<a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a>` では `alt=""` を提案しない
 - `<a href="/event"><img src="/photos/matsuri.jpg">秋祭りの案内</a>`（寸法なし）では `alt=""` の提案が `requires_human_review: true` になる
 - `<a href="/a.pdf"><img src="/images/pdf.gif">申請書</a>`（寸法なしのファイル種別アイコン）は `requires_human_review: false` のまま
-- `document_scan.jpg`・`markets.jpg` をテキスト付きリンクに置いた場合、ファイル名だけで装飾と判定しない
+- 内容のある写真をファイル名だけで装飾と判定しない（`document_scan.jpg`、`markets.jpg`、`pdf_thumbnail.jpg`、`new_building.jpg`、`mail_center.png`、`doc_scan.jpg`、`photo_new.jpg`、`word_cloud.png`、`file_photo.jpg`、`link-banner.jpg`）
+- ファイル名で装飾と分かるアイコンは確認不要のまま（`pdf.gif`、`pdf16.gif`、`mail_icon.png`、`img_pdf.gif`、`icon_excel.gif`）
 
 ### 4.4 指摘2 表のキャプションがページごとに違う
 

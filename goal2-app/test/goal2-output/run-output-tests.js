@@ -122,12 +122,25 @@ const PHOTO_NO_SIZE_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsur
 // 寸法を持たないファイル種別アイコン。ファイル名が根拠になるので確認不要のまま。
 const FILE_ICON_NO_SIZE = `<p><a href="/a.pdf"><img src="/images/pdf.gif">申請書</a></p>`;
 
-// ファイル名にアイコンらしい語を含むが、語の途中で切れている内容のある写真。
-// 語の境界を見ないと doc・mark に当たって装飾と誤判定する。
-const CONTENT_PHOTO_WORD_PREFIX = [
-  `<p><a href="/x"><img src="/photos/document_scan.jpg">資料</a></p>`,
-  `<p><a href="/y"><img src="/photos/markets.jpg">市場</a></p>`,
+// ファイル名にアイコンらしい語を含むが、装飾とは言えない内容のある写真。
+// 語の途中で切れている例(document_scan・markets)と、区切りを挟んで続く例
+// (pdf_thumbnail はチラシPDFのサムネイル、new_building は新庁舎の写真)。
+// どちらもファイル名だけを根拠に確認不要の alt="" にしてはいけない。
+const CONTENT_PHOTO_FILENAMES = [
+  "document_scan.jpg",
+  "markets.jpg",
+  "pdf_thumbnail.jpg",
+  "new_building.jpg",
+  "mail_center.png",
+  "doc_scan.jpg",
+  "photo_new.jpg",
+  "word_cloud.png",
+  "file_photo.jpg",
+  "link-banner.jpg",
 ];
+
+// ファイル名だけで装飾と判断してよいアイコン。寸法が無くても確認不要のまま。
+const ICON_FILENAMES = ["pdf.gif", "pdf16.gif", "mail_icon.png", "img_pdf.gif", "icon_excel.gif"];
 
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
@@ -611,12 +624,21 @@ async function main() {
       JSON.stringify(fileIconNoSize)
     );
 
-    for (const html of CONTENT_PHOTO_WORD_PREFIX) {
-      const wordPrefix = await altTextCandidates(html);
+    for (const name of CONTENT_PHOTO_FILENAMES) {
+      const photo = await altTextCandidates(`<p><a href="/x"><img src="/photos/${name}">資料</a></p>`);
       check(
-        `ファイル名が語の途中で一致する写真を装飾にしない: ${html.match(/src="([^"]+)"/)[1]}`,
-        wordPrefix.length === 1 && wordPrefix[0].humanReview === true,
-        JSON.stringify(wordPrefix)
+        `内容のある写真をファイル名だけで装飾にしない: ${name}`,
+        photo.length === 1 && photo[0].humanReview === true,
+        JSON.stringify(photo)
+      );
+    }
+
+    for (const name of ICON_FILENAMES) {
+      const icon = await altTextCandidates(`<p><a href="/a.pdf"><img src="/images/${name}">申請書</a></p>`);
+      check(
+        `ファイル名で装飾と分かるアイコンは確認不要のまま: ${name}`,
+        icon.length === 1 && icon[0].value === "" && icon[0].humanReview === false,
+        JSON.stringify(icon)
       );
     }
   } finally {
