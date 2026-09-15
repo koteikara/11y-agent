@@ -32,6 +32,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Goal 2開発に必要な画面、API、データ構造、ルール処理、証跡、Cloud Run要件、検証項目を記載する。
 - `memory/ai-accessibility-skills-policy.md`
   - AIによるアクセシビリティ生成を、共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離で扱う方針を記載する。
+- `memory/verification-2026-08-summary.md`
+  - 2026年8月に実施した3方式比較の検証作業について、実施状況、所要時間の記録、AI移行で出た指摘、未実施の項目を記載する。
 - `goal2-app/`
   - Goal 2実行画面の初期PoC実装を格納する。
   - Node.jsの標準HTTPサーバーで静的UIとKBルールAPIを提供する。
