@@ -42,6 +42,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `server.js` の `/api/fetch-html` が、Goal 3のURL取得(簡易SSRF対策付き)を提供する。
 - `goal2-app/CLOUD_RUN_DEPLOY.md`
   - Cloud Run初心者向けに、Google Cloud ConsoleのCloud Run概要画面から始めるステップバイステップのデプロイ手順を記載する。
+- `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
+  - 遠野市の指摘15件のうちツール側で直す8件の設計と、決定のたびに依存候補を作り直す構造変更1の設計、実装ステージ、検証手順を記載する。
 - `a11y-migration-kb/`
   - 既存の移行・アクセシビリティ関連ナレッジを格納する。
 
