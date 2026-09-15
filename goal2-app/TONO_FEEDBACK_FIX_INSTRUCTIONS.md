@@ -342,6 +342,11 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 候補の `patch` は `hasBgColorAttr` に関係なくこの形にする。
 `highlightPatchedTextInElement()` がこのパッチ種別をどう扱うかを確認し、属性削除は本文のハイライト対象にしない。
 
+**既知の残り**。
+背景色と `table.caption` の両方を採用すると、`table.caption` の変換後HTMLには `bgcolor` が残る。
+最終HTMLからは `DEPRECATED_PRESENTATION_ATTRIBUTES` の除去で消えるため出力は正しいが、作業中のプレビューには残って見える。
+候補の `after_html` が元のHTMLから作られ、決定後に作り直されないため（2章の問題1）で、構造変更1の `rebuild` 操作で解消する。このPRでは直さない。
+
 **構造変更1との関係**。
 先に実装してよい。構造変更1のS3で排他グループが入れば、この類型は起きなくなるが、patchを正しく持たせること自体は残す価値がある。
 
@@ -364,13 +369,23 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 **変更**。
 `dataTableHeaderPlan()` を次にする。
 
-| 条件 | 結果 |
-| --- | --- |
-| `thead` がある、または1行目が見出しらしい、または1行目が全て `th` | 1行目を列見出しにする（現状どおり） |
-| 上記以外で、1列目の `th` 率が50%以上 | 列見出し行を作らない。`bodyStartIndex: 0`。各行の1列目は `scope="row"` の `th` にする（現状の本体処理がそうしている） |
-| 上記以外 | 列見出し行を作らない。候補の `message` に「列見出しの行がありません。必要なら見出し行を追加してください」を添え、`requiresHumanReview: true` にする |
+判定は次の順に行う。順序が重要で、1列目の `th` 率を先に見る。
 
-`syntheticTableHeaderCells()` と `looksLikeContactDataTable()` は削除する。
+| 順 | 条件 | 結果 |
+| --- | --- | --- |
+| 1 | `thead` が無く、1列目の `th` 率が50%以上 | 列見出し行を作らない。`bodyStartIndex: 0`。各行の1列目は `scope="row"` の `th` にする（現状の本体処理がそうしている） |
+| 2 | `thead` がある、または1行目が見出しらしい、または1行目が全て `th` | 1行目を列見出しにする（現状どおり） |
+| 3 | 上記以外 | 列見出し行を作らない。候補の `message` に「列見出しの行がありません。必要なら見出し行を追加してください」を添える（この候補は元から `requiresHumanReview: true`） |
+
+順序を逆にして条件2を先に置いてはいけない。
+`firstRowHeaderLike` は「2列以上あり、どのセルも28文字以下で文末記号で終わらない」だけで立つ弱い判定で、課名・電話番号・所在地が並ぶ普通のデータ行にも当たる。
+条件2を先に置くと、1列目が `th` の連絡先一覧で1行目が列見出しへ繰り上がり、データ行が1つ消える。
+佐賀市 sg00761（26個の連絡先表）で `th` 165→139、`scope="row"` 88→61 になることを確認済み。
+
+`syntheticTableHeaderCells()` は削除する。
+`looksLikeContactDataTable()` は削除しない。
+`shouldPreserveAsDataTable()`（データ表として維持するかの判定）、`dataTableSemanticsConfidence()`（確信度）、`isSingleRecordContactDataTableProfile()`（1行だけの連絡先表のキャプション導出）の3か所で使われており、どれも列見出しの文言を作る処理ではない。
+`syntheticTableHeaderCells()` からの参照だけを断つ。
 `headerTexts` が空になるため、`normalizeGenericFileLinkText(clone, headerTexts[index])` は見出しが無いときに何もしないことを確認する。
 `lib/sagaAutoFix.js` の複製も同じ規則に直す。
 
@@ -379,7 +394,12 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 
 **検証**。
 `test/goal2-output` に、1列目 `th` の3行の表を入れ、`table.caption` の変換後HTMLに `<thead>` が無く、`<tr>` が3つであることを確認する。
-`npm run test:saga-gold` を変更前後で実行し、指標が下がっていないことを確認する。下がる場合は、正解データ側が捏造した見出し行を含んでいないかを見る。
+`npm run test:saga-gold` を変更前後で実行する。
+指標一致は652→648に下がるが、これは正解データ側の問題で、退行した指標は0件である。
+差が出るのは佐賀市 sg00761 の1ファイルだけで、`gold_html` が `<thead><tr><th scope="col">&nbsp;</th><th scope="col">電話番号</th><th scope="col">メール</th></tr></thead>` を26個含んでいる。
+「電話番号」「メール」は `old_html` のどこにも無い。
+この gold は先行実装（`koteikara/gemini-a11y-agent`）の出力をもとにしており、`inferSyntheticHeaderCells()` はこの gold を再現するために書かれていた。
+gold に合わせて捏造を戻すことはしない。
 
 ### 4.3 指摘12 ファイルアイコンに画像名の候補が出る
 
@@ -392,11 +412,21 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 `alt=""` は装飾画像として正しい状態で、miCheckerも指摘しない。
 
 **変更**。
-`isLikelyDecorativeIcon(img)` を足す。次のいずれかで真とする。
+`isLikelyDecorativeIcon(img)` を足す。
+
+まず、装飾ではありえない形を先に除く。
+
+- 親に `a` があり、その `a` のテキスト（画像を除く）が空のときは偽。
+  画像だけのリンクでは画像がリンクの名前そのものなので、`alt=""` にするとアクセシブルネームの無いリンクになる。
+  大きさやファイル名がアイコンらしくても、装飾とはみなさない。
+
+そのうえで、次のいずれかで真とする。
 
 - `width` と `height` の属性がともに32以下
 - `src` のファイル名が `/(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark)[\w-]*\.(gif|png|svg|jpg)$/i` に一致
-- 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけ
+- 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけで、**かつ `width` か `height` が明示されていて64を超えることがない**。
+  リンク文言で名前を与えるのはWCAGの技術としては許されるが、テキスト付きリンクの中の640×480の写真まで装飾になり、AIで画像名を作る経路に入らなくなる。
+  写真は内容を説明するというこのプロジェクトの方針を優先する。
 
 規則は `alt` の値で分ける。
 
@@ -412,7 +442,12 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 
 **検証**。
 `test:michecker-parity` で、`alt` 属性の無い画像への指摘が退行していないことを確認する。
-`test/goal2-output` に、`alt=""` のアイコンでは候補が出ないこと、`alt` 属性の無いアイコンでは `alt=""` の提案が出ることを足す。
+`test/goal2-output` に次の4件を足す。
+
+- `alt=""` のアイコンでは候補が出ない
+- `alt` 属性の無いアイコンでは `alt=""` の提案が出る
+- `<a href="/next"><img src="/images/icon_arrow.gif" width="16" height="16"></a>`（画像だけのリンク）では `alt=""` を提案しない
+- `<a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a>` では `alt=""` を提案しない
 
 ### 4.4 指摘2 表のキャプションがページごとに違う
 

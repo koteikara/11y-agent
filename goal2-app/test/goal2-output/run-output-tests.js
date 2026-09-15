@@ -109,6 +109,12 @@ const ROW_HEADER_TABLE = `<table border="1"><tbody>
 const DECORATIVE_ICON_EMPTY_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" alt="" width="16" height="16">様式集</a></p>`;
 const DECORATIVE_ICON_NO_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" width="16" height="16">様式集</a></p>`;
 
+// 画像だけのリンク。装飾扱いにして alt="" にすると、名前の無いリンクになる。
+const ICON_ONLY_LINK = `<p><a href="/next"><img src="/images/icon_arrow.gif" width="16" height="16"></a></p>`;
+
+// テキスト付きリンクの中の写真。リンク文言があっても、内容のある画像は装飾にしない。
+const PHOTO_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a></p>`;
+
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
@@ -539,6 +545,33 @@ async function main() {
         );
       }
     }
+
+    // 画像だけのリンクでは、画像がリンクの名前そのものになる。alt="" を確認不要で
+    // 提案すると、まとめて採用したときに名前の無いリンクができる。
+    const iconOnlyLink = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates
+        .filter((c) => c.rule_id === "image.alt-text")
+        .map((c) => ({ value: c.proposal.patch?.value, reviewType: c.review_type }));
+    }, ICON_ONLY_LINK);
+    check(
+      "画像だけのリンクにはalt=''を提案しない",
+      iconOnlyLink.length === 1 && iconOnlyLink[0].value !== "",
+      JSON.stringify(iconOnlyLink)
+    );
+
+    // リンク文言があっても、寸法の大きい画像は内容のある写真とみなす。
+    const photoInLink = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates
+        .filter((c) => c.rule_id === "image.alt-text")
+        .map((c) => ({ value: c.proposal.patch?.value, reviewType: c.review_type }));
+    }, PHOTO_IN_TEXT_LINK);
+    check(
+      "テキスト付きリンクの中の写真にもalt=''を提案しない",
+      photoInLink.length === 1 && photoInLink[0].value !== "",
+      JSON.stringify(photoInLink)
+    );
   } finally {
     if (browser) await browser.close();
     server.kill();

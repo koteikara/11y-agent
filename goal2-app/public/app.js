@@ -2336,6 +2336,16 @@
   function isLikelyDecorativeIcon(img) {
     const width = Number.parseInt(img.getAttribute("width") || "", 10);
     const height = Number.parseInt(img.getAttribute("height") || "", 10);
+    const link = img.closest("a");
+    const linkText = link ? normalizeText(link.textContent || "") : "";
+
+    // 画像だけのリンクでは、画像がリンクの名前そのものになる。alt="" にすると
+    // アクセシブルネームの無いリンクになるため、大きさやファイル名がアイコンらしくても
+    // 装飾とはみなさず、従来どおりリンク先を表す文言を提案する。
+    if (link && !linkText) {
+      return false;
+    }
+
     if (Number.isFinite(width) && Number.isFinite(height) && width <= 32 && height <= 32) {
       return true;
     }
@@ -2343,9 +2353,11 @@
       return true;
     }
     // テキストを持つリンクの中に1枚だけ置かれた画像は、リンク文言が既に用途を伝えている
-    // ファイル種別アイコンなどの飾りとみなす。
-    const link = img.closest("a");
-    return Boolean(link && link.querySelectorAll("img").length === 1 && normalizeText(link.textContent || ""));
+    // ファイル種別アイコンなどの飾りとみなす。ただし、寸法が明示されていて64を超える画像は
+    // 内容のある写真とみなし、この判定から外す。リンク文言で名前を与えるのはWCAGの技術
+    // としては許されるが、写真は内容を説明するというこのプロジェクトの方針を優先する。
+    const sizeSuggestsContent = (Number.isFinite(width) && width > 64) || (Number.isFinite(height) && height > 64);
+    return Boolean(!sizeSuggestsContent && link && link.querySelectorAll("img").length === 1 && linkText);
   }
 
   function collectImageCandidates(fragment, candidates) {
