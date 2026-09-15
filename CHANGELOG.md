@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-15: 遠野市フィードバック対応 PR-1（背景色候補・表見出しの捏造・装飾アイコン）
+
+- 背景・目的: 遠野市のページでAI移行を試した作業者から上がった15件の指摘のうち、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の4.1〜4.3にあたる3件を直した。互いに独立で、検証が次の自治体へ進む前に直しておきたいものをまとめた。
+- 主な変更内容(`goal2-app/public/app.js`、`goal2-app/lib/sagaAutoFix.js`):
+  - 指摘3: `bgcolor` 属性を持つ表で背景色の候補を採用すると、同じ表の構造候補3件が選べなくなっていた。`collectInlineStyleCandidate()` が `bgcolor` 属性のあるときだけ `patch` を持たせず、`patch` の無い候補が「要素ごと差し替える候補」と判定されていたためである。`remove-style-properties` パッチに `attributes` を足し、`bgcolor` の有無に関係なくパッチを持たせた。
+  - 指摘7: 1列目が `th` で `thead` の無い表に、「項目」「内容1」「内容2」や「電話番号」「メール」という行を先頭に足していた。どちらも元の文書に無い文言なので、`dataTableHeaderPlan()` が列見出しの行を作らないようにし、`syntheticTableHeaderCells()` を削除した。列見出しも行見出しも無い表は、候補のメッセージに見出し行が無いことを添えて人の判断に委ねる。`lib/sagaAutoFix.js` の複製も同じ規則に直した。
+  - 指摘12: `alt=""` の装飾アイコンに「画像内容を具体的に入力」を提案していた。`isLikelyDecorativeIcon()` を足し、`alt=""` の装飾アイコンには候補を出さず、`alt` 属性の無い装飾アイコンには `alt=""` を提案するように分けた。
+- 設計書との差異:
+  - 設計書は `looksLikeContactDataTable()` の削除を指示していたが、この関数は表をデータ表として維持するかの判定・確信度・キャプションの導出でも使われており、見出しの捏造とは無関係のため残した。
+  - 設計書の表は1行目の判定を先に置いていたが、そうすると連絡先一覧の1行目が列見出しへ繰り上がり、データ行が1つ消える。1列目の `th` 率で判定する分岐を元の順序どおり先頭に置いた。
+- 検証: 設計書6章の5コマンドをすべて実行した。`node test/run-tests.js` 正常終了、`run-output-tests.js` 55件、`run-table-tests.js` 7件、`run-parity-tests.js` 223件がすべて通る。`npm run test:saga-gold` は指標一致が652→648、退行した指標は0件。差分は佐賀市 sg00761 の1ファイルだけで、正解データ側が「電話番号」「メール」という捏造した見出し行を含んでいることが原因である。捏造は戻さない判断とした。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/lib/sagaAutoFix.js`、`goal2-app/test/run-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/test/table-nesting/run-table-tests.js`
+
 ## 2026-09-15: 遠野市フィードバック対応の設計書を追加
 
 - 背景・目的: 遠野市のページでAI移行を試した作業者の指摘15件について原因を調べ、ツール側で直す8件の設計と、指摘の多くに共通する構造の弱点（候補が決定後に作り直されない）を直す構造変更1の設計を、実装担当向けの指示書にまとめた。
