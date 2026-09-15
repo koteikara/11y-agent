@@ -15,6 +15,7 @@
 // 遠野市のフィードバック(TONO_FEEDBACK_FIX_INSTRUCTIONS.md):
 //  12. 背景色を採用すると、同じ表の構造候補が選べなくなっていた(指摘3)。
 //  13. 1列目がthの表に「項目／内容1」という元の文書に無い見出し行を足していた(指摘7)。
+//  14. alt=""の装飾アイコンに「画像内容を具体的に入力」の候補を出していた(指摘12)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -103,6 +104,10 @@ const ROW_HEADER_TABLE = `<table border="1"><tbody>
   <tr><th>市民課</th><td>0198-62-2112</td><td>本庁1階</td><td>午前8時30分から</td></tr>
   <tr><th>税務課</th><td>0198-62-2113</td><td>本庁2階</td><td>午前8時30分から</td></tr>
 </tbody></table>`;
+
+// 指摘12: テキスト付きリンクの中に置かれたファイル種別アイコン
+const DECORATIVE_ICON_EMPTY_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" alt="" width="16" height="16">様式集</a></p>`;
+const DECORATIVE_ICON_NO_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" width="16" height="16">様式集</a></p>`;
 
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
@@ -485,6 +490,7 @@ async function main() {
       const bgFinal = await page.inputValue("#finalHtml");
       check("背景色を採用した最終HTMLからbgcolorが消える", !/bgcolor/i.test(bgFinal), bgFinal.slice(0, 300));
     }
+
     // 13. 遠野市フィードバック 指摘7: 表に「項目／内容1」の見出し行を足さない
     const rowHeaderSemantics = await semanticsHtml(ROW_HEADER_TABLE);
     check(
@@ -507,6 +513,32 @@ async function main() {
       (rowHeaderSemantics.match(/scope="row"/g) || []).length === 3,
       rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
     );
+
+    // 14. 遠野市フィードバック 指摘12: 装飾アイコンに画像名の候補を出さない
+    const iconCases = [
+      [DECORATIVE_ICON_EMPTY_ALT, "alt=''のアイコンには候補を出さない", 0],
+      [DECORATIVE_ICON_NO_ALT, "alt属性の無いアイコンにはalt=''を提案する", 1],
+    ];
+    for (const [html, label, expected] of iconCases) {
+      const imageCandidates = await page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        return res.candidates
+          .filter((c) => c.rule_id === "image.alt-text")
+          .map((c) => ({ message: c.message, patch: c.proposal.patch }));
+      }, html);
+      check(
+        `装飾アイコンのalt: ${label}`,
+        imageCandidates.length === expected,
+        JSON.stringify(imageCandidates)
+      );
+      if (expected === 1 && imageCandidates.length === 1) {
+        check(
+          "装飾アイコンへの提案は空の代替テキスト",
+          imageCandidates[0].patch?.name === "alt" && imageCandidates[0].patch?.value === "",
+          JSON.stringify(imageCandidates[0])
+        );
+      }
+    }
   } finally {
     if (browser) await browser.close();
     server.kill();

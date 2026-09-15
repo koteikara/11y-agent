@@ -2328,6 +2328,26 @@
     return noticeRuleIds.has(item.rule_id);
   }
 
+  const DECORATIVE_ICON_SRC_PATTERN = /(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark)[\w-]*\.(gif|png|svg|jpg)$/i;
+
+  // 装飾目的のアイコン画像らしいかどうか。alt="" は装飾画像として正しい状態で、miCheckerも
+  // 指摘しないため、こうした画像には「画像内容を具体的に入力」の候補を出さない
+  // (遠野市フィードバック 指摘12)。
+  function isLikelyDecorativeIcon(img) {
+    const width = Number.parseInt(img.getAttribute("width") || "", 10);
+    const height = Number.parseInt(img.getAttribute("height") || "", 10);
+    if (Number.isFinite(width) && Number.isFinite(height) && width <= 32 && height <= 32) {
+      return true;
+    }
+    if (DECORATIVE_ICON_SRC_PATTERN.test(img.getAttribute("src") || "")) {
+      return true;
+    }
+    // テキストを持つリンクの中に1枚だけ置かれた画像は、リンク文言が既に用途を伝えている
+    // ファイル種別アイコンなどの飾りとみなす。
+    const link = img.closest("a");
+    return Boolean(link && link.querySelectorAll("img").length === 1 && normalizeText(link.textContent || ""));
+  }
+
   function collectImageCandidates(fragment, candidates) {
     fragment.content.querySelectorAll("img").forEach((img) => {
       const alt = img.getAttribute("alt");
@@ -2337,7 +2357,26 @@
       const aiNameDraft = generateImageNameDraft(img, caption);
       const aiNameDraftForAlt = complexImage ? generateComplexImageNameDraft(img, caption, aiNameDraft) : aiNameDraft;
 
-      if (alt === null || alt.trim() === "") {
+      const decorativeIcon = isLikelyDecorativeIcon(img);
+
+      if (decorativeIcon && alt !== null && alt.trim() === "") {
+        // alt="" の装飾アイコンは既に正しい状態なので、候補を出さない。
+      } else if (decorativeIcon && alt === null) {
+        const clone = img.cloneNode(true);
+        clone.setAttribute("alt", "");
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.alt-text",
+            element: img,
+            message: "装飾画像に空の代替テキストを設定します。",
+            reason: "装飾目的のアイコン画像は、alt属性を空にして読み上げから外します。alt属性そのものが無いと、読み上げソフトがファイル名を読み上げることがあります。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "alt", value: "" },
+            confidence: "high",
+            requiresHumanReview: false,
+          })
+        );
+      } else if (alt === null || alt.trim() === "") {
         const clone = img.cloneNode(true);
         const suggestedAlt = aiNameDraftForAlt?.name || (caption ? "" : "画像内容を具体的に入力");
         clone.setAttribute("alt", suggestedAlt);
