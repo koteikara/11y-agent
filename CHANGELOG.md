@@ -28,6 +28,7 @@
   - 指摘3、7、12、2、1、13、6、10 の個別修正を、原因（`app.js` の行番号付き）、変更、構造変更1との関係、検証の順で設計した。指摘4はCMS取込側の証跡待ち、5・9・14はCMS側、8・15はルール決め、11は別機能として対象外にした。
   - 原因調査で確認した事実: `bgcolor` のときだけ `patch` が無いこと（指摘3）、`syntheticTableHeaderCells` が「項目／内容N」を捏造すること（指摘7、`lib/sagaAutoFix.js` に複製あり）、`collectHeadingCandidates` が先頭の飛びしか直さないこと（指摘1）、1行目連結のキャプションフォールバック（指摘2）、`alt=""` の装飾アイコンにも候補が出ること（指摘12）、パネルの `pointerdown` が移動に奪われるためCSSの `resize` では動かないこと（指摘13）。
 - 検証: 指摘1、3、7、12 はPlaywrightで実アプリを動かして再現した。指摘5は表のセル内の `<br>` と `<strong>` が構造候補を通しても残ることを確認し、CMS側と判断した。
+- 構造変更1の未決事項4点（一括採用の粒度、`conflicted` の扱い、AI再確認ボタン、再導出時間の上限）はユーザー確認のうえ設計書3.14と `memory/project-state.md` のDecisionsに確定内容を記録した。
 - 関連ファイル: `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
 
 ## 2026-09-15: 3方式比較の検証作業の実施状況をまとめた
