@@ -42,6 +42,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `server.js` の `/api/fetch-html` が、Goal 3のURL取得(簡易SSRF対策付き)を提供する。
 - `goal2-app/CLOUD_RUN_DEPLOY.md`
   - Cloud Run初心者向けに、Google Cloud ConsoleのCloud Run概要画面から始めるステップバイステップのデプロイ手順を記載する。
+- `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
+  - 遠野市の指摘15件のうちツール側で直す8件の設計と、決定のたびに依存候補を作り直す構造変更1の設計、実装ステージ、検証手順を記載する。
 - `a11y-migration-kb/`
   - 既存の移行・アクセシビリティ関連ナレッジを格納する。
 
@@ -877,6 +879,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 修正候補の操作は、GitHubのコンフリクト解消に近い候補単位のレビューとして扱い、レンダリングHTML上の問題箇所を見ながら `採用`、`編集して採用`、`却下`、`要確認` を選べるようにする。
 - Goal 2では、すべての修正候補が `採用`、`編集して採用`、`却下`、`要確認` のいずれかに分類されるまで、ページ作業を完了扱いにしない。
 - 2026-06-29に、Mark Fairchildの記事 "AI-Generated Accessibility: An Update - Frontier Models Still Fail, but Skills Change the Game" を参照し、AIアクセシビリティ生成の共通方針として「短い基本指示」「部品別Skill」「生成後レビュー」「自動検証と人間確認の分離」を採用した。
+- 2026-09-15に、遠野市フィードバック対応の構造変更1（決定のたびに依存候補を作り直す、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）について次を確定した。一括採用はまとめてログに積んで再導出1回。`conflicted` は新規に作らず証跡の値としてだけ残し、取り下げ（`withdrawn`）で代える。「AIで再確認」ボタンはS4に含めず別PR。再導出の時間の上限は300ミリ秒。
+- 遠野市フィードバック対応の実装は、着手順（同設計書5章）に従い別セッションのOpusが行い、レビューは設計書を書いたセッションが行う分担にした（2026-09-15）。
 
 ## Not Completed Yet
 
