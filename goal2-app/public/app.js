@@ -3383,7 +3383,9 @@
 
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
-      message: "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+      message: dataTableSemanticsMissingHeaderRow(table)
+        ? "データ表として維持し、キャプション・行見出し・scope属性をまとめて追加できます。列見出しの行がありません。必要なら見出し行を追加してください。"
+        : "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
       reason: preserve
         ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
         : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
@@ -4200,14 +4202,38 @@
     return cleanHtml(output.outerHTML) + buildTableNoteSectionHtml(noteEntries);
   }
 
+  // 元の表に列見出しの行が無いときは、列見出しを作らずに本体行だけを出す。以前は
+  // 「項目 / 内容1 / 内容2」や「電話番号 / メール」という行を先頭に足していたが、これは
+  // 元の文書に無い文言の捏造で、このプロジェクトの「捏造しない」方針に反する
+  // (遠野市フィードバック 指摘7)。1列目が見出しらしい表は、本体処理が各行の1列目を
+  // scope="row"のthにするため、列見出しが無くても行と列の関係は表現できる。
+  // 列見出しも行見出しも無い表は、見出し行の追加を人の判断に委ねる(missingHeaderRow)。
   function dataTableHeaderPlan(profile) {
+    // 1列目が見出しらしい表は1行目もデータ行なので、この判定を先に置く。firstRowHeaderLikeは
+    // 「短いテキストが並ぶ」だけで立つため、後ろに回すと連絡先一覧の1行目(課名/電話番号/
+    // メール)まで列見出しに繰り上げてしまい、データ行が1つ消える。
     if (!profile.hasThead && profile.firstColumnHeaderRatio >= 0.5) {
-      return { headerCells: syntheticTableHeaderCells(profile), bodyStartIndex: 0, synthetic: true };
+      return { headerCells: [], bodyStartIndex: 0, missingHeaderRow: false };
     }
     if (profile.hasThead || profile.firstRowHeaderLike || profile.firstRow.every((cell) => cell.tagName === "TH")) {
-      return { headerCells: profile.firstRow, bodyStartIndex: 1, synthetic: false };
+      return { headerCells: profile.firstRow, bodyStartIndex: 1, missingHeaderRow: false };
     }
-    return { headerCells: syntheticTableHeaderCells(profile), bodyStartIndex: 0, synthetic: true };
+    return { headerCells: [], bodyStartIndex: 0, missingHeaderRow: true };
+  }
+
+  // buildDataTableSemanticsHtml()が列見出しの行を作れなかったかどうかを返す。候補の
+  // メッセージに見出し行が無いことを添えるために使う。早期returnする3つの類型は
+  // どれも行見出しか先頭タイトル行を持つため、ここでは対象外にする。
+  function dataTableSemanticsMissingHeaderRow(table) {
+    const profile = dataTableProfile(table);
+    if (
+      isRowHeaderOnlyDataTableProfile(profile) ||
+      isKeyValueDataTableProfile(profile) ||
+      isLeadingTitleRowDataTableProfile(profile)
+    ) {
+      return false;
+    }
+    return dataTableHeaderPlan(profile).missingHeaderRow;
   }
 
   function isKeyValueDataTableProfile(profile) {
@@ -4315,20 +4341,8 @@
     );
   }
 
-  function syntheticTableHeaderCells(profile) {
-    const headers = [];
-    const contact = looksLikeContactDataTable(profile);
-    for (let index = 0; index < profile.maxCells; index += 1) {
-      const cell = document.createElement("th");
-      if (contact && index === 0) cell.textContent = "";
-      else if (contact && index === 1) cell.textContent = "電話番号";
-      else if (contact && index === 2) cell.textContent = "メール";
-      else cell.textContent = index === 0 ? "項目" : `内容${index}`;
-      headers.push(cell);
-    }
-    return headers;
-  }
-
+  // 連絡先らしい表かどうか。データ表として維持するか、確信度をどう見るか、キャプションを
+  // 何にするかの判断に使う。列見出しの文言を作るためには使わない(指摘7)。
   function looksLikeContactDataTable(profile) {
     if (profile.maxCells !== 3 || profile.rows.length < 1) return false;
     const phoneCells = profile.rows.filter((row) => /(?:電話|TEL|[0-9０-９]{2,4}[-ー－][0-9０-９]{2,4})/i.test(row[1]?.textContent || "")).length;

@@ -14,6 +14,7 @@
 //
 // 遠野市のフィードバック(TONO_FEEDBACK_FIX_INSTRUCTIONS.md):
 //  12. 背景色を採用すると、同じ表の構造候補が選べなくなっていた(指摘3)。
+//  13. 1列目がthの表に「項目／内容1」という元の文書に無い見出し行を足していた(指摘7)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -94,6 +95,13 @@ const BGCOLOR_TABLE = `<table bgcolor="#eeeeee" border="1"><tbody>
   <tr><td>区分</td><td>金額</td></tr>
   <tr><td>一般</td><td>500円</td></tr>
   <tr><td>学生</td><td>300円</td></tr>
+</tbody></table>`;
+
+// 指摘7: 1列目がthで、theadの無い3行4列の表
+const ROW_HEADER_TABLE = `<table border="1"><tbody>
+  <tr><th>総務課</th><td>0198-62-2111</td><td>本庁1階</td><td>午前8時30分から</td></tr>
+  <tr><th>市民課</th><td>0198-62-2112</td><td>本庁1階</td><td>午前8時30分から</td></tr>
+  <tr><th>税務課</th><td>0198-62-2113</td><td>本庁2階</td><td>午前8時30分から</td></tr>
 </tbody></table>`;
 
 async function main() {
@@ -477,6 +485,28 @@ async function main() {
       const bgFinal = await page.inputValue("#finalHtml");
       check("背景色を採用した最終HTMLからbgcolorが消える", !/bgcolor/i.test(bgFinal), bgFinal.slice(0, 300));
     }
+    // 13. 遠野市フィードバック 指摘7: 表に「項目／内容1」の見出し行を足さない
+    const rowHeaderSemantics = await semanticsHtml(ROW_HEADER_TABLE);
+    check(
+      "1列目がthの表に見出し行を作らない",
+      !/<thead/i.test(rowHeaderSemantics),
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "元の表にある3行をそのまま残す",
+      (rowHeaderSemantics.match(/<tr[\s>]/gi) || []).length === 3,
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "元の文書に無い見出し語を作らない",
+      !/項目|内容1|電話番号<\/th>|メール<\/th>/.test(rowHeaderSemantics),
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "各行の1列目を行見出しにする",
+      (rowHeaderSemantics.match(/scope="row"/g) || []).length === 3,
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
   } finally {
     if (browser) await browser.close();
     server.kill();
