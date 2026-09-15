@@ -11,6 +11,9 @@
 //  5. CMS独自タグ(<ikkr_textcenter>)・align等の廃止属性・レイアウト目的の空段落・先頭の全角空白が
 //     最終HTMLに残っていた。
 //  6. 連番だけの代替テキスト(alt="碧海山古墳002")を検出していなかった。
+//
+// 遠野市のフィードバック(TONO_FEEDBACK_FIX_INSTRUCTIONS.md):
+//  12. 背景色を採用すると、同じ表の構造候補が選べなくなっていた(指摘3)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -84,6 +87,15 @@ const DIRTY_MARKUP = `
 </div>
 `;
 
+// 遠野市フィードバックの再現入力(設計書 TONO_FEEDBACK_FIX_INSTRUCTIONS.md の6章)
+
+// 指摘3: bgcolor属性を持つ3行2列の表
+const BGCOLOR_TABLE = `<table bgcolor="#eeeeee" border="1"><tbody>
+  <tr><td>区分</td><td>金額</td></tr>
+  <tr><td>一般</td><td>500円</td></tr>
+  <tr><td>学生</td><td>300円</td></tr>
+</tbody></table>`;
+
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
@@ -94,7 +106,9 @@ async function main() {
   let browser;
   try {
     await waitForHealth();
-    browser = await chromium.launch();
+    browser = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium",
+    });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
     await page.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });
@@ -408,6 +422,60 @@ async function main() {
         );
       }, html);
       check(`連番alt検出: ${label}`, hit === expected, `検出=${hit} 期待=${expected}`);
+    }
+    // 12. 遠野市フィードバック 指摘3: 背景色を採用しても表の構造候補を選べる
+    // 背景色の候補にpatchが無いと、要素ごと差し替える候補とみなされ、同じ表の構造候補が
+    // まとめて「自動解決」になって選べなくなっていた。
+    const bgPatch = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      const c = res.candidates.find((x) => x.rule_id === "text.background-color");
+      return c ? c.proposal.patch : null;
+    }, BGCOLOR_TABLE);
+    check(
+      "bgcolor属性の表でも背景色の候補がpatchを持つ",
+      Boolean(bgPatch) && bgPatch.type === "remove-style-properties" && (bgPatch.attributes || []).includes("bgcolor"),
+      JSON.stringify(bgPatch)
+    );
+
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
+    await page.fill("#htmlInput", BGCOLOR_TABLE);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4500);
+
+    const pickedBg = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) => /背景色/.test(b.textContent));
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("背景色の候補を選択できる", pickedBg, "候補が見つからない");
+    if (pickedBg) {
+      await page.waitForTimeout(1000);
+      await page.click("#acceptButton");
+      await page.waitForTimeout(1500);
+      const remaining = await page.evaluate(() =>
+        [...document.querySelectorAll(".candidate-item")].map((node) => ({
+          text: node.textContent.replace(/\s+/g, " ").trim(),
+          unresolved: node.classList.contains("unresolved"),
+        }))
+      );
+      const tableItems = remaining.filter((item) => !/背景色/.test(item.text));
+      check(
+        "背景色だけを採用しても表の構造候補が未処理のまま残る",
+        tableItems.length === 3 && tableItems.every((item) => item.unresolved),
+        JSON.stringify(remaining)
+      );
+
+      await page.evaluate(() => {
+        document.querySelector(".output-drawer").open = true;
+      });
+      await page.waitForTimeout(400);
+      const bgFinal = await page.inputValue("#finalHtml");
+      check("背景色を採用した最終HTMLからbgcolorが消える", !/bgcolor/i.test(bgFinal), bgFinal.slice(0, 300));
     }
   } finally {
     if (browser) await browser.close();

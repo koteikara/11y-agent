@@ -104,7 +104,9 @@ async function main() {
   let browser;
   try {
     await waitForHealth();
-    browser = await chromium.launch();
+    browser = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium",
+    });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
     await page.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });

@@ -4917,7 +4917,10 @@
           message: hasBgColorAttr ? "背景色の指定(廃止されたbgcolor属性を含む)が含まれています。" : "背景色の指定が含まれています。",
           reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。bgcolor属性はHTML Living Standardでも廃止されています。",
           afterHtml: clone.outerHTML,
-          patch: hasBgColorAttr ? undefined : { type: "remove-style-properties", names: ["background", "background-color"] },
+          // bgcolor属性の有無にかかわらずpatchを持たせる。patchが無い候補は
+          // isElementReplacingCandidate()が「要素ごと差し替える候補」とみなし、同じ表の
+          // 構造候補をまとめてconflictedにしてしまうため(遠野市フィードバック 指摘3)。
+          patch: { type: "remove-style-properties", names: ["background", "background-color"], attributes: ["bgcolor"] },
           confidence: "high",
           requiresHumanReview: false,
         })
@@ -6633,6 +6636,7 @@
 
     if (patch.type === "remove-style-properties") {
       removeStyleProperties(target, patch.names || []);
+      (patch.attributes || []).forEach((name) => target.removeAttribute(name));
       return;
     }
 
