@@ -115,6 +115,20 @@ const ICON_ONLY_LINK = `<p><a href="/next"><img src="/images/icon_arrow.gif" wid
 // テキスト付きリンクの中の写真。リンク文言があっても、内容のある画像は装飾にしない。
 const PHOTO_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a></p>`;
 
+// 寸法を持たない写真。CMSが出すHTMLでは width/height の無い画像が普通にある。
+// リンクの中にあること以外に装飾の根拠が無いので、空にしてよいかは人が確かめる。
+const PHOTO_NO_SIZE_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsuri.jpg">秋祭りの案内</a></p>`;
+
+// 寸法を持たないファイル種別アイコン。ファイル名が根拠になるので確認不要のまま。
+const FILE_ICON_NO_SIZE = `<p><a href="/a.pdf"><img src="/images/pdf.gif">申請書</a></p>`;
+
+// ファイル名にアイコンらしい語を含むが、語の途中で切れている内容のある写真。
+// 語の境界を見ないと doc・mark に当たって装飾と誤判定する。
+const CONTENT_PHOTO_WORD_PREFIX = [
+  `<p><a href="/x"><img src="/photos/document_scan.jpg">資料</a></p>`,
+  `<p><a href="/y"><img src="/photos/markets.jpg">市場</a></p>`,
+];
+
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
@@ -552,7 +566,7 @@ async function main() {
       const res = await window.goal2Engine.analyze({ html: h });
       return res.candidates
         .filter((c) => c.rule_id === "image.alt-text")
-        .map((c) => ({ value: c.proposal.patch?.value, reviewType: c.review_type }));
+        .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
     }, ICON_ONLY_LINK);
     check(
       "画像だけのリンクにはalt=''を提案しない",
@@ -565,13 +579,46 @@ async function main() {
       const res = await window.goal2Engine.analyze({ html: h });
       return res.candidates
         .filter((c) => c.rule_id === "image.alt-text")
-        .map((c) => ({ value: c.proposal.patch?.value, reviewType: c.review_type }));
+        .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
     }, PHOTO_IN_TEXT_LINK);
     check(
       "テキスト付きリンクの中の写真にもalt=''を提案しない",
       photoInLink.length === 1 && photoInLink[0].value !== "",
       JSON.stringify(photoInLink)
     );
+
+    // 寸法が無い画像は、リンクの中にあること以外に装飾の根拠が無い。alt="" を提案しても
+    // よいが、確認不要で入れてはいけない。
+    const altTextCandidates = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        return res.candidates
+          .filter((c) => c.rule_id === "image.alt-text")
+          .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
+      }, html);
+
+    const photoNoSize = await altTextCandidates(PHOTO_NO_SIZE_IN_TEXT_LINK);
+    check(
+      "寸法の無い写真へのalt=''の提案は確認必要にする",
+      photoNoSize.length === 1 && photoNoSize[0].value === "" && photoNoSize[0].humanReview === true,
+      JSON.stringify(photoNoSize)
+    );
+
+    const fileIconNoSize = await altTextCandidates(FILE_ICON_NO_SIZE);
+    check(
+      "寸法の無いファイル種別アイコンは確認不要のまま",
+      fileIconNoSize.length === 1 && fileIconNoSize[0].value === "" && fileIconNoSize[0].humanReview === false,
+      JSON.stringify(fileIconNoSize)
+    );
+
+    for (const html of CONTENT_PHOTO_WORD_PREFIX) {
+      const wordPrefix = await altTextCandidates(html);
+      check(
+        `ファイル名が語の途中で一致する写真を装飾にしない: ${html.match(/src="([^"]+)"/)[1]}`,
+        wordPrefix.length === 1 && wordPrefix[0].humanReview === true,
+        JSON.stringify(wordPrefix)
+      );
+    }
   } finally {
     if (browser) await browser.close();
     server.kill();

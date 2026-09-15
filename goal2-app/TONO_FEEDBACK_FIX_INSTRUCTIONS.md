@@ -412,21 +412,42 @@ gold に合わせて捏造を戻すことはしない。
 `alt=""` は装飾画像として正しい状態で、miCheckerも指摘しない。
 
 **変更**。
-`isLikelyDecorativeIcon(img)` を足す。
+`decorativeIconEvidence(img)` を足す。
+真偽ではなく、装飾と判断した**根拠**を返す（`"size" | "filename" | "link-context" | null`）。
+根拠によって確信度が違うため、呼び出し側で扱いを分けられるようにする。
 
 まず、装飾ではありえない形を先に除く。
 
-- 親に `a` があり、その `a` のテキスト（画像を除く）が空のときは偽。
+- 親に `a` があり、その `a` のテキスト（画像を除く）が空のときは `null`。
   画像だけのリンクでは画像がリンクの名前そのものなので、`alt=""` にするとアクセシブルネームの無いリンクになる。
   大きさやファイル名がアイコンらしくても、装飾とはみなさない。
 
-そのうえで、次のいずれかで真とする。
+そのうえで、次の順に判定する。
 
-- `width` と `height` の属性がともに32以下
-- `src` のファイル名が `/(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark)[\w-]*\.(gif|png|svg|jpg)$/i` に一致
-- 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけで、**かつ `width` か `height` が明示されていて64を超えることがない**。
-  リンク文言で名前を与えるのはWCAGの技術としては許されるが、テキスト付きリンクの中の640×480の写真まで装飾になり、AIで画像名を作る経路に入らなくなる。
-  写真は内容を説明するというこのプロジェクトの方針を優先する。
+| 根拠 | 条件 |
+| --- | --- |
+| `"size"` | `width` と `height` の属性がともに32以下 |
+| `"filename"` | `src` のファイル名が下の `DECORATIVE_ICON_SRC_PATTERN` に一致 |
+| `"link-context"` | 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけで、かつ `width` か `height` が明示されていて64を超えることがない |
+
+`"link-context"` は弱い根拠である。
+寸法もファイル名も装飾だとは言っておらず、`width`/`height` を持たない写真もここに入る。
+CMSが出すHTMLでは寸法の無い画像が普通にあるため、この根拠だけのときは `alt=""` の提案を `requiresHumanReview: true`、`confidence: "medium"` にする。
+`"size"` と `"filename"` は従来どおり `requiresHumanReview: false`、`confidence: "high"`。
+
+`alt=""` のときに候補を出さない扱いは、3つの根拠で共通にする（既にある状態を悪くしない）。
+
+ファイル名の判定は次のとおり。
+
+```js
+/(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|pdf|xlsx?|excel|docx?|word|ppt|file|mail|tel|new|ext|external|link|window)(?:[_-][\w-]*)?\.(gif|png|svg|jpg)$/i
+```
+
+ファイル種別アイコンでよく使う語を足してあるため、`pdf.gif` のような寸法の無いアイコンも `"filename"` に入り、確認不要のまま扱える。
+
+語の直後は区切り（`_` `-`）か拡張子の `.` に限る。
+`[\w-]*` のように境界を見ないと、`document_scan.jpg` が `doc` に、`markets.jpg` が `mark` に当たり、内容のある写真をファイル名だけで装飾と判定してしまう。
+語を足すほどこの誤判定は増えるため、境界の条件は語の追加とセットで必要である。
 
 規則は `alt` の値で分ける。
 
@@ -448,6 +469,9 @@ gold に合わせて捏造を戻すことはしない。
 - `alt` 属性の無いアイコンでは `alt=""` の提案が出る
 - `<a href="/next"><img src="/images/icon_arrow.gif" width="16" height="16"></a>`（画像だけのリンク）では `alt=""` を提案しない
 - `<a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a>` では `alt=""` を提案しない
+- `<a href="/event"><img src="/photos/matsuri.jpg">秋祭りの案内</a>`（寸法なし）では `alt=""` の提案が `requires_human_review: true` になる
+- `<a href="/a.pdf"><img src="/images/pdf.gif">申請書</a>`（寸法なしのファイル種別アイコン）は `requires_human_review: false` のまま
+- `document_scan.jpg`・`markets.jpg` をテキスト付きリンクに置いた場合、ファイル名だけで装飾と判定しない
 
 ### 4.4 指摘2 表のキャプションがページごとに違う
 

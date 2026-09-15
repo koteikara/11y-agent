@@ -2328,12 +2328,24 @@
     return noticeRuleIds.has(item.rule_id);
   }
 
-  const DECORATIVE_ICON_SRC_PATTERN = /(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark)[\w-]*\.(gif|png|svg|jpg)$/i;
+  // 装飾アイコンでよく使う語。語の直後は区切り(_ -)か拡張子の . に限る。境界を見ないと
+  // 「document_scan.jpg」が doc に、「markets.jpg」が mark に当たり、内容のある写真を
+  // ファイル名だけで装飾と判定してしまう。
+  const DECORATIVE_ICON_SRC_PATTERN =
+    /(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|pdf|xlsx?|excel|docx?|word|ppt|file|mail|tel|new|ext|external|link|window)(?:[_-][\w-]*)?\.(gif|png|svg|jpg)$/i;
 
-  // 装飾目的のアイコン画像らしいかどうか。alt="" は装飾画像として正しい状態で、miCheckerも
-  // 指摘しないため、こうした画像には「画像内容を具体的に入力」の候補を出さない
-  // (遠野市フィードバック 指摘12)。
-  function isLikelyDecorativeIcon(img) {
+  // 装飾目的のアイコン画像と判断した根拠を返す。判断できないときは null。
+  // alt="" は装飾画像として正しい状態で、miCheckerも指摘しないため、こうした画像には
+  // 「画像内容を具体的に入力」の候補を出さない(遠野市フィードバック 指摘12)。
+  //
+  //   "size"         寸法が小さい
+  //   "filename"     ファイル名がアイコンらしい
+  //   "link-context" テキストを持つリンクの中に1枚だけ置かれている
+  //
+  // 呼び出し側は "link-context" を弱い根拠として扱う。この根拠だけのときは、寸法も
+  // ファイル名も装飾だとは言っておらず、寸法を持たない写真もここに入るため、
+  // alt="" の提案を人の確認に回す。
+  function decorativeIconEvidence(img) {
     const width = Number.parseInt(img.getAttribute("width") || "", 10);
     const height = Number.parseInt(img.getAttribute("height") || "", 10);
     const link = img.closest("a");
@@ -2343,21 +2355,24 @@
     // アクセシブルネームの無いリンクになるため、大きさやファイル名がアイコンらしくても
     // 装飾とはみなさず、従来どおりリンク先を表す文言を提案する。
     if (link && !linkText) {
-      return false;
+      return null;
     }
 
     if (Number.isFinite(width) && Number.isFinite(height) && width <= 32 && height <= 32) {
-      return true;
+      return "size";
     }
     if (DECORATIVE_ICON_SRC_PATTERN.test(img.getAttribute("src") || "")) {
-      return true;
+      return "filename";
     }
     // テキストを持つリンクの中に1枚だけ置かれた画像は、リンク文言が既に用途を伝えている
     // ファイル種別アイコンなどの飾りとみなす。ただし、寸法が明示されていて64を超える画像は
     // 内容のある写真とみなし、この判定から外す。リンク文言で名前を与えるのはWCAGの技術
     // としては許されるが、写真は内容を説明するというこのプロジェクトの方針を優先する。
     const sizeSuggestsContent = (Number.isFinite(width) && width > 64) || (Number.isFinite(height) && height > 64);
-    return Boolean(!sizeSuggestsContent && link && link.querySelectorAll("img").length === 1 && linkText);
+    if (!sizeSuggestsContent && link && link.querySelectorAll("img").length === 1 && linkText) {
+      return "link-context";
+    }
+    return null;
   }
 
   function collectImageCandidates(fragment, candidates) {
@@ -2369,10 +2384,15 @@
       const aiNameDraft = generateImageNameDraft(img, caption);
       const aiNameDraftForAlt = complexImage ? generateComplexImageNameDraft(img, caption, aiNameDraft) : aiNameDraft;
 
-      const decorativeIcon = isLikelyDecorativeIcon(img);
+      const decorativeEvidence = decorativeIconEvidence(img);
+      const decorativeIcon = decorativeEvidence !== null;
+      // リンクの中にあることだけが根拠のときは、寸法もファイル名も装飾だとは言っていない。
+      // 寸法を持たない写真もここに入るため、空にしてよいかは人が確かめる。
+      const weakEvidence = decorativeEvidence === "link-context";
 
       if (decorativeIcon && alt !== null && alt.trim() === "") {
-        // alt="" の装飾アイコンは既に正しい状態なので、候補を出さない。
+        // alt="" の装飾アイコンは既に正しい状態なので、候補を出さない。根拠の強さに
+        // かかわらず、既にある状態を悪くしない。
       } else if (decorativeIcon && alt === null) {
         const clone = img.cloneNode(true);
         clone.setAttribute("alt", "");
@@ -2381,11 +2401,13 @@
             ruleId: "image.alt-text",
             element: img,
             message: "装飾画像に空の代替テキストを設定します。",
-            reason: "装飾目的のアイコン画像は、alt属性を空にして読み上げから外します。alt属性そのものが無いと、読み上げソフトがファイル名を読み上げることがあります。",
+            reason: weakEvidence
+              ? "リンクの文言が既に用途を伝えているため、この画像は装飾の可能性があります。ただし寸法もファイル名もアイコンだとは示していないため、内容のある画像でないかを確認してください。"
+              : "装飾目的のアイコン画像は、alt属性を空にして読み上げから外します。alt属性そのものが無いと、読み上げソフトがファイル名を読み上げることがあります。",
             afterHtml: clone.outerHTML,
             patch: { type: "set-attribute", name: "alt", value: "" },
-            confidence: "high",
-            requiresHumanReview: false,
+            confidence: weakEvidence ? "medium" : "high",
+            requiresHumanReview: weakEvidence,
           })
         );
       } else if (alt === null || alt.trim() === "") {
