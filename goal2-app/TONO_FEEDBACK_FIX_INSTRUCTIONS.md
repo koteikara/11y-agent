@@ -498,17 +498,35 @@ const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
 シリーズで文言を揃える仕組みが無いのは別の機能要望である（対象外）。
 
 **変更**。
-1行目連結のフォールバックを削除する。
-見出しからも導けないときは、キャプション文言を空にし、候補を「文言を調整」でしか採用できないようにする。
-`shouldRequireEditedAdoption()`（`app.js:7230`）は「要確認かつ確信度低かつ簡易編集あり」で採用を止めるので、この場合の候補を `confidence: "low"` にすれば既存の仕組みで止まる。
-編集欄の初期値は空のキャプションにし、`<caption></caption>` のまま採用できないことを確認する。
-`genericTableCaption`（「表の詳細」）へのフォールバックも同じ扱いにする。
+1行目連結のフォールバックを削除し、`genericTableCaption`（「表の詳細」）へのフォールバックも削除する。
+見出しからも導けないときは、キャプション文言を空にする。
+`buildDataTableSemanticsHtml()` は文言が空なら `<caption>` 要素自体を作らないため、`<caption></caption>` は出ない。
+`lib/sagaAutoFix.js` の `inferCaptionFromTable()` にも同じフォールバックがあるので、同じ規則に直す。
+
+「文言を調整」でしか採用できないようにするのは、**キャプション専用の候補**（「表にキャプションがありません」、`patch` が `insert-caption`）に限る。
+この候補は元から `confidence: "low"` と `requiresHumanReview: true` を持つので、`shouldRequireEditedAdoption()`（「要確認かつ確信度低かつ簡易編集あり」）が採用を止める。
+ただし `quickEditConfig()` は `after_html` に `<caption>` があるときしか簡易編集を返さないため、キャプションを作らなくなるとこの候補には簡易編集が出ない。
+`rule_id` が `table.caption` で `after_html` に `<table>` がある候補に、`mode: "insert-caption"` の簡易編集を足す。
+`buildQuickEditedAfterHtml()` にも同じモードを足し、入力された文言で `<caption>` を作って先頭に差し込む。
+
+**「データ表として維持し構造を整える」の手段は確信度を下げない。**
+下げると `shouldRequireEditedAdoption()` が採用を止め、GOAL1の一括採用では代わりに「箇条書きに変換する」が採用されて、行と列の関係を持つ表が解体される（安城市の入れ子の表 n0012 で確認）。
+この手段はキャプション以外に `thead`・行見出し・`scope` も付けるので、キャプションが空でも元より悪くならない。
+キャプションの文言そのものは専用候補で人が入れる。
 
 **構造変更1との関係**。
 独立。
 
 **検証**。
-`test/goal2-output` に、見出しの無い表で `table.caption` の変換後HTMLの `<caption>` が空であること、採用ボタンが無効であることを足す。
+`test/goal2-output` に次を足す。
+
+- 見出しの無い表で、`table.caption` の変換後HTMLに `<caption>` が無いこと（空の `<caption></caption>` も無いこと）
+- キャプション専用の候補が `patch.value` を空にし、`confidence: "low"`・`requiresHumanReview: true` であること
+- その候補では採用ボタンが無効で、「文言を調整」で入力した文言が最終HTMLの `<caption>` になること
+
+`npm run test:saga-gold` は動かない。
+佐賀市の51ファイルではキャプションがすべて見出しの文脈（`inferContextualDataTableCaption()`・`inferCaptionBefore()`）から決まっており、1行目連結のフォールバックが使われていないため。
+変更の前後どちらも21ファイル・81件のキャプションで、gold と同数である。
 
 ### 4.5 指摘1 見出しが先頭しか直らない
 

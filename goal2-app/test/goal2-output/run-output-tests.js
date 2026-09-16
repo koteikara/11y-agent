@@ -16,6 +16,7 @@
 //  12. 背景色を採用すると、同じ表の構造候補が選べなくなっていた(指摘3)。
 //  13. 1列目がthの表に「項目／内容1」という元の文書に無い見出し行を足していた(指摘7)。
 //  14. alt=""の装飾アイコンに「画像内容を具体的に入力」の候補を出していた(指摘12)。
+//  15. 見出しから導けないとき、1行目のセルを連結したキャプションを作っていた(指摘2)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -141,6 +142,16 @@ const CONTENT_PHOTO_FILENAMES = [
 
 // ファイル名だけで装飾と判断してよいアイコン。寸法が無くても確認不要のまま。
 const ICON_FILENAMES = ["pdf.gif", "pdf16.gif", "mail_icon.png", "img_pdf.gif", "icon_excel.gif"];
+
+// 指摘2: 直前に見出しが無く、キャプションの文言を導けない3行の表
+const NO_HEADING_TABLE = `<div><table border="1"><tbody>
+  <tr><td>名称</td><td>遠野市役所</td></tr>
+  <tr><td>電話</td><td>0198-62-2111</td></tr>
+  <tr><td>受付</td><td>平日のみ</td></tr>
+</tbody></table></div>`;
+
+// 指摘2: 構造の手段が出ず、キャプション専用の候補だけが出る表
+const NO_CAPTION_SIMPLE_TABLE = `<table border="1"><tbody><tr><td>電話</td><td>0198-62-2111</td></tr></tbody></table>`;
 
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
@@ -641,6 +652,91 @@ async function main() {
         JSON.stringify(icon)
       );
     }
+    // 15. 遠野市フィードバック 指摘2: キャプションの文言を作らない
+    const captionCandidate = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      const c = res.candidates.find((x) => x.rule_id === "table.caption");
+      return c
+        ? { after: c.proposal.after_html, confidence: c.proposal.confidence, humanReview: c.proposal.requires_human_review }
+        : null;
+    }, NO_HEADING_TABLE);
+    check(
+      "見出しが無いときキャプションの文言を作らない",
+      Boolean(captionCandidate) && !/<caption/i.test(captionCandidate.after),
+      JSON.stringify(captionCandidate).slice(0, 300)
+    );
+    check(
+      "空の<caption></caption>を残さない",
+      Boolean(captionCandidate) && !/<caption>\s*<\/caption>/i.test(captionCandidate.after),
+      (captionCandidate && captionCandidate.after || "").slice(0, 200)
+    );
+    // キャプション専用の候補は、文言を入れてからでないと採用できない。
+    const captionOnly = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      const c = res.candidates.find((x) => x.proposal.patch?.type === "insert-caption");
+      return c
+        ? { value: c.proposal.patch.value, confidence: c.proposal.confidence, humanReview: c.proposal.requires_human_review,
+            after: c.proposal.after_html }
+        : null;
+    }, NO_CAPTION_SIMPLE_TABLE);
+    check(
+      "キャプション専用の候補も文言を作らない",
+      Boolean(captionOnly) && captionOnly.value === "" && !/<caption/i.test(captionOnly.after),
+      JSON.stringify(captionOnly).slice(0, 240)
+    );
+    check(
+      "キャプション専用の候補は確信度lowで要確認",
+      Boolean(captionOnly) && captionOnly.confidence === "low" && captionOnly.humanReview === true,
+      JSON.stringify(captionOnly && { c: captionOnly.confidence, hr: captionOnly.humanReview })
+    );
+
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
+    await page.fill("#htmlInput", NO_CAPTION_SIMPLE_TABLE);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4500);
+    const pickedCaption = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) => /キャプション/.test(b.textContent));
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("キャプションの候補を選択できる", pickedCaption, "候補が見つからない");
+    if (pickedCaption) {
+      await page.waitForTimeout(1200);
+      check(
+        "文言を入れずに採用できない",
+        (await page.getAttribute("#acceptButton", "disabled")) !== null,
+        "採用ボタンが有効のまま"
+      );
+      const quickEditAvailable = await page.evaluate(() => {
+        const button = [...document.querySelectorAll("button")].find((b) => /文言を調整/.test(b.textContent));
+        if (!button) return false;
+        button.click();
+        return true;
+      });
+      check("「文言を調整」から入力できる", quickEditAvailable, "調整ボタンが無い");
+      if (quickEditAvailable) {
+        await page.waitForTimeout(600);
+        await page.fill("#quickEditValue", "遠野市役所の連絡先");
+        await page.click("#quickEditApplyButton");
+        await page.waitForTimeout(1200);
+        await page.evaluate(() => {
+          document.querySelector(".output-drawer").open = true;
+        });
+        await page.waitForTimeout(400);
+        const captionFinal = await page.inputValue("#finalHtml");
+        check(
+          "入力した文言がキャプションになる",
+          /<caption>遠野市役所の連絡先<\/caption>/.test(captionFinal),
+          captionFinal.replace(/\s+/g, " ").slice(0, 240)
+        );
+      }
+    }
+
   } finally {
     if (browser) await browser.close();
     server.kill();
