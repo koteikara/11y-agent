@@ -68,7 +68,6 @@
 
   const tableCaptionWordRe = /\u4e00\u89a7|\u8a73\u7d30|\u8868/u;
   const tableDetailSuffix = "\u306e\u8a73\u7d30";
-  const genericTableCaption = "\u8868\u306e\u8a73\u7d30";
 
   const inputSamples = [
     {
@@ -1950,8 +1949,17 @@
     return normalizeText(match[1] || match[2] || match[3] || match[4] || match[5] || "") || null;
   }
 
+  // 見出しは全件、段落は先頭120件までを渡す。以前は見出しと段落を混ぜて先頭80ブロックで
+  // 切っていたため、長いページでは後半の見出しがAIに渡らず、見出しの補正が先頭付近しか
+  // 効かなかった(遠野市フィードバック 指摘1)。見出しは件数が少なく全件渡しても大きくない
+  // ので上限を外し、代わりに段落を60文字で切って全体の量を抑える。
+  const HEADING_OUTLINE_PARAGRAPH_LIMIT = 120;
+
   function buildHeadingReviewOutline(fragment) {
     const blocks = [];
+    let paragraphCount = 0;
+    // querySelectorAll は文書順に返す。AIは前後関係から見出しの妥当性を判断するため、
+    // 見出しと段落の並びはそのまま保つ。
     fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach((element) => {
       // 表のセル(th/td)内の段落・見出しは文書の見出し階層(アウトライン)の一部ではなく、
       // AIに渡すとth要素の中に新しい見出し要素を挿入する提案を生成してしまう(表構造が壊れる)。
@@ -1963,13 +1971,21 @@
       if (!text) {
         return;
       }
+      const isHeading = /^H[1-6]$/.test(element.tagName);
+      if (!isHeading) {
+        paragraphCount += 1;
+        if (paragraphCount > HEADING_OUTLINE_PARAGRAPH_LIMIT) {
+          return;
+        }
+      }
+      const limit = isHeading ? 100 : 60;
       blocks.push({
         id: element.getAttribute("data-goal2-node-id"),
         tag: element.tagName.toLowerCase(),
-        text: text.length > 100 ? `${text.slice(0, 100)}…` : text,
+        text: text.length > limit ? `${text.slice(0, limit)}…` : text,
       });
     });
-    return blocks.slice(0, 80);
+    return blocks;
   }
 
   function applyHeadingReviewResult(fragment, items, result, validIds) {
@@ -2715,6 +2731,34 @@
 
   function collectHeadingCandidates(fragment, candidates) {
     const headings = [...fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6")];
+
+    // 見出し全体の底上げを、飛びの検出より先に出す。飛びの検出は直前の見出しとの差だけを
+    // 見るため、先頭のh3をh2に直した時点でpreviousLevelが2に進み、続くh3が飛びに見えなく
+    // なっていた。その結果、h3が4つ並ぶページで先頭しか直らなかった(遠野市フィードバック
+    // 指摘1)。h1はページタイトル用でCMS側が持つ前提なので、底上げの対象から外し、
+    // 既存のh1→h2候補に任せる。
+    const shiftTargets = headings.filter((heading) => headingLevel(heading) > 1);
+    const minLevel = shiftTargets.length ? Math.min(...shiftTargets.map(headingLevel)) : 0;
+    const shiftDelta = minLevel > 2 ? 2 - minLevel : 0;
+
+    if (shiftDelta !== 0) {
+      const nodeIds = shiftTargets.map((heading) => heading.getAttribute("data-goal2-node-id")).filter(Boolean);
+      const outline = buildHeadingShiftOutline(fragment.content, { delta: shiftDelta, node_ids: nodeIds });
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-order",
+          element: shiftTargets[0],
+          message: `見出しが h${minLevel} から始まっています。全体を h2 起点に揃えます（対象 ${shiftTargets.length}件）`,
+          reason: "本文の見出しはh2から始めます。先頭だけを直すと以降の見出しとの関係が崩れるため、ページ内の見出しをまとめて同じ数だけ上げます。",
+          afterHtml: outline.outerHTML,
+          patch: { type: "shift-headings", delta: shiftDelta, node_ids: nodeIds },
+          patchMode: "patch",
+          confidence: "medium",
+          requiresHumanReview: true,
+        })
+      );
+    }
+
     let previousLevel = 1;
 
     headings.forEach((heading) => {
@@ -2738,15 +2782,18 @@
         return;
       }
 
-      let effectiveLevel = level;
-      if (level > previousLevel + 1) {
+      // 底上げの候補があるときは、補正後のレベルで飛びを判定する。補正前のレベルで
+      // 判定すると、底上げを採用すれば消える飛びに対しても候補が出てしまう。
+      const shiftedLevel = Math.min(6, Math.max(2, level + shiftDelta));
+      let effectiveLevel = shiftedLevel;
+      if (shiftedLevel > previousLevel + 1) {
         const expected = Math.min(previousLevel + 1, 6);
         const clone = renameElement(heading, `h${expected}`);
         candidates.push(
           makeCandidate({
             ruleId: "html-structure.heading-order",
             element: heading,
-            message: `見出しレベルがh${previousLevel}相当からh${level}へスキップしています。`,
+            message: `見出しレベルがh${previousLevel}相当からh${shiftedLevel}へスキップしています。`,
             reason: "見出しは階層を飛ばさず、ページ構造に沿って設定します。",
             afterHtml: clone.outerHTML,
             patch: { type: "rename-element", tag_name: `h${expected}` },
@@ -3407,18 +3454,18 @@
       }
 
       if (!table.querySelector("caption")) {
-        const clone = table.cloneNode(true);
-        const caption = document.createElement("caption");
-        caption.textContent = genericTableCaption;
-        clone.insertBefore(caption, clone.firstChild);
+        // キャプションの文言は作らない。「表の詳細」という汎用の文言はその表を特定できず、
+        // 確認不要で入ると内容の分からないキャプションが残る(遠野市フィードバック 指摘2)。
+        // 確信度lowと要確認で、shouldRequireEditedAdoption()が「文言を調整」でしか
+        // 採用できないようにする。
         candidates.push(
           makeCandidate({
             ruleId: "table.caption",
             element: table,
-            message: "表にキャプションがありません。",
-            reason: "キャプションを追加すると、利用者や支援技術がこの表の内容を理解しやすくなります。",
-            afterHtml: clone.outerHTML,
-            patch: { type: "insert-caption", value: genericTableCaption },
+            message: "表にキャプションがありません。表の内容が分かる説明を入力してください。",
+            reason: "キャプションを追加すると、利用者や支援技術がこの表の内容を理解しやすくなります。文言は表の中身を見て決める必要があるため、ツールでは作りません。",
+            afterHtml: table.outerHTML,
+            patch: { type: "insert-caption", value: "" },
             confidence: "low",
             requiresHumanReview: true,
           })
@@ -3465,16 +3512,27 @@
     // 出典: Science Tokyoウェブアクセシビリティサポートブック)そのものの実装なので、
     // 用途分類ではなくこの一般ルールを解説として使う。
 
+    const missingCaption = dataTableSemanticsMissingCaption(table);
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
-      message: dataTableSemanticsMissingHeaderRow(table)
-        ? "データ表として維持し、キャプション・行見出し・scope属性をまとめて追加できます。列見出しの行がありません。必要なら見出し行を追加してください。"
-        : "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+      message: [
+        dataTableSemanticsMissingHeaderRow(table)
+          ? "データ表として維持し、キャプション・行見出し・scope属性をまとめて追加できます。列見出しの行がありません。必要なら見出し行を追加してください。"
+          : "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+        missingCaption ? "キャプションの文言は見出しから導けませんでした。表の内容が分かる説明を入力してください。" : "",
+      ]
+        .filter(Boolean)
+        .join(""),
       reason: preserve
         ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
         : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
       afterHtml: buildDataTableSemanticsHtml(table),
       patchMode: "replace",
+      // キャプションを導けなくても確信度は下げない。下げると shouldRequireEditedAdoption()が
+      // 採用を止め、GOAL1の一括採用では代わりに「箇条書きに変換する」が採用されて、
+      // 行と列の関係を持つ表が解体されてしまう(安城市の入れ子の表で確認)。この手段は
+      // キャプション以外にthead・行見出し・scopeも付けるので、キャプションが空でも
+      // 元より悪くならない。キャプションの文言そのものは下の専用候補で人が入れる。
       confidence: preserve ? dataTableSemanticsConfidence(table) : "low",
       requiresHumanReview: true,
       llmContext: null,
@@ -4536,7 +4594,7 @@
     const existing = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (existing) return existing;
     if (isLeadingTitleRowDataTableProfile(profile)) {
-      return leadingTitleRowCaptionText(profile) || genericTableCaption;
+      return leadingTitleRowCaptionText(profile);
     }
     if (isSingleRecordContactDataTableProfile(profile)) {
       const label = normalizeText(profile.rows[0]?.[0]?.textContent || "");
@@ -4547,22 +4605,20 @@
     const derivedCaption = deriveTableCaptionFromHeadings(headings);
     if (derivedCaption) return derivedCaption;
     if (heading) return /一覧|詳細|表/.test(heading) ? heading : `${heading}一覧`;
-    const firstRowText = normalizeText(profile.firstRow.map((cell) => cell.textContent || "").join(" "));
-    if (!firstRowText) return genericTableCaption;
-    return `${truncateAtWordBoundary(firstRowText, 36)}${tableDetailSuffix}`;
+    // 見出しから導けないときは文言を作らない。1行目のセルを連結して「の詳細」を付ける
+    // フォールバックは、行の中身の差で文言が変わるため、同じ構造の表でもページごとに
+    // 違うキャプションになっていた(遠野市フィードバック 指摘2)。「表の詳細」という
+    // 汎用の文言も、その表を特定できないので作らない。空にして、作業者が入力してから
+    // 採用する形にする。
+    return "";
   }
 
-  function truncateAtWordBoundary(text, maxLength) {
-    if (text.length <= maxLength) return text;
-    const words = text.split(" ");
-    let result = "";
-    for (const word of words) {
-      const next = result ? `${result} ${word}` : word;
-      if (next.length > maxLength) break;
-      result = next;
-    }
-    return result || text.slice(0, maxLength);
+  // キャプションの文言を見出しから導けたかどうか。導けなかったときは候補のメッセージに
+  // その旨を添える。文言そのものは、キャプション専用の候補で人が入れる。
+  function dataTableSemanticsMissingCaption(table) {
+    return !dataTableCaptionText(table, dataTableProfile(table));
   }
+
 
   function deriveTableCaptionFromHeadings(headings) {
     const heading = normalizeText(headings[0] || "");
@@ -6732,6 +6788,23 @@
       return;
     }
 
+    // 見出し全体の底上げ。node_idsの各見出しをdelta分ずらす。renameElement()が
+    // data-goal2-node-idを引き継ぐので、要素を残すパッチとして扱える
+    // (ELEMENT_REPLACING_PATCH_TYPESには入れない)。
+    if (patch.type === "shift-headings") {
+      (patch.node_ids || []).forEach((nodeId) => {
+        const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+        if (!heading || !/^H[1-6]$/.test(heading.tagName)) {
+          return;
+        }
+        const next = Math.min(6, Math.max(2, headingLevel(heading) + (patch.delta || 0)));
+        if (next !== headingLevel(heading)) {
+          heading.replaceWith(renameElement(heading, `h${next}`));
+        }
+      });
+      return;
+    }
+
     if (patch.type === "remove-style-properties") {
       removeStyleProperties(target, patch.names || []);
       (patch.attributes || []).forEach((name) => target.removeAttribute(name));
@@ -6772,7 +6845,9 @@
     }
 
     if (patch.type === "insert-caption" && target.tagName === "TABLE") {
-      if (!target.querySelector(":scope > caption")) {
+      // 文言が空のときは何もしない。<caption></caption> が残ると、空のキャプションが
+      // 付いた表として扱われ、かえって分かりにくくなる。
+      if (patch.value && !target.querySelector(":scope > caption")) {
         const caption = document.createElement("caption");
         caption.textContent = patch.value;
         target.insertBefore(caption, target.firstChild);
@@ -6825,7 +6900,31 @@
     return target ? cleanHtml(target.outerHTML) : "";
   }
 
+  // 底上げ候補の修正後欄・証跡に使う一覧。対象の見出しを「h3 → h2: 第1章」の形で並べる。
+  // 対象要素だけを複製してパッチを当てる作りでは、node_idsのうち先頭の見出ししか
+  // 見つからず、画面には1件しか動かないように見える(メッセージは「対象N件」)。
+  // ページ内の見出しをすべて動かす候補なので、作業者が判断できるよう全件を見せる。
+  function buildHeadingShiftOutline(root, patch) {
+    const list = document.createElement("ul");
+    (patch?.node_ids || []).forEach((nodeId) => {
+      const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+      if (!heading || !/^H[1-6]$/.test(heading.tagName)) {
+        return;
+      }
+      const from = headingLevel(heading);
+      const to = Math.min(6, Math.max(2, from + (patch.delta || 0)));
+      const item = document.createElement("li");
+      item.textContent = `h${from} → h${to}: ${normalizeText(heading.textContent || "")}`;
+      list.appendChild(item);
+    });
+    return list;
+  }
+
   function currentCandidateAfterHtml(candidate) {
+    if (candidate.proposal.patch?.type === "shift-headings") {
+      const outline = buildHeadingShiftOutline(parseWorkingFragment().content, candidate.proposal.patch);
+      return outline.children.length ? cleanHtml(outline.outerHTML) : "";
+    }
     const target = currentTargetElement(candidate);
     if (!target) {
       return "";
@@ -7111,7 +7210,20 @@
   }
 
   function canBulkAcceptCandidate(candidate) {
-    return Boolean(candidate && !candidate.decision.status && !acceptDisabledReason(candidate));
+    return Boolean(
+      candidate && !candidate.decision.status && !acceptDisabledReason(candidate) && !isBulkExcludedCandidate(candidate)
+    );
+  }
+
+  // まとめて採用の対象から外す候補。見出し全体の底上げはページ内の見出しをすべて動かすため、
+  // 元の階層の意図を人が見てから決める(遠野市フィードバック 指摘1)。個別の採用は従来どおりできる。
+  //
+  // 注意: canBulkAcceptCandidate()は requires_human_review を見ていない。autoAcceptSafe()の
+  // コメントは「not flagged for human review」と書いているが、実際に採用を止めるのは
+  // acceptDisabledReason()(AI画像名の投入待ちと、文言調整が要る候補)だけである。この食い違いは
+  // このPRの前からあり、範囲が広いのでここでは直さない。
+  function isBulkExcludedCandidate(candidate) {
+    return candidate?.proposal?.patch?.type === "shift-headings";
   }
 
   // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
@@ -8484,6 +8596,19 @@
         help: "表の内容を短く説明するキャプションにします。",
       };
     }
+    // 文言を導けずキャプションを作らなかった表。<caption>が無いので上の分岐では拾えないが、
+    // 簡易編集が無いと shouldRequireEditedAdoption() が働かず、説明の無いまま採用できて
+    // しまう(遠野市フィードバック 指摘2)。
+    if (candidate.rule_id === "table.caption" && firstElementTagName(candidate.proposal.after_html, "table")) {
+      return {
+        mode: "insert-caption",
+        selector: "table",
+        title: "表の説明を調整",
+        label: "表の説明",
+        value: "",
+        help: "見出しから表の説明を導けませんでした。表の内容が分かる短い説明を入力してください。",
+      };
+    }
     const heading = firstElementText(candidate.proposal.after_html, "h1,h2,h3,h4,h5,h6");
     if (heading !== null && /^html-structure\./.test(candidate.rule_id)) {
       return {
@@ -8525,6 +8650,15 @@
       const target = template.content.querySelector(config.selector);
       if (!target) return "";
       target.textContent = value;
+    } else if (config.mode === "insert-caption") {
+      const target = template.content.querySelector(config.selector);
+      if (!target) return "";
+      let caption = target.querySelector(":scope > caption");
+      if (!caption) {
+        caption = document.createElement("caption");
+        target.insertBefore(caption, target.firstChild);
+      }
+      caption.textContent = value;
     } else if (config.mode === "heading") {
       const target = template.content.querySelector(config.selector);
       if (!target) return "";
@@ -8887,9 +9021,18 @@
     sanitizePreview(template.content);
     const candidate = selectedCandidate();
     if (candidate) {
-      const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
-      if (target && !highlightPatchedTextInElement(target, candidate)) {
-        target.classList.add("goal2-highlight");
+      if (candidate.proposal.patch?.type === "shift-headings") {
+        // どの見出しが動くかが一目で分かるよう、対象をすべて強調する。
+        (candidate.proposal.patch.node_ids || []).forEach((nodeId) => {
+          template.content
+            .querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`)
+            ?.classList.add("goal2-highlight");
+        });
+      } else {
+        const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
+        if (target && !highlightPatchedTextInElement(target, candidate)) {
+          target.classList.add("goal2-highlight");
+        }
       }
     }
     if (state.ruleScopeMode === "michecker" && state.selectedMicheckerProblemIndex != null) {

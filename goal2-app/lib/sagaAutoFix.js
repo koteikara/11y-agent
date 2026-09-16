@@ -20,7 +20,6 @@ const STRUCTURAL_KEYS = [
 
 const TABLE_CAPTION_WORD_RE = /\u4e00\u89a7|\u8a73\u7d30|\u8868/u;
 const TABLE_DETAIL_SUFFIX = "\u306e\u8a73\u7d30";
-const GENERIC_TABLE_CAPTION = "\u8868\u306e\u8a73\u7d30";
 const HOLIDAY_DOCTOR_HEADER_SIGNATURE = [
   "\u8a3a\u7642\u79d1",
   "\u533b\u7642\u6a5f\u95a2\u540d",
@@ -2826,23 +2825,6 @@ function isHeaderLikeCell(html) {
   return /項目|内容|区分|種別|車種|対象|税率|金額|所得|診療|時間|電話|所在地|名称|日程|会場|結果|勝敗/.test(text);
 }
 
-function inferCaptionFromTable(profile) {
-  if (isTitledColumnHeaderTableProfile(profile)) {
-    return titleRowCaptionText(profile) || "陦ｨ縺ｮ蜀・ｮｹ";
-  }
-  if (isSingleRecordContactTableProfile(profile)) {
-    const label = normalizeText(visibleText(profile.bodyRows[0]?.[0]?.inner || ""));
-    if (label) {
-      return /荳隕ｧ|隧ｳ邏ｰ/.test(label) ? label : `${label}縺ｮ隧ｳ邏ｰ`;
-    }
-  }
-  const firstRowText = normalizeText(visibleText(profile.firstRow.map((cell) => cell.inner).join(" ")));
-  if (!firstRowText) {
-    return "表の内容";
-  }
-  const base = firstRowText.length > 36 ? firstRowText.slice(0, 36) : firstRowText;
-  return `${base}の詳細`;
-}
 
 function titleRowCaptionText(profile) {
   return normalizeText(visibleText((profile.bodyRows[0] || []).map((cell) => cell.inner).join(" ")));
@@ -2887,9 +2869,12 @@ function cellSpanValue(attrs, attrName) {
   return match ? Number(match[2]) || 1 : 1;
 }
 
+// public/app.js の dataTableCaptionText() と同じ規則。1行目のセルを連結して「の詳細」を
+// 付けるフォールバックと、汎用の文言は作らない。行の中身の差で文言が変わり、同じ構造の
+// 表でもページごとに違うキャプションになっていた(遠野市フィードバック 指摘2)。
 function inferCaptionFromTable(profile) {
   if (isTitledColumnHeaderTableProfile(profile)) {
-    return titleRowCaptionText(profile) || GENERIC_TABLE_CAPTION;
+    return titleRowCaptionText(profile);
   }
   if (isSingleRecordContactTableProfile(profile)) {
     const label = normalizeText(visibleText(profile.bodyRows[0]?.[0]?.inner || ""));
@@ -2897,12 +2882,7 @@ function inferCaptionFromTable(profile) {
       return TABLE_CAPTION_WORD_RE.test(label) ? label : `${label}${TABLE_DETAIL_SUFFIX}`;
     }
   }
-  const firstRowText = normalizeText(visibleText(profile.firstRow.map((cell) => cell.inner).join(" ")));
-  if (!firstRowText) {
-    return "陦ｨ縺ｮ蜀・ｮｹ";
-  }
-  const base = firstRowText.length > 36 ? firstRowText.slice(0, 36) : firstRowText;
-  return `${base}縺ｮ隧ｳ邏ｰ`;
+  return "";
 }
 
 function isRowHeaderOnlyDataTableProfile(profile) {

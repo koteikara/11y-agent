@@ -498,17 +498,35 @@ const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
 シリーズで文言を揃える仕組みが無いのは別の機能要望である（対象外）。
 
 **変更**。
-1行目連結のフォールバックを削除する。
-見出しからも導けないときは、キャプション文言を空にし、候補を「文言を調整」でしか採用できないようにする。
-`shouldRequireEditedAdoption()`（`app.js:7230`）は「要確認かつ確信度低かつ簡易編集あり」で採用を止めるので、この場合の候補を `confidence: "low"` にすれば既存の仕組みで止まる。
-編集欄の初期値は空のキャプションにし、`<caption></caption>` のまま採用できないことを確認する。
-`genericTableCaption`（「表の詳細」）へのフォールバックも同じ扱いにする。
+1行目連結のフォールバックを削除し、`genericTableCaption`（「表の詳細」）へのフォールバックも削除する。
+見出しからも導けないときは、キャプション文言を空にする。
+`buildDataTableSemanticsHtml()` は文言が空なら `<caption>` 要素自体を作らないため、`<caption></caption>` は出ない。
+`lib/sagaAutoFix.js` の `inferCaptionFromTable()` にも同じフォールバックがあるので、同じ規則に直す。
+
+「文言を調整」でしか採用できないようにするのは、**キャプション専用の候補**（「表にキャプションがありません」、`patch` が `insert-caption`）に限る。
+この候補は元から `confidence: "low"` と `requiresHumanReview: true` を持つので、`shouldRequireEditedAdoption()`（「要確認かつ確信度低かつ簡易編集あり」）が採用を止める。
+ただし `quickEditConfig()` は `after_html` に `<caption>` があるときしか簡易編集を返さないため、キャプションを作らなくなるとこの候補には簡易編集が出ない。
+`rule_id` が `table.caption` で `after_html` に `<table>` がある候補に、`mode: "insert-caption"` の簡易編集を足す。
+`buildQuickEditedAfterHtml()` にも同じモードを足し、入力された文言で `<caption>` を作って先頭に差し込む。
+
+**「データ表として維持し構造を整える」の手段は確信度を下げない。**
+下げると `shouldRequireEditedAdoption()` が採用を止め、GOAL1の一括採用では代わりに「箇条書きに変換する」が採用されて、行と列の関係を持つ表が解体される（安城市の入れ子の表 n0012 で確認）。
+この手段はキャプション以外に `thead`・行見出し・`scope` も付けるので、キャプションが空でも元より悪くならない。
+キャプションの文言そのものは専用候補で人が入れる。
 
 **構造変更1との関係**。
 独立。
 
 **検証**。
-`test/goal2-output` に、見出しの無い表で `table.caption` の変換後HTMLの `<caption>` が空であること、採用ボタンが無効であることを足す。
+`test/goal2-output` に次を足す。
+
+- 見出しの無い表で、`table.caption` の変換後HTMLに `<caption>` が無いこと（空の `<caption></caption>` も無いこと）
+- キャプション専用の候補が `patch.value` を空にし、`confidence: "low"`・`requiresHumanReview: true` であること
+- その候補では採用ボタンが無効で、「文言を調整」で入力した文言が最終HTMLの `<caption>` になること
+
+`npm run test:saga-gold` は動かない。
+佐賀市の51ファイルではキャプションがすべて見出しの文脈（`inferContextualDataTableCaption()`・`inferCaptionBefore()`）から決まっており、1行目連結のフォールバックが使われていないため。
+変更の前後どちらも21ファイル・81件のキャプションで、gold と同数である。
 
 ### 4.5 指摘1 見出しが先頭しか直らない
 
@@ -526,11 +544,27 @@ AI側の補完は先頭80ブロックまでしか渡していない（`app.js:19
 
 1. コンテンツ内の見出し（h1を除く。h1はh2への既存候補に任せる）の最小レベル `min` を求める。
 2. `min > 2` なら、`delta = 2 - min` として、次の1件を出す。対象は先頭の見出し。`message` は「見出しが h{min} から始まっています。全体を h2 起点に揃えます（対象 N件）」。`patch` は `{ type: "shift-headings", delta, node_ids: [...] }`。`requiresHumanReview: true`、`confidence: "medium"`。
-3. `applyCandidatePatch()` に `shift-headings` を足す。`node_ids` の各要素を `renameElement()` で `delta` 分ずらす。IDは保たれるので要素を残すパッチとして扱う。
+3. `applyCandidatePatch()` に `shift-headings` を足す。`node_ids` の各要素を `renameElement()` で `delta` 分ずらす。IDは保たれるので要素を残すパッチとして扱う（`ELEMENT_REPLACING_PATCH_TYPES` には入れない）。
 4. 飛びの検出は、補正候補がある場合は補正後のレベルに対して行う。補正候補が無い場合は現状どおり。
+5. GOAL1の一括採用から、この候補を明示的に外す。
 
-`proposal.after_html` は、補正後の見出し一覧を `<ul>` で示す表示用HTMLにし、`patch_mode` は `"patch"` とする。
-`before_html` は先頭の見出しにする。
+`requiresHumanReview: true` にすれば一括採用から外れる、という想定は成り立たない。
+`canBulkAcceptCandidate()` は `requires_human_review` を見ておらず、決定済みかどうかと `acceptDisabledReason()`（AI画像名の投入待ちと、文言調整が要る候補）だけで判断する。
+`autoAcceptSafe()` のコメントは「not flagged for human review」と書いているが、実際にはそうなっていない。
+この食い違いは本書の変更以前からあり、範囲が広いのでここでは直さない。
+代わりに `isBulkExcludedCandidate()` を足し、`shift-headings` のパッチを持つ候補を一括採用の対象から外す。
+ページ内の見出しをすべて動かす変更なので、元の階層の意図を人が見てから決める。個別の採用は従来どおりできる。
+
+`proposal.after_html` は、対象の見出しを `h3 → h2: 第1章` の形で並べた `<ul>` の表示用HTMLにし、`patch_mode` は `"patch"` とする。
+`before_html` は先頭の見出しにする。前後の対比は一覧の各行が持つ。
+
+`currentCandidateAfterHtml()` にも同じ分岐を足す。
+修正パネルの修正後欄はこの関数の結果を優先するが、この関数は対象要素だけを複製した `<template>` にパッチを当てるため、`shift-headings` では `node_ids` のうち先頭の見出ししか見つからない。
+そのままだとメッセージが「対象4件」なのに画面では1件しか動かないように見え、ページ内の見出しをすべて動かす候補の判断材料にならない。
+作業中HTML全体から一覧を組み立てて返す。
+
+`buildPreviewHtml()` も、`shift-headings` のときは `node_ids` のすべてに `goal2-highlight` を付ける。
+どの見出しが動くかが一目で分かるようにする。
 
 AIへの補完は、見出しは全件、段落は先頭120件まで（60文字で切る）を渡すようにし、80ブロックの上限を外す。
 AIの `heading_level_fixes` は現状どおり個別候補にする。
@@ -542,9 +576,17 @@ AIの `heading_level_fixes` は現状どおり個別候補にする。
 
 **検証**。
 `test/goal2-output` に次を足す。
-h3×4で `shift-headings` の候補が1件出て、`node_ids` が4件であること。
-採用後の最終HTMLで4件がh2であること。
-h3, h4, h3 の並びで、採用後が h2, h3, h2 であること。
+
+- h3×4で `shift-headings` の候補が1件出て、`node_ids` が4件であること
+- 採用後の最終HTMLで4件がh2であること
+- h3, h4, h3 の並びで、採用後が h2, h3, h2 であること
+- 補正候補があるとき、同じ並びに飛びの候補を重ねて出さないこと
+- `autoAcceptSafe()` が補正候補を自動採用しないこと
+- 候補の変換後HTMLと、実UIの修正後欄に、対象の見出しが4件とも出ること
+- プレビューが対象の見出しを4件とも強調すること
+
+`npm run test:saga-gold` は動かない。
+この変更は `public/app.js` の候補生成だけで、saga-goldが使う `lib/sagaAutoFix.js` は別実装であり、そちらは `promoteHeadingsBeforeFirstH2()` で独自に見出しを引き上げているため。
 
 ### 4.6 指摘13 操作パネルの大きさを変えられない
 
