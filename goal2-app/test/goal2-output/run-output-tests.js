@@ -1481,6 +1481,99 @@ async function main() {
       `引けた=${derivedIds.selectable} / 派生ID=${derivedIds.derived.length}`
     );
 
+    // 19-e. セル結合の分類ごとの再構成(table.cell-merge-*)も rebuild 操作であること。
+    //     これらは planTableTreatments() の6手段とは別の経路(buildMergedCellProposal())で作られる。
+    //     固定の変換後HTMLのままにすると、畳み込みを廃止した分だけ「先に採用した表の中の
+    //     内容修正が失われる」退行になる(S1では畳み込みが守っていた)。
+    const CELL_MERGE_WITH_CONTENT_FIX = `<h2>対象者</h2><table border="1"><tbody>
+      <tr><td colspan="2">区分</td><td>対象</td><td>備考</td></tr>
+      <tr><td rowspan="2">市民</td><td>一般</td><td>●</td><td>南北約22m</td></tr>
+      <tr><td>学生</td><td>○</td><td>令和５年度</td></tr>
+    </tbody></table>`;
+    const cellMergeFilter = (c) => /^table\.cell-merge-/.test(c.rule_id);
+    const cellMergeContentFirst = await runOrderedFlow(CELL_MERGE_WITH_CONTENT_FIX, "content-first", cellMergeFilter);
+    check(
+      "セル結合の手段が rebuild 操作になっている",
+      cellMergeContentFirst.structural.length > 0 &&
+        cellMergeContentFirst.structural.every((c) => c.patch_type === "rebuild" && c.builder === "mergedCellProposal"),
+      JSON.stringify(cellMergeContentFirst.structural)
+    );
+    check(
+      "内容修正を先に採用してもセル結合の再構成後に残る",
+      /22メートル/.test(cellMergeContentFirst.finalHtml) && /令和5年度/.test(cellMergeContentFirst.finalHtml),
+      cellMergeContentFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)
+    );
+    const cellMergeStructureFirst = await runOrderedFlow(CELL_MERGE_WITH_CONTENT_FIX, "structure-first", cellMergeFilter);
+    check(
+      "セル結合の再構成を先に採用しても内容修正が残る",
+      /22メートル/.test(cellMergeStructureFirst.finalHtml) && /令和5年度/.test(cellMergeStructureFirst.finalHtml),
+      cellMergeStructureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "セル結合の手段でも採用順を変えて最終HTMLが同じ",
+      cellMergeContentFirst.finalHtml === cellMergeStructureFirst.finalHtml,
+      `内容修正が先=${cellMergeContentFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}\n       構造が先  =${cellMergeStructureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}`
+    );
+
+    // 19-f. 「表を丸ごと差し替える候補はすべて rebuild 操作である」ことの検査(設計書 3.7)。
+    //     ここが崩れると 19-e と同じ退行が別のルールで再発する。
+    //     対象外が2種類ある。
+    //      - insert-caption の簡易候補のように要素を残すパッチ。第1段で当たるので、表の中の
+    //        内容修正を消さない。
+    //      - patch_mode が "none" の確認だけの候補(collectNaiveTableStructureCandidates() が
+    //        出す table.layout-table など)。決定ログの op に apply: false が立ち、リプレイで
+    //        当たらないので表を差し替えない。
+    const REBUILD_COVERAGE_INPUTS = [
+      ["セル結合と内容修正の表", CELL_MERGE_WITH_CONTENT_FIX],
+      ["セル結合のある表", MERGED_CELL_TABLE],
+      ["入れ子の表", NESTED_IN_LAYOUT],
+      ["背景色の表", BGCOLOR_TABLE],
+      ["1列目がthの表", ROW_HEADER_TABLE],
+      ["見出しを含まない表", PLAIN_DATA_TABLE],
+      ["セルに見出しがある表", LAYOUT_WITH_HEADINGS],
+      ["キャプションの無い1行の表", NO_CAPTION_SIMPLE_TABLE],
+      ["直前に見出しが無い表", NO_HEADING_TABLE],
+      ["書式設定のある1行の表", FORMATTED_SIMPLE_TABLE],
+      ["廃止属性とCMS独自タグの混ざった本文", DIRTY_MARKUP],
+    ];
+    const rebuildCoverage = await page.evaluate(async (cases) => {
+      const out = [];
+      for (const [label, html] of cases) {
+        const res = await window.goal2Engine.analyze({ html });
+        res.candidates.forEach((candidate) => {
+          const facts = window.goal2Engine.decisionLog.candidateFacts(candidate);
+          if (!facts.table_structural) return;
+          out.push({
+            label,
+            rule_id: candidate.rule_id,
+            method_label: candidate.method_label,
+            ...facts,
+          });
+        });
+      }
+      return out;
+    }, REBUILD_COVERAGE_INPUTS);
+    const uncoveredRebuild = rebuildCoverage.filter(
+      (row) => row.element_replacing && row.patch_mode !== "none" && row.patch_type !== "rebuild"
+    );
+    check(
+      "表を丸ごと差し替える構造候補はすべて rebuild 操作",
+      rebuildCoverage.length > 0 && uncoveredRebuild.length === 0,
+      rebuildCoverage.length === 0
+        ? "表の構造候補が1件も出なかった。検査になっていない"
+        : `rebuild でない要素差し替えの構造候補: ${JSON.stringify(uncoveredRebuild)}`
+    );
+    check(
+      "要素を残すパッチの構造候補(insert-caption)は rebuild にしない",
+      rebuildCoverage.some((row) => row.patch_type === "insert-caption" && !row.element_replacing),
+      `構造候補の一覧: ${JSON.stringify(rebuildCoverage.map((r) => `${r.rule_id}/${r.patch_type}/${r.element_replacing ? "差し替え" : "要素を残す"}`))}`
+    );
+    check(
+      "確認だけの構造候補(patch_mode: none)は rebuild にしない",
+      rebuildCoverage.some((row) => row.patch_mode === "none" && row.patch_type !== "rebuild"),
+      `構造候補の一覧: ${JSON.stringify(rebuildCoverage.map((r) => `${r.rule_id}/${r.patch_mode}/${r.patch_type}`))}`
+    );
+
   } finally {
     if (browser) await browser.close();
     server.kill();

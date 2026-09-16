@@ -3374,7 +3374,8 @@
       // In-place restructure candidates(heading/summary/note): 単一の推奨案のみ。下のM1〜M3
       // 代替手段メニューとは別枠(この3分類向けの代替手段は今回のスコープ外)。
       if (mergeRule && !tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
-        const mergeProposal = buildMergedCellProposal(table, mergeRule);
+        const mergeParams = mergedCellProposalParams(table, mergeRule.ruleId);
+        const mergeProposal = buildMergedCellProposal(table, mergeRule, mergeParams);
         candidates.push(
           makeCandidate({
             ruleId: mergeRule.ruleId,
@@ -3385,6 +3386,9 @@
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
             requiresHumanReview: true,
+            // 表を丸ごと組み立て直す候補なので rebuild 操作にする(3.7)。固定の変換後HTMLで
+            // 差し替えると、先に採用した表の中の内容修正が消える。
+            patch: { type: "rebuild", builder: "mergedCellProposal", params: mergeParams },
           })
         );
       }
@@ -3395,7 +3399,8 @@
       // がtrueのとき、旧コードはこのブロックとplanTableTreatment()の両方でsplitMergedRowsIntoTablesHtml()
       // を呼び、実質同じ候補を2件生成していた)。
       if (mergeRule && (mergeRule.ruleId === "table.cell-merge-file" || mergeRule.ruleId === "table.cell-merge-mark")) {
-        const mergeProposal = buildMergedCellProposal(table, mergeRule);
+        const mergeParams = mergedCellProposalParams(table, mergeRule.ruleId);
+        const mergeProposal = buildMergedCellProposal(table, mergeRule, mergeParams);
         candidates.push(
           makeCandidate({
             ruleId: mergeRule.ruleId,
@@ -3407,6 +3412,7 @@
             confidence: mergeRule.confidence,
             requiresHumanReview: true,
             llmContext: mergeProposal.images?.length ? { images: mergeProposal.images } : null,
+            patch: { type: "rebuild", builder: "mergedCellProposal", params: mergeParams },
           })
         );
       }
@@ -3537,7 +3543,23 @@
     flattenTable: (element, params) => buildFlattenedTableHtml(element, params),
     tableAsList: (element, params) => buildTableAsListHtml(element, params),
     rowsAsSections: (element, params) => buildRowsAsSectionsHtml(element, params),
+    // セル結合の分類ごとの再構成(table.cell-merge-heading / -summary / -note / -file / -mark)。
+    // buildMergedCellProposal() は表と mergeRule.ruleId だけで決まるので、ビルダーは1つにして
+    // params.rule_id で分岐する。結合セルが無くなっているなど扱えない形になっていた場合は
+    // unchangedProposal() が表をそのまま返すので、差し替えても何も変わらない。
+    mergedCellProposal: (element, params) =>
+      buildMergedCellProposal(element, { ruleId: params.rule_id }, params).afterHtml,
   };
+
+  // セル結合の再構成が表の外から読む入力(3.7)。heading_tag は buildHeadingSeparatedTableHtml()、
+  // parent_heading_tag は -file / -mark が最後に通る decomposeLayoutTable() が使う。
+  function mergedCellProposalParams(table, ruleId) {
+    return {
+      rule_id: ruleId,
+      heading_tag: suggestSeparatedHeadingTag(table),
+      parent_heading_tag: nearestPreviousHeadingTag(table) || "h2",
+    };
+  }
 
   function tableRebuildBuilder(name) {
     return Object.prototype.hasOwnProperty.call(TABLE_REBUILD_BUILDERS, name) ? TABLE_REBUILD_BUILDERS[name] : null;
@@ -5968,7 +5990,9 @@
     return `h${Math.min(6, Math.max(3, level + 1))}`;
   }
 
-  function buildMergedCellProposal(table, mergeRule) {
+  // params は「対象の表のDOMの外から決まる入力」(3.7)。`rebuild` 操作から呼ぶときは
+  // 候補を作った時点の値が渡る。
+  function buildMergedCellProposal(table, mergeRule, params = {}) {
     const info = firstMergedCellInfo(table);
     if (!info) {
       return unchangedProposal(table);
@@ -5976,7 +6000,7 @@
 
     if (mergeRule.ruleId === "table.cell-merge-heading") {
       return {
-        afterHtml: buildHeadingSeparatedTableHtml(table, info),
+        afterHtml: buildHeadingSeparatedTableHtml(table, info, params),
         patchMode: "replace",
       };
     }
@@ -5998,8 +6022,8 @@
     if (mergeRule.ruleId === "table.cell-merge-layout") {
       const imageContexts = [];
       const afterHtml = canSplitMergedRowsIntoTables(table)
-        ? splitMergedRowsIntoTablesHtml(table)
-        : decomposeLayoutTable(table, {}, imageContexts);
+        ? splitMergedRowsIntoTablesHtml(table, params)
+        : decomposeLayoutTable(table, params, imageContexts);
       return {
         afterHtml,
         patchMode: "replace",
@@ -6010,7 +6034,7 @@
     if (mergeRule.ruleId === "table.cell-merge-file") {
       const imageContexts = [];
       return {
-        afterHtml: decomposeLayoutTable(table, {}, imageContexts),
+        afterHtml: decomposeLayoutTable(table, params, imageContexts),
         patchMode: "replace",
         images: imageContexts,
       };
@@ -6019,7 +6043,7 @@
     if (mergeRule.ruleId === "table.cell-merge-mark") {
       const imageContexts = [];
       return {
-        afterHtml: buildMarkSeparatedTableHtml(table, imageContexts),
+        afterHtml: buildMarkSeparatedTableHtml(table, imageContexts, params),
         patchMode: "replace",
         images: imageContexts,
       };
@@ -6052,8 +6076,9 @@
     };
   }
 
-  function buildHeadingSeparatedTableHtml(table, info) {
-    const heading = document.createElement(suggestSeparatedHeadingTag(table));
+  function buildHeadingSeparatedTableHtml(table, info, params = {}) {
+    // 表の直前の見出しから決まる入力は params から受け取る(3.7)。
+    const heading = document.createElement(params.heading_tag || suggestSeparatedHeadingTag(table));
     heading.textContent = info.text;
     const clone = tableWithRowRemoved(table, info.rowIndex);
     return cleanHtml(`${heading.outerHTML}${clone.outerHTML}`);
@@ -6218,7 +6243,7 @@
     return cleanHtml(output.innerHTML);
   }
 
-  function buildMarkSeparatedTableHtml(table, imageContexts) {
+  function buildMarkSeparatedTableHtml(table, imageContexts, params = {}) {
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (captionText) {
@@ -6262,7 +6287,7 @@
       return cleanHtml(output.innerHTML);
     }
 
-    return decomposeLayoutTable(table, {}, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
+    return decomposeLayoutTable(table, params, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
   }
 
   // WHATWG HTML自体がcolspan属性を最大1000にクランプする仕様になっている(rowspanは
@@ -11024,6 +11049,16 @@
       },
       replay(sourceHtml, decisions) {
         return replay(sourceHtml, decisions);
+      },
+      // テスト用。「表を丸ごと差し替える候補はすべて rebuild 操作である」ことを外から
+      // 確かめるための窓口(3.7)。
+      candidateFacts(candidate) {
+        return {
+          table_structural: isTableStructuralCandidate(candidate),
+          element_replacing: isElementReplacingCandidate(candidate),
+          patch_type: candidate?.proposal?.patch?.type || null,
+          patch_mode: candidate?.proposal?.patch_mode || null,
+        };
       },
       // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
       screenState() {
