@@ -17,6 +17,7 @@
 //  13. 1列目がthの表に「項目／内容1」という元の文書に無い見出し行を足していた(指摘7)。
 //  14. alt=""の装飾アイコンに「画像内容を具体的に入力」の候補を出していた(指摘12)。
 //  15. 見出しから導けないとき、1行目のセルを連結したキャプションを作っていた(指摘2)。
+//  16. h3が並ぶページで先頭の見出ししか直らなかった(指摘1)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -152,6 +153,10 @@ const NO_HEADING_TABLE = `<div><table border="1"><tbody>
 
 // 指摘2: 構造の手段が出ず、キャプション専用の候補だけが出る表
 const NO_CAPTION_SIMPLE_TABLE = `<table border="1"><tbody><tr><td>電話</td><td>0198-62-2111</td></tr></tbody></table>`;
+
+// 指摘1: h3が4つ並ぶページと、h3→h4→h3 の並び
+const HEADINGS_H3_X4 = `<h3>第1章</h3><p>本文1</p><h3>第2章</h3><p>本文2</p><h3>第3章</h3><p>本文3</p><h3>第4章</h3><p>本文4</p>`;
+const HEADINGS_H3_H4_H3 = `<h3>章1</h3><p>本文a</p><h4>節1</h4><p>本文b</p><h3>章2</h3><p>本文c</p>`;
 
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
@@ -736,6 +741,70 @@ async function main() {
         );
       }
     }
+
+    // 16. 遠野市フィードバック 指摘1: 見出し全体をまとめて底上げする
+    const shiftOf = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        const c = res.candidates.find((x) => x.proposal.patch?.type === "shift-headings");
+        return c
+          ? { delta: c.proposal.patch.delta, nodeIds: c.proposal.patch.node_ids.length, after: c.proposal.after_html,
+              humanReview: c.proposal.requires_human_review }
+          : null;
+      }, html);
+
+    const shift4 = await shiftOf(HEADINGS_H3_X4);
+    check(
+      "h3が4つ並ぶページで底上げの候補が1件出る",
+      Boolean(shift4) && shift4.delta === -1 && shift4.nodeIds === 4,
+      JSON.stringify(shift4)
+    );
+
+    const shiftedFinal = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        const c = res.candidates.find((x) => x.proposal.patch?.type === "shift-headings");
+        if (c) c.decision = { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null };
+        return window.goal2Engine.buildFinalHtml(h, res.candidates);
+      }, html);
+
+    const final4 = await shiftedFinal(HEADINGS_H3_X4);
+    check(
+      "底上げを採用すると4件ともh2になる",
+      (final4.match(/<h2>/g) || []).length === 4 && !/<h3>/.test(final4),
+      final4.replace(/\s+/g, " ").slice(0, 240)
+    );
+
+    const finalMixed = await shiftedFinal(HEADINGS_H3_H4_H3);
+    check(
+      "h3,h4,h3 の並びは h2,h3,h2 になる",
+      /<h2>章1<\/h2>[\s\S]*<h3>節1<\/h3>[\s\S]*<h2>章2<\/h2>/.test(finalMixed) && !/<h4>/.test(finalMixed),
+      finalMixed.replace(/\s+/g, " ").slice(0, 240)
+    );
+
+    const skipsAlongsideShift = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates
+        .filter((c) => c.rule_id === "html-structure.heading-order")
+        .map((c) => c.proposal.patch?.type);
+    }, HEADINGS_H3_H4_H3);
+    check(
+      "底上げがあるとき飛びの候補を重ねて出さない",
+      skipsAlongsideShift.length === 1 && skipsAlongsideShift[0] === "shift-headings",
+      JSON.stringify(skipsAlongsideShift)
+    );
+
+    const shiftAutoAccepted = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      const c = res.candidates.find((x) => x.proposal.patch?.type === "shift-headings");
+      return c ? c.decision.status : "(候補なし)";
+    }, HEADINGS_H3_X4);
+    check(
+      "GOAL1の一括採用で底上げを自動採用しない",
+      !shiftAutoAccepted,
+      `status=${JSON.stringify(shiftAutoAccepted)}`
+    );
 
   } finally {
     if (browser) await browser.close();

@@ -544,8 +544,16 @@ AI側の補完は先頭80ブロックまでしか渡していない（`app.js:19
 
 1. コンテンツ内の見出し（h1を除く。h1はh2への既存候補に任せる）の最小レベル `min` を求める。
 2. `min > 2` なら、`delta = 2 - min` として、次の1件を出す。対象は先頭の見出し。`message` は「見出しが h{min} から始まっています。全体を h2 起点に揃えます（対象 N件）」。`patch` は `{ type: "shift-headings", delta, node_ids: [...] }`。`requiresHumanReview: true`、`confidence: "medium"`。
-3. `applyCandidatePatch()` に `shift-headings` を足す。`node_ids` の各要素を `renameElement()` で `delta` 分ずらす。IDは保たれるので要素を残すパッチとして扱う。
+3. `applyCandidatePatch()` に `shift-headings` を足す。`node_ids` の各要素を `renameElement()` で `delta` 分ずらす。IDは保たれるので要素を残すパッチとして扱う（`ELEMENT_REPLACING_PATCH_TYPES` には入れない）。
 4. 飛びの検出は、補正候補がある場合は補正後のレベルに対して行う。補正候補が無い場合は現状どおり。
+5. GOAL1の一括採用から、この候補を明示的に外す。
+
+`requiresHumanReview: true` にすれば一括採用から外れる、という想定は成り立たない。
+`canBulkAcceptCandidate()` は `requires_human_review` を見ておらず、決定済みかどうかと `acceptDisabledReason()`（AI画像名の投入待ちと、文言調整が要る候補）だけで判断する。
+`autoAcceptSafe()` のコメントは「not flagged for human review」と書いているが、実際にはそうなっていない。
+この食い違いは本書の変更以前からあり、範囲が広いのでここでは直さない。
+代わりに `isBulkExcludedCandidate()` を足し、`shift-headings` のパッチを持つ候補を一括採用の対象から外す。
+ページ内の見出しをすべて動かす変更なので、元の階層の意図を人が見てから決める。個別の採用は従来どおりできる。
 
 `proposal.after_html` は、補正後の見出し一覧を `<ul>` で示す表示用HTMLにし、`patch_mode` は `"patch"` とする。
 `before_html` は先頭の見出しにする。
@@ -560,9 +568,15 @@ AIの `heading_level_fixes` は現状どおり個別候補にする。
 
 **検証**。
 `test/goal2-output` に次を足す。
-h3×4で `shift-headings` の候補が1件出て、`node_ids` が4件であること。
-採用後の最終HTMLで4件がh2であること。
-h3, h4, h3 の並びで、採用後が h2, h3, h2 であること。
+
+- h3×4で `shift-headings` の候補が1件出て、`node_ids` が4件であること
+- 採用後の最終HTMLで4件がh2であること
+- h3, h4, h3 の並びで、採用後が h2, h3, h2 であること
+- 補正候補があるとき、同じ並びに飛びの候補を重ねて出さないこと
+- `autoAcceptSafe()` が補正候補を自動採用しないこと
+
+`npm run test:saga-gold` は動かない。
+この変更は `public/app.js` の候補生成だけで、saga-goldが使う `lib/sagaAutoFix.js` は別実装であり、そちらは `promoteHeadingsBeforeFirstH2()` で独自に見出しを引き上げているため。
 
 ### 4.6 指摘13 操作パネルの大きさを変えられない
 

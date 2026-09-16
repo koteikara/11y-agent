@@ -1949,8 +1949,17 @@
     return normalizeText(match[1] || match[2] || match[3] || match[4] || match[5] || "") || null;
   }
 
+  // 見出しは全件、段落は先頭120件までを渡す。以前は見出しと段落を混ぜて先頭80ブロックで
+  // 切っていたため、長いページでは後半の見出しがAIに渡らず、見出しの補正が先頭付近しか
+  // 効かなかった(遠野市フィードバック 指摘1)。見出しは件数が少なく全件渡しても大きくない
+  // ので上限を外し、代わりに段落を60文字で切って全体の量を抑える。
+  const HEADING_OUTLINE_PARAGRAPH_LIMIT = 120;
+
   function buildHeadingReviewOutline(fragment) {
     const blocks = [];
+    let paragraphCount = 0;
+    // querySelectorAll は文書順に返す。AIは前後関係から見出しの妥当性を判断するため、
+    // 見出しと段落の並びはそのまま保つ。
     fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach((element) => {
       // 表のセル(th/td)内の段落・見出しは文書の見出し階層(アウトライン)の一部ではなく、
       // AIに渡すとth要素の中に新しい見出し要素を挿入する提案を生成してしまう(表構造が壊れる)。
@@ -1962,13 +1971,21 @@
       if (!text) {
         return;
       }
+      const isHeading = /^H[1-6]$/.test(element.tagName);
+      if (!isHeading) {
+        paragraphCount += 1;
+        if (paragraphCount > HEADING_OUTLINE_PARAGRAPH_LIMIT) {
+          return;
+        }
+      }
+      const limit = isHeading ? 100 : 60;
       blocks.push({
         id: element.getAttribute("data-goal2-node-id"),
         tag: element.tagName.toLowerCase(),
-        text: text.length > 100 ? `${text.slice(0, 100)}…` : text,
+        text: text.length > limit ? `${text.slice(0, limit)}…` : text,
       });
     });
-    return blocks.slice(0, 80);
+    return blocks;
   }
 
   function applyHeadingReviewResult(fragment, items, result, validIds) {
@@ -2714,6 +2731,39 @@
 
   function collectHeadingCandidates(fragment, candidates) {
     const headings = [...fragment.content.querySelectorAll("h1,h2,h3,h4,h5,h6")];
+
+    // 見出し全体の底上げを、飛びの検出より先に出す。飛びの検出は直前の見出しとの差だけを
+    // 見るため、先頭のh3をh2に直した時点でpreviousLevelが2に進み、続くh3が飛びに見えなく
+    // なっていた。その結果、h3が4つ並ぶページで先頭しか直らなかった(遠野市フィードバック
+    // 指摘1)。h1はページタイトル用でCMS側が持つ前提なので、底上げの対象から外し、
+    // 既存のh1→h2候補に任せる。
+    const shiftTargets = headings.filter((heading) => headingLevel(heading) > 1);
+    const minLevel = shiftTargets.length ? Math.min(...shiftTargets.map(headingLevel)) : 0;
+    const shiftDelta = minLevel > 2 ? 2 - minLevel : 0;
+
+    if (shiftDelta !== 0) {
+      const nodeIds = shiftTargets.map((heading) => heading.getAttribute("data-goal2-node-id")).filter(Boolean);
+      const outline = document.createElement("ul");
+      shiftTargets.forEach((heading) => {
+        const item = document.createElement("li");
+        item.textContent = `h${headingLevel(heading) + shiftDelta}: ${normalizeText(heading.textContent || "")}`;
+        outline.appendChild(item);
+      });
+      candidates.push(
+        makeCandidate({
+          ruleId: "html-structure.heading-order",
+          element: shiftTargets[0],
+          message: `見出しが h${minLevel} から始まっています。全体を h2 起点に揃えます（対象 ${shiftTargets.length}件）`,
+          reason: "本文の見出しはh2から始めます。先頭だけを直すと以降の見出しとの関係が崩れるため、ページ内の見出しをまとめて同じ数だけ上げます。",
+          afterHtml: outline.outerHTML,
+          patch: { type: "shift-headings", delta: shiftDelta, node_ids: nodeIds },
+          patchMode: "patch",
+          confidence: "medium",
+          requiresHumanReview: true,
+        })
+      );
+    }
+
     let previousLevel = 1;
 
     headings.forEach((heading) => {
@@ -2737,15 +2787,18 @@
         return;
       }
 
-      let effectiveLevel = level;
-      if (level > previousLevel + 1) {
+      // 底上げの候補があるときは、補正後のレベルで飛びを判定する。補正前のレベルで
+      // 判定すると、底上げを採用すれば消える飛びに対しても候補が出てしまう。
+      const shiftedLevel = Math.min(6, Math.max(2, level + shiftDelta));
+      let effectiveLevel = shiftedLevel;
+      if (shiftedLevel > previousLevel + 1) {
         const expected = Math.min(previousLevel + 1, 6);
         const clone = renameElement(heading, `h${expected}`);
         candidates.push(
           makeCandidate({
             ruleId: "html-structure.heading-order",
             element: heading,
-            message: `見出しレベルがh${previousLevel}相当からh${level}へスキップしています。`,
+            message: `見出しレベルがh${previousLevel}相当からh${shiftedLevel}へスキップしています。`,
             reason: "見出しは階層を飛ばさず、ページ構造に沿って設定します。",
             afterHtml: clone.outerHTML,
             patch: { type: "rename-element", tag_name: `h${expected}` },
@@ -6740,6 +6793,23 @@
       return;
     }
 
+    // 見出し全体の底上げ。node_idsの各見出しをdelta分ずらす。renameElement()が
+    // data-goal2-node-idを引き継ぐので、要素を残すパッチとして扱える
+    // (ELEMENT_REPLACING_PATCH_TYPESには入れない)。
+    if (patch.type === "shift-headings") {
+      (patch.node_ids || []).forEach((nodeId) => {
+        const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+        if (!heading || !/^H[1-6]$/.test(heading.tagName)) {
+          return;
+        }
+        const next = Math.min(6, Math.max(2, headingLevel(heading) + (patch.delta || 0)));
+        if (next !== headingLevel(heading)) {
+          heading.replaceWith(renameElement(heading, `h${next}`));
+        }
+      });
+      return;
+    }
+
     if (patch.type === "remove-style-properties") {
       removeStyleProperties(target, patch.names || []);
       (patch.attributes || []).forEach((name) => target.removeAttribute(name));
@@ -7121,7 +7191,20 @@
   }
 
   function canBulkAcceptCandidate(candidate) {
-    return Boolean(candidate && !candidate.decision.status && !acceptDisabledReason(candidate));
+    return Boolean(
+      candidate && !candidate.decision.status && !acceptDisabledReason(candidate) && !isBulkExcludedCandidate(candidate)
+    );
+  }
+
+  // まとめて採用の対象から外す候補。見出し全体の底上げはページ内の見出しをすべて動かすため、
+  // 元の階層の意図を人が見てから決める(遠野市フィードバック 指摘1)。個別の採用は従来どおりできる。
+  //
+  // 注意: canBulkAcceptCandidate()は requires_human_review を見ていない。autoAcceptSafe()の
+  // コメントは「not flagged for human review」と書いているが、実際に採用を止めるのは
+  // acceptDisabledReason()(AI画像名の投入待ちと、文言調整が要る候補)だけである。この食い違いは
+  // このPRの前からあり、範囲が広いのでここでは直さない。
+  function isBulkExcludedCandidate(candidate) {
+    return candidate?.proposal?.patch?.type === "shift-headings";
   }
 
   // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
