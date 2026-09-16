@@ -837,7 +837,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 関連ファイル: `goal2-app/public/app.js`
 - 遠野市のAI移行で上がった指摘のうち、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の4.1〜4.3（背景色の候補にパッチが無く表の構造候補が選べない、表に「項目／内容1」の見出し行を捏造する、`alt=""` の装飾アイコンに画像名の候補を出す）を直した。設計書の4.4以降と構造変更1は未着手。捏造した見出し行は佐賀市の正解データ側にも含まれていたため、`npm run test:saga-gold` の指標一致は652→648へ下がるが、正解データに合わせて捏造を戻すことはしない判断とした。
 - 設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の4.4（表のキャプションを1行目のセルから作るのをやめる）と4.5（見出し全体をh2起点へ揃える候補を出す）を直した。4.4では、確信度を下げるとGOAL1の一括採用で表が解体されるため、「文言を調整でしか採用できない」扱いをキャプション専用の候補に限った。4.5では、`canBulkAcceptCandidate()` が `requires_human_review` を見ていないことが分かり、`shift-headings` だけを一括採用から外した。この食い違い自体は範囲が広いため未着手。設計書4.6以降と構造変更1も未着手。
-- 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S1「決定ログの導入」を実装した（PR #131）。`state.decisions` に決定を順序付きで積み、作業中HTMLと最終HTMLを `replay()` で作るようにした。挙動は変えておらず、6章の5コマンドの結果はS1前と同じ（同値テスト15件を新設）。S1で決めた段階差は、`op` の写しをS2へ回すこと、当て順を決定順ではなく「同じ `node_id` は要素を残すパッチを先」「組は文書順で外側を先」の2規則にすること、旧実装 `rebuildWorkingHtmlFor()` をS2で削除することの3つ。S2（派生IDと `rebuild` 操作）以降は未着手。
+- 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S1「決定ログの導入」を実装した（PR #131）。`state.decisions` に決定を順序付きで積み、作業中HTMLと最終HTMLを `replay()` で作るようにした。挙動は変えておらず、6章の5コマンドの結果はS1前と同じ（同値テスト17件を新設）。S1で決めた段階差は、`op` の写しをS2へ回すこと、当て順を `seq` ではなく候補配列の添字が決める（ログが決めるのは「どの決定を当てるか」だけ）こと、旧実装 `rebuildWorkingHtmlFor()` をS2で削除すること、`orphaned` がS1では畳み込み済みの決定にも立つことの4つ。当て順は当初 `seq` 順にしていたが、レビューで「画面では作業者の採用順で出力が変わる（S1前は変わらなかった）」ことが佐賀市の実ページで示されたため直した。S2（派生IDと `rebuild` 操作）以降は未着手。
 - 表の構造変換の手段を一括採用とGOAL1の `autoAcceptSafe` の対象から外した（PR-2.5）。`TABLE_FIX_METHODS_INSTRUCTIONS.md` 2章の確定済み判断がコード側で満たされていなかったのを、`isBulkExcludedCandidate()` を広げる形で直した。`requires_human_review` を一般の条件にするB案は見送り。構造の手段でもキャプション必須にする揃え方は PR-2.6 の候補として残している。
 
 ## Decisions

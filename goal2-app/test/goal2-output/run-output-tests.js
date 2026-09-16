@@ -169,6 +169,12 @@ const MERGED_CELL_TABLE = `<h2>対象者</h2><table border="1"><tbody>
 // 指摘1: h3が4つ並ぶページと、h3→h4→h3 の並び
 const HEADINGS_H3_X4 = `<h3>第1章</h3><p>本文1</p><h3>第2章</h3><p>本文2</p><h3>第3章</h3><p>本文3</p><h3>第4章</h3><p>本文4</p>`;
 
+// 同じ要素に「要素を残すパッチ」が2件出る例。リンク文言を書き戻す file.file-display-text の
+// set-text と、「１」→「1」の text.alphanumeric の replace-text が同じ <a> を指す。
+// 採用順で当てると、半角化を先に当てたときに set-text が元の文言で上書きする
+// (実ページ: 佐賀市 sg03996 の n0015)。当て順が候補配列の順であることの検査に使う。
+const FILE_LINK_FULLWIDTH_DIGIT = `<p><a href="https://example.lg.jp/site_files/file/2025/a.pdf" title="">第１章　総括【 PDFファイル】</a></p>`;
+
 // 表の中に表がある例。同値テスト(S1)と「解体しても入れ子の表が表として残る」で共有する。
 const NESTED_IN_LAYOUT = `<table border="0"><tbody><tr>
       <td><table border="1"><tbody>
@@ -1016,6 +1022,7 @@ async function main() {
       ["複数修正を含む表", MULTI_FIX_IN_TABLE],
       ["廃止属性とCMS独自タグの混ざった本文", DIRTY_MARKUP],
       ["1列目がthの表", ROW_HEADER_TABLE],
+      ["同じリンクへの文言の書き戻しと半角化", FILE_LINK_FULLWIDTH_DIGIT],
     ];
     const engineEquivalence = await page.evaluate(async (cases) => {
       const out = [];
@@ -1065,6 +1072,33 @@ async function main() {
       }
     }
 
+
+    // 18-d. 要素が9999個を超えても当て順が変わらない。assignNodeIds() は4桁ゼロ埋めなので
+    //     10000個目からは n10000 になり、node_id の文字列比較では n10003 が n9999 より前に来る。
+    //     当て順を node_id 順で決めていると、入れ子の表の内側が外側より先に当たり、外側の
+    //     差し替えで内側の解体が消える。当て順は候補配列の添字で決めるので、ここは一致する。
+    const hugeEquivalence = await page.evaluate(async ({ pad, nested }) => {
+      const html = pad + nested;
+      const res = await window.goal2Engine.analyze({ html });
+      res.candidates.forEach((c) => {
+        if (!c.decision.status) {
+          c.decision = { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null };
+        }
+      });
+      const api = window.goal2Engine.decisionLog;
+      const decisions = api.fromCandidates(res.candidates);
+      return {
+        applied: decisions.filter((d) => ["accepted", "edited"].includes(d.status)).length,
+        // 入れ子の表が n9999 より後ろの4桁超の node_id を持っていることの確認
+        overflowNodeIds: res.candidates.filter((c) => /^n\d{5,}$/.test(c.target.node_id)).length,
+        matches: api.replay(html, decisions, res.candidates) === api.legacyRebuild(html, res.candidates),
+      };
+    }, { pad: "<p>x</p>".repeat(9998), nested: NESTED_IN_LAYOUT });
+    check(
+      "要素が9999個を超えても当て順が変わらない",
+      hugeEquivalence.matches && hugeEquivalence.applied > 0 && hugeEquivalence.overflowNodeIds > 0,
+      `一致=${hugeEquivalence.matches} 当てた決定=${hugeEquivalence.applied}件 5桁のnode_idを持つ候補=${hugeEquivalence.overflowNodeIds}件`
+    );
 
     // 18-c. 決め直した候補は、後の決定だけが当たる。決定済みの候補を選び直して採用や却下を
     //     押し直すと、ログには2件以上の決定が並ぶ。採用→却下と決め直した採用が当たると、

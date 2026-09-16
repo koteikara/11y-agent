@@ -6732,9 +6732,10 @@
     return fragment.innerHTML;
   }
 
-  // 元のHTMLに決定ログを順に当て直して作業中HTMLを作る(設計書 3.7)。
-  // rebuildWorkingHtmlFor() との違いは「当てる順序を候補配列ではなく決定ログが決める」ことだけで、
-  // 1件を当てる処理は同じ applyCandidatePatch()・replaceTarget() を通す。
+  // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
+  // rebuildWorkingHtmlFor() との違いは「当てる決定を候補配列の decision ではなく決定ログが
+  // 決める」ことだけで、当て順も、1件を当てる処理(applyCandidatePatch()・replaceTarget())も
+  // 同じである。S1で挙動を変えないための線で、当て順がログの順になるのはS2以降。
   //
   // S1では決定ログに op(3.3)を持たせないため、当てる内容は candidate_id で候補配列から引く。
   // 第3引数の candidates が要るのはこのためで、S2で rebuild 操作をログへ写したときに落とす。
@@ -6754,42 +6755,46 @@
     });
 
     // conflicted・rejected・pending・withdrawn は記録だけで、HTMLには当てない。
-    const applicable = [...latestByCandidate.values()]
-      .filter((decision) => ["accepted", "edited"].includes(decision.status))
-      .sort((a, b) => a.seq - b.seq);
+    const applicable = [...latestByCandidate.values()].filter((decision) =>
+      ["accepted", "edited"].includes(decision.status)
+    );
 
-    // 当てる順序は2つの規則で決める。どちらも現行の rebuildWorkingHtmlFor() が満たしている
-    // 順序で、S1はこれを崩さない(満たさないと修正が黙って捨てられる)。
+    // 当て順は候補配列の添字が決める。ログが決めるのは「どの決定を当てるか」だけである。
+    // これで旧実装の rebuildWorkingHtmlFor() と構成上同じ順序になる。候補配列の順に並べ、
+    // 同じ node_id の決定を1組にまとめ、組の中では要素を残すパッチを先、要素ごと差し替えを
+    // 後に当てる。組の順序は、その node_id への最初の決定の添字順になる。
     //
-    // 規則1: 同じ node_id への決定は1組にまとめ、組の中では要素を残すパッチを先、要素ごと
-    //   差し替えを後に当てる。逆だと先に要素が消えて data-goal2-node-id が失われ、後続の
-    //   パッチが対象を見つけられない(実データ: <p><tt>…</tt></p> で、<tt>の解除を先に当てた
-    //   ために同じ<tt>への「22m→22メートル」「全　長→全長」の5件がすべて落ちた)。
-    // 規則2: 組の順序は node_id の昇順、つまり元のHTMLの文書順にする。assignNodeIds() は
-    //   文書順に番号を振るので、これは「外側の要素を内側より先に当てる」ことと同じである。
-    //   逆だと、内側を直したあとに外側を差し替えた時点で内側の修正が消える。候補の after_html
-    //   は元のHTMLから固定で作られており、差し替え先のHTMLには内側の修正が入っていないため
-    //   (実データ: 入れ子の表で、中の表を先に解体してから外の表を解体すると
-    //   「<p>市指定史跡</p>」が失われる)。現行は候補を文書順に集めた配列の順で当てるため、
-    //   この順序を意図せず満たしていた。
+    // 組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて data-goal2-node-id が
+    // 失われ、後続のパッチが対象を見つけられないためである(実データ: <p><tt>…</tt></p> で、
+    // <tt>の解除を先に当てたために同じ<tt>への「22m→22メートル」「全　長→全長」の5件が
+    // すべて落ちた)。
     //
-    // つまりS1では、決定順(seq)は当て順そのものにはならない。決定順が当て順になるのは、
-    // 候補が「そのときの作業中HTML」から after_html を作り直すようになるS2以降である。
-    // ログの seq は、同じ組・同じ位相の中の順序(下の sort)としてだけ効く。
+    // seq を当て順に使わない理由。S1の候補の after_html は元のHTMLから固定で作られているため、
+    // 作業者が採用した順で当てると出力が採用順で変わる。旧実装は候補配列の順で当てるので
+    // 採用順に依存しなかった(実ページ: 佐賀市 sg03996 の n0015 で、リンク文言を書き戻す
+    // file.file-display-text の set-text と、「１」→「1」の text.alphanumeric の replace-text が
+    // 同じ要素に出る。半角化を先に当てると set-text が元の文言で上書きする)。
+    // seq が当て順になるのは、候補が作業中HTMLから after_html を作り直すS2以降である。
+    const orderIndex = new Map();
+    (candidates || []).forEach((candidate, index) => orderIndex.set(candidate.candidate_id, index));
+    // 候補配列に無い決定は末尾へ回す。どうせ applyDecision() で orphaned になる。
+    const orderOf = (decision) => {
+      const index = orderIndex.get(decision.candidate_id);
+      return index === undefined ? (candidates?.length || 0) + decision.seq : index;
+    };
+
     const groups = new Map();
-    applicable.forEach((decision) => {
-      if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
-      groups.get(decision.node_id).push(decision);
-    });
-    const ordered = [...groups.keys()]
-      .sort((a, b) => String(a).localeCompare(String(b)))
-      .flatMap((nodeId) => {
-        const group = groups.get(nodeId).slice().sort((a, b) => a.seq - b.seq);
-        return [
-          ...group.filter((decision) => !isElementReplacingDecision(decision, candidateById)),
-          ...group.filter((decision) => isElementReplacingDecision(decision, candidateById)),
-        ];
+    applicable
+      .slice()
+      .sort((a, b) => orderOf(a) - orderOf(b))
+      .forEach((decision) => {
+        if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
+        groups.get(decision.node_id).push(decision);
       });
+    const ordered = [...groups.values()].flatMap((group) => [
+      ...group.filter((decision) => !isElementReplacingDecision(decision, candidateById)),
+      ...group.filter((decision) => isElementReplacingDecision(decision, candidateById)),
+    ]);
     ordered.forEach((decision) => applyDecision(fragment.content, decision, candidateById));
 
     normalizeHeadingEmphasis(fragment.content);
@@ -6809,6 +6814,13 @@
       : null;
     // 対象が見つからない決定・候補を引けない決定は、黙って捨てずに印を付ける(3.7の3)。
     // 現行も対象が無い候補は当たらないため、出力は変わらない。
+    //
+    // S1の orphaned は「修正が失われた」ではなく「リプレイで対象が見つからなかった」である。
+    // 畳み込み(foldDescendantFixIntoAncestor)で祖先の after_html に入った修正も、対象の要素は
+    // 祖先ごと差し替えられて消えるため orphaned が立つ。出力にはその修正が残っている
+    // (MULTI_FIX_IN_TABLE を表の解体まで進めると、表の中の内容修正4件に立つが「22メートル」は
+    // 出力に残る)。S3で画面に出すときに「失われた」と表示すると誤りになる。
+    // 畳み込みが無くなるS2で本来の意味になる。
     if (!target || !candidate) {
       decision.orphaned = true;
       return;
