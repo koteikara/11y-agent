@@ -6688,9 +6688,11 @@
   }
 
   function rebuildWorkingHtml() {
-    return rebuildWorkingHtmlFor(state.sourceHtml, state.candidates);
+    return replay(state.sourceHtml, state.decisions, state.candidates);
   }
 
+  // replay()に置き換え済み。S2で削除する。いまは同値テスト(test/goal2-output)が
+  // 「リプレイが現行の再構築と一致する」ことを確かめるためだけに呼んでいる。
   function rebuildWorkingHtmlFor(sourceHtml, candidates) {
     const fragment = parseFragment(sourceHtml);
     const decided = candidates.filter((candidate) =>
@@ -7311,8 +7313,8 @@
   // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
   //
   // 一方、同じ要素に対する「単位の言い換え」「単語内空白の除去」のように要素を残すパッチは、
-  // 1つの段落に何件あっても互いに独立して当たる(rebuildWorkingHtmlForが要素を残すパッチを
-  // 先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
+  // 1つの段落に何件あっても互いに独立して当たる(replay()が同じnode_idの中で要素を残す
+  // パッチを先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
   function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
       return;
@@ -10887,9 +10889,12 @@
       return accepted;
     },
 
+    // 引数は変えない(goal1.jsの呼び出しをそのままにする)。候補配列から決定ログを
+    // 組み立ててリプレイする(設計書 3.12)。GOAL1バッチは画面のstateを使わないため、
+    // state.decisionsではなく候補が持つdecisionからログを作る。
     buildFinalHtml(sourceHtml, candidates) {
       return stripMigrationUnneededAttributesFromHtml(
-        stripInternalFromHtml(rebuildWorkingHtmlFor(sourceHtml, candidates))
+        stripInternalFromHtml(replay(sourceHtml, decisionsFromCandidates(candidates), candidates))
       );
     },
 
