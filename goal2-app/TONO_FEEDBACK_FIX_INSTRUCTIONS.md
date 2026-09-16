@@ -342,6 +342,19 @@ S1で決めた段階差は次のとおりで、3.3 と 3.7 に書いた。
 `currentCandidateAfterHtml()` を現在の要素からの計算に変える。
 検証: `test:table-nesting` と `test:goal2-output` が緑。表の中の内容修正を先に採用してから構造候補を採用したとき、内容修正が最終HTMLに残ることを新規テストで確認。
 
+S2で確かめる項目（S1のレビューで見つかった申し送り）。
+GOAL1と同じ決定の集合（`autoAcceptSafe()`）でも、佐賀市の実ページ51件のうち5件で、採用済みの決定に `orphaned` が立つ。畳み込みの対象になる表の候補ではないため、修正が実際に最終HTMLから落ちている可能性がある。S2で `rebuild` 操作と派生IDを入れたあと、これらが拾えるようになるかを確かめる。
+
+| ページ | 対象を失った決定 | 同じ箇所を消した採用済みの決定 |
+| --- | --- | --- |
+| sg02535 | `text.note-symbol`（n0030） | 先祖の `text.note-symbol`（n0027） |
+| sg02538 | `text.note-symbol`（n0031、n0032） | 先祖の `text.note-symbol`（n0029） |
+| sg04015 | `text.note-symbol`（n0008）、`text.alphanumeric`（n0015） | n0015 は先祖の `text.decoration-lines`（n0014） |
+| sg02544 | `text.note-symbol`（n0044） | 先祖にも同じ要素にも採用済みの候補が無い。原因を要調査 |
+| sg02554 | `text.alphanumeric`（n0051、n0055、n0059） | 同上 |
+
+原因は一通りではない。上3件は「先祖の要素ごと差し替え」で説明できるが、下2件は先祖にも同じ `node_id` にも採用済みの候補が無く、`replace-paragraph-sequence` や `merge-following-note` のように他の `node_id` を消すパッチが関わっている疑いがある。S2の検証では、5件それぞれについて修正が最終HTMLに残っているかを先に確かめる。
+
 **S3 再導出と照合**。
 `reconcile()` を実装し、決定の後に3.5の流れを入れる。
 `EXCLUSIVE_GROUPS` を導入し、調停ロジック3関数を削除する。
