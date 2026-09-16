@@ -11,6 +11,11 @@
 //  5. CMS独自タグ(<ikkr_textcenter>)・align等の廃止属性・レイアウト目的の空段落・先頭の全角空白が
 //     最終HTMLに残っていた。
 //  6. 連番だけの代替テキスト(alt="碧海山古墳002")を検出していなかった。
+//
+// 遠野市のフィードバック(TONO_FEEDBACK_FIX_INSTRUCTIONS.md):
+//  12. 背景色を採用すると、同じ表の構造候補が選べなくなっていた(指摘3)。
+//  13. 1列目がthの表に「項目／内容1」という元の文書に無い見出し行を足していた(指摘7)。
+//  14. alt=""の装飾アイコンに「画像内容を具体的に入力」の候補を出していた(指摘12)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -84,6 +89,59 @@ const DIRTY_MARKUP = `
 </div>
 `;
 
+// 遠野市フィードバックの再現入力(設計書 TONO_FEEDBACK_FIX_INSTRUCTIONS.md の6章)
+
+// 指摘3: bgcolor属性を持つ3行2列の表
+const BGCOLOR_TABLE = `<table bgcolor="#eeeeee" border="1"><tbody>
+  <tr><td>区分</td><td>金額</td></tr>
+  <tr><td>一般</td><td>500円</td></tr>
+  <tr><td>学生</td><td>300円</td></tr>
+</tbody></table>`;
+
+// 指摘7: 1列目がthで、theadの無い3行4列の表
+const ROW_HEADER_TABLE = `<table border="1"><tbody>
+  <tr><th>総務課</th><td>0198-62-2111</td><td>本庁1階</td><td>午前8時30分から</td></tr>
+  <tr><th>市民課</th><td>0198-62-2112</td><td>本庁1階</td><td>午前8時30分から</td></tr>
+  <tr><th>税務課</th><td>0198-62-2113</td><td>本庁2階</td><td>午前8時30分から</td></tr>
+</tbody></table>`;
+
+// 指摘12: テキスト付きリンクの中に置かれたファイル種別アイコン
+const DECORATIVE_ICON_EMPTY_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" alt="" width="16" height="16">様式集</a></p>`;
+const DECORATIVE_ICON_NO_ALT = `<p><a href="/docs/b.xlsx"><img src="/images/icon_excel.gif" width="16" height="16">様式集</a></p>`;
+
+// 画像だけのリンク。装飾扱いにして alt="" にすると、名前の無いリンクになる。
+const ICON_ONLY_LINK = `<p><a href="/next"><img src="/images/icon_arrow.gif" width="16" height="16"></a></p>`;
+
+// テキスト付きリンクの中の写真。リンク文言があっても、内容のある画像は装飾にしない。
+const PHOTO_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a></p>`;
+
+// 寸法を持たない写真。CMSが出すHTMLでは width/height の無い画像が普通にある。
+// リンクの中にあること以外に装飾の根拠が無いので、空にしてよいかは人が確かめる。
+const PHOTO_NO_SIZE_IN_TEXT_LINK = `<p><a href="/event"><img src="/photos/matsuri.jpg">秋祭りの案内</a></p>`;
+
+// 寸法を持たないファイル種別アイコン。ファイル名が根拠になるので確認不要のまま。
+const FILE_ICON_NO_SIZE = `<p><a href="/a.pdf"><img src="/images/pdf.gif">申請書</a></p>`;
+
+// ファイル名にアイコンらしい語を含むが、装飾とは言えない内容のある写真。
+// 語の途中で切れている例(document_scan・markets)と、区切りを挟んで続く例
+// (pdf_thumbnail はチラシPDFのサムネイル、new_building は新庁舎の写真)。
+// どちらもファイル名だけを根拠に確認不要の alt="" にしてはいけない。
+const CONTENT_PHOTO_FILENAMES = [
+  "document_scan.jpg",
+  "markets.jpg",
+  "pdf_thumbnail.jpg",
+  "new_building.jpg",
+  "mail_center.png",
+  "doc_scan.jpg",
+  "photo_new.jpg",
+  "word_cloud.png",
+  "file_photo.jpg",
+  "link-banner.jpg",
+];
+
+// ファイル名だけで装飾と判断してよいアイコン。寸法が無くても確認不要のまま。
+const ICON_FILENAMES = ["pdf.gif", "pdf16.gif", "mail_icon.png", "img_pdf.gif", "icon_excel.gif"];
+
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
@@ -94,7 +152,9 @@ async function main() {
   let browser;
   try {
     await waitForHealth();
-    browser = await chromium.launch();
+    browser = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium",
+    });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
     await page.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });
@@ -408,6 +468,178 @@ async function main() {
         );
       }, html);
       check(`連番alt検出: ${label}`, hit === expected, `検出=${hit} 期待=${expected}`);
+    }
+    // 12. 遠野市フィードバック 指摘3: 背景色を採用しても表の構造候補を選べる
+    // 背景色の候補にpatchが無いと、要素ごと差し替える候補とみなされ、同じ表の構造候補が
+    // まとめて「自動解決」になって選べなくなっていた。
+    const bgPatch = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      const c = res.candidates.find((x) => x.rule_id === "text.background-color");
+      return c ? c.proposal.patch : null;
+    }, BGCOLOR_TABLE);
+    check(
+      "bgcolor属性の表でも背景色の候補がpatchを持つ",
+      Boolean(bgPatch) && bgPatch.type === "remove-style-properties" && (bgPatch.attributes || []).includes("bgcolor"),
+      JSON.stringify(bgPatch)
+    );
+
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
+    await page.fill("#htmlInput", BGCOLOR_TABLE);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4500);
+
+    const pickedBg = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) => /背景色/.test(b.textContent));
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("背景色の候補を選択できる", pickedBg, "候補が見つからない");
+    if (pickedBg) {
+      await page.waitForTimeout(1000);
+      await page.click("#acceptButton");
+      await page.waitForTimeout(1500);
+      const remaining = await page.evaluate(() =>
+        [...document.querySelectorAll(".candidate-item")].map((node) => ({
+          text: node.textContent.replace(/\s+/g, " ").trim(),
+          unresolved: node.classList.contains("unresolved"),
+        }))
+      );
+      const tableItems = remaining.filter((item) => !/背景色/.test(item.text));
+      check(
+        "背景色だけを採用しても表の構造候補が未処理のまま残る",
+        tableItems.length === 3 && tableItems.every((item) => item.unresolved),
+        JSON.stringify(remaining)
+      );
+
+      await page.evaluate(() => {
+        document.querySelector(".output-drawer").open = true;
+      });
+      await page.waitForTimeout(400);
+      const bgFinal = await page.inputValue("#finalHtml");
+      check("背景色を採用した最終HTMLからbgcolorが消える", !/bgcolor/i.test(bgFinal), bgFinal.slice(0, 300));
+    }
+
+    // 13. 遠野市フィードバック 指摘7: 表に「項目／内容1」の見出し行を足さない
+    const rowHeaderSemantics = await semanticsHtml(ROW_HEADER_TABLE);
+    check(
+      "1列目がthの表に見出し行を作らない",
+      !/<thead/i.test(rowHeaderSemantics),
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "元の表にある3行をそのまま残す",
+      (rowHeaderSemantics.match(/<tr[\s>]/gi) || []).length === 3,
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "元の文書に無い見出し語を作らない",
+      !/項目|内容1|電話番号<\/th>|メール<\/th>/.test(rowHeaderSemantics),
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+    check(
+      "各行の1列目を行見出しにする",
+      (rowHeaderSemantics.match(/scope="row"/g) || []).length === 3,
+      rowHeaderSemantics.replace(/\s+/g, " ").slice(0, 300)
+    );
+
+    // 14. 遠野市フィードバック 指摘12: 装飾アイコンに画像名の候補を出さない
+    const iconCases = [
+      [DECORATIVE_ICON_EMPTY_ALT, "alt=''のアイコンには候補を出さない", 0],
+      [DECORATIVE_ICON_NO_ALT, "alt属性の無いアイコンにはalt=''を提案する", 1],
+    ];
+    for (const [html, label, expected] of iconCases) {
+      const imageCandidates = await page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        return res.candidates
+          .filter((c) => c.rule_id === "image.alt-text")
+          .map((c) => ({ message: c.message, patch: c.proposal.patch }));
+      }, html);
+      check(
+        `装飾アイコンのalt: ${label}`,
+        imageCandidates.length === expected,
+        JSON.stringify(imageCandidates)
+      );
+      if (expected === 1 && imageCandidates.length === 1) {
+        check(
+          "装飾アイコンへの提案は空の代替テキスト",
+          imageCandidates[0].patch?.name === "alt" && imageCandidates[0].patch?.value === "",
+          JSON.stringify(imageCandidates[0])
+        );
+      }
+    }
+
+    // 画像だけのリンクでは、画像がリンクの名前そのものになる。alt="" を確認不要で
+    // 提案すると、まとめて採用したときに名前の無いリンクができる。
+    const iconOnlyLink = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates
+        .filter((c) => c.rule_id === "image.alt-text")
+        .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
+    }, ICON_ONLY_LINK);
+    check(
+      "画像だけのリンクにはalt=''を提案しない",
+      iconOnlyLink.length === 1 && iconOnlyLink[0].value !== "",
+      JSON.stringify(iconOnlyLink)
+    );
+
+    // リンク文言があっても、寸法の大きい画像は内容のある写真とみなす。
+    const photoInLink = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates
+        .filter((c) => c.rule_id === "image.alt-text")
+        .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
+    }, PHOTO_IN_TEXT_LINK);
+    check(
+      "テキスト付きリンクの中の写真にもalt=''を提案しない",
+      photoInLink.length === 1 && photoInLink[0].value !== "",
+      JSON.stringify(photoInLink)
+    );
+
+    // 寸法が無い画像は、リンクの中にあること以外に装飾の根拠が無い。alt="" を提案しても
+    // よいが、確認不要で入れてはいけない。
+    const altTextCandidates = (html) =>
+      page.evaluate(async (h) => {
+        const res = await window.goal2Engine.analyze({ html: h });
+        return res.candidates
+          .filter((c) => c.rule_id === "image.alt-text")
+          .map((c) => ({ value: c.proposal.patch?.value, humanReview: c.proposal.requires_human_review, confidence: c.proposal.confidence }));
+      }, html);
+
+    const photoNoSize = await altTextCandidates(PHOTO_NO_SIZE_IN_TEXT_LINK);
+    check(
+      "寸法の無い写真へのalt=''の提案は確認必要にする",
+      photoNoSize.length === 1 && photoNoSize[0].value === "" && photoNoSize[0].humanReview === true,
+      JSON.stringify(photoNoSize)
+    );
+
+    const fileIconNoSize = await altTextCandidates(FILE_ICON_NO_SIZE);
+    check(
+      "寸法の無いファイル種別アイコンは確認不要のまま",
+      fileIconNoSize.length === 1 && fileIconNoSize[0].value === "" && fileIconNoSize[0].humanReview === false,
+      JSON.stringify(fileIconNoSize)
+    );
+
+    for (const name of CONTENT_PHOTO_FILENAMES) {
+      const photo = await altTextCandidates(`<p><a href="/x"><img src="/photos/${name}">資料</a></p>`);
+      check(
+        `内容のある写真をファイル名だけで装飾にしない: ${name}`,
+        photo.length === 1 && photo[0].humanReview === true,
+        JSON.stringify(photo)
+      );
+    }
+
+    for (const name of ICON_FILENAMES) {
+      const icon = await altTextCandidates(`<p><a href="/a.pdf"><img src="/images/${name}">申請書</a></p>`);
+      check(
+        `ファイル名で装飾と分かるアイコンは確認不要のまま: ${name}`,
+        icon.length === 1 && icon[0].value === "" && icon[0].humanReview === false,
+        JSON.stringify(icon)
+      );
     }
   } finally {
     if (browser) await browser.close();

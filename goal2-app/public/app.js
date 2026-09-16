@@ -2328,6 +2328,64 @@
     return noticeRuleIds.has(item.rule_id);
   }
 
+  // 装飾アイコンでよく使う語。語の強さで3群に分け、群ごとに許す形を変える。
+  //
+  //   強い語     アイコンにしか使わない語。接頭辞・接尾辞どちらも可(icon_excel.gif、pdf_icon.gif)
+  //   ファイル種別 基底名そのものか、数字だけを伴う形(pdf.gif、pdf16.gif)。.jpg はサムネイルの
+  //              可能性が高いので外す
+  //   一般語     基底名そのものだけ。^ か / の直後に限る(new.gif は可、photo_new.jpg は不可)
+  //
+  // 語のあとの区切りを無条件に許すと、区切り付きの内容画像がファイル名だけで装飾になる。
+  // pdf_thumbnail.jpg(チラシPDFのサムネイル)や new_building.jpg(新庁舎の写真)は自治体
+  // サイトに普通にある名前で、確認不要で alt="" にしてはいけない。
+  const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
+    "(?:(?:^|[\\/_-])(?:icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|btn|button)(?:[_-][\\w-]*)?\\.(?:gif|png|svg|jpg)" +
+      "|(?:^|[\\/_-])(?:pdf|xlsx?|excel|docx?|word|ppt)\\d{0,3}\\.(?:gif|png|svg)" +
+      "|(?:^|\\/)(?:new|mail|tel|link|ext|external|window|file)\\d{0,3}\\.(?:gif|png|svg))$",
+    "i"
+  );
+
+  // 装飾目的のアイコン画像と判断した根拠を返す。判断できないときは null。
+  // alt="" は装飾画像として正しい状態で、miCheckerも指摘しないため、こうした画像には
+  // 「画像内容を具体的に入力」の候補を出さない(遠野市フィードバック 指摘12)。
+  //
+  //   "size"         寸法が小さい
+  //   "filename"     ファイル名がアイコンらしい
+  //   "link-context" テキストを持つリンクの中に1枚だけ置かれている
+  //
+  // 呼び出し側は "link-context" を弱い根拠として扱う。この根拠だけのときは、寸法も
+  // ファイル名も装飾だとは言っておらず、寸法を持たない写真もここに入るため、
+  // alt="" の提案を人の確認に回す。
+  function decorativeIconEvidence(img) {
+    const width = Number.parseInt(img.getAttribute("width") || "", 10);
+    const height = Number.parseInt(img.getAttribute("height") || "", 10);
+    const link = img.closest("a");
+    const linkText = link ? normalizeText(link.textContent || "") : "";
+
+    // 画像だけのリンクでは、画像がリンクの名前そのものになる。alt="" にすると
+    // アクセシブルネームの無いリンクになるため、大きさやファイル名がアイコンらしくても
+    // 装飾とはみなさず、従来どおりリンク先を表す文言を提案する。
+    if (link && !linkText) {
+      return null;
+    }
+
+    if (Number.isFinite(width) && Number.isFinite(height) && width <= 32 && height <= 32) {
+      return "size";
+    }
+    if (DECORATIVE_ICON_SRC_PATTERN.test(img.getAttribute("src") || "")) {
+      return "filename";
+    }
+    // テキストを持つリンクの中に1枚だけ置かれた画像は、リンク文言が既に用途を伝えている
+    // ファイル種別アイコンなどの飾りとみなす。ただし、寸法が明示されていて64を超える画像は
+    // 内容のある写真とみなし、この判定から外す。リンク文言で名前を与えるのはWCAGの技術
+    // としては許されるが、写真は内容を説明するというこのプロジェクトの方針を優先する。
+    const sizeSuggestsContent = (Number.isFinite(width) && width > 64) || (Number.isFinite(height) && height > 64);
+    if (!sizeSuggestsContent && link && link.querySelectorAll("img").length === 1 && linkText) {
+      return "link-context";
+    }
+    return null;
+  }
+
   function collectImageCandidates(fragment, candidates) {
     fragment.content.querySelectorAll("img").forEach((img) => {
       const alt = img.getAttribute("alt");
@@ -2337,7 +2395,33 @@
       const aiNameDraft = generateImageNameDraft(img, caption);
       const aiNameDraftForAlt = complexImage ? generateComplexImageNameDraft(img, caption, aiNameDraft) : aiNameDraft;
 
-      if (alt === null || alt.trim() === "") {
+      const decorativeEvidence = decorativeIconEvidence(img);
+      const decorativeIcon = decorativeEvidence !== null;
+      // リンクの中にあることだけが根拠のときは、寸法もファイル名も装飾だとは言っていない。
+      // 寸法を持たない写真もここに入るため、空にしてよいかは人が確かめる。
+      const weakEvidence = decorativeEvidence === "link-context";
+
+      if (decorativeIcon && alt !== null && alt.trim() === "") {
+        // alt="" の装飾アイコンは既に正しい状態なので、候補を出さない。根拠の強さに
+        // かかわらず、既にある状態を悪くしない。
+      } else if (decorativeIcon && alt === null) {
+        const clone = img.cloneNode(true);
+        clone.setAttribute("alt", "");
+        candidates.push(
+          makeCandidate({
+            ruleId: "image.alt-text",
+            element: img,
+            message: "装飾画像に空の代替テキストを設定します。",
+            reason: weakEvidence
+              ? "リンクの文言が既に用途を伝えているため、この画像は装飾の可能性があります。ただし寸法もファイル名もアイコンだとは示していないため、内容のある画像でないかを確認してください。"
+              : "装飾目的のアイコン画像は、alt属性を空にして読み上げから外します。alt属性そのものが無いと、読み上げソフトがファイル名を読み上げることがあります。",
+            afterHtml: clone.outerHTML,
+            patch: { type: "set-attribute", name: "alt", value: "" },
+            confidence: weakEvidence ? "medium" : "high",
+            requiresHumanReview: weakEvidence,
+          })
+        );
+      } else if (alt === null || alt.trim() === "") {
         const clone = img.cloneNode(true);
         const suggestedAlt = aiNameDraftForAlt?.name || (caption ? "" : "画像内容を具体的に入力");
         clone.setAttribute("alt", suggestedAlt);
@@ -3383,7 +3467,9 @@
 
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
-      message: "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
+      message: dataTableSemanticsMissingHeaderRow(table)
+        ? "データ表として維持し、キャプション・行見出し・scope属性をまとめて追加できます。列見出しの行がありません。必要なら見出し行を追加してください。"
+        : "データ表として維持し、キャプション・列見出し・行見出し・scope属性をまとめて追加できます。",
       reason: preserve
         ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
         : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
@@ -4200,14 +4286,38 @@
     return cleanHtml(output.outerHTML) + buildTableNoteSectionHtml(noteEntries);
   }
 
+  // 元の表に列見出しの行が無いときは、列見出しを作らずに本体行だけを出す。以前は
+  // 「項目 / 内容1 / 内容2」や「電話番号 / メール」という行を先頭に足していたが、これは
+  // 元の文書に無い文言の捏造で、このプロジェクトの「捏造しない」方針に反する
+  // (遠野市フィードバック 指摘7)。1列目が見出しらしい表は、本体処理が各行の1列目を
+  // scope="row"のthにするため、列見出しが無くても行と列の関係は表現できる。
+  // 列見出しも行見出しも無い表は、見出し行の追加を人の判断に委ねる(missingHeaderRow)。
   function dataTableHeaderPlan(profile) {
+    // 1列目が見出しらしい表は1行目もデータ行なので、この判定を先に置く。firstRowHeaderLikeは
+    // 「短いテキストが並ぶ」だけで立つため、後ろに回すと連絡先一覧の1行目(課名/電話番号/
+    // メール)まで列見出しに繰り上げてしまい、データ行が1つ消える。
     if (!profile.hasThead && profile.firstColumnHeaderRatio >= 0.5) {
-      return { headerCells: syntheticTableHeaderCells(profile), bodyStartIndex: 0, synthetic: true };
+      return { headerCells: [], bodyStartIndex: 0, missingHeaderRow: false };
     }
     if (profile.hasThead || profile.firstRowHeaderLike || profile.firstRow.every((cell) => cell.tagName === "TH")) {
-      return { headerCells: profile.firstRow, bodyStartIndex: 1, synthetic: false };
+      return { headerCells: profile.firstRow, bodyStartIndex: 1, missingHeaderRow: false };
     }
-    return { headerCells: syntheticTableHeaderCells(profile), bodyStartIndex: 0, synthetic: true };
+    return { headerCells: [], bodyStartIndex: 0, missingHeaderRow: true };
+  }
+
+  // buildDataTableSemanticsHtml()が列見出しの行を作れなかったかどうかを返す。候補の
+  // メッセージに見出し行が無いことを添えるために使う。早期returnする3つの類型は
+  // どれも行見出しか先頭タイトル行を持つため、ここでは対象外にする。
+  function dataTableSemanticsMissingHeaderRow(table) {
+    const profile = dataTableProfile(table);
+    if (
+      isRowHeaderOnlyDataTableProfile(profile) ||
+      isKeyValueDataTableProfile(profile) ||
+      isLeadingTitleRowDataTableProfile(profile)
+    ) {
+      return false;
+    }
+    return dataTableHeaderPlan(profile).missingHeaderRow;
   }
 
   function isKeyValueDataTableProfile(profile) {
@@ -4315,20 +4425,8 @@
     );
   }
 
-  function syntheticTableHeaderCells(profile) {
-    const headers = [];
-    const contact = looksLikeContactDataTable(profile);
-    for (let index = 0; index < profile.maxCells; index += 1) {
-      const cell = document.createElement("th");
-      if (contact && index === 0) cell.textContent = "";
-      else if (contact && index === 1) cell.textContent = "電話番号";
-      else if (contact && index === 2) cell.textContent = "メール";
-      else cell.textContent = index === 0 ? "項目" : `内容${index}`;
-      headers.push(cell);
-    }
-    return headers;
-  }
-
+  // 連絡先らしい表かどうか。データ表として維持するか、確信度をどう見るか、キャプションを
+  // 何にするかの判断に使う。列見出しの文言を作るためには使わない(指摘7)。
   function looksLikeContactDataTable(profile) {
     if (profile.maxCells !== 3 || profile.rows.length < 1) return false;
     const phoneCells = profile.rows.filter((row) => /(?:電話|TEL|[0-9０-９]{2,4}[-ー－][0-9０-９]{2,4})/i.test(row[1]?.textContent || "")).length;
@@ -4917,7 +5015,10 @@
           message: hasBgColorAttr ? "背景色の指定(廃止されたbgcolor属性を含む)が含まれています。" : "背景色の指定が含まれています。",
           reason: "CMSではコントラスト比保持のため、装飾目的の背景色は移行しません。bgcolor属性はHTML Living Standardでも廃止されています。",
           afterHtml: clone.outerHTML,
-          patch: hasBgColorAttr ? undefined : { type: "remove-style-properties", names: ["background", "background-color"] },
+          // bgcolor属性の有無にかかわらずpatchを持たせる。patchが無い候補は
+          // isElementReplacingCandidate()が「要素ごと差し替える候補」とみなし、同じ表の
+          // 構造候補をまとめてconflictedにしてしまうため(遠野市フィードバック 指摘3)。
+          patch: { type: "remove-style-properties", names: ["background", "background-color"], attributes: ["bgcolor"] },
           confidence: "high",
           requiresHumanReview: false,
         })
@@ -6633,6 +6734,7 @@
 
     if (patch.type === "remove-style-properties") {
       removeStyleProperties(target, patch.names || []);
+      (patch.attributes || []).forEach((name) => target.removeAttribute(name));
       return;
     }
 

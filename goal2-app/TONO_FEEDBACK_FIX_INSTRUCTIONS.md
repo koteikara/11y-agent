@@ -342,6 +342,11 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 候補の `patch` は `hasBgColorAttr` に関係なくこの形にする。
 `highlightPatchedTextInElement()` がこのパッチ種別をどう扱うかを確認し、属性削除は本文のハイライト対象にしない。
 
+**既知の残り**。
+背景色と `table.caption` の両方を採用すると、`table.caption` の変換後HTMLには `bgcolor` が残る。
+最終HTMLからは `DEPRECATED_PRESENTATION_ATTRIBUTES` の除去で消えるため出力は正しいが、作業中のプレビューには残って見える。
+候補の `after_html` が元のHTMLから作られ、決定後に作り直されないため（2章の問題1）で、構造変更1の `rebuild` 操作で解消する。このPRでは直さない。
+
 **構造変更1との関係**。
 先に実装してよい。構造変更1のS3で排他グループが入れば、この類型は起きなくなるが、patchを正しく持たせること自体は残す価値がある。
 
@@ -364,13 +369,23 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 **変更**。
 `dataTableHeaderPlan()` を次にする。
 
-| 条件 | 結果 |
-| --- | --- |
-| `thead` がある、または1行目が見出しらしい、または1行目が全て `th` | 1行目を列見出しにする（現状どおり） |
-| 上記以外で、1列目の `th` 率が50%以上 | 列見出し行を作らない。`bodyStartIndex: 0`。各行の1列目は `scope="row"` の `th` にする（現状の本体処理がそうしている） |
-| 上記以外 | 列見出し行を作らない。候補の `message` に「列見出しの行がありません。必要なら見出し行を追加してください」を添え、`requiresHumanReview: true` にする |
+判定は次の順に行う。順序が重要で、1列目の `th` 率を先に見る。
 
-`syntheticTableHeaderCells()` と `looksLikeContactDataTable()` は削除する。
+| 順 | 条件 | 結果 |
+| --- | --- | --- |
+| 1 | `thead` が無く、1列目の `th` 率が50%以上 | 列見出し行を作らない。`bodyStartIndex: 0`。各行の1列目は `scope="row"` の `th` にする（現状の本体処理がそうしている） |
+| 2 | `thead` がある、または1行目が見出しらしい、または1行目が全て `th` | 1行目を列見出しにする（現状どおり） |
+| 3 | 上記以外 | 列見出し行を作らない。候補の `message` に「列見出しの行がありません。必要なら見出し行を追加してください」を添える（この候補は元から `requiresHumanReview: true`） |
+
+順序を逆にして条件2を先に置いてはいけない。
+`firstRowHeaderLike` は「2列以上あり、どのセルも28文字以下で文末記号で終わらない」だけで立つ弱い判定で、課名・電話番号・所在地が並ぶ普通のデータ行にも当たる。
+条件2を先に置くと、1列目が `th` の連絡先一覧で1行目が列見出しへ繰り上がり、データ行が1つ消える。
+佐賀市 sg00761（26個の連絡先表）で `th` 165→139、`scope="row"` 88→61 になることを確認済み。
+
+`syntheticTableHeaderCells()` は削除する。
+`looksLikeContactDataTable()` は削除しない。
+`shouldPreserveAsDataTable()`（データ表として維持するかの判定）、`dataTableSemanticsConfidence()`（確信度）、`isSingleRecordContactDataTableProfile()`（1行だけの連絡先表のキャプション導出）の3か所で使われており、どれも列見出しの文言を作る処理ではない。
+`syntheticTableHeaderCells()` からの参照だけを断つ。
 `headerTexts` が空になるため、`normalizeGenericFileLinkText(clone, headerTexts[index])` は見出しが無いときに何もしないことを確認する。
 `lib/sagaAutoFix.js` の複製も同じ規則に直す。
 
@@ -379,7 +394,12 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 
 **検証**。
 `test/goal2-output` に、1列目 `th` の3行の表を入れ、`table.caption` の変換後HTMLに `<thead>` が無く、`<tr>` が3つであることを確認する。
-`npm run test:saga-gold` を変更前後で実行し、指標が下がっていないことを確認する。下がる場合は、正解データ側が捏造した見出し行を含んでいないかを見る。
+`npm run test:saga-gold` を変更前後で実行する。
+指標一致は652→648に下がるが、これは正解データ側の問題で、退行した指標は0件である。
+差が出るのは佐賀市 sg00761 の1ファイルだけで、`gold_html` が `<thead><tr><th scope="col">&nbsp;</th><th scope="col">電話番号</th><th scope="col">メール</th></tr></thead>` を26個含んでいる。
+「電話番号」「メール」は `old_html` のどこにも無い。
+この gold は先行実装（`koteikara/gemini-a11y-agent`）の出力をもとにしており、`inferSyntheticHeaderCells()` はこの gold を再現するために書かれていた。
+gold に合わせて捏造を戻すことはしない。
 
 ### 4.3 指摘12 ファイルアイコンに画像名の候補が出る
 
@@ -392,11 +412,54 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 `alt=""` は装飾画像として正しい状態で、miCheckerも指摘しない。
 
 **変更**。
-`isLikelyDecorativeIcon(img)` を足す。次のいずれかで真とする。
+`decorativeIconEvidence(img)` を足す。
+真偽ではなく、装飾と判断した**根拠**を返す（`"size" | "filename" | "link-context" | null`）。
+根拠によって確信度が違うため、呼び出し側で扱いを分けられるようにする。
 
-- `width` と `height` の属性がともに32以下
-- `src` のファイル名が `/(^|[\/_-])(icon|ico|arrow|bullet|shim|spacer|blank|dot|mark)[\w-]*\.(gif|png|svg|jpg)$/i` に一致
-- 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけ
+まず、装飾ではありえない形を先に除く。
+
+- 親に `a` があり、その `a` のテキスト（画像を除く）が空のときは `null`。
+  画像だけのリンクでは画像がリンクの名前そのものなので、`alt=""` にするとアクセシブルネームの無いリンクになる。
+  大きさやファイル名がアイコンらしくても、装飾とはみなさない。
+
+そのうえで、次の順に判定する。
+
+| 根拠 | 条件 |
+| --- | --- |
+| `"size"` | `width` と `height` の属性がともに32以下 |
+| `"filename"` | `src` のファイル名が下の `DECORATIVE_ICON_SRC_PATTERN` に一致 |
+| `"link-context"` | 親に `a` があり、その `a` のテキスト（画像を除く）が空でなく、`a` の中の `img` がこの1枚だけで、かつ `width` か `height` が明示されていて64を超えることがない |
+
+`"link-context"` は弱い根拠である。
+寸法もファイル名も装飾だとは言っておらず、`width`/`height` を持たない写真もここに入る。
+CMSが出すHTMLでは寸法の無い画像が普通にあるため、この根拠だけのときは `alt=""` の提案を `requiresHumanReview: true`、`confidence: "medium"` にする。
+`"size"` と `"filename"` は従来どおり `requiresHumanReview: false`、`confidence: "high"`。
+
+`alt=""` のときに候補を出さない扱いは、3つの根拠で共通にする（既にある状態を悪くしない）。
+
+ファイル名の判定は、語の強さで3群に分け、群ごとに許す形を変える。
+
+| 群 | 語 | 許す形 | 拡張子 |
+| --- | --- | --- | --- |
+| 強い語 | `icon` `ico` `arrow` `bullet` `shim` `spacer` `blank` `dot` `mark` `btn` `button` | 接頭辞・接尾辞どちらも可（`icon_excel.gif`、`pdf_icon.gif`） | gif/png/svg/jpg |
+| ファイル種別の語 | `pdf` `xls` `xlsx` `excel` `doc` `docx` `word` `ppt` | 基底名そのもの、または数字だけを伴う（`pdf.gif`、`pdf16.gif`） | gif/png/svg |
+| 一般語 | `new` `mail` `tel` `link` `ext` `external` `window` `file` | 基底名そのものだけ。`^` か `/` の直後に限る（`new.gif` は可、`photo_new.jpg` は不可） | gif/png/svg |
+
+```js
+const DECORATIVE_ICON_SRC_PATTERN = new RegExp(
+  "(?:(?:^|[\\/_-])(?:icon|ico|arrow|bullet|shim|spacer|blank|dot|mark|btn|button)(?:[_-][\\w-]*)?\\.(?:gif|png|svg|jpg)" +
+    "|(?:^|[\\/_-])(?:pdf|xlsx?|excel|docx?|word|ppt)\\d{0,3}\\.(?:gif|png|svg)" +
+    "|(?:^|\\/)(?:new|mail|tel|link|ext|external|window|file)\\d{0,3}\\.(?:gif|png|svg))$",
+  "i"
+);
+```
+
+群を分ける理由は、語を足すほどファイル名だけでの誤判定が増えるためである。
+すべての語に「語のあとは区切りが来れば何でも可」を許すと、`pdf_thumbnail.jpg`（チラシPDFのサムネイル）や `new_building.jpg`（新庁舎の写真）といった、自治体サイトに普通にある名前の内容画像が `"filename"` に入り、確認不要で `alt=""` になる。
+ファイル種別の語で `.jpg` を外しているのも同じ理由で、`.jpg` のファイル種別アイコンは稀で、サムネイルの可能性の方が高い。
+
+`ext_link.gif`（外部リンクのアイコン）はこの判定では拾えず、根拠 `"link-context"`（確認必要）に落ちる。
+`alt=""` の提案自体は出るため、実害は確認が1回増えることだけである。
 
 規則は `alt` の値で分ける。
 
@@ -412,7 +475,16 @@ patch: { type: "remove-style-properties", names: ["background", "background-colo
 
 **検証**。
 `test:michecker-parity` で、`alt` 属性の無い画像への指摘が退行していないことを確認する。
-`test/goal2-output` に、`alt=""` のアイコンでは候補が出ないこと、`alt` 属性の無いアイコンでは `alt=""` の提案が出ることを足す。
+`test/goal2-output` に次の4件を足す。
+
+- `alt=""` のアイコンでは候補が出ない
+- `alt` 属性の無いアイコンでは `alt=""` の提案が出る
+- `<a href="/next"><img src="/images/icon_arrow.gif" width="16" height="16"></a>`（画像だけのリンク）では `alt=""` を提案しない
+- `<a href="/event"><img src="/photos/matsuri.jpg" width="640" height="480">秋祭りの案内</a>` では `alt=""` を提案しない
+- `<a href="/event"><img src="/photos/matsuri.jpg">秋祭りの案内</a>`（寸法なし）では `alt=""` の提案が `requires_human_review: true` になる
+- `<a href="/a.pdf"><img src="/images/pdf.gif">申請書</a>`（寸法なしのファイル種別アイコン）は `requires_human_review: false` のまま
+- 内容のある写真をファイル名だけで装飾と判定しない（`document_scan.jpg`、`markets.jpg`、`pdf_thumbnail.jpg`、`new_building.jpg`、`mail_center.png`、`doc_scan.jpg`、`photo_new.jpg`、`word_cloud.png`、`file_photo.jpg`、`link-banner.jpg`）
+- ファイル名で装飾と分かるアイコンは確認不要のまま（`pdf.gif`、`pdf16.gif`、`mail_icon.png`、`img_pdf.gif`、`icon_excel.gif`）
 
 ### 4.4 指摘2 表のキャプションがページごとに違う
 

@@ -906,16 +906,23 @@ async function main() {
     fixedLegacyEnvironmentSection.includes("<h2>種別割のかかる人（納税義務者）</h2>"),
     "The remaining city-managed tax subsections should be promoted after removing the legacy environment section"
   );
+  // 連絡先一覧の表には、以前は「電話番号」「メール」という列見出しの行を作って足していた。
+  // 元の文書に無い文言なので作らなくした(遠野市フィードバック 指摘7)。キャプションと
+  // 行見出しは引き続き付ける。
   assert.equal(
     (fixedSingleContactTables.match(/<thead\b/g) || []).length,
+    0,
+    "Contact tables should not receive a fabricated column-header row"
+  );
+  assert.equal(
+    (fixedSingleContactTables.match(/<caption\b/g) || []).length,
     26,
-    "Single-row contact tables on large directory pages should also receive synthetic thead rows"
+    "Contact tables should still receive a per-table caption"
   );
   assert.ok(
-    true || fixedSingleContactTables.includes(
-      '<caption>蜃ｺ邇・ｮｺ縺ｮ隧ｳ邏ｰ</caption><thead><tr><th scope="col"></th><th scope="col">髮ｻ隧ｱ逡ｪ蜿ｷ</th><th scope="col">繝｡繝ｼ繝ｫ</th></tr></thead><tbody><tr><th scope="row"><a href="https://www.city.saga.lg.jp/main/16382.html">出納室</a></th><td>0952-40-7300</td>'
-    ),
-    "Single-row contact tables should derive a per-table caption and keep the contact row in tbody"
+    !/\u96fb\u8a71\u756a\u53f7<\/th>/.test(fixedSingleContactTables) &&
+      !/\u30e1\u30fc\u30eb<\/th>/.test(fixedSingleContactTables),
+    "Contact tables should not invent 電話番号 / メール header cells"
   );
   assert.equal(
     (fixedTitledHeaderTable.match(/<thead\b/g) || []).length,
@@ -929,26 +936,29 @@ async function main() {
     "Merged title rows should become captions while the next row becomes thead"
   );
   assert.ok(
-    /<caption>\u51fa\u7d0d\u5ba4\u306e\u8a73\u7d30<\/caption><thead><tr><th scope="col"><\/th><th scope="col">\u96fb\u8a71\u756a\u53f7<\/th><th scope="col">\u30e1\u30fc\u30eb<\/th><\/tr><\/thead><tbody><tr><th scope="row"><a href="https:\/\/www\.city\.saga\.lg\.jp\/main\/16382\.html">\u51fa\u7d0d\u5ba4<\/a><\/th><td>0952-40-7300<\/td>/.test(
+    /<caption>\u51fa\u7d0d\u5ba4\u306e\u8a73\u7d30<\/caption><tbody><tr><th scope="row"><a href="https:\/\/www\.city\.saga\.lg\.jp\/main\/16382\.html">\u51fa\u7d0d\u5ba4<\/a><\/th><td>0952-40-7300<\/td>/.test(
       fixedSingleContactTables
     ),
-    "Single-row contact tables should derive a readable caption from the single contact row"
+    "Single-row contact tables should derive a readable caption and keep the contact row in tbody"
   );
   assert.ok(
-    /<caption>\u90fd\u5e02\u6226\u7565\u90e8\u4e00\u89a7<\/caption><thead><tr><th scope="row"><\/th><th scope="col">\u96fb\u8a71\u756a\u53f7<\/th><th scope="col">\u30e1\u30fc\u30eb<\/th><\/tr><\/thead>/.test(
+    /<caption>\u90fd\u5e02\u6226\u7565\u90e8\u4e00\u89a7<\/caption><tbody><tr><th scope="row">/.test(
       fixedSingleContactTables
     ),
-    "Contact tables whose source already uses th cells without row scope should keep the synthetic corner cell on the row axis"
+    "Contact tables whose source already uses th cells should keep those cells on the row axis"
   );
+  // 正解データ(gold)の側が「電話番号」「メール」という列見出しの行を含んでいるため、
+  // 捏造をやめた結果としてscopeColは0のまま離れ、scopeRowはgoldへ近づく。goldに合わせて
+  // 捏造を戻すことはしない。
   assert.equal(
-    singleContactTableComparison.metrics.scopeCol.status,
-    "matches_gold",
-    "Large contact-table directories should match gold scopeCol counts"
+    singleContactTableComparison.metrics.scopeCol.current,
+    0,
+    "Contact tables should emit no column headers once the fabricated header row is gone"
   );
   assert.equal(
     singleContactTableComparison.metrics.scopeRow.status,
-    "matches_gold",
-    "Large contact-table directories should match gold scopeRow counts"
+    "improved",
+    "Contact tables should move closer to gold row-header counts"
   );
   assert.ok(
     /<caption>\u672a\u6210\u5e74\u8005\u306e\u5bfe\u8c61\u5e74\u9f62<\/caption><thead><tr><th scope="col">\u4ee4\u548c4\u5e74\u5ea6\u307e\u3067<\/th><th scope="col">\u4ee4\u548c5\u5e74\u5ea6\u304b\u3089<\/th><\/tr><\/thead><tbody><tr><td><p>20\u6b73\u672a\u6e80<\/p>/.test(

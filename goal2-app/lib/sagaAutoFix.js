@@ -2726,29 +2726,19 @@ function buildDataTableHtml(attrs, inner, profile, prefix) {
 }
 
 function resolvePlannedHeaderScope(profile, headerPlan, index) {
-  if (!headerPlan.synthetic && profile.maxCols === 2 && headerPlan.headerCells.length === 2 && index === 0) {
-    return "row";
-  }
-  if (headerPlan.synthetic && shouldUseRowCornerHeaderForContactTable(profile) && index === 0) {
+  if (profile.maxCols === 2 && headerPlan.headerCells.length === 2 && index === 0) {
     return "row";
   }
   return "col";
 }
 
-function shouldUseRowCornerHeaderForContactTable(profile) {
-  if (!looksLikeContactTable(profile)) {
-    return false;
-  }
-  const firstCell = profile.bodyRows[0]?.[0];
-  return Boolean(firstCell && firstCell.tag === "th" && !/\bscope=/i.test(firstCell.attrs || ""));
-}
-
+// public/app.js の dataTableHeaderPlan() と同じ規則。元の表に列見出しの行が無いときは
+// 列見出しを作らず、本体行だけを出す(遠野市フィードバック 指摘7)。
 function planHeaderRows(profile) {
   if (!profile.hasThead && profile.firstColumnHeaderRatio >= 0.5) {
     return {
-      headerCells: inferSyntheticHeaderCells(profile),
+      headerCells: [],
       bodyStartIndex: 0,
-      synthetic: true,
     };
   }
 
@@ -2756,30 +2746,13 @@ function planHeaderRows(profile) {
     return {
       headerCells: profile.firstRow,
       bodyStartIndex: 1,
-      synthetic: false,
     };
   }
 
   return {
-    headerCells: inferSyntheticHeaderCells(profile),
+    headerCells: [],
     bodyStartIndex: 0,
-    synthetic: true,
   };
-}
-
-function inferSyntheticHeaderCells(profile) {
-  if (looksLikeContactTable(profile)) {
-    return [
-      { tag: "th", attrs: "", inner: "" },
-      { tag: "th", attrs: "", inner: "電話番号" },
-      { tag: "th", attrs: "", inner: "メール" },
-    ];
-  }
-  return Array.from({ length: profile.maxCols }, (_item, index) => ({
-    tag: "th",
-    attrs: "",
-    inner: index === 0 ? "項目" : `内容${index}`,
-  }));
 }
 
 function looksLikeContactTable(profile) {
