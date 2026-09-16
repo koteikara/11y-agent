@@ -70,7 +70,7 @@ AIによる補完（`enrichWithLlm` など）は生成直後に一度だけ走�
 `goal2Engine.buildFinalHtml()` は `rebuildWorkingHtmlFor` の結果から内部属性を除いたものを返す。
 GOAL1のバッチ（`goal2Engine.autoAcceptSafe`）は、候補配列を一度走査して安全なものを採用し、同じ調停を通す。
 
-この章はS1前の姿である。S1で再構築は `replay()` に替わり、`rebuildWorkingHtmlFor()` は同値テストの比較対象としてだけ残っている（3.13）。それ以外の生成・決定・証跡はS1でも同じである。
+この章はS1前の姿である。S1で再構築は `replay()` に替わり、`rebuildWorkingHtmlFor()` は同値テストの比較対象としてだけ残った。S2で `rebuildWorkingHtmlFor()` と `foldDescendantFixIntoAncestor()` は削除し、表の構造候補は固定の `after_html` ではなく `rebuild` 操作を持つようになった（3.7）。生成と証跡はS2でも同じである。
 
 **この構造の何が問題か**。
 
@@ -286,6 +286,8 @@ S1では、上の2が書く「`seq` 順に走査し、世代の境目で区切�
 | `flattenTable` | `buildFlattenedTableHtml` | なし（表の外を読まない） |
 | `tableAsList` | `buildTableAsListHtml` | `heading_tag` |
 | `rowsAsSections` | `buildRowsAsSectionsHtml` | `heading_tag` |
+
+`rebuild` を持たせたのは `planTableTreatments()` が返す6手段だけである。`isTableStructuralCandidate()` はこれ以外にも真になる（`table.cell-merge-file` / `-mark` の `buildMergedCellProposal()`、`insert-caption` の簡易候補など）が、対応するビルダーが上の表に無いため、挙動を変えない側を選んで従来どおり固定の変換後HTMLで差し替える。S3で排他グループを入れるときに、まとめて操作化するかを判断する。
 
 `applyCandidatePatch()` は `rebuild` を当てるようになり、「当てられたか」を返す。対象が表でない、ビルダーの名前が引けない、ビルダーが空を返したときは当てず、リプレイ側で `orphaned` を立てる。`ELEMENT_REPLACING_PATCH_TYPES` には `rebuild` と `replace-html` を足した。
 
