@@ -19,6 +19,25 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-16: 構造変更1 S1（決定ログとリプレイの導入）
+
+- 背景・目的: 設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章「構造変更1: 決定のたびに依存候補を作り直す」の実装ステージ S1。決定を候補配列から切り離した順序付きのログへ積み、作業中HTMLと最終HTMLをそのログのリプレイで作る。S2以降で再導出によって候補が入れ替わっても決定が消えないようにするための土台で、この段階では挙動を変えない。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `state.decisions`（3.3）を足し、`applyCandidateDecision()` が採用・編集・却下・要確認のすべてをログへ積むようにした。`resolveSupersededTableCandidates()` と `resolveAlternativeMethodCandidates()` が付ける `conflicted` も `actor: "AGENT"` の決定として積む（リプレイでは当てない）。ログを「何がいつどう決まったか」の完全な記録にするため。
+  - `seq` は単調増加、`generation` は「決定の一かたまり」ごとに1つ。`decide()` 1回、`bulkAcceptSelected()`・`bulkAcceptReviewFree()`・`applyPendingAutoAcceptSafe()`・`goal2Engine.autoAcceptSafe()` の呼び出し1回がそれぞれ1世代になるよう `beginDecisionBatch()` で囲んだ（3.14の確定「一括採用はまとめてログに積んで再導出1回」）。
+  - `replay(sourceHtml, decisions, candidates)` を新設し、`rebuildWorkingHtml()` と `goal2Engine.buildFinalHtml()` を切り替えた。`buildFinalHtml(sourceHtml, candidates)` の引数は変えず、内部で候補配列から決定ログを組み立てる（3.12）。対象要素が見つからない決定には `orphaned: true` を立て、黙って捨てない（3.7の3）。
+  - 同じ候補を決め直せる（決定済みの候補を選んで採用や却下を押し直せる）ため、リプレイは候補ごとに `seq` が最大の決定だけを当てる。両方当てると、採用から却下へ決め直した候補の採用が当たってしまう。
+  - `rebuildWorkingHtmlFor()` は「replay に置き換え済み、S2で削除」とコメントして残した。いまは同値テストの比較対象にだけ使う。
+- S1で決めた段階差（設計書 3.3・3.7・3.13 に追記）:
+  - 3.3の `op` はS1では持たせない。`foldDescendantFixIntoAncestor()` が決定の後から構造候補の `decision.after_html` を書き換えるため、決定時点の `after_html` を写すと畳み込みがリプレイに乗らず挙動が変わる。S1のリプレイは `candidate_id` で候補配列から `patch` と `after_html` を引く。`op` の写しはS2の `rebuild` 操作と一緒に入れる。
+  - 当て順は、3.7の2が書く「世代の境目で区切って当てる」ではなく、「同じ `node_id` は要素を残すパッチを先」「組の順序は `node_id` の昇順＝文書順（外側を先）」の2規則にした。同値テストで、決定順をそのまま当て順にすると現行と結果が変わる原因が2つ出たためである。どちらも候補の `after_html` が元のHTMLから固定で作られていることに由来し、S2の `rebuild` 操作で解消する。決定順が当て順になるのはS2以降。
+  - `currentCandidateAfterHtml()` は `rebuildWorkingHtmlFor()` を呼んでおらず、対象の要素を複製して `applyCandidatePatch()` を当てる作りなので切り替えの対象外だった。「現在の要素からの計算」になるのはS2。
+- 設計書との差異（設計書側も同じPRで直した）: 2章の行番号を現在の値に直し、`rebuildWorkingHtmlFor()` の `node_id` の組そのものの順序が候補配列の並び順（＝種類ごと、その中は文書順）で決まり、それが出力を左右することを事実として書き足した。設計書はこの順序に触れていなかったが、内側の表を先に当てると外側の差し替えで内側の修正が消えるため、S1のリプレイの当て順を決めるうえで欠かせない事実である。あわせて、決定済みの候補をもう一度決められることも書き足した。
+- 同値テスト（新規15件）: `replay()` と `rebuildWorkingHtmlFor()` の出力が一致することを、既存の `test/goal2-output` の入力（背景色の表、入れ子の表、複数修正の段落、複数修正を含む表、廃止属性混じりの本文、1列目がthの表、h3×4、セル結合のある表）に対して確かめた。決定の集合は、GOAL1と同じ一括自動採用と、画面で作業者が進めた決定（世代が分かれ、調停の `conflicted` も入る）の2通り。積む順序は「元の順」「候補の並び順（まとめて1世代／1件1世代）」「逆順」「無作為3通り」の7通り。全ケース・全順序で一致。あわせて `seq` の単調増加、`conflicted` の記録、一括採用が1世代にまとまること、決め直した候補は後の決定だけが当たることも確かめた。
+- 検証: 設計書6章の5コマンドすべて通過し、結果はS1前と同じ。`run-output-tests.js` 109件（S1前94件＋新規15件）、`run-table-tests.js` 7件、`run-parity-tests.js` 223件、`run-tests.js` 正常終了。`npm run test:saga-gold` は指標一致648・差分15でS1前と同じ（`lib/sagaAutoFix.js` は候補の決定を通らないため影響しない）。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
+- 関連PR/コミット: PR #131
+
 ## 2026-09-16: 遠野市フィードバック対応 PR-2.5（表の構造変換を一括採用の対象から外す）
 
 - 背景・目的: PR-2 のレビューで、`canBulkAcceptCandidate()` が `requires_human_review` を見ておらず、`TABLE_FIX_METHODS_INSTRUCTIONS.md` 2章の確定済み判断「全ての構造変換手段は一括採用とGOAL1の `autoAcceptSafe` の対象に絶対に入れない」がコード側で満たされていないことが分かった。ユーザー確定のA案（表の構造変換の手段だけを外す、文書どおりの最小の変更）として直した。

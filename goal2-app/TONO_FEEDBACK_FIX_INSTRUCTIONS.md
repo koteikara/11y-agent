@@ -6,6 +6,8 @@
 
 原因調査の結果は `memory/verification-2026-08-summary.md` の「AI移行で出た指摘」に、指摘の一覧はAI移行の指摘シートにある。
 行番号は `main` の `1826b46` 時点の `public/app.js` を指す。
+PR-1、PR-2、PR-2.5、構造変更1 S1 でずれているため、行番号ではなく関数名で該当箇所を探す。
+2章の行番号だけは S1 で現在の値に直した（`public/app.js` の S1 時点）。
 
 ## 0. 作業の前に読むもの
 
@@ -40,27 +42,34 @@
 構造変更1を設計するために、候補がどう生まれ、どう決まり、どう出力に反映されるかを先に書く。
 
 **生成**。
-`parseFragment()` が入力HTMLを `<template>` に読み込み、`assignNodeIds()`（`app.js:1034`）が全要素に文書順で `data-goal2-node-id="n0001"` 形式のIDを振る。
-`generateCandidates()` が各コレクター（`collectHeadingCandidates`、`collectTableCandidates` など）を呼び、`makeCandidate()`（`app.js:6425`）が候補を作る。
+`parseFragment()` が入力HTMLを `<template>` に読み込み、`assignNodeIds()`（`app.js:1046`）が全要素に文書順で `data-goal2-node-id="n0001"` 形式のIDを振る。
+`generateCandidates()`（`app.js:1060`）が各コレクター（`collectHeadingCandidates`、`collectTableCandidates` など）を呼び、`makeCandidate()`（`app.js:6595`）が候補を作る。
+コレクターは呼ばれる順に走り、1つのコレクターの中は文書順なので、候補配列は「種類ごと、その中は文書順」に並ぶ。
 候補は `target.node_id` と、元の要素から作った `proposal.after_html` を持つ。
 軽い修正は `proposal.patch`（`set-attribute`、`remove-style-properties`、`rename-element` など）で表し、それ以外は `after_html` による要素ごとの差し替えになる。
 AIによる補完（`enrichWithLlm` など）は生成直後に一度だけ走り、候補の文言を書き換えたり、新しい候補を足したりする。
 
 **決定**。
-`applyCandidateDecision()`（`app.js:6867`）が候補の `decision` を書き換え、続けて2つの調停を走らせる。
-`resolveSupersededTableCandidates()`（`app.js:7054`）は、表の構造候補が採用されたとき、その表の中の内容修正候補を変換後HTMLへ「畳み込み」、同じ表の他の表候補を `conflicted` にする。
-`resolveAlternativeMethodCandidates()`（`app.js:6894`）は、要素ごと差し替える候補が採用されたとき、同じ `node_id` の他の要素差し替え候補を `conflicted` にする。
+`applyCandidateDecision()`（`app.js:7290`）が候補の `decision` を書き換え、続けて2つの調停を走らせる。
+`resolveSupersededTableCandidates()`（`app.js:7506`）は、表の構造候補が採用されたとき、その表の中の内容修正候補を変換後HTMLへ「畳み込み」（`foldDescendantFixIntoAncestor()`、`app.js:7602`）、同じ表の他の表候補を `conflicted` にする。
+`resolveAlternativeMethodCandidates()`（`app.js:7318`）は、要素ごと差し替える候補が採用されたとき、同じ `node_id` の他の要素差し替え候補を `conflicted` にする。
+決定済みの候補をもう一度選んで採用や却下を押し直せる。画面は決定済みかどうかで決定ボタンを閉じていないため、同じ候補が2回以上決まることがある。
 
 **再構築**。
-`rebuildWorkingHtmlFor()`（`app.js:6524`）は、毎回**元のHTMLから**やり直す。
+`rebuildWorkingHtmlFor()`（`app.js:6696`）は、毎回**元のHTMLから**やり直す。
 元のHTMLを読み直してIDを振り直し、採用・編集済みの候補を `node_id` ごとにまとめ、要素を残すパッチを先、要素ごと差し替えるパッチを後の順で当てる。
-`replaceTarget()`（`app.js:6684`）は差し替え後の先頭要素に元のIDを引き継ぎ、入れ子の表のIDも並び順で引き継ぐ。
+`node_id` の組そのものの順序は候補配列の並び順で決まる。つまり「同じ種類の候補の中では文書順」であり、表の候補では外側の表が内側の表より先に当たる。
+この順序は出力を左右する。候補の `after_html` は元のHTMLから固定で作られているため、内側を先に直してから外側を差し替えると、内側の修正は差し替えで消える。
+現行はこの条件を意図せず満たしているだけで、どこにも明示されていない。
+`replaceTarget()`（`app.js:6977`）は差し替え後の先頭要素に元のIDを引き継ぎ、入れ子の表のIDも並び順で引き継ぐ。
 差し替えで新しく生まれたそれ以外の要素にはIDが無い。
 
 **証跡と最終HTML**。
-`buildEvidenceFor()`（`app.js:8933`）は候補の配列をそのまま証跡にする。
+`buildEvidenceFor()`（`app.js:9418`）は候補の配列をそのまま証跡にする。
 `goal2Engine.buildFinalHtml()` は `rebuildWorkingHtmlFor` の結果から内部属性を除いたものを返す。
 GOAL1のバッチ（`goal2Engine.autoAcceptSafe`）は、候補配列を一度走査して安全なものを採用し、同じ調停を通す。
+
+この章はS1前の姿である。S1で再構築は `replay()` に替わり、`rebuildWorkingHtmlFor()` は同値テストの比較対象としてだけ残っている（3.13）。それ以外の生成・決定・証跡はS1でも同じである。
 
 **この構造の何が問題か**。
 
@@ -142,6 +151,14 @@ candidate.proposal.patch = { type: "rebuild", builder: "dataTableSemantics", par
 `candidate.decision` は当面残す（画面と証跡の多くがこれを読む）。
 ただし正本は `state.decisions` で、`candidate.decision` はログから写す派生情報にする。
 
+**S1での段階差（実装済み）**。
+
+- `op` はS1では持たせない。`foldDescendantFixIntoAncestor()` が決定の後から構造候補の `decision.after_html` を書き換えるため、決定時点の `after_html` を写すと畳み込みがリプレイに乗らず挙動が変わる。`op` の写しは、畳み込みが要らなくなるS2の `rebuild` 操作と一緒に入れる。S1のログは `candidate_id` を持ち、リプレイは `patch` と `after_html` を候補配列から引く。
+- 同じ理由で、`edited` の `after_html` もS1では「証跡用の写し」にとどめ、リプレイは候補配列の `decision.after_html` を読む。正本をログへ移すのはS2。
+- `candidate.fingerprint`、`candidate.generation`、`candidate.origin`、`candidate.target.content_hash` はS1では足していない。これらを読むのは3.6の照合だけなので、S3で入れる。指紋はログの各決定が `fingerprint` として持つ。
+- `state.generation`（再導出の回数）はS1では使わない。S1が持つのは `state.decisionSeq`（決定の通し番号）と `state.decisionGeneration`（決定の一かたまりの番号）で、どちらも再導出の回数とは別の数である。
+- `exclusive_group` は、いま導ける値（`isTableStructuralCandidate()` が真なら `table-structure`）をS1から入れている。読むのは3.8なのでS3から。
+
 ### 3.4 ノード識別子の派生
 
 差し替えで生まれた要素にもIDが要る。
@@ -221,6 +238,22 @@ IDの書式に依存するコードは無い（`grep` で確認済み）。
 `edited` の決定は、人が直したHTMLを固定で持つ。
 編集画面の初期値は `currentCandidateAfterHtml()`（現在の要素から計算した値）にするので、編集前に採用した内容修正は編集結果に含まれる。
 
+**S1での段階差（実装済み）**。
+
+S1の `replay()` は `replay(sourceHtml, decisions, candidates)` の3引数になる。ログに `op` が無く、当てる内容を候補配列から引くためである。第3引数はS2で落とす。
+
+S1では、上の2が書く「世代の境目で区切って当てる」ことはしない。代わりに次の2つの規則で当て順を決める。どちらも現行の `rebuildWorkingHtmlFor()` が満たしている順序で、崩すと修正が黙って捨てられる。
+
+1. 同じ `node_id` への決定を1組にまとめ、組の中では要素を残すパッチを先、要素ごと差し替えを後に当てる（現行どおり）。組の中の同じ位相では `seq` 順。
+2. 組そのものの順序は `node_id` の昇順、つまり元のHTMLの文書順にする。`assignNodeIds()` は文書順に番号を振るので、これは「外側の要素を内側より先に当てる」ことと同じである。
+
+つまりS1では、決定順（`seq`）は当て順そのものにはならない。決定順が当て順になるのは、候補が「そのときの作業中HTML」から `after_html` を作り直すようになるS2以降である。この段階差は同値テストで見つけた次の2つの事実に基づく（どちらも2章に追記した）。
+
+- 同じ `node_id` への決定を世代で分けて当てると、要素ごと差し替えが先に来たときに残りの修正が対象を失う。`<p><tt>…</tt></p>` で、`<tt>` の解除と同じ `<tt>` への「22m→22メートル」「全　長→全長」5件がすべて同じ `node_id` を指す。
+- 外側の要素より内側を先に当てると、外側を差し替えた時点で内側の修正が消える。入れ子の表で、中の表を先に解体してから外の表を解体すると `<p>市指定史跡</p>` が失われる。
+
+同じ候補が2回以上決まることがある（2章）。後の決定が前の決定を置き換えるので、リプレイは候補ごとに `seq` が最大の1件だけを当てる。残さないと、採用から却下へ決め直した候補の採用が当たってしまう。
+
 ### 3.8 調停ロジックの廃止と排他グループ
 
 `app.js` に排他グループの宣言を置く。
@@ -284,11 +317,18 @@ CSVの列順は末尾に追加し、既存の集計を壊さない。
 
 各ステージの終わりに「6. 検証手順」を通し、ユーザー確認のうえコミットする。
 
-**S1 決定ログの導入**。
+**S1 決定ログの導入**。実装済み（PR #131）。
 `state.decisions` を作り、`applyCandidateDecision()` がログにも積むようにする。
-`rebuildWorkingHtmlFor()` を `replay()` に置き換え、決定順で当てる。
+`rebuildWorkingHtmlFor()` を `replay()` に置き換える。
 この段階では候補配列の `decision` を正本のままにし、挙動を変えない。
-検証: 4系統のテストが緑。
+検証: 6章の5コマンドすべてがS1前と同じ結果。
+
+S1で決めた段階差は次のとおりで、3.3 と 3.7 に書いた。
+
+- `op` はS2から。畳み込み（`foldDescendantFixIntoAncestor()`）が決定の後から `after_html` を書き換えるため、決定時点の写しを持つと挙動が変わる。S1のリプレイは候補配列から `patch` と `after_html` を引く（`replay()` は3引数）。
+- 当て順は決定順そのものではなく、「同じ `node_id` は要素を残すパッチを先」「組の順序は `node_id` の昇順＝文書順で外側を先」の2規則にする。決定順が当て順になるのはS2以降。
+- 旧実装の `rebuildWorkingHtmlFor()` はS1では残し、同値テストの比較対象にだけ使う。削除はS2。
+- 同じ候補を決め直したときは、リプレイは `seq` が最大の決定だけを当てる。
 
 **S2 派生IDと rebuild 操作**。
 `replaceTarget()` で派生IDを振る。
