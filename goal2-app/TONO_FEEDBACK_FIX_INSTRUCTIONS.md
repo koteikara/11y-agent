@@ -276,7 +276,7 @@ S1では、上の2が書く「`seq` 順に走査し、世代の境目で区切�
 
 **S2での段階差（実装済み）**。
 
-**ビルダーのレジストリ**。表の構造ビルダー6件を `TABLE_REBUILD_BUILDERS` に名前で登録し、`(element, params) => htmlString` の形に揃えた。各ビルダーが対象の要素の外のDOM（直前の見出し）から読んでいた入力は `params` に移し、候補を作る時点で確定させる。`currentCandidateAfterHtml()` は対象の表だけを複製してビルダーを当てるため、複製先には直前の見出しが無く、DOMから導き直すと表示と適用で結果が食い違うからである。AIの補完（`applyTableCaptionLlmResult()`）がキャプションの文言を書き換えたときは `params.caption` も揃える。
+**ビルダーのレジストリ**。表の構造ビルダー7件を `TABLE_REBUILD_BUILDERS` に名前で登録し、`(element, params) => htmlString` の形に揃えた。各ビルダーが対象の要素の外のDOM（直前の見出し）から読んでいた入力は `params` に移し、候補を作る時点で確定させる。`currentCandidateAfterHtml()` は対象の表だけを複製してビルダーを当てるため、複製先には直前の見出しが無く、DOMから導き直すと表示と適用で結果が食い違うからである。AIの補完（`applyTableCaptionLlmResult()`）がキャプションの文言を書き換えたときは `params.caption` も揃える。
 
 | builder | 現在の関数 | `params` |
 | --- | --- | --- |
@@ -286,8 +286,20 @@ S1では、上の2が書く「`seq` 順に走査し、世代の境目で区切�
 | `flattenTable` | `buildFlattenedTableHtml` | なし（表の外を読まない） |
 | `tableAsList` | `buildTableAsListHtml` | `heading_tag` |
 | `rowsAsSections` | `buildRowsAsSectionsHtml` | `heading_tag` |
+| `mergedCellProposal` | `buildMergedCellProposal` | `rule_id`、`heading_tag`、`parent_heading_tag` |
 
-`rebuild` を持たせたのは `planTableTreatments()` が返す6手段だけである。`isTableStructuralCandidate()` はこれ以外にも真になる（`table.cell-merge-file` / `-mark` の `buildMergedCellProposal()`、`insert-caption` の簡易候補など）が、対応するビルダーが上の表に無いため、挙動を変えない側を選んで従来どおり固定の変換後HTMLで差し替える。S3で排他グループを入れるときに、まとめて操作化するかを判断する。
+`rebuild` を持たせるのは「表を丸ごと差し替える構造候補」すべてである。`planTableTreatments()` が返す6手段に加えて、`buildMergedCellProposal()` が作るセル結合の分類ごとの再構成（`table.cell-merge-heading` / `-summary` / `-note` / `-file` / `-mark`）も含む。後者は表と `mergeRule.ruleId` だけで決まるので、ビルダーは `mergedCellProposal` 1つにして `params.rule_id` で分岐する。結合セルが無くなっているなど扱えない形になっていた場合は `unchangedProposal()` が表をそのまま返すので、差し替えても何も変わらない。
+
+ここを6手段だけに留めると、畳み込みの廃止と組み合わさって挙動が変わる。セル結合の再構成が固定の変換後HTMLのままだと、リプレイの第1段で、`order`（表のコレクターは文字のコレクターより先に走る）により表の中の内容修正より**先に**当たり、元のHTMLから作ったHTMLで表ごと差し替えてしまう。後に当たる内容修正は対象を失う。S1ではこれを畳み込みが守っていた。
+
+`isTableStructuralCandidate()` が真でも `rebuild` にしない候補が2種類ある。どちらも表を差し替えないので、上の問題は起きない。
+
+- 要素を残すパッチを持つ候補（`insert-caption` の簡易候補）。第1段で当たり、表の中の他の修正を消さない。
+- `patch_mode` が `"none"` の確認だけの候補（`collectNaiveTableStructureCandidates()` が出す `table.layout-table` など）。決定ログの `op` に `apply: false` が立ち、リプレイで当たらない。
+
+`image.image-text-layout` は `figure` / `p` / `div` を対象にするので、そもそも `isTableStructuralCandidate()` が真にならない。
+
+回帰テストで、全候補を走査して「要素ごと差し替える構造候補（`patch_mode` が `"none"` でないもの）はすべて `rebuild`」が成り立つことを確かめている。
 
 `applyCandidatePatch()` は `rebuild` を当てるようになり、「当てられたか」を返す。対象が表でない、ビルダーの名前が引けない、ビルダーが空を返したときは当てず、リプレイ側で `orphaned` を立てる。`ELEMENT_REPLACING_PATCH_TYPES` には `rebuild` と `replace-html` を足した。
 
