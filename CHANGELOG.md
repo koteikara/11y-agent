@@ -19,6 +19,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-16: 遠野市フィードバック対応 PR-2.5（表の構造変換を一括採用の対象から外す）
+
+- 背景・目的: PR-2 のレビューで、`canBulkAcceptCandidate()` が `requires_human_review` を見ておらず、`TABLE_FIX_METHODS_INSTRUCTIONS.md` 2章の確定済み判断「全ての構造変換手段は一括採用とGOAL1の `autoAcceptSafe` の対象に絶対に入れない」がコード側で満たされていないことが分かった。ユーザー確定のA案（表の構造変換の手段だけを外す、文書どおりの最小の変更）として直した。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - `isBulkExcludedCandidate()` を、`shift-headings` に加えて `isTableStructuralCandidate()` が真の候補でも真を返すようにした。これで画面の一括採用、GOAL1の `autoAcceptSafe()`、goal3引き継ぎの `applyPendingAutoAcceptSafe()` のすべてから外れる。
+  - `table.th-scope` や `table.format-clear` のような構造を変えない表の候補は対象にしていない（同3章「既存の独立候補はそのまま維持」）。
+  - `autoAcceptSafe()` のコメントを実態に書き直した。「not flagged for human review」は誤りで、実際の条件は「決定済みでない」「`acceptDisabledReason()` が無い」「`isBulkExcludedCandidate()` でない」である。
+  - `requires_human_review` を一般に一括採用の条件にするB案は行っていない。
+- 影響の確認: `public/goal1.js` は採用件数と残り件数をどちらも実行時に数えており、固定値を持たないため追随は不要だった。`test/run-tests.js` にGOAL1の採用件数を固定する検査は無い。`tools/`・`agents-cli/` に `autoAcceptSafe`・`canBulkAcceptCandidate` の利用は無い。
+- 既存テストの扱い: 解体や再構築を前提にした3件（「表を解体しても段落内の修正が失われない」「解体しても入れ子の表が表として残る」「入れ子の表でもセル内の文字間空白が詰まる」）を、画面で作業者が行うのと同じ手順（確認不要をまとめて採用 → 表の手段を順に採用）に置き換えた。`decision` を直接立てる形では、表の中の文字修正を構造候補の変換後HTMLへ畳み込む処理（`resolveSupersededTableCandidates`）が採用の経路でしか走らないため、畳み込みが飛んでテストの意図が失われる。置き換え後も実際に表が解体されることを出力で確認している。
+- 検証: 5コマンドすべて通過。`run-output-tests.js` 94件（新規3件）、`run-table-tests.js` 7件、`run-parity-tests.js` 223件、`run-tests.js` 正常終了。`npm run test:saga-gold` は指標一致648で変更前と同じ（`lib/sagaAutoFix.js` は候補の採用を通らないため影響しない）。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
+
 ## 2026-09-16: 遠野市フィードバック対応 PR-2（表キャプションのフォールバックと見出しの一括補正）
 
 - 背景・目的: 設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の「5. 着手順」の2番目として、4.4（指摘2）と4.5（指摘1）を直した。どちらも「元の文書に無い文言を作らない」「先頭だけ直して残りを放置しない」という、PR-1で確定した線の延長である。

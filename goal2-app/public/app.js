@@ -7215,15 +7215,20 @@
     );
   }
 
-  // まとめて採用の対象から外す候補。見出し全体の底上げはページ内の見出しをすべて動かすため、
-  // 元の階層の意図を人が見てから決める(遠野市フィードバック 指摘1)。個別の採用は従来どおりできる。
+  // まとめて採用の対象から外す候補。どちらもページや表の構造をまとめて作り替えるもので、
+  // 元の構造の意図を人が見てから決める。個別の採用は従来どおりできる。
   //
-  // 注意: canBulkAcceptCandidate()は requires_human_review を見ていない。autoAcceptSafe()の
-  // コメントは「not flagged for human review」と書いているが、実際に採用を止めるのは
-  // acceptDisabledReason()(AI画像名の投入待ちと、文言調整が要る候補)だけである。この食い違いは
-  // このPRの前からあり、範囲が広いのでここでは直さない。
+  // 1. 見出し全体の底上げ。ページ内の見出しをすべて動かす(遠野市フィードバック 指摘1)。
+  // 2. 表の構造変換の手段。TABLE_FIX_METHODS_INSTRUCTIONS.md 2章の確定済み設計判断
+  //    「全ての構造変換手段は一括採用とGOAL1のautoAcceptSafeの対象に絶対に入れない」を
+  //    コード側で実際に満たすため(2026-09-16 ユーザー確定のA案)。
+  //    requiresHumanReview: true だけでは外れない。canBulkAcceptCandidate()は
+  //    requires_human_review を見ておらず、決定済みかどうかとacceptDisabledReason()だけで
+  //    判断するため、構造手段は要確認のまま自動採用されていた。
+  //    表の候補でも、構造を変えないもの(table.th-scope、table.format-clearなど)は対象にしない
+  //    (同3章「既存の独立候補はそのまま維持」)。
   function isBulkExcludedCandidate(candidate) {
-    return candidate?.proposal?.patch?.type === "shift-headings";
+    return candidate?.proposal?.patch?.type === "shift-headings" || isTableStructuralCandidate(candidate);
   }
 
   // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
@@ -10614,9 +10619,13 @@
       }
     },
 
-    // Applies the same safety bar as the goal2 screen's 一括採用 (canBulkAcceptCandidate):
-    // mechanical, sufficiently confident, and not flagged for human review. Mutates the
-    // passed candidates' decision in place and returns how many were accepted.
+    // Applies the same bar as the goal2 screen's 一括採用 (canBulkAcceptCandidate): not already
+    // decided, no acceptDisabledReason (AI image-name insertion pending, or a candidate whose
+    // wording must be edited first), and not bulk-excluded (whole-page heading shifts and table
+    // structural methods — see isBulkExcludedCandidate). Note this bar does NOT test
+    // requires_human_review on its own; candidates flagged for review are still accepted here
+    // unless one of the above applies. Mutates the passed candidates' decision in place and
+    // returns how many were accepted.
     autoAcceptSafe(candidates) {
       let accepted = 0;
       candidates.forEach((candidate) => {
