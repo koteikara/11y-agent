@@ -168,6 +168,18 @@ const MERGED_CELL_TABLE = `<h2>対象者</h2><table border="1"><tbody>
 
 // 指摘1: h3が4つ並ぶページと、h3→h4→h3 の並び
 const HEADINGS_H3_X4 = `<h3>第1章</h3><p>本文1</p><h3>第2章</h3><p>本文2</p><h3>第3章</h3><p>本文3</p><h3>第4章</h3><p>本文4</p>`;
+
+// 表の中に表がある例。同値テスト(S1)と「解体しても入れ子の表が表として残る」で共有する。
+const NESTED_IN_LAYOUT = `<table border="0"><tbody><tr>
+      <td><table border="1"><tbody>
+        <tr><td><p>市指定史跡</p></td></tr>
+        <tr><td><table border="0"><tbody>
+          <tr><td>遺跡番号</td><td>541031</td></tr>
+          <tr><td>墳丘</td><td>円墳</td></tr>
+        </tbody></table></td></tr>
+      </tbody></table><h2>概要</h2><p>本文</p></td>
+      <td><h2>所在地</h2><p>安城市</p></td>
+    </tr></tbody></table>`;
 const HEADINGS_H3_H4_H3 = `<h3>章1</h3><p>本文a</p><h4>節1</h4><p>本文b</p><h3>章2</h3><p>本文c</p>`;
 
 async function main() {
@@ -386,17 +398,6 @@ async function main() {
     }
 
     // 9. 表の中にある表を、解体後も表のまま残して修正できる
-    const NESTED_IN_LAYOUT = `<table border="0"><tbody><tr>
-      <td><table border="1"><tbody>
-        <tr><td><p>市指定史跡</p></td></tr>
-        <tr><td><table border="0"><tbody>
-          <tr><td>遺跡番号</td><td>541031</td></tr>
-          <tr><td>墳丘</td><td>円墳</td></tr>
-        </tbody></table></td></tr>
-      </tbody></table><h2>概要</h2><p>本文</p></td>
-      <td><h2>所在地</h2><p>安城市</p></td>
-    </tr></tbody></table>`;
-
     const nestedOut = await runTableMethodFlow(NESTED_IN_LAYOUT, "解体|箇条書き|データ表として維持");
 
     check(
@@ -928,6 +929,175 @@ async function main() {
       "GOAL1の一括採用で底上げを自動採用しない",
       !shiftAutoAccepted,
       `status=${JSON.stringify(shiftAutoAccepted)}`
+    );
+
+
+    // 18. S1 同値テスト: 決定ログのリプレイ(replay)が、置き換え対象の rebuildWorkingHtmlFor() と
+    //     同じHTMLを返す(設計書 TONO_FEEDBACK_FIX_INSTRUCTIONS.md 3.13 S1)。
+    //     決定を積む順序を「候補の並び順」「逆順」「無作為に3通り」に変えても一致することまで見る。
+    //     並び順を変えられるのは replay() だけで、rebuildWorkingHtmlFor() は候補配列の並び順しか
+    //     見ないため、この比較は「リプレイが現行と同じ結果を出し、かつ決定順に依存しない」ことの検査になる。
+    await page.evaluate(() => {
+      // 決まった種から作る擬似乱数。無作為の並び順を毎回同じにして、失敗を再現できるようにする。
+      const randomFrom = (seed) => {
+        let value = seed;
+        return () => {
+          value = (value * 1103515245 + 12345) % 2147483648;
+          return value / 2147483648;
+        };
+      };
+      const shuffled = (items, random) => {
+        const out = items.slice();
+        for (let i = out.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(random() * (i + 1));
+          [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+      };
+      // 並べ替えたログに seq と generation を振り直す。perGeneration は「1件ずつ決めた」状態で、
+      // 世代が1件ずつに分かれる。
+      const relog = (decisions, perGeneration) =>
+        decisions.map((decision, index) => ({
+          ...decision,
+          seq: index + 1,
+          generation: perGeneration ? index + 1 : 1,
+        }));
+
+      window.__s1CompareOrders = (sourceHtml, decisions, candidates) => {
+        const api = window.goal2Engine.decisionLog;
+        const legacy = api.legacyRebuild(sourceHtml, candidates);
+        const base = decisions.map((decision) => ({ ...decision }));
+        const orders = [
+          ["元の順(ログのまま)", base],
+          ["候補の並び順(まとめて1世代)", relog(base, false)],
+          ["候補の並び順(1件1世代)", relog(base, true)],
+          ["逆順", relog(base.slice().reverse(), true)],
+        ];
+        [1, 2, 3].forEach((seed) => {
+          orders.push([`無作為${seed}`, relog(shuffled(base, randomFrom(seed * 7919 + 13)), true)]);
+        });
+        const mismatches = orders
+          .map(([name, log]) => ({ name, html: api.replay(sourceHtml, log, candidates) }))
+          .filter((entry) => entry.html !== legacy);
+        return {
+          orders: orders.length,
+          logged: base.length,
+          applied: base.filter((d) => ["accepted", "edited"].includes(d.status)).length,
+          generations: new Set(base.map((d) => d.generation)).size,
+          agentLogged: base.filter((d) => d.actor === "AGENT").length,
+          seqMonotonic: base.every((d, i) => d.seq === i + 1),
+          largestGeneration: Math.max(
+            0,
+            ...[...new Set(base.map((d) => d.generation))].map(
+              (g) => base.filter((d) => d.generation === g).length
+            )
+          ),
+          mismatches: mismatches.map((entry) => entry.name),
+          firstMismatch: mismatches[0] ? { replayed: mismatches[0].html, legacy } : null,
+        };
+      };
+    });
+
+    const reportEquivalence = (label, row) => {
+      check(
+        `リプレイが現行の再構築と一致する(${label}・${row.orders}通りの決定順)`,
+        row.mismatches.length === 0 && row.applied > 0,
+        row.mismatches.length
+          ? `不一致の並び順: ${row.mismatches.join(", ")}\n       replay=${(row.firstMismatch?.replayed || "").replace(/\s+/g, " ").slice(0, 300)}\n       legacy=${(row.firstMismatch?.legacy || "").replace(/\s+/g, " ").slice(0, 300)}`
+          : `当てた決定が0件(ログ${row.logged}件)。決定の集合が空では同値の確認にならない`
+      );
+    };
+
+    // 18-a. GOAL1バッチと同じ決定の集合(確認不要の一括自動採用)で比べる。
+    const ENGINE_EQUIVALENCE_INPUTS = [
+      ["背景色の表", BGCOLOR_TABLE],
+      ["入れ子の表", NESTED_IN_LAYOUT],
+      ["複数修正の段落", MULTI_FIX_PARAGRAPH],
+      ["複数修正を含む表", MULTI_FIX_IN_TABLE],
+      ["廃止属性とCMS独自タグの混ざった本文", DIRTY_MARKUP],
+      ["1列目がthの表", ROW_HEADER_TABLE],
+    ];
+    const engineEquivalence = await page.evaluate(async (cases) => {
+      const out = [];
+      for (const [label, html] of cases) {
+        const res = await window.goal2Engine.analyze({ html });
+        window.goal2Engine.autoAcceptSafe(res.candidates);
+        const decisions = window.goal2Engine.decisionLog.fromCandidates(res.candidates);
+        out.push([label, window.__s1CompareOrders(html, decisions, res.candidates)]);
+      }
+      return out;
+    }, ENGINE_EQUIVALENCE_INPUTS);
+    engineEquivalence.forEach(([label, row]) => reportEquivalence(`${label}・一括自動採用`, row));
+
+    // 18-b. 画面で作業者が進めたときの決定ログ(世代が分かれ、調停のconflictedも入る)で比べる。
+    //     確認不要をまとめて採用したあと、表の手段や見出しの底上げを1件ずつ採用する経路を通る。
+    //     一括採用では何も決まらない入力(h3×4、セル結合の表)も、ここで決定の集合を作れる。
+    const SCREEN_EQUIVALENCE_INPUTS = [
+      ["入れ子の表", NESTED_IN_LAYOUT, "解体|箇条書き|データ表として維持"],
+      ["h3が4つ並ぶ見出し", HEADINGS_H3_X4, "見出し"],
+      // 「データ表として維持」はこの表ではキャプションの文言を入れるまで採用できず、
+      // runTableMethodFlow が1件も採用せずに抜ける。1行ずつ展開する手段を指名する。
+      ["セル結合のある表", MERGED_CELL_TABLE, "1行ずつ見出し"],
+    ];
+    for (const [label, html, methodPattern] of SCREEN_EQUIVALENCE_INPUTS) {
+      await runTableMethodFlow(html, methodPattern);
+      const row = await page.evaluate(() => {
+        const { sourceHtml, decisions, candidates } = window.goal2Engine.decisionLog.screenState();
+        return window.__s1CompareOrders(sourceHtml, decisions, candidates);
+      });
+      reportEquivalence(`${label}・画面の操作`, row);
+      check(
+        `決定ログの seq が抜けなく単調増加する(${label})`,
+        row.seqMonotonic,
+        `決定${row.logged}件`
+      );
+      if (label === "入れ子の表") {
+        check(
+          "調停が付ける conflicted も決定ログに積む",
+          row.agentLogged > 0,
+          `actor=AGENT の決定 ${row.agentLogged}件 / 全${row.logged}件`
+        );
+        check(
+          "一括採用が複数件をまとめて1世代に積む",
+          row.largestGeneration > 1 && row.generations > 1,
+          `最大の世代に入っている決定 ${row.largestGeneration}件 / 全${row.logged}件・${row.generations}世代`
+        );
+      }
+    }
+
+
+    // 18-c. 決め直した候補は、後の決定だけが当たる。決定済みの候補を選び直して採用や却下を
+    //     押し直すと、ログには2件以上の決定が並ぶ。採用→却下と決め直した採用が当たると、
+    //     却下したはずの修正が出力に残る。
+    const redecided = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      const api = window.goal2Engine.decisionLog;
+      const target = res.candidates.find((c) => c.rule_id.startsWith("text."));
+      if (!target) return { skipped: true };
+      const base = (status) => ({
+        ...api.fromCandidates([target])[0],
+        status,
+      });
+      // 採用したあとに却下へ決め直したログ
+      const log = [
+        { ...base("accepted"), seq: 1, generation: 1 },
+        { ...base("rejected"), seq: 2, generation: 2 },
+      ];
+      target.decision = { ...target.decision, status: "rejected", after_html: null };
+      return {
+        skipped: false,
+        rule: target.rule_id,
+        replayed: api.replay(h, log, res.candidates),
+        legacy: api.legacyRebuild(h, res.candidates),
+        source: h,
+      };
+    }, MULTI_FIX_PARAGRAPH);
+    check(
+      "決め直した候補は後の決定だけが当たる",
+      !redecided.skipped && redecided.replayed === redecided.legacy,
+      redecided.skipped
+        ? "text.* の候補が出なかった"
+        : `対象=${redecided.rule}\n       replay=${redecided.replayed.replace(/\s+/g, " ").slice(0, 200)}\n       legacy=${redecided.legacy.replace(/\s+/g, " ").slice(0, 200)}`
     );
 
   } finally {
