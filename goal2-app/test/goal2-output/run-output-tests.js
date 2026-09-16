@@ -794,6 +794,44 @@ async function main() {
       JSON.stringify(skipsAlongsideShift)
     );
 
+    // 修正後欄と証跡は対象の見出しを全件見せる。対象要素だけを複製してパッチを当てる作りでは
+    // 先頭の1件しか出ず、メッセージの「対象4件」と画面が食い違っていた。
+    check(
+      "底上げの候補の変換後HTMLが対象4件を並べる",
+      (shift4.after.match(/<li>/g) || []).length === 4 && /h3 → h2: 第1章/.test(shift4.after),
+      (shift4.after || "").replace(/\s+/g, " ").slice(0, 240)
+    );
+
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
+    await page.fill("#htmlInput", HEADINGS_H3_X4);
+    await page.click("#analyzeButton");
+    await page.waitForTimeout(4500);
+    const pickedShift = await page.evaluate(() => {
+      const button = [...document.querySelectorAll(".candidate-item")].find((b) => /見出し階層/.test(b.textContent));
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    check("底上げの候補を選択できる", pickedShift, "候補が見つからない");
+    if (pickedShift) {
+      await page.waitForTimeout(1200);
+      const afterPanel = await page.inputValue("#afterHtml");
+      check(
+        "修正後欄に対象の見出しが4件出る",
+        (afterPanel.match(/<li>/g) || []).length === 4,
+        afterPanel.replace(/\s+/g, " ").slice(0, 240)
+      );
+      const highlighted = await page.evaluate(() => {
+        const doc = document.getElementById("previewFrame").contentDocument;
+        return doc ? doc.querySelectorAll(".goal2-highlight").length : -1;
+      });
+      check("プレビューが対象の見出しを4件とも強調する", highlighted === 4, `強調された要素=${highlighted}`);
+    }
+
     const shiftAutoAccepted = await page.evaluate(async (h) => {
       const res = await window.goal2Engine.analyze({ html: h });
       window.goal2Engine.autoAcceptSafe(res.candidates);

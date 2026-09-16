@@ -555,8 +555,16 @@ AI側の補完は先頭80ブロックまでしか渡していない（`app.js:19
 代わりに `isBulkExcludedCandidate()` を足し、`shift-headings` のパッチを持つ候補を一括採用の対象から外す。
 ページ内の見出しをすべて動かす変更なので、元の階層の意図を人が見てから決める。個別の採用は従来どおりできる。
 
-`proposal.after_html` は、補正後の見出し一覧を `<ul>` で示す表示用HTMLにし、`patch_mode` は `"patch"` とする。
-`before_html` は先頭の見出しにする。
+`proposal.after_html` は、対象の見出しを `h3 → h2: 第1章` の形で並べた `<ul>` の表示用HTMLにし、`patch_mode` は `"patch"` とする。
+`before_html` は先頭の見出しにする。前後の対比は一覧の各行が持つ。
+
+`currentCandidateAfterHtml()` にも同じ分岐を足す。
+修正パネルの修正後欄はこの関数の結果を優先するが、この関数は対象要素だけを複製した `<template>` にパッチを当てるため、`shift-headings` では `node_ids` のうち先頭の見出ししか見つからない。
+そのままだとメッセージが「対象4件」なのに画面では1件しか動かないように見え、ページ内の見出しをすべて動かす候補の判断材料にならない。
+作業中HTML全体から一覧を組み立てて返す。
+
+`buildPreviewHtml()` も、`shift-headings` のときは `node_ids` のすべてに `goal2-highlight` を付ける。
+どの見出しが動くかが一目で分かるようにする。
 
 AIへの補完は、見出しは全件、段落は先頭120件まで（60文字で切る）を渡すようにし、80ブロックの上限を外す。
 AIの `heading_level_fixes` は現状どおり個別候補にする。
@@ -574,6 +582,8 @@ AIの `heading_level_fixes` は現状どおり個別候補にする。
 - h3, h4, h3 の並びで、採用後が h2, h3, h2 であること
 - 補正候補があるとき、同じ並びに飛びの候補を重ねて出さないこと
 - `autoAcceptSafe()` が補正候補を自動採用しないこと
+- 候補の変換後HTMLと、実UIの修正後欄に、対象の見出しが4件とも出ること
+- プレビューが対象の見出しを4件とも強調すること
 
 `npm run test:saga-gold` は動かない。
 この変更は `public/app.js` の候補生成だけで、saga-goldが使う `lib/sagaAutoFix.js` は別実装であり、そちらは `promoteHeadingsBeforeFirstH2()` で独自に見出しを引き上げているため。

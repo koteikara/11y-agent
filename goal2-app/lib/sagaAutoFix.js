@@ -20,7 +20,6 @@ const STRUCTURAL_KEYS = [
 
 const TABLE_CAPTION_WORD_RE = /\u4e00\u89a7|\u8a73\u7d30|\u8868/u;
 const TABLE_DETAIL_SUFFIX = "\u306e\u8a73\u7d30";
-const GENERIC_TABLE_CAPTION = "\u8868\u306e\u8a73\u7d30";
 const HOLIDAY_DOCTOR_HEADER_SIGNATURE = [
   "\u8a3a\u7642\u79d1",
   "\u533b\u7642\u6a5f\u95a2\u540d",

@@ -2743,12 +2743,7 @@
 
     if (shiftDelta !== 0) {
       const nodeIds = shiftTargets.map((heading) => heading.getAttribute("data-goal2-node-id")).filter(Boolean);
-      const outline = document.createElement("ul");
-      shiftTargets.forEach((heading) => {
-        const item = document.createElement("li");
-        item.textContent = `h${headingLevel(heading) + shiftDelta}: ${normalizeText(heading.textContent || "")}`;
-        outline.appendChild(item);
-      });
+      const outline = buildHeadingShiftOutline(fragment.content, { delta: shiftDelta, node_ids: nodeIds });
       candidates.push(
         makeCandidate({
           ruleId: "html-structure.heading-order",
@@ -6905,7 +6900,31 @@
     return target ? cleanHtml(target.outerHTML) : "";
   }
 
+  // 底上げ候補の修正後欄・証跡に使う一覧。対象の見出しを「h3 → h2: 第1章」の形で並べる。
+  // 対象要素だけを複製してパッチを当てる作りでは、node_idsのうち先頭の見出ししか
+  // 見つからず、画面には1件しか動かないように見える(メッセージは「対象N件」)。
+  // ページ内の見出しをすべて動かす候補なので、作業者が判断できるよう全件を見せる。
+  function buildHeadingShiftOutline(root, patch) {
+    const list = document.createElement("ul");
+    (patch?.node_ids || []).forEach((nodeId) => {
+      const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+      if (!heading || !/^H[1-6]$/.test(heading.tagName)) {
+        return;
+      }
+      const from = headingLevel(heading);
+      const to = Math.min(6, Math.max(2, from + (patch.delta || 0)));
+      const item = document.createElement("li");
+      item.textContent = `h${from} → h${to}: ${normalizeText(heading.textContent || "")}`;
+      list.appendChild(item);
+    });
+    return list;
+  }
+
   function currentCandidateAfterHtml(candidate) {
+    if (candidate.proposal.patch?.type === "shift-headings") {
+      const outline = buildHeadingShiftOutline(parseWorkingFragment().content, candidate.proposal.patch);
+      return outline.children.length ? cleanHtml(outline.outerHTML) : "";
+    }
     const target = currentTargetElement(candidate);
     if (!target) {
       return "";
@@ -9002,9 +9021,18 @@
     sanitizePreview(template.content);
     const candidate = selectedCandidate();
     if (candidate) {
-      const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
-      if (target && !highlightPatchedTextInElement(target, candidate)) {
-        target.classList.add("goal2-highlight");
+      if (candidate.proposal.patch?.type === "shift-headings") {
+        // どの見出しが動くかが一目で分かるよう、対象をすべて強調する。
+        (candidate.proposal.patch.node_ids || []).forEach((nodeId) => {
+          template.content
+            .querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`)
+            ?.classList.add("goal2-highlight");
+        });
+      } else {
+        const target = template.content.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
+        if (target && !highlightPatchedTextInElement(target, candidate)) {
+          target.classList.add("goal2-highlight");
+        }
       }
     }
     if (state.ruleScopeMode === "michecker" && state.selectedMicheckerProblemIndex != null) {
