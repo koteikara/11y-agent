@@ -160,6 +160,14 @@ candidate.proposal.patch = { type: "rebuild", builder: "dataTableSemantics", par
 - `state.generation`（再導出の回数）はS1では使わない。S1が持つのは `state.decisionSeq`（決定の通し番号）と `state.decisionGeneration`（決定の一かたまりの番号）で、どちらも再導出の回数とは別の数である。
 - `exclusive_group` は、いま導ける値（`isTableStructuralCandidate()` が真なら `table-structure`）をS1から入れている。読むのは3.8なのでS3から。
 
+**S2での段階差（実装済み）**。
+
+- `op` を入れた。`accepted` の `op` は決定時点の `proposal.patch` の写しで、パッチを持たない候補は `{ type: "replace-html", after_html }`、`patch_mode` が `"none"` の候補は `apply: false` を立てる。`merge-following-note` や `replace-paragraph-sequence` のように当てるときに変換後HTMLを読むパッチ型があるため、`rebuild` 以外の写しには `after_html` も添える。別の手段を選んだ決定の `op` は、選んだ手段の候補から写す。
+- `edited` の `after_html` をログの正本にした。畳み込みが無くなり、決定の後から書き換わらなくなったためである。
+- `order`（当て順に使う候補配列の添字）を足した。3.7の第1段の当て順に使う。S2では候補配列が変わらないので、決定した時点の添字を固定で持つ。S3で候補を作業中HTMLから作り直し、当て順を `seq` へ切り替えるときに落とす。
+- これで `replay()` は候補配列を参照しなくなり、`replay(sourceHtml, decisions)` の2引数になった。旧実装 `rebuildWorkingHtmlFor()` と `decisionLog.legacyRebuild` は削除した。
+- `candidate.fingerprint`、`candidate.generation`、`candidate.origin`、`candidate.target.content_hash`、`state.generation` はS2でも足していない。S3で入れる。
+
 ### 3.4 ノード識別子の派生
 
 差し替えで生まれた要素にもIDが要る。
@@ -175,6 +183,13 @@ candidate.proposal.patch = { type: "rebuild", builder: "dataTableSemantics", par
 同じ元HTMLに同じ決定を同じ順で当てれば同じIDになるので、リプレイは決定的である。
 `cssEscape` は `.` を扱えることを確認済み。
 IDの書式に依存するコードは無い（`grep` で確認済み）。
+
+**S2での段階差（実装済み）**。
+
+- `replaceTarget()` が上の規則どおり派生IDを振る。当てている決定の `seq` は、引数で持ち回らず、リプレイが当てている間だけ立てるモジュール変数（`activeDecisionSeq`）から読む。画面の「修正後」欄のように決定の外から当てるときは `null` なので、派生IDは振らない。
+- 入れ子の表のID引き継ぎは廃止した。3.7の第2段が `rebuild` の決定を内側（子孫）から先に当てるため、入れ子の表の変換は外側の変換より先に済んでおり、外側の変換結果にそのまま含まれる。実ページ51件のプローブでも退行は出なかったので、`rebuild` 以外の差し替えにも引き継ぎは残していない。
+- 派生IDは `seq` を含むので、**同じ決定の集合でも積んだ順が違えばIDの値は変わる**。変わらないのは中身の方である。回帰テストの「決定順を入れ替えても出力が変わらない」検査は、内部属性を落としたHTMLで比べている。
+- 引き継ぎの廃止で、画面側に1点の制限が残る。外側の表を解体したあと、内側の表への未処理候補は `node_id` が作業中HTMLから消えるため、「修正後」欄が生成時点の `proposal.after_html` へフォールバックする（採用そのものはできる。リプレイが内側を先に当てるため最終HTMLは正しい）。S3の再導出で、内側の表に新しい `node_id` の候補が出るようになれば解消する。
 
 ### 3.5 再導出の流れ
 
@@ -259,6 +274,36 @@ S1では、上の2が書く「`seq` 順に走査し、世代の境目で区切�
 
 上の3が言う `orphaned` は、S1では「修正が失われた」ではなく「リプレイで対象が見つからなかった」を意味する。畳み込み（`foldDescendantFixIntoAncestor()`）で祖先の `after_html` に入った修正も、対象の要素は祖先ごと差し替えられて消えるため印が立つが、修正自体は出力に残っている。S3で画面に出すときに「失われた」と表示すると誤りになる。畳み込みが無くなるS2で本来の意味になる。
 
+**S2での段階差（実装済み）**。
+
+**ビルダーのレジストリ**。表の構造ビルダー6件を `TABLE_REBUILD_BUILDERS` に名前で登録し、`(element, params) => htmlString` の形に揃えた。各ビルダーが対象の要素の外のDOM（直前の見出し）から読んでいた入力は `params` に移し、候補を作る時点で確定させる。`currentCandidateAfterHtml()` は対象の表だけを複製してビルダーを当てるため、複製先には直前の見出しが無く、DOMから導き直すと表示と適用で結果が食い違うからである。AIの補完（`applyTableCaptionLlmResult()`）がキャプションの文言を書き換えたときは `params.caption` も揃える。
+
+| builder | 現在の関数 | `params` |
+| --- | --- | --- |
+| `dataTableSemantics` | `buildDataTableSemanticsHtml` | `caption`（直前の見出しから導いたキャプションの文言。空なら現在の要素から導き直す。表が自分で `<caption>` を持っていればそちらが優先される） |
+| `splitMergedRows` | `splitMergedRowsIntoTablesHtml` | `heading_text`、`heading_tag_with_caption`、`heading_tag_fallback` |
+| `decomposeLayoutTable` | `decomposeLayoutTable` | `parent_heading_tag` |
+| `flattenTable` | `buildFlattenedTableHtml` | なし（表の外を読まない） |
+| `tableAsList` | `buildTableAsListHtml` | `heading_tag` |
+| `rowsAsSections` | `buildRowsAsSectionsHtml` | `heading_tag` |
+
+`applyCandidatePatch()` は `rebuild` を当てるようになり、「当てられたか」を返す。対象が表でない、ビルダーの名前が引けない、ビルダーが空を返したときは当てず、リプレイ側で `orphaned` を立てる。`ELEMENT_REPLACING_PATCH_TYPES` には `rebuild` と `replace-html` を足した。
+
+**当て順は2段**。S2でも `seq` は当て順にしない（第1段の決定は固定の `after_html` を持つため、採用順で当てると出力が採用順で変わる。上の実ページの例を参照）。
+
+- 第1段: `rebuild` 以外の決定。S1の規則のまま（`order`＝候補配列の添字の順、同じ `node_id` は1組、組の中は要素を残すパッチを先、要素ごと差し替えを後）。
+- 第2段: `rebuild` の決定。内側（子孫）を先、外側（先祖）を後に当てる。互いに子孫関係に無いものは `order` の順。子孫関係は第2段を当て始める前のDOMで判定する（当て始めると要素が入れ替わるため）。同じ要素を指す `rebuild` が2件以上あると互いを子孫と見て選べなくなるので、その場合は `order` の先頭から当てる。
+
+第1段を先にするので、ビルダーは「先に当てた内容修正を含む現在の要素」を読む。これにより、作業者がどちらを先に採用しても、表の中の内容修正も内側の表の変換も外側の変換結果に含まれる。
+
+**畳み込みの廃止（挙動の変更）**。`foldDescendantFixIntoAncestor()` を削除し、`resolveSupersededTableCandidates()` から内容修正の子孫候補（`table.` 以外）に対する処理を外した。同じ表の表関連候補（`table.*`）を `conflicted` にする処理と、入れ子の表の `survivesInAncestorOutput()` の扱いはS2では変えていない（S3で排他グループに置き換える）。
+
+これまで「構造候補の採用時に未処理だった内容修正」は、畳み込みで作業者の採用なしに出力へ入り、`conflicted`（反映済み）と表示されていた。S2からは未処理のまま残り、作業者が採用したものだけが第1段で当たって最終HTMLに入る。採用が後になっても、リプレイは第1段を先に当てるので反映される。
+
+**`edited` の制限**。構造候補を編集（`edited`）すると、その決定は人が直したHTMLでの固定の差し替えになる。そのあとにその表の中の内容修正を採用しても、対象が編集後のHTMLに無いため `orphaned` になる（従来は畳み込みで入っていた）。S3の再導出で、編集後のHTMLに対する候補が出るようになるまでの制限である。編集画面の初期値は `currentCandidateAfterHtml()`（現在の要素から計算）なので、編集**前**に採用した内容修正は編集結果に含まれる。
+
+**`orphaned` の意味**。畳み込みが無くなったので、S2の `orphaned` は本来の意味、つまり「その決定の操作が当たらなかった」になった。ただし `patch_mode` が `"none"` の候補（通知だけの候補）も、対象が見つからなければ印が立つ。HTMLは元から変えない候補なので「修正が失われた」わけではない。画面に出すS4で、この区別を付けるか判断する。
+
 ### 3.8 調停ロジックの廃止と排他グループ
 
 `app.js` に排他グループの宣言を置く。
@@ -336,24 +381,28 @@ S1で決めた段階差は次のとおりで、3.3 と 3.7 に書いた。
 - 同じ候補を決め直したときは、リプレイは `seq` が最大の決定だけを当てる。
 - `orphaned` はS1では畳み込み済みの決定にも立つ。本来の意味になるのはS2。
 
-**S2 派生IDと rebuild 操作**。
+**S2 派生IDと rebuild 操作**。実装済み（PR #132）。
 `replaceTarget()` で派生IDを振る。
 表の構造ビルダー6件をレジストリに登録し、候補に `rebuild` を持たせる。
 `currentCandidateAfterHtml()` を現在の要素からの計算に変える。
-検証: `test:table-nesting` と `test:goal2-output` が緑。表の中の内容修正を先に採用してから構造候補を採用したとき、内容修正が最終HTMLに残ることを新規テストで確認。
+あわせて、S1から持ち越した「決定ログの正本化」（`op`・`order`、`replay()` の2引数化、旧実装の削除）と「畳み込みの廃止」も行った。段階差は3.3・3.4・3.7に書いた。
+検証: 6章の5コマンドすべて緑。`npm run test:saga-gold` は変更前後で同じ数値（`lib/sagaAutoFix.js` は候補の決定を通らない）。実ページ51件のGOAL1経路は51件すべてS1と同じ出力。
 
 S2で確かめる項目（S1のレビューで見つかった申し送り）。
 GOAL1と同じ決定の集合（`autoAcceptSafe()`）でも、佐賀市の実ページ51件のうち5件で、採用済みの決定に `orphaned` が立つ。畳み込みの対象になる表の候補ではないため、修正が実際に最終HTMLから落ちている可能性がある。S2で `rebuild` 操作と派生IDを入れたあと、これらが拾えるようになるかを確かめる。
 
-| ページ | 対象を失った決定 | 同じ箇所を消した採用済みの決定 |
-| --- | --- | --- |
-| sg02535 | `text.note-symbol`（n0030） | 先祖の `text.note-symbol`（n0027） |
-| sg02538 | `text.note-symbol`（n0031、n0032） | 先祖の `text.note-symbol`（n0029） |
-| sg04015 | `text.note-symbol`（n0008）、`text.alphanumeric`（n0015） | n0015 は先祖の `text.decoration-lines`（n0014） |
-| sg02544 | `text.note-symbol`（n0044） | 先祖にも同じ要素にも採用済みの候補が無い。原因を要調査 |
-| sg02554 | `text.alphanumeric`（n0051、n0055、n0059） | 同上 |
+5件とも表の構造候補が関わらない（`rebuild` にならない）決定だったため、S2でも `orphaned` は同じ5件に立ち、出力もS1と同じである。1件ずつ確かめた結果は次のとおりで、**修正が実際に失われていたのは sg04015 の1件だけ**だった。
 
-原因は一通りではない。上3件は「先祖の要素ごと差し替え」で説明できるが、下2件は先祖にも同じ `node_id` にも採用済みの候補が無く、`replace-paragraph-sequence` や `merge-following-note` のように他の `node_id` を消すパッチが関わっている疑いがある。S2の検証では、5件それぞれについて修正が最終HTMLに残っているかを先に確かめる。
+| ページ | 対象を失った決定 | 同じ箇所を消した採用済みの決定 | S2の結果 |
+| --- | --- | --- | --- |
+| sg02535 | `text.note-symbol`（n0030） | 先祖の `text.note-symbol`（n0027） | 修正は残る。n0030 は `after_html` が `before_html` と同じ（HTMLを変えない候補）で、先祖 n0027 の同じルールの差し替えが `<br>`・`<strong>` を外した段落を作っている。失われた修正は無い |
+| sg02538 | `text.note-symbol`（n0031、n0032） | 先祖の `text.note-symbol`（n0029） | 修正は残る。n0031 はHTMLを変えない候補。n0032 の意図（`<br>` を外す）は、先祖 n0029 の差し替え後HTMLに同じ形で入っている |
+| sg04015 | `text.note-symbol`（n0008）、`text.alphanumeric`（n0015） | n0004 の `text.list`（`replace-paragraph-sequence`） | n0008 はHTMLを変えない候補で失われていない。**n0015（「令和５年度」→「令和5年度」）は失われている**。原因は先祖の `text.decoration-lines`（n0014）ではなく、n0004 の `replace-paragraph-sequence` が n0012〜n0018 の段落をまとめて差し替えることだった。この候補の `after_html` は元のHTMLから作られるため、同じ範囲に当たった他の修正（n0014 の `<u>` 解除もこちら）が上書きされる。`rebuild` では直らない。**S3の再導出に回す** |
+| sg02544 | `text.note-symbol`（n0044） | n0029 の `text.list`（`replace-paragraph-sequence`、n0029/n0033/n0037/n0040/n0047/n0051/n0054/n0055 をまとめる） | 修正は残る。n0044 は `patch_mode: "none"` の通知候補で、そもそもHTMLを変えない |
+| sg02554 | `text.alphanumeric`（n0051、n0055、n0059） | n0050/n0054/n0058 の `text.list`（`replace-paragraph-sequence`） | 修正は残る（実質）。箇条書き化で行頭の「２．」ごと落ちるため、最終HTMLに全角の「２」は1つも残っていない |
+
+下2件の「先祖にも同じ要素にも採用済みの候補が無い」は誤りで、S1のレビューで疑われていたとおり `replace-paragraph-sequence` が他の `node_id` を消していた。
+S3で直すのは sg04015 の1件と、その一般形である「固定の `after_html` を持つ候補が、他の修正が当たった範囲を元のHTMLで上書きする」問題である。
 
 **S3 再導出と照合**。
 `reconcile()` を実装し、決定の後に3.5の流れを入れる。
