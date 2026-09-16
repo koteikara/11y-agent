@@ -414,6 +414,15 @@
     workingHtml: "",
     candidates: [],
     notices: [],
+    // 決定ログ(設計書 TONO_FEEDBACK_FIX_INSTRUCTIONS.md 3.3)。採用・編集・却下・要確認と、
+    // 調停が自動で付ける conflicted を、決まった順に積む。S1では候補配列の decision が正本で、
+    // このログは鏡写しである。リプレイ(replay)は「どの決定をどの順で当てるか」をここから読む。
+    decisions: [],
+    // 決定の通し番号。単調増加させ、一度使った番号は再利用しない。
+    decisionSeq: 0,
+    // 「決定の一かたまり」の番号。decide()1回、一括採用1回がそれぞれ1世代になる。
+    // 3.3の state.generation(再導出の回数)はS3で入る別の数で、これとは混ぜない。
+    decisionGeneration: 0,
     selectedCandidateId: null,
     bulkSelectedCandidateIds: new Set(),
     bulkActionMessage: "",
@@ -803,6 +812,7 @@
     state.workingHtml = "";
     state.candidates = [];
     state.notices = [];
+    resetDecisionLog();
     state.selectedCandidateId = null;
     clearBulkSelection();
     state.generatedAt = null;
@@ -817,6 +827,9 @@
   // batch engine (window.goal2Engine). Pure with respect to UI state except for
   // state.llmUsage, which the LLM helpers accumulate into (callers reset it first).
   async function runAnalysis(html, options = {}) {
+    // 候補を作り直すので、前のページ・前の解析の決定ログは捨てる。画面の analyze() と
+    // GOAL1バッチの goal2Engine.analyze() のどちらもここを通る。
+    resetDecisionLog();
     const ruleScopeMode = options.ruleScopeMode || state.ruleScopeMode;
     const fragment = parseFragment(html);
     let reviewItems = generateCandidates(fragment);
@@ -6675,9 +6688,11 @@
   }
 
   function rebuildWorkingHtml() {
-    return rebuildWorkingHtmlFor(state.sourceHtml, state.candidates);
+    return replay(state.sourceHtml, state.decisions, state.candidates);
   }
 
+  // replay()に置き換え済み。S2で削除する。いまは同値テスト(test/goal2-output)が
+  // 「リプレイが現行の再構築と一致する」ことを確かめるためだけに呼んでいる。
   function rebuildWorkingHtmlFor(sourceHtml, candidates) {
     const fragment = parseFragment(sourceHtml);
     const decided = candidates.filter((candidate) =>
@@ -6715,6 +6730,119 @@
 
     normalizeHeadingEmphasis(fragment.content);
     return fragment.innerHTML;
+  }
+
+  // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
+  // rebuildWorkingHtmlFor() との違いは「当てる決定を候補配列の decision ではなく決定ログが
+  // 決める」ことだけで、当て順も、1件を当てる処理(applyCandidatePatch()・replaceTarget())も
+  // 同じである。S1で挙動を変えないための線で、当て順がログの順になるのはS2以降。
+  //
+  // S1では決定ログに op(3.3)を持たせないため、当てる内容は candidate_id で候補配列から引く。
+  // 第3引数の candidates が要るのはこのためで、S2で rebuild 操作をログへ写したときに落とす。
+  function replay(sourceHtml, decisions, candidates) {
+    const fragment = parseFragment(sourceHtml);
+    const candidateById = new Map((candidates || []).map((candidate) => [candidate.candidate_id, candidate]));
+
+    // 同じ候補を決め直すと(決定済みの候補を選んで採用や却下を押し直すと)、ログには2件以上の
+    // 決定が並ぶ。後の決定が前の決定を置き換えるので、候補ごとにseqが最大の1件だけを残す。
+    // 残さないと、採用→却下と決め直した候補の採用が当たってしまう。
+    const latestByCandidate = new Map();
+    (decisions || []).forEach((decision) => {
+      const previous = latestByCandidate.get(decision.candidate_id);
+      if (!previous || decision.seq >= previous.seq) {
+        latestByCandidate.set(decision.candidate_id, decision);
+      }
+    });
+
+    // conflicted・rejected・pending・withdrawn は記録だけで、HTMLには当てない。
+    const applicable = [...latestByCandidate.values()].filter((decision) =>
+      ["accepted", "edited"].includes(decision.status)
+    );
+
+    // 当て順は候補配列の添字が決める。ログが決めるのは「どの決定を当てるか」だけである。
+    // これで旧実装の rebuildWorkingHtmlFor() と構成上同じ順序になる。候補配列の順に並べ、
+    // 同じ node_id の決定を1組にまとめ、組の中では要素を残すパッチを先、要素ごと差し替えを
+    // 後に当てる。組の順序は、その node_id への最初の決定の添字順になる。
+    //
+    // 組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて data-goal2-node-id が
+    // 失われ、後続のパッチが対象を見つけられないためである(実データ: <p><tt>…</tt></p> で、
+    // <tt>の解除を先に当てたために同じ<tt>への「22m→22メートル」「全　長→全長」の5件が
+    // すべて落ちた)。
+    //
+    // seq を当て順に使わない理由。S1の候補の after_html は元のHTMLから固定で作られているため、
+    // 作業者が採用した順で当てると出力が採用順で変わる。旧実装は候補配列の順で当てるので
+    // 採用順に依存しなかった(実ページ: 佐賀市 sg03996 の n0015 で、リンク文言を書き戻す
+    // file.file-display-text の set-text と、「１」→「1」の text.alphanumeric の replace-text が
+    // 同じ要素に出る。半角化を先に当てると set-text が元の文言で上書きする)。
+    // seq が当て順になるのは、候補が作業中HTMLから after_html を作り直すS2以降である。
+    const orderIndex = new Map();
+    (candidates || []).forEach((candidate, index) => orderIndex.set(candidate.candidate_id, index));
+    // 候補配列に無い決定は末尾へ回す。どうせ applyDecision() で orphaned になる。
+    const orderOf = (decision) => {
+      const index = orderIndex.get(decision.candidate_id);
+      return index === undefined ? (candidates?.length || 0) + decision.seq : index;
+    };
+
+    const groups = new Map();
+    applicable
+      .slice()
+      .sort((a, b) => orderOf(a) - orderOf(b))
+      .forEach((decision) => {
+        if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
+        groups.get(decision.node_id).push(decision);
+      });
+    const ordered = [...groups.values()].flatMap((group) => [
+      ...group.filter((decision) => !isElementReplacingDecision(decision, candidateById)),
+      ...group.filter((decision) => isElementReplacingDecision(decision, candidateById)),
+    ]);
+    ordered.forEach((decision) => applyDecision(fragment.content, decision, candidateById));
+
+    normalizeHeadingEmphasis(fragment.content);
+    return fragment.innerHTML;
+  }
+
+  function isElementReplacingDecision(decision, candidateById) {
+    const candidate = candidateById.get(decision.candidate_id);
+    // 候補が引けない決定は、現行の「patchが無い候補」と同じ扱い(要素ごと差し替え)にする。
+    return candidate ? isElementReplacingCandidate(candidate) : true;
+  }
+
+  function applyDecision(root, decision, candidateById) {
+    const candidate = candidateById.get(decision.candidate_id);
+    const target = decision.node_id
+      ? root.querySelector(`[data-goal2-node-id="${cssEscape(decision.node_id)}"]`)
+      : null;
+    // 対象が見つからない決定・候補を引けない決定は、黙って捨てずに印を付ける(3.7の3)。
+    // 現行も対象が無い候補は当たらないため、出力は変わらない。
+    //
+    // S1の orphaned は「修正が失われた」ではなく「リプレイで対象が見つからなかった」である。
+    // 畳み込み(foldDescendantFixIntoAncestor)で祖先の after_html に入った修正も、対象の要素は
+    // 祖先ごと差し替えられて消えるため orphaned が立つ。出力にはその修正が残っている
+    // (MULTI_FIX_IN_TABLE を表の解体まで進めると、表の中の内容修正4件に立つが「22メートル」は
+    // 出力に残る)。S3で画面に出すときに「失われた」と表示すると誤りになる。
+    // 畳み込みが無くなるS2で本来の意味になる。
+    if (!target || !candidate) {
+      decision.orphaned = true;
+      return;
+    }
+    decision.orphaned = false;
+
+    if (decision.status === "edited") {
+      // 畳み込み(foldDescendantFixIntoAncestor)が決定の後から書き換えるため、人が直したHTMLも
+      // ログの写しではなく候補配列の decision.after_html から引く。S2で正本をログへ移す。
+      replaceTarget(
+        root,
+        decision.node_id,
+        candidate.decision?.after_html || decision.after_html || candidate.proposal.after_html
+      );
+      return;
+    }
+
+    if (candidate.proposal.patch_mode === "none") {
+      return;
+    }
+
+    applyCandidatePatch(root, candidate);
   }
 
   function normalizeHeadingEmphasis(root) {
@@ -7044,7 +7172,8 @@
       return;
     }
     const afterHtml = status === "edited" ? editedAfterHtml : chosenMethodCandidate.proposal.after_html;
-    applyCandidateDecision(candidate, status, reason, afterHtml, chosenMethodCandidate);
+    // 決定1件と、それに伴って調停が付ける conflicted を同じ世代にする(設計書 3.5)。
+    beginDecisionBatch(() => applyCandidateDecision(candidate, status, reason, afterHtml, chosenMethodCandidate));
     state.workingHtml = rebuildWorkingHtml();
     moveToNextUnresolvedCandidate(candidate.candidate_id);
     state.quickEditOpen = false;
@@ -7065,6 +7194,111 @@
     decide("edited");
   }
 
+  // ---- 決定ログ(設計書 3.3) -------------------------------------------------
+  //
+  // 決定を候補配列から切り離し、順序付きのログへ積む。S2以降で再導出によって候補が
+  // 入れ替わっても決定が消えないようにするための土台である。
+  // S1では候補配列の decision が正本で、ログはその鏡写しにとどめる。リプレイ(replay)は
+  // ログから「どの決定をどの順で当てるか」だけを読み、当てる内容(patch・after_html)は
+  // candidate_id で候補配列から引く。
+  //
+  // S1のログが 3.3 の op(決定時点の操作の写し)を持たない理由:
+  // foldDescendantFixIntoAncestor() が、決定の後から構造候補の decision.after_html を
+  // 書き換える(表の中の内容修正を変換後HTMLへ畳み込む)。決定時点の after_html を写して
+  // しまうと、その後の畳み込みがリプレイに乗らず挙動が変わる。op の写しは、畳み込みが
+  // 要らなくなるS2の rebuild 操作と一緒に入れる。
+
+  // 同じ「かたまり」の決定に同じ世代番号を振るための入れ物。decide() や一括採用の
+  // 呼び出し1回を beginDecisionBatch() で囲む。囲まれていない決定は1件で1世代になる。
+  let openDecisionGeneration = null;
+
+  function beginDecisionBatch(run) {
+    const outer = openDecisionGeneration;
+    state.decisionGeneration += 1;
+    openDecisionGeneration = state.decisionGeneration;
+    try {
+      return run();
+    } finally {
+      openDecisionGeneration = outer;
+    }
+  }
+
+  function currentDecisionGeneration() {
+    if (openDecisionGeneration !== null) {
+      return openDecisionGeneration;
+    }
+    state.decisionGeneration += 1;
+    return state.decisionGeneration;
+  }
+
+  function resetDecisionLog() {
+    state.decisions = [];
+    state.decisionSeq = 0;
+    state.decisionGeneration = 0;
+    openDecisionGeneration = null;
+  }
+
+  // 「同じ箇所への同じルールの指摘」を世代をまたいで同一視するための指紋(3.3)。
+  // 対象の中身(content_hash)は含めない。中身が別の修正で変わっても同じ問題だからである。
+  function candidateFingerprint(candidate) {
+    return `${candidate?.rule_id || ""}|${candidate?.method_label || ""}|${candidate?.target?.node_id || ""}`;
+  }
+
+  function decisionLogEntry(candidate, decision, seq, generation) {
+    return {
+      seq,
+      generation,
+      candidate_id: candidate.candidate_id,
+      fingerprint: candidateFingerprint(candidate),
+      rule_id: candidate.rule_id,
+      method_label: candidate.method_label || null,
+      node_id: candidate.target?.node_id || null,
+      // 3.8の排他グループ。S1では誰も読まないが、ログを「何がいつどう決まったか」の
+      // 完全な記録にするため、いま導ける値(表の構造変換の手段)は入れておく。
+      exclusive_group: isTableStructuralCandidate(candidate) ? "table-structure" : null,
+      status: decision.status,
+      reason: decision.reason ?? null,
+      actor: decision.actor ?? null,
+      decided_at: decision.decided_at ?? null,
+      // 人が直したHTMLの記録。リプレイは候補配列の decision.after_html を使う(畳み込みが
+      // 後から入るため)。この欄は証跡用の写しで、S2で op と一緒に正本へ格上げする。
+      after_html: decision.status === "edited" ? decision.after_html ?? null : null,
+      op: null,
+      selected_method_id: decision.selected_method_id ?? null,
+      selected_method_rule_id: decision.selected_method_rule_id ?? null,
+      selected_method_title: decision.selected_method_title ?? null,
+      selected_method_label: decision.selected_method_label ?? null,
+      // 3.6の取り下げ。S3で再導出と照合を入れるまで発生しない。
+      withdrawn_by_seq: null,
+      // 3.7の3。リプレイで対象要素が見つからなかった決定に立つ。
+      orphaned: false,
+    };
+  }
+
+  // 候補に下した決定をログへ積む。採用・編集・却下・要確認と、調停ロジックが付ける
+  // conflicted のすべてを通す。conflicted はリプレイでは当てない(記録だけ)。
+  function recordDecision(candidate, decision) {
+    state.decisionSeq += 1;
+    const entry = decisionLogEntry(candidate, decision, state.decisionSeq, currentDecisionGeneration());
+    state.decisions.push(entry);
+    return entry;
+  }
+
+  // 候補配列から決定ログを組み立てる(設計書 3.12)。goal2Engine.buildFinalHtml() は
+  // 引数を変えないため、候補が持つ decision からログを作ってリプレイする。
+  // 候補配列の並び順で seq を振り、全件を同じ1世代に置く。現行の rebuildWorkingHtmlFor() は
+  // 候補配列の並び順で node_id の組を作るため、こうするとリプレイの当て順が現行と一致する。
+  function decisionsFromCandidates(candidates) {
+    const decisions = [];
+    (candidates || []).forEach((candidate) => {
+      if (!candidate?.decision?.status) {
+        return;
+      }
+      decisions.push(decisionLogEntry(candidate, candidate.decision, decisions.length + 1, 1));
+    });
+    return decisions;
+  }
+
   function applyCandidateDecision(candidate, status, reason, afterHtml, selectedMethodCandidate = candidate) {
     candidate.status = status;
     candidate.decision = {
@@ -7078,6 +7312,7 @@
       selected_method_title: selectedMethodCandidate.rule.title,
       selected_method_label: selectedMethodCandidate.method_label || null,
     };
+    recordDecision(candidate, candidate.decision);
     state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
     resolveSupersededTableCandidates(candidate);
     resolveAlternativeMethodCandidates(candidate);
@@ -7090,8 +7325,8 @@
   // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
   //
   // 一方、同じ要素に対する「単位の言い換え」「単語内空白の除去」のように要素を残すパッチは、
-  // 1つの段落に何件あっても互いに独立して当たる(rebuildWorkingHtmlForが要素を残すパッチを
-  // 先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
+  // 1つの段落に何件あっても互いに独立して当たる(replay()が同じnode_idの中で要素を残す
+  // パッチを先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
   function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
       return;
@@ -7118,6 +7353,7 @@
         decided_at: decidedAt,
         after_html: null,
       };
+      recordDecision(other, other.decision);
       state.bulkSelectedCandidateIds.delete(other.candidate_id);
     });
   }
@@ -7143,16 +7379,19 @@
     let acceptedCount = 0;
     let skippedCount = 0;
 
-    selected.forEach((candidate) => {
-      if (candidate.decision.status) {
-        return;
-      }
-      if (!canBulkAcceptCandidate(candidate)) {
-        skippedCount += 1;
-        return;
-      }
-      applyCandidateDecision(candidate, "accepted", "チェックした候補を一括採用", candidate.proposal.after_html);
-      acceptedCount += 1;
+    // 一括採用はまとめて1世代に積む(3.14の確定「まとめてログに積んで再導出1回」)。
+    beginDecisionBatch(() => {
+      selected.forEach((candidate) => {
+        if (candidate.decision.status) {
+          return;
+        }
+        if (!canBulkAcceptCandidate(candidate)) {
+          skippedCount += 1;
+          return;
+        }
+        applyCandidateDecision(candidate, "accepted", "チェックした候補を一括採用", candidate.proposal.after_html);
+        acceptedCount += 1;
+      });
     });
 
     pruneBulkSelection();
@@ -7189,13 +7428,16 @@
     }
 
     const ruleCounts = new Map();
-    targets.forEach((candidate) => {
-      if (candidate.decision.status) {
-        return;
-      }
-      applyCandidateDecision(candidate, "accepted", "確認不要の候補をまとめて採用", candidate.proposal.after_html);
-      const title = candidate.rule.title;
-      ruleCounts.set(title, (ruleCounts.get(title) || 0) + 1);
+    // 一括採用はまとめて1世代に積む(3.14)。
+    beginDecisionBatch(() => {
+      targets.forEach((candidate) => {
+        if (candidate.decision.status) {
+          return;
+        }
+        applyCandidateDecision(candidate, "accepted", "確認不要の候補をまとめて採用", candidate.proposal.after_html);
+        const title = candidate.rule.title;
+        ruleCounts.set(title, (ruleCounts.get(title) || 0) + 1);
+      });
     });
 
     const accepted = [...ruleCounts.values()].reduce((sum, count) => sum + count, 0);
@@ -7238,11 +7480,14 @@
   // Applied once per hand-off: analyze() clears the flag right after calling this.
   function applyPendingAutoAcceptSafe() {
     state.pendingAutoAcceptSafe = false;
-    state.candidates.forEach((candidate) => {
-      if (!canBulkAcceptCandidate(candidate)) {
-        return;
-      }
-      applyCandidateDecision(candidate, "accepted", "一括自動採用（機械的・確認不要）", candidate.proposal.after_html);
+    // 引き継ぎ1回分をまとめて1世代に積む(3.14)。
+    beginDecisionBatch(() => {
+      state.candidates.forEach((candidate) => {
+        if (!canBulkAcceptCandidate(candidate)) {
+          return;
+        }
+        applyCandidateDecision(candidate, "accepted", "一括自動採用（機械的・確認不要）", candidate.proposal.after_html);
+      });
     });
   }
 
@@ -7327,6 +7572,7 @@
           decided_at: decidedAt,
           after_html: null,
         };
+        recordDecision(other, other.decision);
         state.bulkSelectedCandidateIds.delete(other.candidate_id);
         return;
       }
@@ -7350,6 +7596,7 @@
         decided_at: decidedAt,
         after_html: null,
       };
+      recordDecision(other, other.decision);
       state.bulkSelectedCandidateIds.delete(other.candidate_id);
     });
   }
@@ -10628,34 +10875,62 @@
     // returns how many were accepted.
     autoAcceptSafe(candidates) {
       let accepted = 0;
-      candidates.forEach((candidate) => {
-        if (!canBulkAcceptCandidate(candidate)) {
-          return;
-        }
-        candidate.decision = {
-          status: "accepted",
-          reason: "一括自動採用（機械的・確認不要）",
-          actor: "goal1-batch",
-          decided_at: new Date().toISOString(),
-          after_html: null,
-        };
-        accepted += 1;
-        // 画面側の採用(applyCandidateDecision)と同じ競合解決を通す。通していなかったため、
-        // 同じ箇所の代替手段がすべて採用され、出力が適用順で決まっていた。
-        resolveSupersededTableCandidates(candidate, candidates);
-        resolveAlternativeMethodCandidates(candidate, candidates);
+      // 呼び出し1回をまとめて1世代に積む(3.14)。applyCandidateDecision() を通さないのは、
+      // actor が goal1-batch であることと candidate.status を触らないことを変えないため。
+      // 決定ログへの記録だけ画面側と同じ recordDecision() で揃える。
+      beginDecisionBatch(() => {
+        candidates.forEach((candidate) => {
+          if (!canBulkAcceptCandidate(candidate)) {
+            return;
+          }
+          candidate.decision = {
+            status: "accepted",
+            reason: "一括自動採用（機械的・確認不要）",
+            actor: "goal1-batch",
+            decided_at: new Date().toISOString(),
+            after_html: null,
+          };
+          recordDecision(candidate, candidate.decision);
+          accepted += 1;
+          // 画面側の採用(applyCandidateDecision)と同じ競合解決を通す。通していなかったため、
+          // 同じ箇所の代替手段がすべて採用され、出力が適用順で決まっていた。
+          resolveSupersededTableCandidates(candidate, candidates);
+          resolveAlternativeMethodCandidates(candidate, candidates);
+        });
       });
       return accepted;
     },
 
+    // 引数は変えない(goal1.jsの呼び出しをそのままにする)。候補配列から決定ログを
+    // 組み立ててリプレイする(設計書 3.12)。GOAL1バッチは画面のstateを使わないため、
+    // state.decisionsではなく候補が持つdecisionからログを作る。
     buildFinalHtml(sourceHtml, candidates) {
       return stripMigrationUnneededAttributesFromHtml(
-        stripInternalFromHtml(rebuildWorkingHtmlFor(sourceHtml, candidates))
+        stripInternalFromHtml(replay(sourceHtml, decisionsFromCandidates(candidates), candidates))
       );
     },
 
     buildEvidence(context, finalHtml) {
       return buildEvidenceFor(context, finalHtml);
+    },
+
+    // S1の同値テスト(test/goal2-output)専用の窓口。決定ログのリプレイが、置き換え対象の
+    // rebuildWorkingHtmlFor() と同じHTMLを返すことを、決定を積む順序を変えて確かめる。
+    // legacyRebuild は rebuildWorkingHtmlFor() ごとS2で消す。
+    decisionLog: {
+      fromCandidates(candidates) {
+        return decisionsFromCandidates(candidates);
+      },
+      replay(sourceHtml, decisions, candidates) {
+        return replay(sourceHtml, decisions, candidates);
+      },
+      legacyRebuild(sourceHtml, candidates) {
+        return rebuildWorkingHtmlFor(sourceHtml, candidates);
+      },
+      // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
+      screenState() {
+        return { sourceHtml: state.sourceHtml, decisions: state.decisions, candidates: state.candidates };
+      },
     },
 
     sessionIdFor(oldUrl, pageTitle) {
