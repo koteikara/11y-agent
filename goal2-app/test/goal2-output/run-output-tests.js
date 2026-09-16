@@ -18,6 +18,7 @@
 //  14. alt=""の装飾アイコンに「画像内容を具体的に入力」の候補を出していた(指摘12)。
 //  15. 見出しから導けないとき、1行目のセルを連結したキャプションを作っていた(指摘2)。
 //  16. h3が並ぶページで先頭の見出ししか直らなかった(指摘1)。
+//  17. 表の構造変換の手段が、要確認のまま一括採用で自動採用されていた(PR-2.5)。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -154,6 +155,17 @@ const NO_HEADING_TABLE = `<div><table border="1"><tbody>
 // 指摘2: 構造の手段が出ず、キャプション専用の候補だけが出る表
 const NO_CAPTION_SIMPLE_TABLE = `<table border="1"><tbody><tr><td>電話</td><td>0198-62-2111</td></tr></tbody></table>`;
 
+// PR-2.5: 書式設定のある1行の表。構造の手段(table.caption・table.layout-table)は一括採用の
+// 対象外になり、構造を変えない table.format-clear だけが採用される。
+const FORMATTED_SIMPLE_TABLE = `<table border="1" cellpadding="4"><tbody><tr><td bgcolor="#eee"><font size="3">電話</font></td><td>0198-62-2111</td></tr></tbody></table>`;
+
+// PR-2.5: セル結合のある表。結合の分類候補も構造変換の手段なので一括採用の対象外。
+const MERGED_CELL_TABLE = `<h2>対象者</h2><table border="1"><tbody>
+  <tr><td colspan="2">区分</td><td>対象</td></tr>
+  <tr><td rowspan="2">市民</td><td>一般</td><td>●</td></tr>
+  <tr><td>学生</td><td>○</td></tr>
+</tbody></table>`;
+
 // 指摘1: h3が4つ並ぶページと、h3→h4→h3 の並び
 const HEADINGS_H3_X4 = `<h3>第1章</h3><p>本文1</p><h3>第2章</h3><p>本文2</p><h3>第3章</h3><p>本文3</p><h3>第4章</h3><p>本文4</p>`;
 const HEADINGS_H3_H4_H3 = `<h3>章1</h3><p>本文a</p><h4>節1</h4><p>本文b</p><h3>章2</h3><p>本文c</p>`;
@@ -174,6 +186,48 @@ async function main() {
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
     await page.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });
+
+    // 表の構造変換の手段は一括採用の対象外になった(PR-2.5)。解体や再構築を前提にしたテストは、
+    // 画面で作業者が行うのと同じ手順に置き換える。確認不要をまとめて採用してから、表の手段を
+    // 上から順に採用する。decisionを直接立てる形にはできない。表の中の文字修正を構造候補の
+    // 変換後HTMLへ畳み込む処理(resolveSupersededTableCandidates)が採用の経路でしか走らず、
+    // 畳み込みを飛ばすと「表を解体しても段落内の修正が失われない」が成り立たなくなるため。
+    const runTableMethodFlow = async (html, methodPattern) => {
+      for (let attempt = 0; attempt < 4 && !(await page.isVisible("#htmlInput")); attempt += 1) {
+        await page.evaluate(() => document.getElementById("toggleInputButton")?.click());
+        await page.waitForTimeout(400);
+      }
+      await page.fill("#htmlInput", html);
+      await page.click("#analyzeButton");
+      await page.waitForTimeout(4500);
+
+      if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) === null) {
+        await page.click("#bulkAcceptReviewFreeButton");
+        await page.waitForTimeout(1500);
+      }
+
+      for (let round = 0; round < 6; round += 1) {
+        const picked = await page.evaluate((pattern) => {
+          const button = [...document.querySelectorAll(".candidate-item.unresolved")].find((b) =>
+            new RegExp(pattern).test(b.textContent)
+          );
+          if (!button) return false;
+          button.click();
+          return true;
+        }, methodPattern);
+        if (!picked) break;
+        await page.waitForTimeout(900);
+        if ((await page.getAttribute("#acceptButton", "disabled")) !== null) break;
+        await page.click("#acceptButton");
+        await page.waitForTimeout(1200);
+      }
+
+      await page.evaluate(() => {
+        document.querySelector(".output-drawer").open = true;
+      });
+      await page.waitForTimeout(400);
+      return page.inputValue("#finalHtml");
+    };
 
     const ruleIdsFor = (html) =>
       page.evaluate(async (h) => {
@@ -265,11 +319,7 @@ async function main() {
     check("装飾タグの解除も反映される", !/<tt>/i.test(plainFixed), plainFixed);
 
     // 表の中でも、表構造候補を採用したときに同じ修正が残る
-    const inTableFixed = await page.evaluate(async (h) => {
-      const res = await window.goal2Engine.analyze({ html: h });
-      window.goal2Engine.autoAcceptSafe(res.candidates);
-      return window.goal2Engine.buildFinalHtml(h, res.candidates);
-    }, MULTI_FIX_IN_TABLE);
+    const inTableFixed = await runTableMethodFlow(MULTI_FIX_IN_TABLE, "解体|箇条書き|データ表として維持");
     check(
       "表を解体しても段落内の修正が失われない",
       /22メートル/.test(inTableFixed) && /17\.5メートル/.test(inTableFixed) && /4メートル/.test(inTableFixed),
@@ -282,6 +332,12 @@ async function main() {
     );
 
     // 8. 画面表示: 同じ段落の独立した修正を「代替手段」として見せない
+    // 直前の候補生成で入力欄が畳まれているので開いてから入れ直す
+    await page.evaluate(() => {
+      const body = document.getElementById("inputBody");
+      if (body && body.hidden) document.getElementById("toggleInputButton").click();
+    });
+    await page.waitForTimeout(300);
     await page.fill("#htmlInput", MULTI_FIX_PARAGRAPH);
     await page.click("#analyzeButton");
     await page.waitForTimeout(4000);
@@ -341,11 +397,7 @@ async function main() {
       <td><h2>所在地</h2><p>安城市</p></td>
     </tr></tbody></table>`;
 
-    const nestedOut = await page.evaluate(async (h) => {
-      const res = await window.goal2Engine.analyze({ html: h });
-      window.goal2Engine.autoAcceptSafe(res.candidates);
-      return window.goal2Engine.buildFinalHtml(h, res.candidates);
-    }, NESTED_IN_LAYOUT);
+    const nestedOut = await runTableMethodFlow(NESTED_IN_LAYOUT, "解体|箇条書き|データ表として維持");
 
     check(
       "解体しても入れ子の表が表として残る",
@@ -405,11 +457,10 @@ async function main() {
     }
 
     // 表のセルの修正が、入れ子の表を採用しても残る
-    const cellFixed = await page.evaluate(async (h) => {
-      const res = await window.goal2Engine.analyze({ html: h });
-      window.goal2Engine.autoAcceptSafe(res.candidates);
-      return window.goal2Engine.buildFinalHtml(h, res.candidates);
-    }, `<table border="0"><tbody><tr><td><table border="1"><tbody><tr><td>遺跡番号</td><td>541031</td></tr><tr><td>墳　丘</td><td>円墳</td></tr></tbody></table><h2>概要</h2><p>本文</p></td><td><h2>所在地</h2><p>安城市</p></td></tr></tbody></table>`);
+    const cellFixed = await runTableMethodFlow(
+      `<table border="0"><tbody><tr><td><table border="1"><tbody><tr><td>遺跡番号</td><td>541031</td></tr><tr><td>墳　丘</td><td>円墳</td></tr></tbody></table><h2>概要</h2><p>本文</p></td><td><h2>所在地</h2><p>安城市</p></td></tr></tbody></table>`,
+      "解体|箇条書き|データ表として維持"
+    );
     check(
       "入れ子の表でもセル内の文字間空白が詰まる",
       /墳丘/.test(cellFixed) && !/墳　丘/.test(cellFixed),
@@ -831,6 +882,41 @@ async function main() {
       });
       check("プレビューが対象の見出しを4件とも強調する", highlighted === 4, `強調された要素=${highlighted}`);
     }
+
+    // 17. PR-2.5: 表の構造変換の手段を一括採用の対象から外す
+    // TABLE_FIX_METHODS_INSTRUCTIONS.md 2章の「全ての構造変換手段は一括採用とGOAL1の
+    // autoAcceptSafeの対象に絶対に入れない」を、コード側で実際に満たす。
+    const bulkTableOutcome = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return res.candidates
+        .filter((c) => c.rule_id.startsWith("table."))
+        .map((c) => ({ rule: c.rule_id, status: c.decision.status || null }));
+    }, FORMATTED_SIMPLE_TABLE);
+    const structuralRules = ["table.caption", "table.layout-table", "table.simple-structure"];
+    check(
+      "一括採用が表の構造変換の手段を採用しない",
+      bulkTableOutcome.filter((c) => structuralRules.includes(c.rule)).every((c) => c.status === null),
+      JSON.stringify(bulkTableOutcome)
+    );
+    check(
+      "構造を変えない表の候補は従来どおり採用する",
+      bulkTableOutcome.some((c) => c.rule === "table.format-clear" && c.status === "accepted"),
+      JSON.stringify(bulkTableOutcome)
+    );
+
+    const mergedBulkOutcome = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      window.goal2Engine.autoAcceptSafe(res.candidates);
+      return res.candidates
+        .filter((c) => c.rule_id.startsWith("table.cell-merge-"))
+        .map((c) => ({ rule: c.rule_id, status: c.decision.status || null }));
+    }, MERGED_CELL_TABLE);
+    check(
+      "一括採用がセル結合の手段を採用しない",
+      mergedBulkOutcome.length > 0 && mergedBulkOutcome.every((c) => c.status === null),
+      JSON.stringify(mergedBulkOutcome)
+    );
 
     const shiftAutoAccepted = await page.evaluate(async (h) => {
       const res = await window.goal2Engine.analyze({ html: h });

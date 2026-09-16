@@ -30,6 +30,7 @@ GOAL2(候補レビュー画面)の「修正方法」パネルは、現状1つの
 
 - **手段=兄弟候補という既存機構をそのまま使う。** 新しい「メソッド配列」データ構造は導入しない。適用可能な各手段を同一表(同一`target.node_id`)への候補としてプッシュすれば、既存の修正方法グリッド・`selected_method_id`記録・`applyCandidatePatch`の反映・証跡出力がすべて無改修で機能する。
 - **全ての構造変換手段は `requiresHumanReview: true`。** 一括採用(`canBulkAcceptCandidate`)とGOAL1の`autoAcceptSafe`の対象に絶対に入れない。
+  - PR-2.5 でコードを文書に合わせた。`isBulkExcludedCandidate()` が実体で、`isTableStructuralCandidate()` が真の候補を一括採用から外す。それ以前は `requiresHumanReview: true` だけで外れる想定だったが、`canBulkAcceptCandidate()` は `requires_human_review` を見ておらず、構造手段は要確認のまま自動採用されていた。
 - **`<dl>`(定義リスト)への変換は手段に含めない。** ユーザー確定済み方針(project-state.md Decisions 2026-07-10): CMS入力画面での自治体職員による定義リストの運用が難しいため、見出し+段落構造を使う。
 - **推奨手段の順序**: 修正方法グリッドの先頭(「おすすめ:」表示)は現行`planTableTreatment()`のウォーターフォール順位をそのまま推奨順位として使う(データ表維持 > 分割 > レイアウト解体 > その他)。既存の推奨挙動を変えない。
 - **rule_idは既存idへ相乗りし、新設しない**(ユーザー確定 2026-07-21): M4→`table.cell-merge-layout`、M5/M6→`table.layout-table`。カード・証跡の表示は`methodLabel`で区別する。KBファイル追加・rules.jsonl再生成は行わない。
