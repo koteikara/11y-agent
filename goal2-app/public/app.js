@@ -2291,6 +2291,11 @@
     if (candidate.proposal.patch?.type === "insert-caption") {
       candidate.proposal.patch.value = suggestion;
     }
+    // rebuild 操作の params も揃える(3.7)。ここを直さないと、リプレイでビルダーが
+    // 元の(AI補完前の)文言でキャプションを作り直してしまう。
+    if (candidate.proposal.patch?.type === "rebuild" && candidate.proposal.patch.params) {
+      candidate.proposal.patch.params.caption = suggestion;
+    }
     candidate.proposal.after_html = cleanHtml(tableElement.outerHTML);
   }
 
@@ -3427,6 +3432,9 @@
             requiresHumanReview: method.requiresHumanReview,
             llmContext: method.llmContext,
             methodLabel: method.methodLabel,
+            // 表の構造候補は「現在の要素にビルダーを当てる」操作として持つ(設計書 3.7)。
+            // proposal.after_html は表示用に残す(生成時点の値のまま)。
+            patch: { type: "rebuild", builder: method.builder, params: method.params },
           })
         );
       });
@@ -3514,6 +3522,37 @@
   // M1(データ表として維持)とM3(表をやめて解体)は、旧来の単一判定(shouldPreserveAsDataTable /
   // isLikelyLayoutTable)より緩いゲートで「選択肢として提示するかどうか」を決める。ただし
   // shouldPreserveAsDataTable()自体は確信度・推奨順の判断材料として引き続き使う。
+  // 表の構造ビルダーのレジストリ(設計書 3.7)。決定ログの rebuild 操作は builder を名前で引く。
+  // 登録する関数は「現在の要素と params を受け取り、HTML文字列を返す」形に揃える。
+  //
+  // params は「その要素のDOMの外から決まる入力」だけを持つ。表の直前の見出しから導く
+  // キャプションの文言や見出しレベルがこれにあたる。候補を作る時点で確定させる理由は2つ。
+  //  - currentCandidateAfterHtml() が対象の表だけを複製して当てるため、複製先には直前の
+  //    見出しが無い。DOMから導き直すと表示と適用で結果が食い違う。
+  //  - AIの補完(applyTableCaptionLlmResult)が書き換えた文言を、リプレイでも使えるようにする。
+  const TABLE_REBUILD_BUILDERS = {
+    dataTableSemantics: (element, params) => buildDataTableSemanticsHtml(element, params),
+    splitMergedRows: (element, params) => splitMergedRowsIntoTablesHtml(element, params),
+    decomposeLayoutTable: (element, params) => decomposeLayoutTable(element, params, []),
+    flattenTable: (element, params) => buildFlattenedTableHtml(element, params),
+    tableAsList: (element, params) => buildTableAsListHtml(element, params),
+    rowsAsSections: (element, params) => buildRowsAsSectionsHtml(element, params),
+  };
+
+  function tableRebuildBuilder(name) {
+    return Object.prototype.hasOwnProperty.call(TABLE_REBUILD_BUILDERS, name) ? TABLE_REBUILD_BUILDERS[name] : null;
+  }
+
+  // M2(意味単位ごとの分割)が表の外から読む入力。キャプションの有無で使う値が変わるため、
+  // 両方を確定させておく(3.7)。
+  function splitMergedRowsParams(table) {
+    return {
+      heading_text: nearestPreviousHeadingText(table),
+      heading_tag_with_caption: suggestSeparatedHeadingTag(table),
+      heading_tag_fallback: nearestPreviousHeadingTag(table) || "h3",
+    };
+  }
+
   function planTableTreatments(table) {
     const preserve = shouldPreserveAsDataTable(table);
     const canOfferSemantics = canOfferDataTableSemanticsMethod(table);
@@ -3526,6 +3565,12 @@
     // 用途分類ではなくこの一般ルールを解説として使う。
 
     const missingCaption = dataTableSemanticsMissingCaption(table);
+    // 各手段の params(3.7)。候補を作る時点で確定させる値なので、手段を組み立てる前に置く。
+    const semanticsParams = { caption: dataTableCaptionText(table, dataTableProfile(table)) };
+    const splitParams = splitMergedRowsParams(table);
+    const decomposeParams = { parent_heading_tag: nearestPreviousHeadingTag(table) || "h2" };
+    const separatedHeadingParams = { heading_tag: suggestSeparatedHeadingTag(table) };
+
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
       message: [
@@ -3539,7 +3584,9 @@
       reason: preserve
         ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
         : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
-      afterHtml: buildDataTableSemanticsHtml(table),
+      afterHtml: buildDataTableSemanticsHtml(table, semanticsParams),
+      builder: "dataTableSemantics",
+      params: semanticsParams,
       patchMode: "replace",
       // キャプションを導けなくても確信度は下げない。下げると shouldRequireEditedAdoption()が
       // 採用を止め、GOAL1の一括採用では代わりに「箇条書きに変換する」が採用されて、
@@ -3556,7 +3603,9 @@
       ruleId: "table.simple-structure",
       message: "結合により複数の意味単位が1つの表にまとめられています。",
       reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
-      afterHtml: splitMergedRowsIntoTablesHtml(table),
+      afterHtml: splitMergedRowsIntoTablesHtml(table, splitParams),
+      builder: "splitMergedRows",
+      params: splitParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3570,12 +3619,14 @@
     // preserveAsDataTableによるnull-return、同関数内のコメント参照)、それと同じ安全策を踏襲する。
     const buildDecomposeMethod = () => {
       const imageContexts = [];
-      const afterHtml = decomposeLayoutTable(table, imageContexts);
+      const afterHtml = decomposeLayoutTable(table, decomposeParams, imageContexts);
       return {
         ruleId: "table.layout-table",
         message: "この表はレイアウト目的で使われている可能性があります。",
         reason: layoutTableReason(table),
         afterHtml,
+        builder: "decomposeLayoutTable",
+        params: decomposeParams,
         patchMode: "replace",
         confidence: layoutTableConfidence(table),
         requiresHumanReview: true,
@@ -3592,6 +3643,8 @@
       message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
       reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
       afterHtml: buildFlattenedTableHtml(table),
+      builder: "flattenTable",
+      params: {},
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3604,7 +3657,9 @@
       ruleId: "table.layout-table",
       message: "この表は箇条書きとして表現できる可能性があります。",
       reason: "列数が少なく1項目=1行の構造に見えるため、表をやめて箇条書き(リスト)へ変換する方法も選択肢に含めます。",
-      afterHtml: buildTableAsListHtml(table),
+      afterHtml: buildTableAsListHtml(table, separatedHeadingParams),
+      builder: "tableAsList",
+      params: separatedHeadingParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3617,7 +3672,9 @@
       ruleId: "table.layout-table",
       message: "この表は行ごとに見出し+説明文として表現できる可能性があります。",
       reason: "各行が行見出し(1列目)を持ち、独立した項目として読めるため、1行=1項目の見出し+段落へ展開する方法も選択肢に含めます。",
-      afterHtml: buildRowsAsSectionsHtml(table),
+      afterHtml: buildRowsAsSectionsHtml(table, separatedHeadingParams),
+      builder: "rowsAsSections",
+      params: separatedHeadingParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3743,7 +3800,7 @@
     return true;
   }
 
-  function buildTableAsListHtml(table) {
+  function buildTableAsListHtml(table, params = {}) {
     const shape = computeTableGridShape(table);
     if (!shape) {
       return cleanHtml(table.outerHTML);
@@ -3753,7 +3810,7 @@
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (captionText) {
-      const heading = document.createElement(suggestSeparatedHeadingTag(table));
+      const heading = document.createElement(params.heading_tag || suggestSeparatedHeadingTag(table));
       heading.textContent = captionText;
       output.content.appendChild(heading);
     }
@@ -3783,14 +3840,14 @@
   // M6: 各行を「行見出し+値の段落」に展開する。列見出しは1行目th(あれば)を使い、無ければ
   // 機械的なラベルを付けず値のみの段落にする。<dl>は使わない(確定方針、project-state.md
   // Decisions 2026-07-10: CMS入力画面での運用のしやすさを優先し見出し+段落構造を使う)。
-  function buildRowsAsSectionsHtml(table) {
+  function buildRowsAsSectionsHtml(table, params = {}) {
     const shape = computeTableGridShape(table);
     if (!shape) {
       return cleanHtml(table.outerHTML);
     }
     const { maxColumns, firstRowIsHeaderRow, grid, bodyRows } = shape;
     const columnHeaders = firstRowIsHeaderRow ? grid[0].slice(0, maxColumns).map((item) => item?.text || "") : [];
-    const headingTag = suggestSeparatedHeadingTag(table);
+    const headingTag = params.heading_tag || suggestSeparatedHeadingTag(table);
 
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
@@ -3827,7 +3884,10 @@
     return cleanHtml(output.innerHTML);
   }
 
-  function buildFlattenedTableHtml(table) {
+  // params は読まない(この手段は表の外のDOMを一切見ないため)。3.7のレジストリが
+  // 「現在の要素と params を受け取る」形に揃えているので、受け口だけ置く。
+  function buildFlattenedTableHtml(table, params = {}) {
+    void params;
     const shape = computeTableGridShape(table);
     if (!shape || shape.maxColumns === 0) {
       return cleanHtml(table.outerHTML);
@@ -4229,12 +4289,17 @@
     });
   }
 
-  function buildDataTableSemanticsHtml(table) {
+  function buildDataTableSemanticsHtml(table, params = {}) {
     const profile = dataTableProfile(table);
     const output = document.createElement("table");
     [...table.attributes].forEach((attr) => output.setAttribute(attr.name, attr.value));
 
-    const captionText = dataTableCaptionText(table, profile);
+    // params.caption は候補を作った時点で確定したキャプションの文言(3.7)。表の直前の見出しから
+    // 導くため、rebuild 操作で表だけを複製して当てるときには元のDOMを読めない。AIの補完
+    // (applyTableCaptionLlmResult)が書き換えた文言もこの欄が正本になる。空のときは
+    // 「文言を導けなかった」ということなので、現在の要素から導き直す(表に<caption>が後から
+    // 入っていればそれが拾われる)。
+    const captionText = params.caption || dataTableCaptionText(table, profile);
     if (captionText) {
       const caption = document.createElement("caption");
       caption.textContent = captionText;
@@ -5834,11 +5899,12 @@
   // imageContexts, when passed, collects { src, caption } for every <img> whose alt text
   // this function fills in heuristically (see prepareLayoutTableImage), so a post-hoc LLM
   // vision enrichment pass can upgrade them later without re-walking the decomposed HTML.
-  function decomposeLayoutTable(table, imageContexts) {
+  function decomposeLayoutTable(table, params = {}, imageContexts) {
     const template = document.createElement("template");
     const caption = table.querySelector(":scope > caption");
     const captionText = normalizeText(caption?.textContent || "");
-    const parentHeadingTag = captionText ? "h2" : nearestPreviousHeadingTag(table) || "h2";
+    // 表の直前の見出しから決まる入力は params から受け取る(3.7)。
+    const parentHeadingTag = captionText ? "h2" : params.parent_heading_tag || nearestPreviousHeadingTag(table) || "h2";
 
     if (captionText) {
       const heading = document.createElement("h3");
@@ -5933,7 +5999,7 @@
       const imageContexts = [];
       const afterHtml = canSplitMergedRowsIntoTables(table)
         ? splitMergedRowsIntoTablesHtml(table)
-        : decomposeLayoutTable(table, imageContexts);
+        : decomposeLayoutTable(table, {}, imageContexts);
       return {
         afterHtml,
         patchMode: "replace",
@@ -5944,7 +6010,7 @@
     if (mergeRule.ruleId === "table.cell-merge-file") {
       const imageContexts = [];
       return {
-        afterHtml: decomposeLayoutTable(table, imageContexts),
+        afterHtml: decomposeLayoutTable(table, {}, imageContexts),
         patchMode: "replace",
         images: imageContexts,
       };
@@ -6064,11 +6130,14 @@
     return new Set(firstColumnLabels).size >= 2 && grid.slice(1).some((row) => row[0] && !row[0].isOrigin);
   }
 
-  function splitMergedRowsIntoTablesHtml(table) {
+  function splitMergedRowsIntoTablesHtml(table, params = {}) {
     const grid = buildExpandedTableGrid(table);
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
-    const headingText = captionText || nearestPreviousHeadingText(table);
-    const parentHeadingTag = captionText ? suggestSeparatedHeadingTag(table) : nearestPreviousHeadingTag(table) || "h3";
+    // 表の外のDOM(直前の見出し)から決まる入力は params から受け取る(3.7)。
+    const headingText = captionText || params.heading_text || nearestPreviousHeadingText(table);
+    const parentHeadingTag = captionText
+      ? params.heading_tag_with_caption || suggestSeparatedHeadingTag(table)
+      : params.heading_tag_fallback || nearestPreviousHeadingTag(table) || "h3";
     const output = document.createElement("template");
     if (captionText) {
       const heading = document.createElement(parentHeadingTag);
@@ -6193,7 +6262,7 @@
       return cleanHtml(output.innerHTML);
     }
 
-    return decomposeLayoutTable(table, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
+    return decomposeLayoutTable(table, {}, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
   }
 
   // WHATWG HTML自体がcolspan属性を最大1000にクランプする仕様になっている(rowspanは
@@ -6861,6 +6930,10 @@
     "rename-element",
     "merge-following-note",
     "replace-paragraph-sequence",
+    // 表の構造変換(3.7)。表を丸ごと組み立て直すので、元の要素と data-goal2-node-id は消える。
+    "rebuild",
+    // パッチを持たない候補の「変換後HTMLで差し替える」操作(3.3の op)。
+    "replace-html",
   ]);
 
   function isElementReplacingCandidate(candidate) {
@@ -6874,46 +6947,52 @@
     return ELEMENT_REPLACING_PATCH_TYPES.has(patch.type);
   }
 
+  // 戻り値は「当てられたか」。当てられなかった場合(対象が無い、rebuild のビルダーが
+  // この要素を扱えない)は、呼び出し元がリプレイの orphaned を立てる(3.7の3)。
   function applyCandidatePatch(root, candidate) {
     const target = root.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
     if (!target) {
-      return;
+      return false;
     }
 
     if (candidate.decision?.selected_method_id && candidate.decision.selected_method_id !== candidate.candidate_id) {
       replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
-      return;
+      return true;
     }
 
     const patch = candidate.proposal.patch;
     if (!patch) {
       replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
-      return;
+      return true;
+    }
+
+    if (patch.type === "rebuild") {
+      return applyRebuildPatch(root, candidate.target.node_id, target, patch);
     }
 
     if (patch.type === "set-attribute") {
       target.setAttribute(patch.name, patch.value);
-      return;
+      return true;
     }
 
     if (patch.type === "remove-attribute") {
       target.removeAttribute(patch.name);
-      return;
+      return true;
     }
 
     if (patch.type === "set-text") {
       target.textContent = patch.value;
-      return;
+      return true;
     }
 
     if (patch.type === "replace-text") {
       replaceTextInElement(target, patch.before, patch.after);
-      return;
+      return true;
     }
 
     if (patch.type === "rename-element") {
       target.replaceWith(renameElement(target, patch.tag_name));
-      return;
+      return true;
     }
 
     // 見出し全体の底上げ。node_idsの各見出しをdelta分ずらす。renameElement()が
@@ -6930,30 +7009,30 @@
           heading.replaceWith(renameElement(heading, `h${next}`));
         }
       });
-      return;
+      return true;
     }
 
     if (patch.type === "remove-style-properties") {
       removeStyleProperties(target, patch.names || []);
       (patch.attributes || []).forEach((name) => target.removeAttribute(name));
-      return;
+      return true;
     }
 
     if (patch.type === "unwrap-element") {
       target.replaceWith(...target.childNodes);
-      return;
+      return true;
     }
 
     if (patch.type === "remove-element") {
       target.remove();
-      return;
+      return true;
     }
 
     if (patch.type === "merge-following-note") {
       const note = root.querySelector(`[data-goal2-node-id="${cssEscape(patch.note_node_id)}"]`);
       replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
       note?.remove();
-      return;
+      return true;
     }
 
     if (patch.type === "replace-paragraph-sequence") {
@@ -6964,12 +7043,12 @@
         replaceTarget(root, nodes[0].getAttribute("data-goal2-node-id"), candidate.decision.after_html || candidate.proposal.after_html);
         nodes.slice(1).forEach((node) => node.remove());
       }
-      return;
+      return true;
     }
 
     if (patch.type === "strip-formatting") {
       stripFormatting(target);
-      return;
+      return true;
     }
 
     if (patch.type === "insert-caption" && target.tagName === "TABLE") {
@@ -6980,10 +7059,27 @@
         caption.textContent = patch.value;
         target.insertBefore(caption, target.firstChild);
       }
-      return;
+      return true;
     }
 
     replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
+    return true;
+  }
+
+  // rebuild 操作(3.7)。現在の要素にビルダーを当て、その結果で要素を差し替える。
+  // 対象が表でない、ビルダーの名前が引けないなど、扱えない場合は当てずに false を返す。
+  // 黙って捨てず、リプレイ側で orphaned を立てるためである。
+  function applyRebuildPatch(root, nodeId, target, patch) {
+    const builder = tableRebuildBuilder(patch.builder);
+    if (!builder || target.tagName !== "TABLE") {
+      return false;
+    }
+    const html = builder(target, patch.params || {});
+    if (typeof html !== "string" || !html.trim()) {
+      return false;
+    }
+    replaceTarget(root, nodeId, html);
+    return true;
   }
 
   function replaceTarget(root, nodeId, html) {
@@ -7065,6 +7161,9 @@
     }
     const template = document.createElement("template");
     template.content.appendChild(target.cloneNode(true));
+    // rebuild を持つ候補は、生成時点の proposal.after_html ではなく、作業中HTMLの現在の要素に
+    // ビルダーを当てた結果を見せる(3.7)。表の中の内容修正を先に採用していれば、その修正を
+    // 含んだ変換後HTMLになる。編集画面の初期値もこの値である。
     applyCandidatePatch(template.content, candidate);
     return cleanHtml(template.innerHTML);
   }
