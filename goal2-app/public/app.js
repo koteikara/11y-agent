@@ -2291,6 +2291,11 @@
     if (candidate.proposal.patch?.type === "insert-caption") {
       candidate.proposal.patch.value = suggestion;
     }
+    // rebuild 操作の params も揃える(3.7)。ここを直さないと、リプレイでビルダーが
+    // 元の(AI補完前の)文言でキャプションを作り直してしまう。
+    if (candidate.proposal.patch?.type === "rebuild" && candidate.proposal.patch.params) {
+      candidate.proposal.patch.params.caption = suggestion;
+    }
     candidate.proposal.after_html = cleanHtml(tableElement.outerHTML);
   }
 
@@ -3369,7 +3374,8 @@
       // In-place restructure candidates(heading/summary/note): 単一の推奨案のみ。下のM1〜M3
       // 代替手段メニューとは別枠(この3分類向けの代替手段は今回のスコープ外)。
       if (mergeRule && !tableDecomposeMergeRuleIds.has(mergeRule.ruleId)) {
-        const mergeProposal = buildMergedCellProposal(table, mergeRule);
+        const mergeParams = mergedCellProposalParams(table, mergeRule.ruleId);
+        const mergeProposal = buildMergedCellProposal(table, mergeRule, mergeParams);
         candidates.push(
           makeCandidate({
             ruleId: mergeRule.ruleId,
@@ -3380,6 +3386,9 @@
             patchMode: mergeProposal.patchMode,
             confidence: mergeRule.confidence,
             requiresHumanReview: true,
+            // 表を丸ごと組み立て直す候補なので rebuild 操作にする(3.7)。固定の変換後HTMLで
+            // 差し替えると、先に採用した表の中の内容修正が消える。
+            patch: { type: "rebuild", builder: "mergedCellProposal", params: mergeParams },
           })
         );
       }
@@ -3390,7 +3399,8 @@
       // がtrueのとき、旧コードはこのブロックとplanTableTreatment()の両方でsplitMergedRowsIntoTablesHtml()
       // を呼び、実質同じ候補を2件生成していた)。
       if (mergeRule && (mergeRule.ruleId === "table.cell-merge-file" || mergeRule.ruleId === "table.cell-merge-mark")) {
-        const mergeProposal = buildMergedCellProposal(table, mergeRule);
+        const mergeParams = mergedCellProposalParams(table, mergeRule.ruleId);
+        const mergeProposal = buildMergedCellProposal(table, mergeRule, mergeParams);
         candidates.push(
           makeCandidate({
             ruleId: mergeRule.ruleId,
@@ -3402,6 +3412,7 @@
             confidence: mergeRule.confidence,
             requiresHumanReview: true,
             llmContext: mergeProposal.images?.length ? { images: mergeProposal.images } : null,
+            patch: { type: "rebuild", builder: "mergedCellProposal", params: mergeParams },
           })
         );
       }
@@ -3427,6 +3438,9 @@
             requiresHumanReview: method.requiresHumanReview,
             llmContext: method.llmContext,
             methodLabel: method.methodLabel,
+            // 表の構造候補は「現在の要素にビルダーを当てる」操作として持つ(設計書 3.7)。
+            // proposal.after_html は表示用に残す(生成時点の値のまま)。
+            patch: { type: "rebuild", builder: method.builder, params: method.params },
           })
         );
       });
@@ -3514,6 +3528,53 @@
   // M1(データ表として維持)とM3(表をやめて解体)は、旧来の単一判定(shouldPreserveAsDataTable /
   // isLikelyLayoutTable)より緩いゲートで「選択肢として提示するかどうか」を決める。ただし
   // shouldPreserveAsDataTable()自体は確信度・推奨順の判断材料として引き続き使う。
+  // 表の構造ビルダーのレジストリ(設計書 3.7)。決定ログの rebuild 操作は builder を名前で引く。
+  // 登録する関数は「現在の要素と params を受け取り、HTML文字列を返す」形に揃える。
+  //
+  // params は「その要素のDOMの外から決まる入力」だけを持つ。表の直前の見出しから導く
+  // キャプションの文言や見出しレベルがこれにあたる。候補を作る時点で確定させる理由は2つ。
+  //  - currentCandidateAfterHtml() が対象の表だけを複製して当てるため、複製先には直前の
+  //    見出しが無い。DOMから導き直すと表示と適用で結果が食い違う。
+  //  - AIの補完(applyTableCaptionLlmResult)が書き換えた文言を、リプレイでも使えるようにする。
+  const TABLE_REBUILD_BUILDERS = {
+    dataTableSemantics: (element, params) => buildDataTableSemanticsHtml(element, params),
+    splitMergedRows: (element, params) => splitMergedRowsIntoTablesHtml(element, params),
+    decomposeLayoutTable: (element, params) => decomposeLayoutTable(element, params, []),
+    flattenTable: (element, params) => buildFlattenedTableHtml(element, params),
+    tableAsList: (element, params) => buildTableAsListHtml(element, params),
+    rowsAsSections: (element, params) => buildRowsAsSectionsHtml(element, params),
+    // セル結合の分類ごとの再構成(table.cell-merge-heading / -summary / -note / -file / -mark)。
+    // buildMergedCellProposal() は表と mergeRule.ruleId だけで決まるので、ビルダーは1つにして
+    // params.rule_id で分岐する。結合セルが無くなっているなど扱えない形になっていた場合は
+    // unchangedProposal() が表をそのまま返すので、差し替えても何も変わらない。
+    mergedCellProposal: (element, params) =>
+      buildMergedCellProposal(element, { ruleId: params.rule_id }, params).afterHtml,
+  };
+
+  // セル結合の再構成が表の外から読む入力(3.7)。heading_tag は buildHeadingSeparatedTableHtml()、
+  // parent_heading_tag は -file / -mark が最後に通る decomposeLayoutTable() が使う。
+  function mergedCellProposalParams(table, ruleId) {
+    return {
+      rule_id: ruleId,
+      heading_tag: suggestSeparatedHeadingTag(table),
+      parent_heading_tag: nearestPreviousHeadingTag(table) || "h2",
+    };
+  }
+
+  function tableRebuildBuilder(name) {
+    return Object.prototype.hasOwnProperty.call(TABLE_REBUILD_BUILDERS, name) ? TABLE_REBUILD_BUILDERS[name] : null;
+  }
+
+  // M2(意味単位ごとの分割)が表の外から読む入力。キャプションの有無で使う値が変わるため、
+  // 両方を確定させておく(3.7)。
+  function splitMergedRowsParams(table) {
+    return {
+      heading_text: nearestPreviousHeadingText(table),
+      heading_tag_with_caption: suggestSeparatedHeadingTag(table),
+      heading_tag_fallback: nearestPreviousHeadingTag(table) || "h3",
+    };
+  }
+
   function planTableTreatments(table) {
     const preserve = shouldPreserveAsDataTable(table);
     const canOfferSemantics = canOfferDataTableSemanticsMethod(table);
@@ -3526,6 +3587,12 @@
     // 用途分類ではなくこの一般ルールを解説として使う。
 
     const missingCaption = dataTableSemanticsMissingCaption(table);
+    // 各手段の params(3.7)。候補を作る時点で確定させる値なので、手段を組み立てる前に置く。
+    const semanticsParams = { caption: dataTableCaptionText(table, dataTableProfile(table)) };
+    const splitParams = splitMergedRowsParams(table);
+    const decomposeParams = { parent_heading_tag: nearestPreviousHeadingTag(table) || "h2" };
+    const separatedHeadingParams = { heading_tag: suggestSeparatedHeadingTag(table) };
+
     const buildSemanticsMethod = () => ({
       ruleId: "table.caption",
       message: [
@@ -3539,7 +3606,9 @@
       reason: preserve
         ? "表をレイアウト用として解体する前に、行・列の関係を持つデータ表かどうかを確認します。データ表として維持できる場合は、表を崩さずにキャプション・列見出し・行見出し・scope属性をまとめて追加します。"
         : "この表がデータ表かどうかの確信度は高くありませんが、データ表として維持しキャプション・列見出し・行見出し・scope属性を整える方法も選択肢に含めます。",
-      afterHtml: buildDataTableSemanticsHtml(table),
+      afterHtml: buildDataTableSemanticsHtml(table, semanticsParams),
+      builder: "dataTableSemantics",
+      params: semanticsParams,
       patchMode: "replace",
       // キャプションを導けなくても確信度は下げない。下げると shouldRequireEditedAdoption()が
       // 採用を止め、GOAL1の一括採用では代わりに「箇条書きに変換する」が採用されて、
@@ -3556,7 +3625,9 @@
       ruleId: "table.simple-structure",
       message: "結合により複数の意味単位が1つの表にまとめられています。",
       reason: "強引に1つの表へまとめたことで結合が発生している場合は、表を意味単位に分割する方法も選択肢に含めます。",
-      afterHtml: splitMergedRowsIntoTablesHtml(table),
+      afterHtml: splitMergedRowsIntoTablesHtml(table, splitParams),
+      builder: "splitMergedRows",
+      params: splitParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3570,12 +3641,14 @@
     // preserveAsDataTableによるnull-return、同関数内のコメント参照)、それと同じ安全策を踏襲する。
     const buildDecomposeMethod = () => {
       const imageContexts = [];
-      const afterHtml = decomposeLayoutTable(table, imageContexts);
+      const afterHtml = decomposeLayoutTable(table, decomposeParams, imageContexts);
       return {
         ruleId: "table.layout-table",
         message: "この表はレイアウト目的で使われている可能性があります。",
         reason: layoutTableReason(table),
         afterHtml,
+        builder: "decomposeLayoutTable",
+        params: decomposeParams,
         patchMode: "replace",
         confidence: layoutTableConfidence(table),
         requiresHumanReview: true,
@@ -3592,6 +3665,8 @@
       message: "結合セルを解除し、rowspan/colspanのない単純な表に整えられます。",
       reason: "結合セルは読み上げ順や表構造を複雑にするため、rowspan/colspanを解除してマスごとに内容を明記する方法も選択肢に含めます。表自体は分割・解体せず、結合だけをやめたい場合に選べます。",
       afterHtml: buildFlattenedTableHtml(table),
+      builder: "flattenTable",
+      params: {},
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3604,7 +3679,9 @@
       ruleId: "table.layout-table",
       message: "この表は箇条書きとして表現できる可能性があります。",
       reason: "列数が少なく1項目=1行の構造に見えるため、表をやめて箇条書き(リスト)へ変換する方法も選択肢に含めます。",
-      afterHtml: buildTableAsListHtml(table),
+      afterHtml: buildTableAsListHtml(table, separatedHeadingParams),
+      builder: "tableAsList",
+      params: separatedHeadingParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3617,7 +3694,9 @@
       ruleId: "table.layout-table",
       message: "この表は行ごとに見出し+説明文として表現できる可能性があります。",
       reason: "各行が行見出し(1列目)を持ち、独立した項目として読めるため、1行=1項目の見出し+段落へ展開する方法も選択肢に含めます。",
-      afterHtml: buildRowsAsSectionsHtml(table),
+      afterHtml: buildRowsAsSectionsHtml(table, separatedHeadingParams),
+      builder: "rowsAsSections",
+      params: separatedHeadingParams,
       patchMode: "replace",
       confidence: "medium",
       requiresHumanReview: true,
@@ -3743,7 +3822,7 @@
     return true;
   }
 
-  function buildTableAsListHtml(table) {
+  function buildTableAsListHtml(table, params = {}) {
     const shape = computeTableGridShape(table);
     if (!shape) {
       return cleanHtml(table.outerHTML);
@@ -3753,7 +3832,7 @@
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (captionText) {
-      const heading = document.createElement(suggestSeparatedHeadingTag(table));
+      const heading = document.createElement(params.heading_tag || suggestSeparatedHeadingTag(table));
       heading.textContent = captionText;
       output.content.appendChild(heading);
     }
@@ -3783,14 +3862,14 @@
   // M6: 各行を「行見出し+値の段落」に展開する。列見出しは1行目th(あれば)を使い、無ければ
   // 機械的なラベルを付けず値のみの段落にする。<dl>は使わない(確定方針、project-state.md
   // Decisions 2026-07-10: CMS入力画面での運用のしやすさを優先し見出し+段落構造を使う)。
-  function buildRowsAsSectionsHtml(table) {
+  function buildRowsAsSectionsHtml(table, params = {}) {
     const shape = computeTableGridShape(table);
     if (!shape) {
       return cleanHtml(table.outerHTML);
     }
     const { maxColumns, firstRowIsHeaderRow, grid, bodyRows } = shape;
     const columnHeaders = firstRowIsHeaderRow ? grid[0].slice(0, maxColumns).map((item) => item?.text || "") : [];
-    const headingTag = suggestSeparatedHeadingTag(table);
+    const headingTag = params.heading_tag || suggestSeparatedHeadingTag(table);
 
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
@@ -3827,7 +3906,10 @@
     return cleanHtml(output.innerHTML);
   }
 
-  function buildFlattenedTableHtml(table) {
+  // params は読まない(この手段は表の外のDOMを一切見ないため)。3.7のレジストリが
+  // 「現在の要素と params を受け取る」形に揃えているので、受け口だけ置く。
+  function buildFlattenedTableHtml(table, params = {}) {
+    void params;
     const shape = computeTableGridShape(table);
     if (!shape || shape.maxColumns === 0) {
       return cleanHtml(table.outerHTML);
@@ -4229,12 +4311,17 @@
     });
   }
 
-  function buildDataTableSemanticsHtml(table) {
+  function buildDataTableSemanticsHtml(table, params = {}) {
     const profile = dataTableProfile(table);
     const output = document.createElement("table");
     [...table.attributes].forEach((attr) => output.setAttribute(attr.name, attr.value));
 
-    const captionText = dataTableCaptionText(table, profile);
+    // params.caption は候補を作った時点で確定したキャプションの文言(3.7)。表の直前の見出しから
+    // 導くため、rebuild 操作で表だけを複製して当てるときには元のDOMを読めない。AIの補完
+    // (applyTableCaptionLlmResult)が書き換えた文言もこの欄が正本になる。空のときは
+    // 「文言を導けなかった」ということなので、現在の要素から導き直す(表に<caption>が後から
+    // 入っていればそれが拾われる)。
+    const captionText = params.caption || dataTableCaptionText(table, profile);
     if (captionText) {
       const caption = document.createElement("caption");
       caption.textContent = captionText;
@@ -5834,11 +5921,12 @@
   // imageContexts, when passed, collects { src, caption } for every <img> whose alt text
   // this function fills in heuristically (see prepareLayoutTableImage), so a post-hoc LLM
   // vision enrichment pass can upgrade them later without re-walking the decomposed HTML.
-  function decomposeLayoutTable(table, imageContexts) {
+  function decomposeLayoutTable(table, params = {}, imageContexts) {
     const template = document.createElement("template");
     const caption = table.querySelector(":scope > caption");
     const captionText = normalizeText(caption?.textContent || "");
-    const parentHeadingTag = captionText ? "h2" : nearestPreviousHeadingTag(table) || "h2";
+    // 表の直前の見出しから決まる入力は params から受け取る(3.7)。
+    const parentHeadingTag = captionText ? "h2" : params.parent_heading_tag || nearestPreviousHeadingTag(table) || "h2";
 
     if (captionText) {
       const heading = document.createElement("h3");
@@ -5902,7 +5990,9 @@
     return `h${Math.min(6, Math.max(3, level + 1))}`;
   }
 
-  function buildMergedCellProposal(table, mergeRule) {
+  // params は「対象の表のDOMの外から決まる入力」(3.7)。`rebuild` 操作から呼ぶときは
+  // 候補を作った時点の値が渡る。
+  function buildMergedCellProposal(table, mergeRule, params = {}) {
     const info = firstMergedCellInfo(table);
     if (!info) {
       return unchangedProposal(table);
@@ -5910,7 +6000,7 @@
 
     if (mergeRule.ruleId === "table.cell-merge-heading") {
       return {
-        afterHtml: buildHeadingSeparatedTableHtml(table, info),
+        afterHtml: buildHeadingSeparatedTableHtml(table, info, params),
         patchMode: "replace",
       };
     }
@@ -5932,8 +6022,8 @@
     if (mergeRule.ruleId === "table.cell-merge-layout") {
       const imageContexts = [];
       const afterHtml = canSplitMergedRowsIntoTables(table)
-        ? splitMergedRowsIntoTablesHtml(table)
-        : decomposeLayoutTable(table, imageContexts);
+        ? splitMergedRowsIntoTablesHtml(table, params)
+        : decomposeLayoutTable(table, params, imageContexts);
       return {
         afterHtml,
         patchMode: "replace",
@@ -5944,7 +6034,7 @@
     if (mergeRule.ruleId === "table.cell-merge-file") {
       const imageContexts = [];
       return {
-        afterHtml: decomposeLayoutTable(table, imageContexts),
+        afterHtml: decomposeLayoutTable(table, params, imageContexts),
         patchMode: "replace",
         images: imageContexts,
       };
@@ -5953,7 +6043,7 @@
     if (mergeRule.ruleId === "table.cell-merge-mark") {
       const imageContexts = [];
       return {
-        afterHtml: buildMarkSeparatedTableHtml(table, imageContexts),
+        afterHtml: buildMarkSeparatedTableHtml(table, imageContexts, params),
         patchMode: "replace",
         images: imageContexts,
       };
@@ -5986,8 +6076,9 @@
     };
   }
 
-  function buildHeadingSeparatedTableHtml(table, info) {
-    const heading = document.createElement(suggestSeparatedHeadingTag(table));
+  function buildHeadingSeparatedTableHtml(table, info, params = {}) {
+    // 表の直前の見出しから決まる入力は params から受け取る(3.7)。
+    const heading = document.createElement(params.heading_tag || suggestSeparatedHeadingTag(table));
     heading.textContent = info.text;
     const clone = tableWithRowRemoved(table, info.rowIndex);
     return cleanHtml(`${heading.outerHTML}${clone.outerHTML}`);
@@ -6064,11 +6155,14 @@
     return new Set(firstColumnLabels).size >= 2 && grid.slice(1).some((row) => row[0] && !row[0].isOrigin);
   }
 
-  function splitMergedRowsIntoTablesHtml(table) {
+  function splitMergedRowsIntoTablesHtml(table, params = {}) {
     const grid = buildExpandedTableGrid(table);
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
-    const headingText = captionText || nearestPreviousHeadingText(table);
-    const parentHeadingTag = captionText ? suggestSeparatedHeadingTag(table) : nearestPreviousHeadingTag(table) || "h3";
+    // 表の外のDOM(直前の見出し)から決まる入力は params から受け取る(3.7)。
+    const headingText = captionText || params.heading_text || nearestPreviousHeadingText(table);
+    const parentHeadingTag = captionText
+      ? params.heading_tag_with_caption || suggestSeparatedHeadingTag(table)
+      : params.heading_tag_fallback || nearestPreviousHeadingTag(table) || "h3";
     const output = document.createElement("template");
     if (captionText) {
       const heading = document.createElement(parentHeadingTag);
@@ -6149,7 +6243,7 @@
     return cleanHtml(output.innerHTML);
   }
 
-  function buildMarkSeparatedTableHtml(table, imageContexts) {
+  function buildMarkSeparatedTableHtml(table, imageContexts, params = {}) {
     const output = document.createElement("template");
     const captionText = normalizeText(table.querySelector(":scope > caption")?.textContent || "");
     if (captionText) {
@@ -6193,7 +6287,7 @@
       return cleanHtml(output.innerHTML);
     }
 
-    return decomposeLayoutTable(table, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
+    return decomposeLayoutTable(table, params, imageContexts).replace(/[●○◎◯✓✔■□]/g, "該当");
   }
 
   // WHATWG HTML自体がcolspan属性を最大1000にクランプする仕様になっている(rowspanは
@@ -6687,61 +6781,36 @@
     return fallbackRule(id, ruleInfo.category, ruleInfo.title, ruleInfo.processingClass, ruleInfo.wcag);
   }
 
+  // いま当てている決定の seq。派生ID(3.4)を振るために replaceTarget() が読む。
+  let activeDecisionSeq = null;
+
   function rebuildWorkingHtml() {
-    return replay(state.sourceHtml, state.decisions, state.candidates);
-  }
-
-  // replay()に置き換え済み。S2で削除する。いまは同値テスト(test/goal2-output)が
-  // 「リプレイが現行の再構築と一致する」ことを確かめるためだけに呼んでいる。
-  function rebuildWorkingHtmlFor(sourceHtml, candidates) {
-    const fragment = parseFragment(sourceHtml);
-    const decided = candidates.filter((candidate) =>
-      ["accepted", "edited"].includes(candidate.decision.status)
-    );
-
-    // 同じ要素を指す候補は、要素を残すパッチ(単位の言い換え・単語内空白の除去など)を先に、
-    // 要素ごと差し替えるパッチ(装飾タグの解除など)を後に当てる。逆順だと、先に要素が消えて
-    // data-goal2-node-idが失われ、後続のパッチが対象を見つけられず黙って捨てられる。
-    // 実データ(安城市の史跡ページ)で、<tt>の解除が先に当たったために同じ段落の
-    // 「22m→22メートル」「全　長→全長」がすべて反映されなかった。
-    const groups = new Map();
-    decided.forEach((candidate) => {
-      const nodeId = candidate.target.node_id;
-      if (!groups.has(nodeId)) groups.set(nodeId, []);
-      groups.get(nodeId).push(candidate);
-    });
-    const ordered = [...groups.values()].flatMap((group) => [
-      ...group.filter((candidate) => !isElementReplacingCandidate(candidate)),
-      ...group.filter((candidate) => isElementReplacingCandidate(candidate)),
-    ]);
-
-    ordered.forEach((candidate) => {
-      if (candidate.decision.status === "edited") {
-        replaceTarget(fragment.content, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
-        return;
-      }
-
-      if (candidate.proposal.patch_mode === "none") {
-        return;
-      }
-
-      applyCandidatePatch(fragment.content, candidate);
-    });
-
-    normalizeHeadingEmphasis(fragment.content);
-    return fragment.innerHTML;
+    return replay(state.sourceHtml, state.decisions);
   }
 
   // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
-  // rebuildWorkingHtmlFor() との違いは「当てる決定を候補配列の decision ではなく決定ログが
-  // 決める」ことだけで、当て順も、1件を当てる処理(applyCandidatePatch()・replaceTarget())も
-  // 同じである。S1で挙動を変えないための線で、当て順がログの順になるのはS2以降。
   //
-  // S1では決定ログに op(3.3)を持たせないため、当てる内容は candidate_id で候補配列から引く。
-  // 第3引数の candidates が要るのはこのためで、S2で rebuild 操作をログへ写したときに落とす。
-  function replay(sourceHtml, decisions, candidates) {
+  // S2から、当てる内容は決定ログだけで決まる(候補配列を参照しない)。accepted は決定時点の
+  // 操作の写しである op を、edited はログが持つ after_html を当てる。これができるように
+  // なったのは、表の構造候補が rebuild 操作になり、決定の後から after_html を書き換える
+  // 畳み込み(foldDescendantFixIntoAncestor)が要らなくなったためである。
+  //
+  // 当て順は2段になる(3.7のS2)。
+  //  第1段: rebuild 以外の決定。S1の規則のまま、候補配列の添字(決定が持つ order)の順に
+  //         並べ、同じ node_id の決定を1組にまとめ、組の中では要素を残すパッチを先、
+  //         要素ごと差し替えを後に当てる。
+  //  第2段: rebuild の決定。内側(子孫)を先、外側(先祖)を後に当てる。
+  //
+  // 第1段を先にするのは、ビルダーが現在の要素を読むためである。表の中の内容修正を先に
+  // 当てておけば、作業者がどちらを先に採用したかに関わらず、変換後の表にその修正が含まれる。
+  //
+  // seq を当て順にしないのは、S1と同じ理由による。第1段の決定は固定の after_html を持つので、
+  // 採用順で当てると出力が採用順で変わる(実ページ: 佐賀市 sg03996 の n0015 で、リンク文言を
+  // 書き戻す file.file-display-text の set-text と「１」→「1」の text.alphanumeric の
+  // replace-text が同じ要素に出る。半角化を先に当てると set-text が元の文言で上書きする)。
+  // seq 順に切り替えるのは、候補を作業中HTMLから作り直すS3である。
+  function replay(sourceHtml, decisions) {
     const fragment = parseFragment(sourceHtml);
-    const candidateById = new Map((candidates || []).map((candidate) => [candidate.candidate_id, candidate]));
 
     // 同じ候補を決め直すと(決定済みの候補を選んで採用や却下を押し直すと)、ログには2件以上の
     // 決定が並ぶ。後の決定が前の決定を置き換えるので、候補ごとにseqが最大の1件だけを残す。
@@ -6759,90 +6828,122 @@
       ["accepted", "edited"].includes(decision.status)
     );
 
-    // 当て順は候補配列の添字が決める。ログが決めるのは「どの決定を当てるか」だけである。
-    // これで旧実装の rebuildWorkingHtmlFor() と構成上同じ順序になる。候補配列の順に並べ、
-    // 同じ node_id の決定を1組にまとめ、組の中では要素を残すパッチを先、要素ごと差し替えを
-    // 後に当てる。組の順序は、その node_id への最初の決定の添字順になる。
-    //
-    // 組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて data-goal2-node-id が
-    // 失われ、後続のパッチが対象を見つけられないためである(実データ: <p><tt>…</tt></p> で、
-    // <tt>の解除を先に当てたために同じ<tt>への「22m→22メートル」「全　長→全長」の5件が
-    // すべて落ちた)。
-    //
-    // seq を当て順に使わない理由。S1の候補の after_html は元のHTMLから固定で作られているため、
-    // 作業者が採用した順で当てると出力が採用順で変わる。旧実装は候補配列の順で当てるので
-    // 採用順に依存しなかった(実ページ: 佐賀市 sg03996 の n0015 で、リンク文言を書き戻す
-    // file.file-display-text の set-text と、「１」→「1」の text.alphanumeric の replace-text が
-    // 同じ要素に出る。半角化を先に当てると set-text が元の文言で上書きする)。
-    // seq が当て順になるのは、候補が作業中HTMLから after_html を作り直すS2以降である。
-    const orderIndex = new Map();
-    (candidates || []).forEach((candidate, index) => orderIndex.set(candidate.candidate_id, index));
-    // 候補配列に無い決定は末尾へ回す。どうせ applyDecision() で orphaned になる。
-    const orderOf = (decision) => {
-      const index = orderIndex.get(decision.candidate_id);
-      return index === undefined ? (candidates?.length || 0) + decision.seq : index;
-    };
+    // order を持たない決定(候補配列に無い決定)は末尾へ回す。どうせ orphaned になる。
+    const orderOf = (decision) =>
+      Number.isFinite(decision.order) ? decision.order : Number.MAX_SAFE_INTEGER;
+    const byOrder = applicable.slice().sort((a, b) => orderOf(a) - orderOf(b) || a.seq - b.seq);
 
+    // 第1段。組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて
+    // data-goal2-node-id が失われ、後続のパッチが対象を見つけられないためである
+    // (実データ: <p><tt>…</tt></p> で、<tt>の解除を先に当てたために同じ<tt>への
+    // 「22m→22メートル」「全　長→全長」の5件がすべて落ちた)。
     const groups = new Map();
-    applicable
-      .slice()
-      .sort((a, b) => orderOf(a) - orderOf(b))
+    byOrder
+      .filter((decision) => !isRebuildDecision(decision))
       .forEach((decision) => {
         if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
         groups.get(decision.node_id).push(decision);
       });
-    const ordered = [...groups.values()].flatMap((group) => [
-      ...group.filter((decision) => !isElementReplacingDecision(decision, candidateById)),
-      ...group.filter((decision) => isElementReplacingDecision(decision, candidateById)),
-    ]);
-    ordered.forEach((decision) => applyDecision(fragment.content, decision, candidateById));
+    [...groups.values()]
+      .flatMap((group) => [
+        ...group.filter((decision) => !isElementReplacingDecision(decision)),
+        ...group.filter((decision) => isElementReplacingDecision(decision)),
+      ])
+      .forEach((decision) => applyDecision(fragment.content, decision));
+
+    // 第2段。
+    orderRebuildDecisions(fragment.content, byOrder.filter(isRebuildDecision)).forEach((decision) =>
+      applyDecision(fragment.content, decision)
+    );
 
     normalizeHeadingEmphasis(fragment.content);
     return fragment.innerHTML;
   }
 
-  function isElementReplacingDecision(decision, candidateById) {
-    const candidate = candidateById.get(decision.candidate_id);
-    // 候補が引けない決定は、現行の「patchが無い候補」と同じ扱い(要素ごと差し替え)にする。
-    return candidate ? isElementReplacingCandidate(candidate) : true;
+  function isRebuildDecision(decision) {
+    return decision.status === "accepted" && decision.op?.type === "rebuild";
   }
 
-  function applyDecision(root, decision, candidateById) {
-    const candidate = candidateById.get(decision.candidate_id);
+  // 第2段の当て順を決める(3.7のS2)。内側(子孫)を先、外側(先祖)を後にし、互いに子孫関係に
+  // 無いものは order の順のまま残す。ビルダーは現在の要素を読むので、内側を先に変換して
+  // おけば、外側の変換結果に内側の変換結果が含まれる。これが入れ子の表のID引き継ぎ(3.4)が
+  // 要らなくなる理由でもある。
+  //
+  // 子孫関係は、第2段を当て始める前のDOMで判定する。当て始めると要素が入れ替わるためである。
+  function orderRebuildDecisions(root, decisions) {
+    const elementOf = new Map();
+    decisions.forEach((decision) => {
+      elementOf.set(
+        decision,
+        decision.node_id
+          ? root.querySelector(`[data-goal2-node-id="${cssEscape(decision.node_id)}"]`)
+          : null
+      );
+    });
+
+    const remaining = decisions.slice();
+    const ordered = [];
+    while (remaining.length) {
+      // 残りの中に自分の子孫がいない最初の決定を選ぶ。
+      let index = remaining.findIndex((decision) => {
+        const element = elementOf.get(decision);
+        if (!element) return true;
+        return !remaining.some((other) => {
+          const otherElement = other === decision ? null : elementOf.get(other);
+          return Boolean(otherElement) && element.contains(otherElement);
+        });
+      });
+      // 同じ要素を指す rebuild の決定が2件以上あると、互いを子孫と見て選べなくなる。
+      // その場合は order の先頭から当てる(同じ箇所の代替手段で、後に当てた方が残る)。
+      if (index < 0) index = 0;
+      ordered.push(remaining.splice(index, 1)[0]);
+    }
+    return ordered;
+  }
+
+  // 対象要素そのものを消す・差し替える決定かどうか(第1段の組の中の順序に使う)。
+  function isElementReplacingDecision(decision) {
+    if (decision.status === "edited") {
+      return true;
+    }
+    const op = decision.op;
+    if (!op) {
+      return true;
+    }
+    return ELEMENT_REPLACING_PATCH_TYPES.has(op.type);
+  }
+
+  function applyDecision(root, decision) {
     const target = decision.node_id
       ? root.querySelector(`[data-goal2-node-id="${cssEscape(decision.node_id)}"]`)
       : null;
-    // 対象が見つからない決定・候補を引けない決定は、黙って捨てずに印を付ける(3.7の3)。
-    // 現行も対象が無い候補は当たらないため、出力は変わらない。
-    //
-    // S1の orphaned は「修正が失われた」ではなく「リプレイで対象が見つからなかった」である。
-    // 畳み込み(foldDescendantFixIntoAncestor)で祖先の after_html に入った修正も、対象の要素は
-    // 祖先ごと差し替えられて消えるため orphaned が立つ。出力にはその修正が残っている
-    // (MULTI_FIX_IN_TABLE を表の解体まで進めると、表の中の内容修正4件に立つが「22メートル」は
-    // 出力に残る)。S3で画面に出すときに「失われた」と表示すると誤りになる。
-    // 畳み込みが無くなるS2で本来の意味になる。
-    if (!target || !candidate) {
+    // 対象が見つからない決定は、黙って捨てずに印を付ける(3.7の3)。
+    // S2の orphaned は本来の意味、つまり「その決定の修正が最終HTMLに入らなかった」である。
+    // S1では畳み込みで祖先の after_html に入った修正にも印が立っていた。
+    if (!target) {
       decision.orphaned = true;
       return;
     }
-    decision.orphaned = false;
 
-    if (decision.status === "edited") {
-      // 畳み込み(foldDescendantFixIntoAncestor)が決定の後から書き換えるため、人が直したHTMLも
-      // ログの写しではなく候補配列の decision.after_html から引く。S2で正本をログへ移す。
-      replaceTarget(
-        root,
-        decision.node_id,
-        candidate.decision?.after_html || decision.after_html || candidate.proposal.after_html
-      );
-      return;
+    // 派生ID(3.4)は「当てている決定の seq」で振る。replaceTarget() まで引数で持ち回らず、
+    // 当てている間だけ立てる。
+    const previousSeq = activeDecisionSeq;
+    activeDecisionSeq = decision.seq;
+    try {
+      if (decision.status === "edited") {
+        // edited の after_html はログが正本(3.7のS2)。畳み込みが無くなったので後から
+        // 書き換わることはない。
+        const html = decision.after_html;
+        decision.orphaned = !(typeof html === "string" && html.trim());
+        if (!decision.orphaned) {
+          replaceTarget(root, decision.node_id, html);
+        }
+        return;
+      }
+      decision.orphaned = !applyDecisionOp(root, decision.node_id, decision.op, target);
+    } finally {
+      activeDecisionSeq = previousSeq;
     }
-
-    if (candidate.proposal.patch_mode === "none") {
-      return;
-    }
-
-    applyCandidatePatch(root, candidate);
   }
 
   function normalizeHeadingEmphasis(root) {
@@ -6861,6 +6962,10 @@
     "rename-element",
     "merge-following-note",
     "replace-paragraph-sequence",
+    // 表の構造変換(3.7)。表を丸ごと組み立て直すので、元の要素と data-goal2-node-id は消える。
+    "rebuild",
+    // パッチを持たない候補の「変換後HTMLで差し替える」操作(3.3の op)。
+    "replace-html",
   ]);
 
   function isElementReplacingCandidate(candidate) {
@@ -6874,116 +6979,181 @@
     return ELEMENT_REPLACING_PATCH_TYPES.has(patch.type);
   }
 
-  function applyCandidatePatch(root, candidate) {
-    const target = root.querySelector(`[data-goal2-node-id="${cssEscape(candidate.target.node_id)}"]`);
-    if (!target) {
-      return;
+  // 決定ログへ写す操作(設計書 3.3 の op)。決定時点の proposal.patch の写しで、パッチを
+  // 持たない候補は { type: "replace-html", after_html } になる。patch_mode が "none" の
+  // 候補は apply: false を立てる(記録はするが当てない)。
+  //
+  // after_html を写しに添えるのは、merge-following-note・replace-paragraph-sequence や
+  // 分岐の無いパッチ型が、当てるときに変換後HTMLを読むためである。rebuild は現在の要素から
+  // 作り直すので添えない。
+  function decisionOpFor(candidate) {
+    if (!candidate) {
+      return null;
     }
-
-    if (candidate.decision?.selected_method_id && candidate.decision.selected_method_id !== candidate.candidate_id) {
-      replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
-      return;
-    }
-
     const patch = candidate.proposal.patch;
-    if (!patch) {
-      replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
-      return;
+    const op = patch
+      ? JSON.parse(JSON.stringify(patch))
+      : { type: "replace-html", after_html: candidate.decision?.after_html || candidate.proposal.after_html || "" };
+    if (patch && patch.type !== "rebuild") {
+      op.after_html = candidate.decision?.after_html || candidate.proposal.after_html || "";
+    }
+    if (candidate.proposal.patch_mode === "none") {
+      op.apply = false;
+    }
+    return op;
+  }
+
+  // 候補に対して、その候補の操作を当てる。画面の「修正後」欄(currentCandidateAfterHtml)が
+  // 使う。リプレイは候補配列を見ないので、決定ログの op を applyDecisionOp() へ直接渡す。
+  function applyCandidatePatch(root, candidate) {
+    const decision = candidate.decision;
+    // 別の手段を選んで採用した候補は、選んだ手段の変換後HTMLで差し替える。
+    // リプレイでは、ログの op が選んだ手段の op になっているのでこの分岐を通らない。
+    if (decision?.selected_method_id && decision.selected_method_id !== candidate.candidate_id) {
+      return applyDecisionOp(root, candidate.target.node_id, {
+        type: "replace-html",
+        after_html: decision.after_html || candidate.proposal.after_html || "",
+      });
+    }
+    return applyDecisionOp(root, candidate.target.node_id, decisionOpFor(candidate));
+  }
+
+  // 戻り値は「当てられたか」。当てられなかった場合(対象が無い、rebuild のビルダーがこの
+  // 要素を扱えない)は、呼び出し元がリプレイの orphaned を立てる(3.7の3)。
+  function applyDecisionOp(root, nodeId, op, knownTarget) {
+    const target =
+      knownTarget || root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+    if (!target || !op) {
+      return false;
     }
 
-    if (patch.type === "set-attribute") {
-      target.setAttribute(patch.name, patch.value);
-      return;
+    // patch_mode が "none" の候補(通知だけの候補)は当てない。対象は見つかっているので
+    // orphaned ではない。
+    if (op.apply === false) {
+      return true;
     }
 
-    if (patch.type === "remove-attribute") {
-      target.removeAttribute(patch.name);
-      return;
+    const afterHtml = op.after_html || "";
+
+    if (op.type === "rebuild") {
+      return applyRebuildOp(root, nodeId, target, op);
     }
 
-    if (patch.type === "set-text") {
-      target.textContent = patch.value;
-      return;
+    if (op.type === "replace-html") {
+      replaceTarget(root, nodeId, afterHtml);
+      return true;
     }
 
-    if (patch.type === "replace-text") {
-      replaceTextInElement(target, patch.before, patch.after);
-      return;
+    if (op.type === "set-attribute") {
+      target.setAttribute(op.name, op.value);
+      return true;
     }
 
-    if (patch.type === "rename-element") {
-      target.replaceWith(renameElement(target, patch.tag_name));
-      return;
+    if (op.type === "remove-attribute") {
+      target.removeAttribute(op.name);
+      return true;
+    }
+
+    if (op.type === "set-text") {
+      target.textContent = op.value;
+      return true;
+    }
+
+    if (op.type === "replace-text") {
+      replaceTextInElement(target, op.before, op.after);
+      return true;
+    }
+
+    if (op.type === "rename-element") {
+      target.replaceWith(renameElement(target, op.tag_name));
+      return true;
     }
 
     // 見出し全体の底上げ。node_idsの各見出しをdelta分ずらす。renameElement()が
     // data-goal2-node-idを引き継ぐので、要素を残すパッチとして扱える
     // (ELEMENT_REPLACING_PATCH_TYPESには入れない)。
-    if (patch.type === "shift-headings") {
-      (patch.node_ids || []).forEach((nodeId) => {
-        const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`);
+    if (op.type === "shift-headings") {
+      (op.node_ids || []).forEach((headingNodeId) => {
+        const heading = root.querySelector(`[data-goal2-node-id="${cssEscape(headingNodeId)}"]`);
         if (!heading || !/^H[1-6]$/.test(heading.tagName)) {
           return;
         }
-        const next = Math.min(6, Math.max(2, headingLevel(heading) + (patch.delta || 0)));
+        const next = Math.min(6, Math.max(2, headingLevel(heading) + (op.delta || 0)));
         if (next !== headingLevel(heading)) {
           heading.replaceWith(renameElement(heading, `h${next}`));
         }
       });
-      return;
+      return true;
     }
 
-    if (patch.type === "remove-style-properties") {
-      removeStyleProperties(target, patch.names || []);
-      (patch.attributes || []).forEach((name) => target.removeAttribute(name));
-      return;
+    if (op.type === "remove-style-properties") {
+      removeStyleProperties(target, op.names || []);
+      (op.attributes || []).forEach((name) => target.removeAttribute(name));
+      return true;
     }
 
-    if (patch.type === "unwrap-element") {
+    if (op.type === "unwrap-element") {
       target.replaceWith(...target.childNodes);
-      return;
+      return true;
     }
 
-    if (patch.type === "remove-element") {
+    if (op.type === "remove-element") {
       target.remove();
-      return;
+      return true;
     }
 
-    if (patch.type === "merge-following-note") {
-      const note = root.querySelector(`[data-goal2-node-id="${cssEscape(patch.note_node_id)}"]`);
-      replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
+    if (op.type === "merge-following-note") {
+      const note = root.querySelector(`[data-goal2-node-id="${cssEscape(op.note_node_id)}"]`);
+      replaceTarget(root, nodeId, afterHtml);
       note?.remove();
-      return;
+      return true;
     }
 
-    if (patch.type === "replace-paragraph-sequence") {
-      const nodes = (patch.node_ids || [])
-        .map((nodeId) => root.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`))
+    if (op.type === "replace-paragraph-sequence") {
+      const nodes = (op.node_ids || [])
+        .map((paragraphNodeId) => root.querySelector(`[data-goal2-node-id="${cssEscape(paragraphNodeId)}"]`))
         .filter(Boolean);
       if (nodes.length > 0) {
-        replaceTarget(root, nodes[0].getAttribute("data-goal2-node-id"), candidate.decision.after_html || candidate.proposal.after_html);
+        replaceTarget(root, nodes[0].getAttribute("data-goal2-node-id"), afterHtml);
         nodes.slice(1).forEach((node) => node.remove());
       }
-      return;
+      return true;
     }
 
-    if (patch.type === "strip-formatting") {
+    if (op.type === "strip-formatting") {
       stripFormatting(target);
-      return;
+      return true;
     }
 
-    if (patch.type === "insert-caption" && target.tagName === "TABLE") {
+    if (op.type === "insert-caption" && target.tagName === "TABLE") {
       // 文言が空のときは何もしない。<caption></caption> が残ると、空のキャプションが
       // 付いた表として扱われ、かえって分かりにくくなる。
-      if (patch.value && !target.querySelector(":scope > caption")) {
+      if (op.value && !target.querySelector(":scope > caption")) {
         const caption = document.createElement("caption");
-        caption.textContent = patch.value;
+        caption.textContent = op.value;
         target.insertBefore(caption, target.firstChild);
       }
-      return;
+      return true;
     }
 
-    replaceTarget(root, candidate.target.node_id, candidate.decision.after_html || candidate.proposal.after_html);
+    replaceTarget(root, nodeId, afterHtml);
+    return true;
+  }
+
+  // rebuild 操作(3.7)。現在の要素にビルダーを当て、その結果で要素を差し替える。
+  // 対象が表でない、ビルダーの名前が引けないなど、扱えない場合は当てずに false を返す。
+  // 黙って捨てず、リプレイ側で orphaned を立てるためである。
+  function applyRebuildOp(root, nodeId, target, op) {
+    const builder = tableRebuildBuilder(op.builder);
+    if (!builder || target.tagName !== "TABLE") {
+      return false;
+    }
+    const html = builder(target, op.params || {});
+    if (typeof html !== "string" || !html.trim()) {
+      return false;
+    }
+    replaceTarget(root, nodeId, html);
+    return true;
   }
 
   function replaceTarget(root, nodeId, html) {
@@ -6993,7 +7163,7 @@
     }
 
     const template = document.createElement("template");
-    template.innerHTML = html.trim();
+    template.innerHTML = String(html || "").trim();
     if (!template.content.childNodes.length) {
       return;
     }
@@ -7001,26 +7171,37 @@
     if (replacement.childNodes.length === 1 && replacement.firstElementChild) {
       replacement.firstElementChild.setAttribute("data-goal2-node-id", nodeId);
     }
-    // 置き換え前に中にあった表のIDを、置き換え後の同じ並びの表へ引き継ぐ。表を解体しても
-    // セルの中にあった表はそのまま残るため、その表に対する候補(キャプション・フラット化など)を
-    // 続けて適用できるようにする。引き継がないと対象を見つけられず、入れ子の表が誰も直さないまま残る。
-    const nestedIds = [...target.querySelectorAll("table")].map((table) =>
-      table.getAttribute("data-goal2-node-id")
-    );
     const inserted = [...replacement.childNodes];
     target.replaceWith(replacement);
-    if (nestedIds.length) {
-      const insertedTables = inserted.flatMap((node) =>
-        node.nodeType === Node.ELEMENT_NODE
-          ? [...(node.matches("table") ? [node] : []), ...node.querySelectorAll("table")]
-          : []
-      );
-      insertedTables.forEach((table, index) => {
-        if (nestedIds[index] && !table.hasAttribute("data-goal2-node-id")) {
-          table.setAttribute("data-goal2-node-id", nestedIds[index]);
-        }
-      });
+    assignDerivedNodeIds(inserted, nodeId);
+  }
+
+  // 差し替えで生まれた要素に派生ID(設計書 3.4)を振る。差し替え後の先頭要素は元のIDを
+  // 引き継ぐので対象外で、それ以外の要素に文書順で nX.s{seq}.{k} を振る。
+  // 同じ元HTMLに同じ決定を同じ順で当てれば同じIDになるので、リプレイは決定的である。
+  //
+  // S1まではここで「置き換え前に中にあった表のIDを、置き換え後の同じ並びの表へ引き継ぐ」
+  // 処理をしていた。表を解体しても中の表はそのまま残るため、その表への候補を続けて当てられる
+  // ようにするためだった。S2では要らない。リプレイが rebuild の決定を内側から先に当てるので、
+  // 入れ子の表の変換は外側の変換より先に済んでおり、外側の変換結果にそのまま含まれる(3.7)。
+  // 引き継ぎを残すと、並び順で当てるため別の表のIDを付けてしまう危険もある。
+  function assignDerivedNodeIds(insertedNodes, nodeId) {
+    if (activeDecisionSeq === null || activeDecisionSeq === undefined) {
+      return;
     }
+    let index = 1;
+    insertedNodes.forEach((node) => {
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      [node, ...node.querySelectorAll("*")].forEach((element) => {
+        if (element.hasAttribute("data-goal2-node-id")) {
+          return;
+        }
+        element.setAttribute("data-goal2-node-id", `${nodeId}.s${activeDecisionSeq}.${index}`);
+        index += 1;
+      });
+    });
   }
 
   function currentTargetHtml(candidate) {
@@ -7065,6 +7246,9 @@
     }
     const template = document.createElement("template");
     template.content.appendChild(target.cloneNode(true));
+    // rebuild を持つ候補は、生成時点の proposal.after_html ではなく、作業中HTMLの現在の要素に
+    // ビルダーを当てた結果を見せる(3.7)。表の中の内容修正を先に採用していれば、その修正を
+    // 含んだ変換後HTMLになる。編集画面の初期値もこの値である。
     applyCandidatePatch(template.content, candidate);
     return cleanHtml(template.innerHTML);
   }
@@ -7196,17 +7380,17 @@
 
   // ---- 決定ログ(設計書 3.3) -------------------------------------------------
   //
-  // 決定を候補配列から切り離し、順序付きのログへ積む。S2以降で再導出によって候補が
+  // 決定を候補配列から切り離し、順序付きのログへ積む。S3以降で再導出によって候補が
   // 入れ替わっても決定が消えないようにするための土台である。
-  // S1では候補配列の decision が正本で、ログはその鏡写しにとどめる。リプレイ(replay)は
-  // ログから「どの決定をどの順で当てるか」だけを読み、当てる内容(patch・after_html)は
-  // candidate_id で候補配列から引く。
   //
-  // S1のログが 3.3 の op(決定時点の操作の写し)を持たない理由:
-  // foldDescendantFixIntoAncestor() が、決定の後から構造候補の decision.after_html を
-  // 書き換える(表の中の内容修正を変換後HTMLへ畳み込む)。決定時点の after_html を写して
-  // しまうと、その後の畳み込みがリプレイに乗らず挙動が変わる。op の写しは、畳み込みが
-  // 要らなくなるS2の rebuild 操作と一緒に入れる。
+  // S2でログを正本にした。accepted は決定時点の操作の写し(op)を、edited は人が直したHTMLを
+  // 持ち、リプレイ(replay)は候補配列を参照しない。畳み込み(foldDescendantFixIntoAncestor)が
+  // 決定の後から after_html を書き換えることが無くなったため、写しを持てるようになった。
+  // 候補配列の decision は当面残す(画面と証跡の多くがこれを読む)。
+  //
+  // order は当て順に使う候補配列の添字である(3.7)。S2では候補配列が変わらないので、決定した
+  // 時点の添字を固定で持つ。S3で候補を作業中HTMLから作り直し、当て順を seq へ切り替えるときに
+  // 落とす。
 
   // 同じ「かたまり」の決定に同じ世代番号を振るための入れ物。decide() や一括採用の
   // 呼び出し1回を beginDecisionBatch() で囲む。囲まれていない決定は1件で1世代になる。
@@ -7244,10 +7428,14 @@
     return `${candidate?.rule_id || ""}|${candidate?.method_label || ""}|${candidate?.target?.node_id || ""}`;
   }
 
-  function decisionLogEntry(candidate, decision, seq, generation) {
+  // methodCandidate は「選んだ手段」の候補(既定は候補自身)。別の手段を選んだ決定では、
+  // 当てるのは選んだ手段の操作なので、op はそちらから写す(3.7のS2)。
+  // order は候補配列の添字。第1段の当て順に使う(3.7)。S3で seq 順に切り替えるときに落とす。
+  function decisionLogEntry(candidate, decision, seq, generation, methodCandidate = candidate, order = null) {
     return {
       seq,
       generation,
+      order: Number.isFinite(order) && order >= 0 ? order : null,
       candidate_id: candidate.candidate_id,
       fingerprint: candidateFingerprint(candidate),
       rule_id: candidate.rule_id,
@@ -7260,10 +7448,11 @@
       reason: decision.reason ?? null,
       actor: decision.actor ?? null,
       decided_at: decision.decided_at ?? null,
-      // 人が直したHTMLの記録。リプレイは候補配列の decision.after_html を使う(畳み込みが
-      // 後から入るため)。この欄は証跡用の写しで、S2で op と一緒に正本へ格上げする。
+      // 人が直したHTML。S2からはこれがリプレイの正本である(3.7)。畳み込みが無くなったので
+      // 決定の後から書き換わることはない。
       after_html: decision.status === "edited" ? decision.after_html ?? null : null,
-      op: null,
+      // 決定時点の操作の写し(3.3)。これがあるのでリプレイは候補配列を参照しない。
+      op: decision.status === "accepted" ? decisionOpFor(methodCandidate || candidate) : null,
       selected_method_id: decision.selected_method_id ?? null,
       selected_method_rule_id: decision.selected_method_rule_id ?? null,
       selected_method_title: decision.selected_method_title ?? null,
@@ -7277,24 +7466,38 @@
 
   // 候補に下した決定をログへ積む。採用・編集・却下・要確認と、調停ロジックが付ける
   // conflicted のすべてを通す。conflicted はリプレイでは当てない(記録だけ)。
-  function recordDecision(candidate, decision) {
+  // candidateList は order(候補配列の添字)を数える対象。画面は state.candidates だが、
+  // ヘッドレス経路(goal2Engine.autoAcceptSafe)は渡された配列を使う。
+  function recordDecision(candidate, decision, methodCandidate = candidate, candidateList = state.candidates) {
     state.decisionSeq += 1;
-    const entry = decisionLogEntry(candidate, decision, state.decisionSeq, currentDecisionGeneration());
+    const entry = decisionLogEntry(
+      candidate,
+      decision,
+      state.decisionSeq,
+      currentDecisionGeneration(),
+      methodCandidate,
+      (candidateList || []).indexOf(candidate)
+    );
     state.decisions.push(entry);
     return entry;
   }
 
   // 候補配列から決定ログを組み立てる(設計書 3.12)。goal2Engine.buildFinalHtml() は
   // 引数を変えないため、候補が持つ decision からログを作ってリプレイする。
-  // 候補配列の並び順で seq を振り、全件を同じ1世代に置く。現行の rebuildWorkingHtmlFor() は
-  // 候補配列の並び順で node_id の組を作るため、こうするとリプレイの当て順が現行と一致する。
+  // 候補配列の並び順で seq と order を振り、全件を同じ1世代に置く。
   function decisionsFromCandidates(candidates) {
+    const list = candidates || [];
+    const byId = new Map(list.map((candidate) => [candidate.candidate_id, candidate]));
     const decisions = [];
-    (candidates || []).forEach((candidate) => {
+    list.forEach((candidate, index) => {
       if (!candidate?.decision?.status) {
         return;
       }
-      decisions.push(decisionLogEntry(candidate, candidate.decision, decisions.length + 1, 1));
+      const selectedId = candidate.decision.selected_method_id;
+      const methodCandidate = selectedId ? byId.get(selectedId) || candidate : candidate;
+      decisions.push(
+        decisionLogEntry(candidate, candidate.decision, decisions.length + 1, 1, methodCandidate, index)
+      );
     });
     return decisions;
   }
@@ -7312,7 +7515,7 @@
       selected_method_title: selectedMethodCandidate.rule.title,
       selected_method_label: selectedMethodCandidate.method_label || null,
     };
-    recordDecision(candidate, candidate.decision);
+    recordDecision(candidate, candidate.decision, selectedMethodCandidate);
     state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
     resolveSupersededTableCandidates(candidate);
     resolveAlternativeMethodCandidates(candidate);
@@ -7353,7 +7556,7 @@
         decided_at: decidedAt,
         after_html: null,
       };
-      recordDecision(other, other.decision);
+      recordDecision(other, other.decision, other, candidates);
       state.bulkSelectedCandidateIds.delete(other.candidate_id);
     });
   }
@@ -7515,6 +7718,17 @@
     });
   }
 
+  // 表の構造候補が採用されたとき、同じ表への表関連候補(th/scope・キャプション・セル結合など)を
+  // 自動解決する。
+  //
+  // S2で、表内の「内容修正」候補(table.* 以外)に対する処理を外した。以前は、構造候補の
+  // 変換後HTMLへ内容修正を畳み込み(foldDescendantFixIntoAncestor)、未処理だったものを
+  // 「反映済み」として conflicted にしていた。rebuild 操作が現在の要素を読むようになったので
+  // 畳み込みは要らなくなり、内容修正は未処理のまま残す。作業者が採用したものだけが、
+  // リプレイの第1段で当たって最終HTMLに入る(3.7)。
+  //
+  // 同じ表の表関連候補を conflicted にする処理と、入れ子の表の survivesInAncestorOutput() の
+  // 扱いはS2では変えない(S3で排他グループに置き換える)。
   function resolveSupersededTableCandidates(candidate, candidates = state.candidates) {
     if (!["accepted", "edited"].includes(candidate.decision.status)) {
       return;
@@ -7524,56 +7738,20 @@
     }
 
     const decidedAt = new Date().toISOString();
-    // 要素ごと差し替える候補(装飾タグの解除など)を先に畳み込む。文字列置換より後にすると、
-    // 先の置換で中身が変わっているため「元の要素」が見つからず畳み込めなくなる。
-    const ordered = [
-      ...candidates.filter((other) => isElementReplacingCandidate(other)),
-      ...candidates.filter((other) => !isElementReplacingCandidate(other)),
-    ];
-    ordered.forEach((other) => {
-      if (other === candidate) {
+    candidates.forEach((other) => {
+      if (other === candidate || other.decision.status) {
         return;
       }
       const isDescendantCandidate = isDescendantOfCandidateTarget(other, candidate);
-      // 表内の「内容修正」候補(file.file-display-text でリンク文言から「（PDF：76KB）」を削除する、
-      // text.* の文字修正など、table.* 以外)は、表の構造変換では実行されない。表構造候補の変換後HTMLへ
-      // この修正を畳み込むことで、採用順に関わらず出力に修正が反映されるようにする。
-      const isContentDescendant = isDescendantCandidate && !other.rule_id.startsWith("table.");
-
-      // 既に解決済みの内容修正候補: 表を丸ごと置換する変換後HTMLが、この修正を上書きして消して
-      // しまうため、変換後HTMLへ畳み込んでおく(候補自体の状態は変えない)。
-      // conflictedも対象にする。入れ子の表では外側→内側の順に採用されるため、外側へ畳み込んだ
-      // 時点でconflictedになった修正が、後から採用した内側の変換後HTML(元の要素から作られる)で
-      // 消えていた(実データ: 表のセルの「墳　丘」が詰められないまま残っていた)。
-      if (isContentDescendant && ["accepted", "edited", "conflicted"].includes(other.decision.status)) {
-        foldDescendantFixIntoAncestor(candidate, other);
-        return;
-      }
-
-      if (other.decision.status) {
-        return;
-      }
       const isSameTableCandidate = other.target.node_id === candidate.target.node_id && isTableRelatedCandidate(other);
       if (!isSameTableCandidate && !isDescendantCandidate) {
         return;
       }
 
-      // 未処理の内容修正候補: 変換後HTMLへ畳み込めた場合のみ「解決済み」にする。畳み込めない場合は、
-      // 修正が失われたまま「完了」と誤表示するのを避けるため、未処理のまま残す。
-      if (isContentDescendant && !isSameTableCandidate) {
-        if (!foldDescendantFixIntoAncestor(candidate, other)) {
-          return;
-        }
-        other.status = "conflicted";
-        other.decision = {
-          status: "conflicted",
-          reason: "表の構造変換候補の変換後HTMLへ、この修正内容を反映済みとして自動解決",
-          actor: "AGENT",
-          decided_at: decidedAt,
-          after_html: null,
-        };
-        recordDecision(other, other.decision);
-        state.bulkSelectedCandidateIds.delete(other.candidate_id);
+      // 表内の内容修正候補(file.file-display-text でリンク文言から「（PDF：76KB）」を削除する、
+      // text.* の文字修正など、table.* 以外)は未処理のまま残す。リプレイの第1段で、表の変換より
+      // 先に当たるためである。
+      if (isDescendantCandidate && !isSameTableCandidate && !other.rule_id.startsWith("table.")) {
         return;
       }
 
@@ -7596,60 +7774,9 @@
         decided_at: decidedAt,
         after_html: null,
       };
-      recordDecision(other, other.decision);
+      recordDecision(other, other.decision, other, candidates);
       state.bulkSelectedCandidateIds.delete(other.candidate_id);
     });
-  }
-
-  // 採用済みの表構造候補(ancestor)の変換後HTMLへ、表内の内容修正候補(descendant)の修正を畳み込む。
-  // descendant の before_html が変換後HTMLに現れる場合のみ、after_html へ置換する(現れない場合は
-  // 畳み込めないため false を返す)。
-  // テキストをHTMLの直列化と同じ表記へ揃える(&・<・>・NBSPなど)。
-  function serializeTextForHtml(text) {
-    const holder = document.createElement("div");
-    holder.textContent = String(text ?? "");
-    return holder.innerHTML;
-  }
-
-  function foldDescendantFixIntoAncestor(ancestor, descendant) {
-    // 変換後HTMLが未設定の場合は、候補が持つ変換後HTMLを起点にする。ヘッドレス経路
-    // (goal2Engine.autoAcceptSafe)は decision.after_html を null のまま採用するため、
-    // これが無いと畳み込みが一度も成立しなかった。
-    if (!ancestor.decision) {
-      return false;
-    }
-    if (typeof ancestor.decision.after_html !== "string") {
-      const fallback = ancestor.proposal?.after_html;
-      if (typeof fallback !== "string") {
-        return false;
-      }
-      ancestor.decision.after_html = fallback;
-    }
-    const current = ancestor.decision.after_html;
-
-    // 文字列置換のパッチ(単位の言い換え・単語内空白の除去など)は、置換する部分だけを畳み込む。
-    // 要素まるごとの before/after で畳み込むと、同じ要素に複数の修正があるとき2件目以降が
-    // 「元の要素」を見つけられず(1件目で書き換わっているため)捨てられていた。
-    const patch = descendant.proposal?.patch;
-    if (patch?.type === "replace-text" && typeof patch.before === "string" && patch.before && patch.before !== patch.after) {
-      // パッチが持つのはDOMのテキスト(実際のNBSP文字など)、畳み込み先は直列化されたHTML
-      // (&nbsp; 等の実体参照)。同じ直列化を通してから突き合わせないと、単語内の全角空白の除去の
-      // ように&nbsp;を含む修正が一致せず、黙って捨てられる。
-      const before = serializeTextForHtml(patch.before);
-      const after = serializeTextForHtml(patch.after);
-      if (before && current.includes(before)) {
-        ancestor.decision.after_html = current.split(before).join(after);
-        return true;
-      }
-    }
-
-    const before = descendant.proposal?.before_html || "";
-    const after = descendant.proposal?.after_html || "";
-    if (!before || !after || before === after || !current.includes(before)) {
-      return false;
-    }
-    ancestor.decision.after_html = current.split(before).join(after);
-    return true;
   }
 
   // 親の変換後HTMLに、その候補が指す要素がそのまま残っているか。表を解体してもセルの中身は
@@ -10890,7 +11017,7 @@
             decided_at: new Date().toISOString(),
             after_html: null,
           };
-          recordDecision(candidate, candidate.decision);
+          recordDecision(candidate, candidate.decision, candidate, candidates);
           accepted += 1;
           // 画面側の採用(applyCandidateDecision)と同じ競合解決を通す。通していなかったため、
           // 同じ箇所の代替手段がすべて採用され、出力が適用順で決まっていた。
@@ -10906,7 +11033,7 @@
     // state.decisionsではなく候補が持つdecisionからログを作る。
     buildFinalHtml(sourceHtml, candidates) {
       return stripMigrationUnneededAttributesFromHtml(
-        stripInternalFromHtml(replay(sourceHtml, decisionsFromCandidates(candidates), candidates))
+        stripInternalFromHtml(replay(sourceHtml, decisionsFromCandidates(candidates)))
       );
     },
 
@@ -10914,18 +11041,24 @@
       return buildEvidenceFor(context, finalHtml);
     },
 
-    // S1の同値テスト(test/goal2-output)専用の窓口。決定ログのリプレイが、置き換え対象の
-    // rebuildWorkingHtmlFor() と同じHTMLを返すことを、決定を積む順序を変えて確かめる。
-    // legacyRebuild は rebuildWorkingHtmlFor() ごとS2で消す。
+    // テスト(test/goal2-output)用の窓口。決定ログを組み立て、順序を変えてリプレイし、
+    // 出力が決定順に依存しないことを確かめる。
     decisionLog: {
       fromCandidates(candidates) {
         return decisionsFromCandidates(candidates);
       },
-      replay(sourceHtml, decisions, candidates) {
-        return replay(sourceHtml, decisions, candidates);
+      replay(sourceHtml, decisions) {
+        return replay(sourceHtml, decisions);
       },
-      legacyRebuild(sourceHtml, candidates) {
-        return rebuildWorkingHtmlFor(sourceHtml, candidates);
+      // テスト用。「表を丸ごと差し替える候補はすべて rebuild 操作である」ことを外から
+      // 確かめるための窓口(3.7)。
+      candidateFacts(candidate) {
+        return {
+          table_structural: isTableStructuralCandidate(candidate),
+          element_replacing: isElementReplacingCandidate(candidate),
+          patch_type: candidate?.proposal?.patch?.type || null,
+          patch_mode: candidate?.proposal?.patch_mode || null,
+        };
       },
       // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
       screenState() {

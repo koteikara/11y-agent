@@ -25,6 +25,25 @@
 - 主な変更内容: 19件の課題候補を追加し、理解サマリーからリンク。参照コミットと最新mainとの差分を明記し、実装済み機能を未実装と誤認しないよう注意を付記した。
 - 関連ファイル: `memory/project-issue-candidates.md`、`memory/project-understanding-summary.md`
 - 関連PR/コミット: 本変更のコミット（`docs: integrate project issue candidates`）。関連する理解サマリーはPR #29、取り込み時mainは `11acac4`。
+## 2026-09-16: 構造変更1 S2（派生IDと rebuild 操作）
+
+- 背景・目的: 設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章の実装ステージ S2。表の構造変換を「固定の変換後HTML」から「現在の要素にビルダーを当てる操作（`rebuild`）」に変え、決定ログを正本にして、差し替えで生まれた要素に派生IDを振る。これにより、表の中の内容修正を先に採用しても後から採用しても、修正が最終HTMLに残るようになる。
+- 主な変更内容(`goal2-app/public/app.js`):
+  - 表の構造ビルダー7件（`dataTableSemantics`、`splitMergedRows`、`decomposeLayoutTable`、`flattenTable`、`tableAsList`、`rowsAsSections`、`mergedCellProposal`）を `TABLE_REBUILD_BUILDERS` に名前で登録し、`(element, params) => htmlString` の形に揃えた（3.7）。各ビルダーが対象の要素の外のDOM（直前の見出し）から読んでいた入力は `params` に移し、候補を作る時点で確定させる。`currentCandidateAfterHtml()` は対象の表だけを複製して当てるため、複製先には直前の見出しが無いからである。AIの補完がキャプションの文言を書き換えたときは `params.caption` も揃える。
+  - 表を丸ごと差し替える構造候補の `proposal.patch` を `{ type: "rebuild", builder, params }` にした。`planTableTreatments()` の6手段に加え、`buildMergedCellProposal()` が作るセル結合の分類ごとの再構成（`table.cell-merge-heading` / `-summary` / `-note` / `-file` / `-mark`）も含む。要素を残すパッチ（`insert-caption`）と `patch_mode: "none"` の確認だけの候補は対象外で、どちらも表を差し替えないため問題にならない。`proposal.after_html` は表示用に生成時点の値のまま残す。`applyCandidatePatch()` に `rebuild` を足し、「当てられたか」を返すようにした（対象が表でないなどビルダーが扱えない場合は当てずに `orphaned` を立てる）。`ELEMENT_REPLACING_PATCH_TYPES` に `rebuild` と `replace-html` を足した。
+  - `currentCandidateAfterHtml()` は `rebuild` を持つ候補で、作業中HTMLの現在の要素（複製）にビルダーを当てて計算する。編集画面の初期値もこの値になる。
+  - 決定ログを正本にした（3.3）。`accepted` の `op`（決定時点の `proposal.patch` の写し。別の手段を選んだ決定では選んだ手段の候補から写す）、`edited` の `after_html`、当て順に使う `order`（候補配列の添字）を持たせ、`replay(sourceHtml, decisions)` の2引数にした。旧実装 `rebuildWorkingHtmlFor()` と `decisionLog.legacyRebuild` は削除した。
+  - リプレイの当て順を2段にした（3.7）。第1段は `rebuild` 以外の決定でS1の規則のまま、第2段は `rebuild` の決定を内側（子孫）から先に当てる。ビルダーが現在の要素を読むので、先に当てた内容修正も、先に変換した内側の表も、外側の変換結果に含まれる。
+  - `replaceTarget()` で派生ID `nX.s{seq}.{k}` を振るようにし（3.4）、入れ子の表のID引き継ぎを廃止した。第2段が内側を先に当てるため不要になった。
+- 挙動の変更（畳み込みの廃止）: `foldDescendantFixIntoAncestor()` を削除し、`resolveSupersededTableCandidates()` から内容修正の子孫候補（`table.` 以外）に対する処理を外した。これまで「構造候補の採用時に未処理だった内容修正」は、畳み込みで作業者の採用なしに出力へ入り `conflicted`（反映済み）と表示されていた。S2からは未処理のまま残り、作業者が採用したものだけが最終HTMLに入る。同じ表の表関連候補（`table.*`）を `conflicted` にする処理と、入れ子の表の `survivesInAncestorOutput()` の扱いは変えていない（S3で排他グループに置き換える）。
+- 残る制限: 構造候補を編集（`edited`）したあとに、その表の中の内容修正を採用すると、対象が編集後のHTMLに無いため `orphaned` になる。S3の再導出までの制限として設計書 3.7 に書いた。
+- テスト(`goal2-app/test/goal2-output/run-output-tests.js`): S1の同値テスト（旧実装との比較）を「期待するHTMLを直接アサートする」形に書き直し、決定順を入れ替えても出力が変わらない検査（7通り）は残した。新規に、表の中の内容修正と構造手段3件（データ表として維持／箇条書きに変換／1行ずつ見出し・段落）とセル結合の手段を両方の順で採用しても内容修正が残り最終HTMLが一致すること、構造候補だけを採用したとき内容修正候補が未処理のまま残ること、入れ子の表で外側・内側どちらを先に採用しても同じ最終HTMLになること、派生IDが決定的で `cssEscape` が「.」を含むIDを扱えること、「要素ごと差し替える構造候補はすべて `rebuild`」が全候補の走査で成り立つことを確かめる。155件すべて緑（S1の111件から44件増）。
+- 検証: 6章の5コマンドすべて通過。`npm run test:saga-gold` は変更前後で同じ（平均類似度 0.9165→0.9222、指標一致648・差分15）。佐賀市の実ページ51件で、GOAL1経路（`analyze()`→`autoAcceptSafe()`→`buildFinalHtml()`）の最終HTMLは51件すべてS1と同じ。全候補を採用した経路では21件に差が出たが、いずれも「`rebuild` が現在の要素を読むようになったこと」で説明できる（これまで対象を失って当たらなかった決定258件が新たに当たるようになり、同じ表に複数の手段を同時採用したときの2件目以降の `table.layout-table` 11件が当たらなくなった）。
+- 設計書 3.13 の「S2で確かめる項目」（`orphaned` が立つ5ページ）を1件ずつ確かめ、表に結果を書き足した。修正が実際に失われていたのは `sg04015` の1件だけで、原因は `replace-paragraph-sequence` が固定の変換後HTMLで段落の並びをまとめて差し替えることだった。`rebuild` では直らないため S3 に回す。
+- リプレイ時間: 要素数が最も多い `sg00761`（708要素・決定148件）で、リプレイ1回が 20.6ミリ秒、決定1件あたり 0.14ミリ秒。3.14の上限300ミリ秒に収まっている（S1は4.5ミリ秒）。
+- レビュー（Fable）で受けた要修正の対応: `rebuild` を `planTableTreatments()` の6手段だけに留めたため、`buildMergedCellProposal()` が作るセル結合の5候補が固定の変換後HTMLのまま残り、畳み込みの廃止と組み合わさってS1からの退行になっていた（表の中の内容修正を採用したあとにセル結合の手段を採用すると、内容修正が失われる）。原因は、これらの候補がリプレイの第1段で `order`（表のコレクターは文字のコレクターより先）により内容修正より先に当たり、表ごと差し替えること。ビルダー `mergedCellProposal` を1つ登録して `params.rule_id` で分岐する形にし、5候補も `rebuild` にした。`main` と PR head の両方で再現を確かめてから直し、回帰テストに足した。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
+- 関連PR/コミット: PR #132
 
 ## 2026-09-16: 構造変更1 S1（決定ログとリプレイの導入）
 
