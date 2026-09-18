@@ -1938,6 +1938,55 @@ async function main() {
       check("排他グループの検査に使う構造候補が2件以上出る", false, JSON.stringify(exclusiveBefore));
     }
 
+    // 20-f-2. 構造候補を採用したあと、同じ候補を選び直して却下すると、その表の構造候補が
+    //     再導出で未処理に戻る。3.8 の「この箇所の構造は決定済み」は、ログの全行ではなく
+    //     候補ごとの最新の決定だけを見る必要がある(リプレイが seq 最大の1件だけを当てるのと
+    //     同じ見方)。全行を見ると、却下で元に戻った表に対して構造候補が二度と出なくなる。
+    await analyzeOnScreen(EXCLUSIVE_TABLE);
+    const redecideBefore = await candidateSnapshot();
+    const redecideTarget = redecideBefore.find((c) => c.builder === "dataTableSemantics");
+    const redecideSiblings = redecideBefore.filter(
+      (c) => c.patch_type === "rebuild" && c.id !== redecideTarget?.id
+    );
+    if (redecideTarget && redecideSiblings.length) {
+      await acceptCandidateById(redecideTarget.id);
+      const afterAccept = await candidateSnapshot();
+      // 同じ候補を選び直して却下する。
+      await page.evaluate((id) => {
+        const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+          (b.getAttribute("aria-label") || "").includes(id)
+        );
+        button?.click();
+      }, redecideTarget.id);
+      await page.waitForTimeout(500);
+      await page.click("#rejectButton");
+      await page.waitForTimeout(900);
+      const afterReject = await candidateSnapshot();
+      const returned = afterReject.filter(
+        (c) => !c.status && c.patch_type === "rebuild" && c.node_id === redecideTarget.node_id
+      );
+      const workingHtml = await page.evaluate(() => window.goal2Engine.decisionLog.screenState().workingHtml);
+      check(
+        "構造候補を採用してから却下すると、作業中HTMLが元に戻る",
+        !/<caption>/.test(workingHtml) && !/scope="row"/.test(workingHtml),
+        workingHtml.replace(/ data-goal2-node-id="[^"]*"/g, "").replace(/\s+/g, " ").slice(0, 200)
+      );
+      check(
+        "却下したあと、同じ表の構造候補が未処理で戻る(node_id は同じ、candidate_id は新しい)",
+        returned.length === redecideSiblings.length &&
+          returned.every((c) => !redecideBefore.some((row) => row.id === c.id)),
+        `採用後=${JSON.stringify(afterAccept)}\n       却下後=${JSON.stringify(afterReject)}`
+      );
+      check(
+        "却下した候補は「却下」として一覧に残り、未処理では戻らない",
+        afterReject.some((c) => c.id === redecideTarget.id && c.status === "rejected") &&
+          !returned.some((c) => c.builder === "dataTableSemantics"),
+        JSON.stringify(afterReject)
+      );
+    } else {
+      check("決め直しの検査に使う構造候補が2件以上出る", false, JSON.stringify(redecideBefore));
+    }
+
     // 20-g. 遠野市 指摘3(設計書 4.1)。bgcolor の表で「確認不要をまとめて採用」を押すと背景色が
     //     消え、再導出では背景色の候補が出ない。表の構造候補3件は同じ指紋で残り、引き続き選べる。
     await analyzeOnScreen(BGCOLOR_TABLE);

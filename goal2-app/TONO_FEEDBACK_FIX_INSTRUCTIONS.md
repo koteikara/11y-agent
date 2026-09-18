@@ -421,6 +421,7 @@ const EXCLUSIVE_GROUPS = {
 - 候補一覧の「同じ箇所の代替手段 N件中」と、代替手段のグループ表示（`renderCandidates()` のバケット分け）、手段の選択（`activeFixMethodCandidate()`）を、`isElementReplacingCandidate()` ではなく排他グループで数えるようにした。
 - `resolveSupersededTableCandidates()`、`resolveAlternativeMethodCandidates()`、`survivesInAncestorOutput()`、`isDescendantOfCandidateTarget()`、`isTableRelatedCandidate()`、`tableRelatedRuleIds` を削除した。`conflicted` を新しく作る経路は無い（`grep` で確認。残るのは状態ラベルの定義とCSS、コメントだけ）。
 - 上の規則を `createGenerationReplacementGuard()` として、`bulkAcceptSelected()`、`bulkAcceptReviewFree()`、`applyPendingAutoAcceptSafe()`、`goal2Engine.autoAcceptSafe()` に入れた。範囲の判定に作業中HTMLのDOMを使うため、`runAnalysis()` が `state.sourceHtml` と `state.workingHtml` を候補の元のHTMLに揃えるようにした（ヘッドレス経路には画面の `analyze()` のような設定箇所が無く、前のページのHTMLが残っていた）。
+- **「この箇所の構造は決定済み」は、候補ごとの最新の決定だけを見る**。リプレイが候補ごとに `seq` が最大の1件だけを当てる（3.7）のと同じ見方にする。ログの全行を見ると、構造候補を採用したあとに却下へ決め直しても採用の行が残り、リプレイで元へ戻った表に対して構造候補が二度と候補一覧へ出なくなる。絞り込みは `latestDecisions()` に切り出し、`replay()` と共有する。
 - ガードは候補配列の順に判定するので、**先に来た候補が勝つ**。コレクターの並びは「要素をまとめて差し替える候補（`collectPseudoListCandidate` / `collectSequentialNumberedParagraphCandidates`、どちらも要素の走査で先に出る）→ 文字の修正（テキストノードの走査）」なので、sg04015 の形では差し替えが先に採用され、範囲の中の文字修正が次の世代へ回る。
 - **挙動の変更**。S2 まで `conflicted`（決定済み）になっていた「同じ箇所の採用されなかった代替手段」は、S3 では未処理のまま残る。GOAL1 の証跡では、その分だけ `unresolved` が増え `complete` が偽になりうる。S5 で `autoAcceptSafe()` をループ化すれば、これらは再導出で取り下げられるか、作業者が選ぶべき手段として正しく残る。
 

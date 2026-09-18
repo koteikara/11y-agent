@@ -6818,6 +6818,24 @@
     return replay(state.sourceHtml, state.decisions);
   }
 
+  // 同じ候補を決め直すと(決定済みの候補を選んで採用や却下を押し直すと)、ログには2件以上の
+  // 決定が並ぶ。後の決定が前の決定を置き換えるので、候補ごとに seq が最大の1件だけを残す。
+  //
+  // 「いまの決定はどれか」を見るところは、すべてこの絞り込みを通す。リプレイが古い決定を
+  // 当ててしまわないようにするためだけでなく(採用→却下と決め直した候補の採用が当たる)、
+  // 3.8 の「この箇所の構造は決定済み」の判定も同じ見方をしなければならない。ログの全行を
+  // 見ると、後で却下した採用が残り続け、再導出で戻ってきた構造候補が永久に一覧へ出なくなる。
+  function latestDecisions(decisions) {
+    const latestByCandidate = new Map();
+    (decisions || []).forEach((decision) => {
+      const previous = latestByCandidate.get(decision.candidate_id);
+      if (!previous || decision.seq >= previous.seq) {
+        latestByCandidate.set(decision.candidate_id, decision);
+      }
+    });
+    return [...latestByCandidate.values()];
+  }
+
   // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
   //
   // S2から、当てる内容は決定ログだけで決まる(候補配列を参照しない)。accepted は決定時点の
@@ -6845,19 +6863,8 @@
   function replay(sourceHtml, decisions) {
     const fragment = parseFragment(sourceHtml);
 
-    // 同じ候補を決め直すと(決定済みの候補を選んで採用や却下を押し直すと)、ログには2件以上の
-    // 決定が並ぶ。後の決定が前の決定を置き換えるので、候補ごとにseqが最大の1件だけを残す。
-    // 残さないと、採用→却下と決め直した候補の採用が当たってしまう。
-    const latestByCandidate = new Map();
-    (decisions || []).forEach((decision) => {
-      const previous = latestByCandidate.get(decision.candidate_id);
-      if (!previous || decision.seq >= previous.seq) {
-        latestByCandidate.set(decision.candidate_id, decision);
-      }
-    });
-
     // conflicted・rejected・pending・withdrawn は記録だけで、HTMLには当てない。
-    const applicable = [...latestByCandidate.values()].filter((decision) =>
+    const applicable = latestDecisions(decisions).filter((decision) =>
       ["accepted", "edited"].includes(decision.status)
     );
 
@@ -8210,9 +8217,13 @@
 
   // ログに accepted / edited の決定がある「node_id + 排他グループ」の集合(3.8)。再導出で
   // 同じ構造候補がもう一度現れても、候補一覧には載せない(「この箇所の構造は決定済み」)。
+  //
+  // 見るのは候補ごとの最新の決定だけである(latestDecisions)。ログの全行を見ると、採用した
+  // あとに却下へ決め直しても採用の行が残るため、リプレイでは元へ戻った表に対して構造候補が
+  // 二度と一覧へ出なくなる。
   function decidedExclusiveGroupKeys(decisions) {
     const keys = new Set();
-    (decisions || []).forEach((decision) => {
+    latestDecisions(decisions).forEach((decision) => {
       if (!["accepted", "edited"].includes(decision.status) || !decision.exclusive_group) {
         return;
       }
