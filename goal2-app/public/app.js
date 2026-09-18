@@ -7181,6 +7181,11 @@
         const caption = document.createElement("caption");
         caption.textContent = op.value;
         target.insertBefore(caption, target.firstChild);
+        // 差し替え以外でも、リプレイが作った要素には派生ID(3.4)を振る。振らないと、
+        // 再導出の parseWorkingForRederivation() が「IDの無い要素」として n#### を振り、
+        // その番号は同じ決定の集合をリプレイし直しても同じとは限らない(前に IDの無い
+        // 要素が増えるとずれる)。この候補を対象にした候補が次の世代で対象を見失う。
+        assignDerivedNodeIds([caption], nodeId);
       }
       return true;
     }

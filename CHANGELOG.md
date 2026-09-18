@@ -31,7 +31,8 @@
   - 指紋 `rule_id|method_label|node_id` は一意にならないため、`replace-text` では置換前の文字列まで含めるようにした。
 - 挙動の変更: S2まで `conflicted`（決定済み）になっていた「同じ箇所の採用されなかった代替手段」は、未処理のまま残る。佐賀市の実ページ51件の画面の経路で、対象を失う決定（`orphaned`）が9件から0件になった。GOAL1経路の最終HTMLは51件すべてS2と同一。
 - 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
-- 関連PR/コミット: PR #135（構造変更1 S3）。S1はPR #131、S2はPR #132。
+- レビュー対応: 構造候補を採用してから却下すると、その表の構造候補が再導出で二度と候補一覧に出なくなっていた。排他グループの判定が決定ログの全行を見ていたためで、各候補の最新の決定だけを見るようにした（`latestDecisions()`）。あわせて `insert-caption` がリプレイで作る `<caption>` にも派生IDを振るようにした。
+- 関連PR/コミット: PR #135（構造変更1 S3）。S1はPR #131、S2はPR #132。`text.partial-date` の誤検出は issue #136 へ分離。
 
 ## 2026-09-17: PR #133レビュー指摘を課題一覧へ反映
 

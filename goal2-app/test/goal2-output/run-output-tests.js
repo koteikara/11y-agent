@@ -1987,6 +1987,46 @@ async function main() {
       check("決め直しの検査に使う構造候補が2件以上出る", false, JSON.stringify(redecideBefore));
     }
 
+    // 20-f-3. insert-caption がリプレイで作る <caption> にも派生ID(3.4)を振る。振らないと
+    //     再導出が「IDの無い要素」として n#### を振り、その番号は同じ決定の集合をリプレイ
+    //     し直しても同じとは限らない(前にIDの無い要素が増えるとずれる)。
+    //     いまこの候補は確信度 low・要確認で「文言を調整」(edited)でしか採用できず、
+    //     一括採用の対象外でもあるため accepted の経路には乗らないが、操作としては当たる。
+    const captionIds = await page.evaluate(async (h) => {
+      const api = window.goal2Engine.decisionLog;
+      const res = await window.goal2Engine.analyze({ html: h });
+      const candidate = res.candidates.find((c) => c.proposal.patch?.type === "insert-caption");
+      if (!candidate) return { skipped: true };
+      const decision = {
+        ...api.fromCandidates([{ ...candidate, decision: { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null } }])[0],
+        seq: 1,
+        generation: 1,
+      };
+      // この候補は文言が空のままでは採用できない(作業者が「文言を調整」で入れる)。
+      // ここで見たいのはIDの振り方なので、文言だけ入れた操作にする。
+      decision.op = { ...decision.op, value: decision.op?.value || "電話番号の一覧" };
+      const patchValue = decision.op.value;
+      const idOfCaption = (html) => {
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        return template.content.querySelector("caption")?.getAttribute("data-goal2-node-id") || null;
+      };
+      return {
+        skipped: false,
+        patchValue,
+        first: idOfCaption(api.replay(h, [decision])),
+        second: idOfCaption(api.replay(h, [decision])),
+      };
+    }, NO_CAPTION_SIMPLE_TABLE);
+    check(
+      "insert-caption が作る caption に派生IDを振る(リプレイし直しても同じ)",
+      !captionIds.skipped &&
+        typeof captionIds.first === "string" &&
+        /^n\d+\.s\d+\.\d+$/.test(captionIds.first) &&
+        captionIds.first === captionIds.second,
+      JSON.stringify(captionIds)
+    );
+
     // 20-g. 遠野市 指摘3(設計書 4.1)。bgcolor の表で「確認不要をまとめて採用」を押すと背景色が
     //     消え、再導出では背景色の候補が出ない。表の構造候補3件は同じ指紋で残り、引き続き選べる。
     await analyzeOnScreen(BGCOLOR_TABLE);
