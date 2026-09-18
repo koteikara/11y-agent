@@ -2247,6 +2247,89 @@ async function main() {
       );
     }
 
+    // 20-m. 範囲の規則が候補配列の並び順に依存しないこと(3.8)。1世代分の採用計画を、候補配列の
+    //     並びと、その逆順の両方で作り、同じ結果になることを確かめる。3つの形で見る。
+    //       (a) 同じ要素に、要素を残す修正と固定HTMLの差し替えが並ぶ
+    //       (b) 差し替えが消す段落の中(祖先からの包含)に修正がある
+    //       (c) replace-paragraph-sequence がまとめる複数の段落の中に修正がある
+    //     1段で回していたときは (a) で、内容修正が先に並ぶため両方採用してしまい、差し替えの
+    //     固定の変換後HTMLが先の修正を上書きしていた。
+    const GUARD_ORDER_CASES = [
+      ["同じ要素", `<p>令和５年度の申請（※）が必要です。</p><p>※書類を添付</p>`, "text.note-symbol", "text.alphanumeric"],
+      ["祖先からの包含", `<p>申請（※）が必要です。</p><p>※<span>令和５年度</span>の書類</p>`, "text.note-symbol", "text.alphanumeric"],
+      ["まとめて差し替える段落", `<p>１．申請書</p><p>２．令和５年度の<u>本人確認書類</u></p><p>３．印鑑</p>`, "text.list", "text.alphanumeric"],
+    ];
+    const guardOrder = await page.evaluate(async (cases) => {
+      const out = [];
+      for (const [label, html, claimerRule, insideRule] of cases) {
+        const res = await window.goal2Engine.analyze({ html });
+        const forward = window.goal2Engine.decisionLog.planGeneration(res.candidates);
+        const backward = window.goal2Engine.decisionLog.planGeneration(res.candidates.slice().reverse());
+        const claimer = res.candidates.filter((c) => c.rule_id === claimerRule);
+        const inside = res.candidates.filter((c) => c.rule_id === insideRule);
+        out.push({
+          label,
+          forward: forward.slice().sort(),
+          backward: backward.slice().sort(),
+          claimer: claimer.map((c) => c.candidate_id),
+          inside: inside.map((c) => c.candidate_id),
+          total: res.candidates.length,
+        });
+      }
+      return out;
+    }, GUARD_ORDER_CASES);
+    guardOrder.forEach((row) => {
+      check(
+        `1世代の採用計画が候補配列の並び順に依存しない(${row.label})`,
+        JSON.stringify(row.forward) === JSON.stringify(row.backward),
+        JSON.stringify(row)
+      );
+      // 範囲を主張した候補は採用され、その範囲の中の候補は(要素を残すパッチでも、別の
+      // 差し替えでも)次の世代へ回る。「まとめて差し替える段落」では、範囲の中にある
+      // text.decoration-lines の解除も同じ理由で次の世代へ回る。
+      check(
+        `差し替えは採用され、範囲の中の修正は次の世代へ回る(${row.label})`,
+        row.claimer.length > 0 &&
+          row.claimer.every((id) => row.forward.includes(id)) &&
+          row.inside.length > 0 &&
+          row.inside.every((id) => !row.forward.includes(id)),
+        JSON.stringify(row)
+      );
+    });
+
+    // 20-m-2. (a) の形を画面の経路で通す。1回目の一括採用で統合だけが当たり、半角化は次の
+    //     世代の候補として残る。2回目で両方が最終HTMLに入る。
+    const MERGE_SAME_NODE = `<p>令和５年度の申請（※）が必要です。</p><p>※書類を添付</p>`;
+    await analyzeOnScreen(MERGE_SAME_NODE);
+    const mergeSameBefore = await candidateSnapshot();
+    const mergeSameFix = mergeSameBefore.find((c) => c.rule_id === "text.alphanumeric");
+    const mergeSameMerge = mergeSameBefore.find((c) => c.patch_type === "merge-following-note");
+    check(
+      "同じ要素に内容修正と統合の候補が並び、内容修正が先に並ぶ入力である",
+      Boolean(mergeSameFix) &&
+        Boolean(mergeSameMerge) &&
+        mergeSameFix.node_id === mergeSameMerge.node_id &&
+        mergeSameBefore.indexOf(mergeSameFix) < mergeSameBefore.indexOf(mergeSameMerge),
+      JSON.stringify(mergeSameBefore)
+    );
+    if (mergeSameFix && mergeSameMerge) {
+      await bulkAcceptAll();
+      const mergeSameAfter = await candidateSnapshot();
+      check(
+        "1回目の一括採用で統合だけが当たり、半角化は未処理のまま残る",
+        mergeSameAfter.some((c) => c.id === mergeSameMerge.id && c.status === "accepted") &&
+          mergeSameAfter.some((c) => c.rule_id === "text.alphanumeric" && !c.status),
+        JSON.stringify(mergeSameAfter)
+      );
+      await bulkAcceptAll();
+      const mergeSameFinal = await readFinalHtml();
+      check(
+        "2回目の一括採用で、統合と半角化の両方が最終HTMLに入る",
+        /令和5年度の申請（書類を添付）/.test(mergeSameFinal) && !/令和５年度/.test(mergeSameFinal),
+        mergeSameFinal
+      );
+    }
+
     // 20-j. conflicted を新しく作る経路が無いこと(3.8・3.14)。値は過去の証跡CSVとの互換のため
     //     残すが、S3以降は誰も書き込まない。ソースを読んで代入の形が無いことを確かめる。
     const appSource = require("fs").readFileSync(path.join(rootDir, "public/app.js"), "utf8");

@@ -7946,7 +7946,7 @@
     let acceptedCount = 0;
     let skippedCount = 0;
     let deferredCount = 0;
-    const allowReplacement = createGenerationReplacementGuard();
+    const allowed = planGenerationAcceptance(selected);
 
     // 一括採用はまとめて1世代に積む(3.14の確定「まとめてログに積んで再導出1回」)。
     beginDecisionBatch(() => {
@@ -7958,8 +7958,8 @@
           skippedCount += 1;
           return;
         }
-        // 同じ箇所の2件目以降の差し替えは、次の世代で作り直された候補を採用してもらう(3.8)。
-        if (!allowReplacement(candidate)) {
+        // 同じ箇所・同じ範囲の候補は、次の世代で作り直された候補を採用してもらう(3.8)。
+        if (!allowed.has(candidate)) {
           deferredCount += 1;
           return;
         }
@@ -8003,15 +8003,15 @@
 
     const ruleCounts = new Map();
     let deferredCount = 0;
-    const allowReplacement = createGenerationReplacementGuard();
+    const allowed = planGenerationAcceptance(targets);
     // 一括採用はまとめて1世代に積む(3.14)。
     beginDecisionBatch(() => {
       targets.forEach((candidate) => {
         if (candidate.decision.status) {
           return;
         }
-        // 同じ箇所の2件目以降の差し替えは、次の世代で作り直された候補を採用してもらう(3.8)。
-        if (!allowReplacement(candidate)) {
+        // 同じ箇所・同じ範囲の候補は、次の世代で作り直された候補を採用してもらう(3.8)。
+        if (!allowed.has(candidate)) {
           deferredCount += 1;
           return;
         }
@@ -8102,21 +8102,31 @@
     return !patch || SUBTREE_REPLACING_PATCH_TYPES.has(patch.type);
   }
 
-  // 1世代分の一括採用を回す間だけ使う。採用してよければ true を返す。
+  // この候補は、採用されたら「固定の変換後HTMLで差し替わる範囲」を主張するか。
+  // 1世代分の一括採用で、この世代に採用してよい候補を決める(設計書 3.8)。2段で決める。
   //
-  //  (1) 同じ node_id の2件目以降の要素ごと差し替えには false を返す。
-  //  (2) 変換後HTMLで差し替わった範囲(その要素と子孫、replace-paragraph-sequence なら
-  //      まとめられる段落すべてとその子孫)にある候補にも false を返す。
+  //  第1段: 同じ node_id への要素ごと差し替えは1件まで。候補配列の順で先に来た方が残る。
+  //         要素を残すパッチはここで止めない。リプレイの第1段が同じ node_id の中で要素を残す
+  //         パッチを先に当てるので、unwrap-element や rename-element と同居していても
+  //         両方とも最終HTMLに残る。
+  //  第2段: 第1段を通った「固定の変換後HTMLで差し替える候補」が範囲を主張する。範囲の中の
+  //         候補は、要素を残すパッチであっても、この世代では採用しない。
   //
-  // (2) が要るのは、実データの佐賀市 sg04015 で見つかった形のためである。n0004 の text.list
-  // (replace-paragraph-sequence)が n0004〜n0018 の段落をまとめて差し替え、同じ一括採用で
-  // 採用された n0015 の text.alphanumeric(「令和５年度」→「令和5年度」)が消えていた。
+  // 第2段を第1段の結果から作るので、範囲の規則は候補配列の並び順に依存しない。1段で回して
+  // いたときは、内容修正が先に並ぶ組で内容修正を採用したあとに差し替えも採用してしまい、
+  // 差し替えの固定の変換後HTMLが先の修正を上書きしていた(実データの形:
+  // <p>令和５年度の申請（※）が必要です。</p><p>※書類を添付</p> で、半角化のあとに統合が
+  // 当たって「令和５年度」に戻る)。
+  //
+  // 範囲を主張する候補どうしが入れ子になっている場合は、外側が残る。内側は次の世代で、
+  // 外側の変換結果から作り直された候補を採用する。
+  //
+  // 範囲の規則が要るのは、実データの佐賀市 sg04015 で見つかった形のためである。n0004 の
+  // text.list(replace-paragraph-sequence)が n0004〜n0018 の段落をまとめて差し替え、同じ
+  // 一括採用で採用された n0015 の text.alphanumeric(「令和５年度」→「令和5年度」)が消えていた。
   // 差し替える候補の変換後HTMLは、その世代では作り直されていないので元のHTML由来である。
-  // 次の世代では作業中HTMLから作り直されるため、そこで採用すれば両方が残る(3.8)。
-  function createGenerationReplacementGuard() {
-    const claimedNodes = new Set();
-    const replacedNodes = new Set();
-    const replacedRoots = [];
+  function planGenerationAcceptance(candidates) {
+    const list = candidates || [];
     let root = null;
     const dom = () => {
       if (!root) {
@@ -8129,28 +8139,18 @@
     const elementOf = (nodeId) =>
       nodeId ? dom().querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`) : null;
 
-    return (candidate) => {
-      const nodeId = candidate?.target?.node_id || "";
-      const replacing = isGenerationExclusiveReplacement(candidate);
-      // (1) 同じ node_id への2件目以降の要素ごと差し替え。要素を残すパッチはここで止めない。
-      //     リプレイの第1段が同じ node_id の中で要素を残すパッチを先に当てるので、
-      //     unwrap-element や rename-element と同居していても両方とも残る。
-      if (replacing && claimedNodes.has(nodeId)) {
-        return false;
+    // 第1段。
+    const claimedNodes = new Set();
+    const claimedIdsOf = new Map();
+    const survivors = [];
+    list.forEach((candidate) => {
+      if (!isGenerationExclusiveReplacement(candidate)) {
+        survivors.push(candidate);
+        return;
       }
-      // (2) 固定の変換後HTMLで差し替わる範囲の中。こちらは要素を残すパッチも止める。
-      //     差し替えの変換後HTMLは元のHTML由来なので、先に当てた修正ごと上書きされる。
-      if (replacedNodes.has(nodeId)) {
-        return false;
-      }
-      if (replacedRoots.length) {
-        const element = elementOf(nodeId);
-        if (element && replacedRoots.some((claimed) => claimed !== element && claimed.contains(element))) {
-          return false;
-        }
-      }
-      if (!replacing) {
-        return true;
+      const nodeId = candidate.target?.node_id || "";
+      if (claimedNodes.has(nodeId)) {
+        return;
       }
       const patch = candidate.proposal.patch;
       // merge-following-note は note_node_id の段落を消す。消される段落とその子孫も範囲に
@@ -8162,15 +8162,42 @@
         nodeIds.push(patch.note_node_id);
       }
       nodeIds.forEach((id) => claimedNodes.add(id));
-      if (replacesSubtree(candidate)) {
-        nodeIds.forEach((id) => {
-          replacedNodes.add(id);
-          const element = elementOf(id);
-          if (element) replacedRoots.push(element);
-        });
+      claimedIdsOf.set(candidate, nodeIds);
+      survivors.push(candidate);
+    });
+
+    // 第2段の範囲。owner を持たせて、自分の範囲で自分を落とさないようにする。
+    const ranges = [];
+    survivors.forEach((candidate) => {
+      const nodeIds = claimedIdsOf.get(candidate);
+      if (!nodeIds || !replacesSubtree(candidate)) {
+        return;
       }
-      return true;
-    };
+      nodeIds.forEach((id) => ranges.push({ owner: candidate, nodeId: id, element: elementOf(id) }));
+    });
+
+    const accepted = new Set();
+    survivors.forEach((candidate) => {
+      if (ranges.length) {
+        const nodeId = candidate.target?.node_id || "";
+        const element = elementOf(nodeId);
+        const blocked = ranges.some((range) => {
+          if (range.owner === candidate) {
+            return false;
+          }
+          if (range.element && element) {
+            return range.element === element || range.element.contains(element);
+          }
+          // 作業中HTMLに要素が見つからないときは node_id の一致だけで見る。
+          return range.nodeId === nodeId;
+        });
+        if (blocked) {
+          return;
+        }
+      }
+      accepted.add(candidate);
+    });
+    return accepted;
   }
 
   // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
@@ -8180,11 +8207,11 @@
   // 3.8 の「1世代に同じ node_id の要素ごと差し替えは1件まで」も一括採用と同じく守る。
   function applyPendingAutoAcceptSafe() {
     state.pendingAutoAcceptSafe = false;
-    const allowReplacement = createGenerationReplacementGuard();
+    const allowed = planGenerationAcceptance(state.candidates);
     // 引き継ぎ1回分をまとめて1世代に積む(3.14)。
     beginDecisionBatch(() => {
       state.candidates.forEach((candidate) => {
-        if (!canBulkAcceptCandidate(candidate) || !allowReplacement(candidate)) {
+        if (!canBulkAcceptCandidate(candidate) || !allowed.has(candidate)) {
           return;
         }
         applyCandidateDecision(candidate, "accepted", "一括自動採用（機械的・確認不要）", candidate.proposal.after_html);
@@ -11465,13 +11492,13 @@
     // 差し替えは1件まで」で守る。2件目以降は未処理のまま残る(S2までは conflicted だった)。
     autoAcceptSafe(candidates) {
       let accepted = 0;
-      const allowReplacement = createGenerationReplacementGuard();
+      const allowed = planGenerationAcceptance(candidates);
       // 呼び出し1回をまとめて1世代に積む(3.14)。applyCandidateDecision() を通さないのは、
       // actor が goal1-batch であることと candidate.status を触らないことを変えないため。
       // 決定ログへの記録だけ画面側と同じ recordDecision() で揃える。
       beginDecisionBatch(() => {
         candidates.forEach((candidate) => {
-          if (!canBulkAcceptCandidate(candidate) || !allowReplacement(candidate)) {
+          if (!canBulkAcceptCandidate(candidate) || !allowed.has(candidate)) {
             return;
           }
           candidate.decision = {
@@ -11519,6 +11546,12 @@
           patch_type: candidate?.proposal?.patch?.type || null,
           patch_mode: candidate?.proposal?.patch_mode || null,
         };
+      },
+      // テスト用。1世代分の一括採用で採用してよい候補(3.8)を candidate_id で返す。
+      // 候補配列の並び順に依存しないことを、並びを入れ替えて比べるために使う。
+      planGeneration(candidates) {
+        const accepted = planGenerationAcceptance(candidates);
+        return (candidates || []).filter((candidate) => accepted.has(candidate)).map((c) => c.candidate_id);
       },
       // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
       screenState() {
