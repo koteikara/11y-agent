@@ -243,15 +243,23 @@ async function main() {
       // S2から、表の構造変換は表の中の内容修正を畳み込まない(設計書 3.7)。S1までは未処理の
       // 内容修正が構造候補の変換後HTMLへ畳み込まれ、作業者の採用なしに出力へ入っていた
       // (状態は conflicted「反映済み」)。S2では作業者が採用したものだけが入るので、残っている
-      // 内容修正候補を明示的に採用する。リプレイは内容修正を表の変換より先に当てるため、
-      // 構造候補より後に採用しても最終HTMLに残る。
-      const contentFixIds = await page.evaluate(() =>
-        window.goal2Engine.decisionLog
-          .screenState()
-          .candidates.filter((c) => !c.decision.status && /^text\./.test(c.rule_id))
-          .map((c) => c.candidate_id)
-      );
-      for (const contentFixId of contentFixIds) {
+      // 内容修正候補を明示的に採用する。
+      //
+      // S3からは、1件採用するたびに候補が作業中HTMLから作り直される(3.5)。同じ要素の他の
+      // 内容修正候補は取り下げられ、新しい candidate_id で出直すので、先に控えたIDの一覧を
+      // 順に押す形では2件目以降が押せない。毎回候補一覧を読み直す。
+      const skippedContentFixIds = new Set();
+      for (let round = 0; round < 24; round += 1) {
+        const contentFixId = await page.evaluate(
+          (skipped) =>
+            window.goal2Engine.decisionLog
+              .screenState()
+              .candidates.find(
+                (c) => !c.decision.status && /^text\./.test(c.rule_id) && !skipped.includes(c.candidate_id)
+              )?.candidate_id || null,
+          [...skippedContentFixIds]
+        );
+        if (!contentFixId) break;
         const picked = await page.evaluate((id) => {
           const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
             (b.getAttribute("aria-label") || "").includes(id)
@@ -260,9 +268,15 @@ async function main() {
           button.click();
           return true;
         }, contentFixId);
-        if (!picked) continue;
+        if (!picked) {
+          skippedContentFixIds.add(contentFixId);
+          continue;
+        }
         await page.waitForTimeout(700);
-        if ((await page.getAttribute("#acceptButton", "disabled")) !== null) continue;
+        if ((await page.getAttribute("#acceptButton", "disabled")) !== null) {
+          skippedContentFixIds.add(contentFixId);
+          continue;
+        }
         await page.click("#acceptButton");
         await page.waitForTimeout(800);
       }
@@ -987,26 +1001,41 @@ async function main() {
         return out;
       };
       // 並べ替えたログに seq と generation を振り直す。perGeneration は「1件ずつ決めた」状態で、
-      // 世代が1件ずつに分かれる。order は決定が持つ値のまま動かさない(当て順を決めるのは
-      // order であり、決定を積んだ順ではないことを確かめるため)。
-      const relog = (decisions, perGeneration) =>
-        decisions.map((decision, index) => ({
-          ...decision,
-          seq: index + 1,
-          generation: perGeneration ? index + 1 : 1,
-        }));
+      // S3から、当て順は seq 順で、世代(決定の一かたまり)ごとにまとまる(設計書 3.7)。
+      // 世代をまたいで決定を入れ替えると「どの作業中HTMLに対して下した判断か」が変わるため、
+      // 入れ替えても同じ出力になるべき、とは言えなくなった(S1・S2 は候補配列の添字で当てて
+      // いたので、決定を積んだ順は出力に関係しなかった)。そこでS3では、世代の構成をそのまま
+      // 保ち、同じ世代の中だけを入れ替えて比べる。同じ世代の決定は同じ作業中HTMLに対する
+      // 判断なので、互いに順序で結果が変わってはいけない。
+      const regroup = (decisions, permute) => {
+        const groups = new Map();
+        decisions.forEach((decision) => {
+          const key = Number.isFinite(decision.generation) ? decision.generation : -1;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(decision);
+        });
+        let seq = 0;
+        return [...groups.values()]
+          .flatMap((group) => permute(group))
+          .map((decision) => {
+            seq += 1;
+            return { ...decision, seq };
+          });
+      };
 
       window.__replayOrders = (sourceHtml, decisions) => {
         const api = window.goal2Engine.decisionLog;
         const base = decisions.map((decision) => ({ ...decision }));
         const orders = [
           ["元の順(ログのまま)", base],
-          ["候補の並び順(まとめて1世代)", relog(base, false)],
-          ["候補の並び順(1件1世代)", relog(base, true)],
-          ["逆順", relog(base.slice().reverse(), true)],
+          ["seqを振り直す(並びは同じ)", regroup(base, (group) => group)],
+          ["世代の中だけ逆順", regroup(base, (group) => group.slice().reverse())],
         ];
         [1, 2, 3].forEach((seed) => {
-          orders.push([`無作為${seed}`, relog(shuffled(base, randomFrom(seed * 7919 + 13)), true)]);
+          orders.push([
+            `世代の中だけ無作為${seed}`,
+            regroup(base, (group) => shuffled(group, randomFrom(seed * 7919 + 13))),
+          ]);
         });
         // 比べるのは内部属性を落としたHTML(最終HTMLと同じ形)。派生ID(3.4)は当てている決定の
         // seq を含むので、ログを並べ替えると data-goal2-node-id の値は変わる。変わってはいけない
@@ -1029,8 +1058,8 @@ async function main() {
           generations: new Set(base.map((d) => d.generation)).size,
           agentLogged: base.filter((d) => d.actor === "AGENT").length,
           seqMonotonic: base.every((d, i) => d.seq === i + 1),
-          // 第1段の当て順は order で決まるので、当たる決定は order を持っていなければならない。
-          orderedDecisions: base.filter((d) => Number.isFinite(d.order)).length,
+          // 当て順は seq と generation で決まるので、当たる決定は両方を持っていなければならない。
+          orderedDecisions: base.filter((d) => Number.isFinite(d.seq) && Number.isFinite(d.generation)).length,
           largestGeneration: Math.max(
             0,
             ...[...new Set(base.map((d) => d.generation))].map(
@@ -1046,7 +1075,7 @@ async function main() {
 
     const reportOrderIndependence = (label, row) => {
       check(
-        `決定順を入れ替えてもリプレイの出力が変わらない(${label}・${row.orders}通りの決定順)`,
+        `同じ世代の中で決定順を入れ替えても出力が変わらない(${label}・${row.orders}通りの決定順)`,
         row.mismatches.length === 0 && row.applied > 0,
         row.mismatches.length
           ? `不一致の並び順: ${row.mismatches.join(", ")}\n       replay=${(row.firstMismatch?.replayed || "").replace(/\s+/g, " ").slice(0, 300)}\n       expected=${(row.firstMismatch?.expected || "").replace(/\s+/g, " ").slice(0, 300)}`
@@ -1079,9 +1108,9 @@ async function main() {
       reportOrderIndependence(`${label}・一括自動採用`, row);
       engineEquivalenceByLabel.set(label, { row, finalHtml });
       check(
-        `当たる決定が order(候補配列の添字)を持つ(${label})`,
+        `当たる決定が seq と generation を持つ(${label})`,
         row.orderedDecisions === row.logged,
-        `order を持つ決定 ${row.orderedDecisions}件 / 全${row.logged}件`
+        `seq と generation を持つ決定 ${row.orderedDecisions}件 / 全${row.logged}件`
       );
     });
 
@@ -1161,12 +1190,21 @@ async function main() {
     // 18-d. 要素が9999個を超えても当て順が変わらない。assignNodeIds() は4桁ゼロ埋めなので
     //     10000個目からは n10000 になり、node_id の文字列比較では n10003 が n9999 より前に来る。
     //     当て順を node_id 順で決めていると、入れ子の表の内側が外側より先に当たり、外側の
-    //     差し替えで内側の解体が消える。当て順は第1段が order、第2段が子孫関係で決まるので、
+    //     差し替えで内側の解体が消える。当て順は第1段が seq、第2段が子孫関係で決まるので、
     //     ここは node_id の桁数に左右されない。
     const hugeEquivalence = await page.evaluate(async ({ pad, nested }) => {
       const html = pad + nested;
       const res = await window.goal2Engine.analyze({ html });
+      // S3の「1世代に同じ node_id の要素ごと差し替えは1件まで」(3.8)と同じ絞り込みをかける。
+      // これをかけずに全候補を採用すると、同じ表に排他の手段が同時に採用された状態になり、
+      // 画面でもGOAL1でも起きない決定の集合になる。
+      const takenNodes = new Set();
       res.candidates.forEach((c) => {
+        const facts = window.goal2Engine.decisionLog.candidateFacts(c);
+        if (facts.element_replacing && facts.patch_mode !== "none") {
+          if (takenNodes.has(c.target.node_id)) return;
+          takenNodes.add(c.target.node_id);
+        }
         if (!c.decision.status) {
           c.decision = { status: "accepted", reason: "t", actor: "t", decided_at: "", after_html: null };
         }
@@ -1277,6 +1315,23 @@ async function main() {
         }))
       );
 
+    // S3から、決定のたびに候補は作業中HTMLから作り直される(設計書 3.5)。対象の要素が
+    // 差し替わった候補は取り下げられ、作り直された要素に新しい candidate_id の候補が出る。
+    // そのため「先に控えた candidate_id を順に採用する」形は使えない。採用のたびに候補一覧を
+    // 読み直し、条件に合う未処理候補を選ぶ。
+    const acceptMatchingCandidates = async (predicate, { maxAccepted = Infinity, rounds = 16 } = {}) => {
+      const accepted = [];
+      const skipped = new Set();
+      for (let round = 0; round < rounds && accepted.length < maxAccepted; round += 1) {
+        const snapshot = await candidateSnapshot();
+        const target = snapshot.find((c) => !c.status && !skipped.has(c.id) && predicate(c));
+        if (!target) break;
+        if (await acceptCandidateById(target.id)) accepted.push(target);
+        else skipped.add(target.id);
+      }
+      return accepted;
+    };
+
     const readFinalHtml = async () => {
       await page.evaluate(() => {
         document.querySelector(".output-drawer").open = true;
@@ -1289,26 +1344,31 @@ async function main() {
     const runOrderedFlow = async (html, mode, methodFilter) => {
       await analyzeOnScreen(html);
       const before = await candidateSnapshot();
-      const contentFixes = before.filter((c) => /^text\./.test(c.rule_id));
+      const isContent = (c) => /^text\./.test(c.rule_id);
+      const contentFixes = before.filter(isContent);
       const structural = before.filter(methodFilter);
-      const sequence =
-        mode === "structure-only"
-          ? structural
-          : mode === "structure-first"
-            ? [...structural, ...contentFixes]
-            : [...contentFixes, ...structural];
-      const acceptedIds = [];
-      for (const c of sequence) {
-        if (await acceptCandidateById(c.id)) acceptedIds.push(c.id);
+      let acceptedStructural = [];
+      let acceptedContent = [];
+      if (mode === "structure-only") {
+        acceptedStructural = await acceptMatchingCandidates(methodFilter, { maxAccepted: 1, rounds: 4 });
+      } else if (mode === "structure-first") {
+        acceptedStructural = await acceptMatchingCandidates(methodFilter, { maxAccepted: 1, rounds: 4 });
+        // S3の再導出で、変換後の表の中に新しい node_id の内容修正候補が出る。S2では
+        // 対象を失って取り下げも作り直しもされず、採用できなかった。
+        acceptedContent = await acceptMatchingCandidates(isContent);
+      } else {
+        acceptedContent = await acceptMatchingCandidates(isContent);
+        acceptedStructural = await acceptMatchingCandidates(methodFilter, { maxAccepted: 1, rounds: 4 });
       }
+      const after = await candidateSnapshot();
       return {
         before,
         contentFixes,
         structural,
-        acceptedIds,
-        acceptedStructural: structural.filter((c) => acceptedIds.includes(c.id)).length,
-        acceptedContent: contentFixes.filter((c) => acceptedIds.includes(c.id)).length,
-        after: await candidateSnapshot(),
+        acceptedStructural: acceptedStructural.length,
+        acceptedContent: acceptedContent.length,
+        unresolvedContent: after.filter((c) => isContent(c) && !c.status).length,
+        after,
         finalHtml: await readFinalHtml(),
       };
     };
@@ -1340,8 +1400,10 @@ async function main() {
       );
       check(
         `内容修正と構造候補の両方を採用できた(${label})`,
-        contentFirst.acceptedStructural === 1 && contentFirst.acceptedContent === contentFirst.contentFixes.length,
-        `構造=${contentFirst.acceptedStructural}/${contentFirst.structural.length} 内容修正=${contentFirst.acceptedContent}/${contentFirst.contentFixes.length}`
+        contentFirst.acceptedStructural === 1 &&
+          contentFirst.acceptedContent >= contentFirst.contentFixes.length &&
+          contentFirst.unresolvedContent === 0,
+        `構造=${contentFirst.acceptedStructural}/${contentFirst.structural.length} 内容修正=${contentFirst.acceptedContent}（生成時${contentFirst.contentFixes.length}件）未処理=${contentFirst.unresolvedContent}`
       );
       check(
         `内容修正を先に採用しても構造変換後に残る(${label})`,
@@ -1359,8 +1421,10 @@ async function main() {
       );
       check(
         `構造候補のあとでも内容修正を採用できた(${label})`,
-        structureFirst.acceptedStructural === 1 && structureFirst.acceptedContent === structureFirst.contentFixes.length,
-        `構造=${structureFirst.acceptedStructural}/${structureFirst.structural.length} 内容修正=${structureFirst.acceptedContent}/${structureFirst.contentFixes.length}`
+        structureFirst.acceptedStructural === 1 &&
+          structureFirst.acceptedContent >= structureFirst.contentFixes.length &&
+          structureFirst.unresolvedContent === 0,
+        `構造=${structureFirst.acceptedStructural}/${structureFirst.structural.length} 内容修正=${structureFirst.acceptedContent}（生成時${structureFirst.contentFixes.length}件）未処理=${structureFirst.unresolvedContent}`
       );
       check(
         `構造候補を先に採用しても内容修正が残る(${label})`,
@@ -1382,6 +1446,8 @@ async function main() {
         "structure-only",
         (c) => c.builder === method.builder
       );
+      // S3では、構造候補を採用すると表の中の候補は取り下げられ、作り直された表に対する
+      // 新しい候補が未処理で出る。どちらにしても「作業者の採用なしに決定が付く」ことは無い。
       const resolvedContentFixes = structureOnly.after.filter(
         (c) => /^text\./.test(c.rule_id) && c.status
       );
@@ -1389,8 +1455,9 @@ async function main() {
         `構造候補だけを採用したとき内容修正候補が未処理のまま残る(${label})`,
         structureOnly.acceptedStructural === 1 &&
           structureOnly.contentFixes.length > 0 &&
+          structureOnly.unresolvedContent > 0 &&
           resolvedContentFixes.length === 0,
-        `採用した構造候補=${structureOnly.acceptedStructural} 内容修正候補=${structureOnly.contentFixes.length} 決定が付いた内容修正=${JSON.stringify(resolvedContentFixes)}`
+        `採用した構造候補=${structureOnly.acceptedStructural} 生成時の内容修正候補=${structureOnly.contentFixes.length} 再導出後の未処理=${structureOnly.unresolvedContent} 決定が付いた内容修正=${JSON.stringify(resolvedContentFixes)}`
       );
     }
 
@@ -1406,10 +1473,15 @@ async function main() {
         .filter((c) => c.builder === "dataTableSemantics")
         .sort((a, b) => (a.node_id < b.node_id ? 1 : -1))[0];
       if (!outer || !inner) return { skipped: true, rebuilds };
-      const order = innerFirst ? [inner, outer] : [outer, inner];
+      // S3では、外側を解体すると内側の表の node_id が派生ID(nX.s{seq}.{k})に変わるので、
+      // 先に控えた candidate_id では引けない。builder と「表であること」で選び直す。
+      const isOuter = (c) => c.patch_type === "rebuild" && c.builder === "decomposeLayoutTable";
+      const isInner = (c) => c.patch_type === "rebuild" && c.builder === "dataTableSemantics";
       const accepted = [];
-      for (const c of order) {
-        if (await acceptCandidateById(c.id)) accepted.push(c.id);
+      const steps = innerFirst ? [isInner, isOuter] : [isOuter, isInner];
+      for (const predicate of steps) {
+        const done = await acceptMatchingCandidates(predicate, { maxAccepted: 1, rounds: 4 });
+        done.forEach((c) => accepted.push(c.id));
       }
       return { skipped: false, outer, inner, accepted, finalHtml: await readFinalHtml() };
     };

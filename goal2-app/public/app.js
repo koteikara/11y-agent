@@ -30,23 +30,6 @@
     "text.meaningless-symbol",
   ]);
 
-  const tableRelatedRuleIds = new Set([
-    "image.image-text-layout",
-    "table.format-clear",
-    "table.caption",
-    "table.layout-table",
-    // 表を丸ごと置き換える手段(M2 意味単位ごとの分割 / M4 結合セルの解除)。この2つを
-    // 登録し忘れていたため、同じ表に対する table.layout-table と table.simple-structure が
-    // 両方とも採用され、最終HTMLが適用順で決まる状態になっていた。
-    "table.simple-structure",
-    "table.cell-merge-layout",
-    "table.cell-merge-heading",
-    "table.cell-merge-summary",
-    "table.cell-merge-note",
-    "table.cell-merge-file",
-    "table.cell-merge-mark",
-  ]);
-
   const tableStructuralRuleIds = new Set([
     "image.image-text-layout",
     "table.caption",
@@ -415,14 +398,25 @@
     candidates: [],
     notices: [],
     // 決定ログ(設計書 TONO_FEEDBACK_FIX_INSTRUCTIONS.md 3.3)。採用・編集・却下・要確認と、
-    // 調停が自動で付ける conflicted を、決まった順に積む。S1では候補配列の decision が正本で、
-    // このログは鏡写しである。リプレイ(replay)は「どの決定をどの順で当てるか」をここから読む。
+    // 再導出の取り下げ(withdrawn)を、決まった順に積む。S2からこのログが正本で、リプレイ
+    // (replay)は「どの決定を当てるか」も「どの順で当てるか」もここから読む。
     decisions: [],
     // 決定の通し番号。単調増加させ、一度使った番号は再利用しない。
     decisionSeq: 0,
     // 「決定の一かたまり」の番号。decide()1回、一括採用1回がそれぞれ1世代になる。
-    // 3.3の state.generation(再導出の回数)はS3で入る別の数で、これとは混ぜない。
+    // リプレイ(replay)はこの番号で決定をまとめ、世代の中だけを2段の当て順で当てる(3.7)。
     decisionGeneration: 0,
+    // 再導出の回数(3.3)。候補が生まれた世代を candidate.generation に記録するために使う。
+    // decisionGeneration とは別の数である。GOAL1の autoAcceptSafe() はS3では単一パスで
+    // 再導出を挟まない(S5でループ化する)ため、決定の世代が進んでもこちらは進まない。
+    generation: 0,
+    // candidate_id の通し番号。世代をまたいで再利用しない(3.3)。makeCandidate() が振る
+    // 番号は世代ごとに1から数え直すため、照合(reconcile)の中でここから振り直す。
+    nextCandidateSeq: 1,
+    // 直近の再導出で候補が何件増えて何件取り下げられたか(画面の一言に使う)。
+    lastRederivation: null,
+    lastRederivationAdded: 0,
+    lastRederivationWithdrawn: 0,
     selectedCandidateId: null,
     bulkSelectedCandidateIds: new Set(),
     bulkActionMessage: "",
@@ -833,6 +827,14 @@
     const ruleScopeMode = options.ruleScopeMode || state.ruleScopeMode;
     const fragment = parseFragment(html);
     let reviewItems = generateCandidates(fragment);
+    // 機械的な再導出で作り直せる候補に印を付ける(3.3の candidate.origin)。この後のAI補完が
+    // items.push() で足す候補にはこの印が無いので、下でまとめて origin: "llm" にする。
+    // AI が出した候補は再導出では再現できないため、照合(3.6)で別扱いにする必要がある。
+    const enrichmentSnapshot = new Map();
+    reviewItems.forEach((item) => {
+      item.origin = "mechanical";
+      enrichmentSnapshot.set(item, enrichmentFingerprint(item));
+    });
     if (ruleScopeMode === "michecker") {
       // enrichment(特にLLM呼び出し)の対象・件数を絞るため、ここで先に一度フィルタする。
       reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
@@ -860,13 +862,20 @@
       // 紛れ込むのを防ぐ。
       reviewItems = reviewItems.filter((item) => isMicheckerRelevantRule(item.rule_id));
     }
+    // AI補完が足した候補(origin の印が付いていないもの)に origin: "llm" を付ける(3.6の4)。
+    // 既にあった候補は、補完の前後で内容が変わったかどうかを enriched に控える。再導出は
+    // AIを呼び直さないので(3.9)、書き換えられた部分は照合で前の候補から引き継ぐ。
+    reviewItems.forEach((item) => {
+      if (!item.origin) {
+        item.origin = "llm";
+        item.enriched = true;
+        return;
+      }
+      item.enriched = enrichmentSnapshot.get(item) !== enrichmentFingerprint(item);
+    });
     const candidates = reviewItems
       .filter((item) => !isNoticeItem(item))
-      .map((candidate, index) => ({
-        ...candidate,
-        candidate_id: `cand_${String(index + 1).padStart(3, "0")}`,
-        review_type: "fix",
-      }));
+      .map((candidate) => withReconcileFields({ ...candidate, candidate_id: nextCandidateId(), review_type: "fix" }, 0));
     const notices = reviewItems
       .filter(isNoticeItem)
       .map((notice, index) => ({
@@ -880,6 +889,20 @@
     // 結果はマージ・重複排除もしない(呼び出し元が独立表示する)。
     const micheckerEngineResult = ruleScopeMode === "michecker" ? runMicheckerEngine(html) : null;
     return { candidates, notices, micheckerEngineResult };
+  }
+
+  // AIの補完が候補の内容を書き換えたかどうかを見分けるための写し(3.6)。補完が触りうる
+  // フィールドだけを見る。ここに差が出た候補は、再導出のたびに機械的な下書きへ戻さない。
+  function enrichmentFingerprint(item) {
+    return JSON.stringify([
+      item.issue?.message ?? null,
+      item.issue?.reason ?? null,
+      item.proposal?.after_html ?? null,
+      item.proposal?.patch ?? null,
+      item.proposal?.confidence ?? null,
+      item.proposal?.requires_human_review ?? null,
+      item.proposal?.ai_draft ?? null,
+    ]);
   }
 
   // michecker-engine.jsはCheckEngine.javaの判定ロジックの忠実な移植で、doctype/body等を
@@ -920,9 +943,11 @@
       state.selectedCandidateId = state.candidates[0]?.candidate_id || null;
       clearBulkSelection();
       if (state.pendingAutoAcceptSafe) {
+        // 引き継ぎ1回分を積んでから再導出する(3.5)。この中で workingHtml も作り直される。
         applyPendingAutoAcceptSafe();
+      } else {
+        state.workingHtml = rebuildWorkingHtml();
       }
-      state.workingHtml = rebuildWorkingHtml();
       setInputCollapsed(true);
       renderAll();
       setAnalyzeStatus("complete");
@@ -6795,20 +6820,23 @@
   // なったのは、表の構造候補が rebuild 操作になり、決定の後から after_html を書き換える
   // 畳み込み(foldDescendantFixIntoAncestor)が要らなくなったためである。
   //
-  // 当て順は2段になる(3.7のS2)。
-  //  第1段: rebuild 以外の決定。S1の規則のまま、候補配列の添字(決定が持つ order)の順に
-  //         並べ、同じ node_id の決定を1組にまとめ、組の中では要素を残すパッチを先、
-  //         要素ごと差し替えを後に当てる。
-  //  第2段: rebuild の決定。内側(子孫)を先、外側(先祖)を後に当てる。
+  // S3から当て順は seq 順になる(3.7)。S1・S2 は候補配列の添字(order)で当てていた。候補の
+  // after_html が元のHTMLから固定で作られていたため、作業者が採用した順で当てると出力が
+  // 採用順で変わったからである(佐賀市 sg03996 の n0015 で、リンク文言を書き戻す
+  // file.file-display-text の set-text と「１」→「1」の text.alphanumeric の replace-text が
+  // 同じ<a>に出る。半角化を先に当てると set-text が元の文言で上書きする)。S3では決定のたびに
+  // 候補を作業中HTMLから作り直すので、2件目の候補は1件目の結果から作られる。当て順を seq に
+  // すると、作業者が見て採用したとおりの順で当たる。
   //
-  // 第1段を先にするのは、ビルダーが現在の要素を読むためである。表の中の内容修正を先に
-  // 当てておけば、作業者がどちらを先に採用したかに関わらず、変換後の表にその修正が含まれる。
+  // 当て順は「世代ごとにまとめ、世代の中を2段」にする。
+  //  世代間: 世代の順(世代の中で最小の seq の順)。
+  //  世代の中 第1段: rebuild 以外の決定。seq 順に並べ、同じ node_id の決定を1組にまとめ、
+  //         組の中では要素を残すパッチを先、要素ごと差し替えを後に当てる。
+  //  世代の中 第2段: rebuild の決定。内側(子孫)を先、外側(先祖)を後に当てる。
   //
-  // seq を当て順にしないのは、S1と同じ理由による。第1段の決定は固定の after_html を持つので、
-  // 採用順で当てると出力が採用順で変わる(実ページ: 佐賀市 sg03996 の n0015 で、リンク文言を
-  // 書き戻す file.file-display-text の set-text と「１」→「1」の text.alphanumeric の
-  // replace-text が同じ要素に出る。半角化を先に当てると set-text が元の文言で上書きする)。
-  // seq 順に切り替えるのは、候補を作業中HTMLから作り直すS3である。
+  // 世代でまとめるのは、1世代(decide()1回、一括採用1回)の決定が「同じ作業中HTML」に対して
+  // 下された判断だからである。第1段を第2段より先にするのは、ビルダーが現在の要素を読むため
+  // である。表の中の内容修正を先に当てておけば、変換後の表にその修正が含まれる。
   function replay(sourceHtml, decisions) {
     const fragment = parseFragment(sourceHtml);
 
@@ -6828,33 +6856,42 @@
       ["accepted", "edited"].includes(decision.status)
     );
 
-    // order を持たない決定(候補配列に無い決定)は末尾へ回す。どうせ orphaned になる。
-    const orderOf = (decision) =>
-      Number.isFinite(decision.order) ? decision.order : Number.MAX_SAFE_INTEGER;
-    const byOrder = applicable.slice().sort((a, b) => orderOf(a) - orderOf(b) || a.seq - b.seq);
+    const bySeq = applicable.slice().sort((a, b) => a.seq - b.seq);
 
-    // 第1段。組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて
-    // data-goal2-node-id が失われ、後続のパッチが対象を見つけられないためである
-    // (実データ: <p><tt>…</tt></p> で、<tt>の解除を先に当てたために同じ<tt>への
-    // 「22m→22メートル」「全　長→全長」の5件がすべて落ちた)。
-    const groups = new Map();
-    byOrder
-      .filter((decision) => !isRebuildDecision(decision))
-      .forEach((decision) => {
-        if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
-        groups.get(decision.node_id).push(decision);
-      });
-    [...groups.values()]
-      .flatMap((group) => [
-        ...group.filter((decision) => !isElementReplacingDecision(decision)),
-        ...group.filter((decision) => isElementReplacingDecision(decision)),
-      ])
-      .forEach((decision) => applyDecision(fragment.content, decision));
+    // 世代ごとにまとめる。世代の順は「その世代で最小の seq」の順にする。世代番号そのもので
+    // 並べないのは、入れ子の一括採用のように後から始まった世代に大きい番号が付くことがあり、
+    // 番号順と決定の順が食い違いうるためである。
+    const generations = new Map();
+    bySeq.forEach((decision) => {
+      const key = Number.isFinite(decision.generation) ? decision.generation : -1;
+      if (!generations.has(key)) generations.set(key, []);
+      generations.get(key).push(decision);
+    });
 
-    // 第2段。
-    orderRebuildDecisions(fragment.content, byOrder.filter(isRebuildDecision)).forEach((decision) =>
-      applyDecision(fragment.content, decision)
-    );
+    [...generations.values()].forEach((group) => {
+      // 第1段。組の中で要素を残すパッチを先にするのは、逆だと先に要素が消えて
+      // data-goal2-node-id が失われ、後続のパッチが対象を見つけられないためである
+      // (実データ: <p><tt>…</tt></p> で、<tt>の解除を先に当てたために同じ<tt>への
+      // 「22m→22メートル」「全　長→全長」の5件がすべて落ちた)。
+      const groups = new Map();
+      group
+        .filter((decision) => !isRebuildDecision(decision))
+        .forEach((decision) => {
+          if (!groups.has(decision.node_id)) groups.set(decision.node_id, []);
+          groups.get(decision.node_id).push(decision);
+        });
+      [...groups.values()]
+        .flatMap((nodeGroup) => [
+          ...nodeGroup.filter((decision) => !isElementReplacingDecision(decision)),
+          ...nodeGroup.filter((decision) => isElementReplacingDecision(decision)),
+        ])
+        .forEach((decision) => applyDecision(fragment.content, decision));
+
+      // 第2段。
+      orderRebuildDecisions(fragment.content, group.filter(isRebuildDecision)).forEach((decision) =>
+        applyDecision(fragment.content, decision)
+      );
+    });
 
     normalizeHeadingEmphasis(fragment.content);
     return fragment.innerHTML;
@@ -6864,10 +6901,10 @@
     return decision.status === "accepted" && decision.op?.type === "rebuild";
   }
 
-  // 第2段の当て順を決める(3.7のS2)。内側(子孫)を先、外側(先祖)を後にし、互いに子孫関係に
-  // 無いものは order の順のまま残す。ビルダーは現在の要素を読むので、内側を先に変換して
-  // おけば、外側の変換結果に内側の変換結果が含まれる。これが入れ子の表のID引き継ぎ(3.4)が
-  // 要らなくなる理由でもある。
+  // 第2段の当て順を決める(3.7)。内側(子孫)を先、外側(先祖)を後にし、互いに子孫関係に
+  // 無いものは渡された順(S3では seq の順)のまま残す。ビルダーは現在の要素を読むので、内側を
+  // 先に変換しておけば、外側の変換結果に内側の変換結果が含まれる。これが入れ子の表のID
+  // 引き継ぎ(3.4)が要らなくなる理由でもある。
   //
   // 子孫関係は、第2段を当て始める前のDOMで判定する。当て始めると要素が入れ替わるためである。
   function orderRebuildDecisions(root, decisions) {
@@ -6894,7 +6931,7 @@
         });
       });
       // 同じ要素を指す rebuild の決定が2件以上あると、互いを子孫と見て選べなくなる。
-      // その場合は order の先頭から当てる(同じ箇所の代替手段で、後に当てた方が残る)。
+      // その場合は先頭(seq が小さい方)から当てる(同じ箇所の代替手段で、後に当てた方が残る)。
       if (index < 0) index = 0;
       ordered.push(remaining.splice(index, 1)[0]);
     }
@@ -7356,11 +7393,13 @@
       return;
     }
     const afterHtml = status === "edited" ? editedAfterHtml : chosenMethodCandidate.proposal.after_html;
-    // 決定1件と、それに伴って調停が付ける conflicted を同じ世代にする(設計書 3.5)。
+    // 決定1件を1世代にする(設計書 3.5)。
     beginDecisionBatch(() => applyCandidateDecision(candidate, status, reason, afterHtml, chosenMethodCandidate));
-    state.workingHtml = rebuildWorkingHtml();
+    // 決定の一かたまりごとに1回、作業中HTMLと候補を作り直す(3.5)。
+    rederiveCandidates();
     moveToNextUnresolvedCandidate(candidate.candidate_id);
     state.quickEditOpen = false;
+    state.bulkActionMessage = rederivationSummaryText();
     renderAll();
   }
 
@@ -7380,17 +7419,15 @@
 
   // ---- 決定ログ(設計書 3.3) -------------------------------------------------
   //
-  // 決定を候補配列から切り離し、順序付きのログへ積む。S3以降で再導出によって候補が
-  // 入れ替わっても決定が消えないようにするための土台である。
+  // 決定を候補配列から切り離し、順序付きのログへ積む。S3の再導出で候補が入れ替わっても
+  // 決定が消えないのは、正本がここにあるためである。
   //
   // S2でログを正本にした。accepted は決定時点の操作の写し(op)を、edited は人が直したHTMLを
   // 持ち、リプレイ(replay)は候補配列を参照しない。畳み込み(foldDescendantFixIntoAncestor)が
   // 決定の後から after_html を書き換えることが無くなったため、写しを持てるようになった。
-  // 候補配列の decision は当面残す(画面と証跡の多くがこれを読む)。
+  // 候補配列の decision は当面残す(画面と証跡の多くがこれを読む)。ログからの写しである。
   //
-  // order は当て順に使う候補配列の添字である(3.7)。S2では候補配列が変わらないので、決定した
-  // 時点の添字を固定で持つ。S3で候補を作業中HTMLから作り直し、当て順を seq へ切り替えるときに
-  // 落とす。
+  // S2まで持っていた order(候補配列の添字)は落とした。S3では当て順が seq で決まる(3.7)。
 
   // 同じ「かたまり」の決定に同じ世代番号を振るための入れ物。decide() や一括採用の
   // 呼び出し1回を beginDecisionBatch() で囲む。囲まれていない決定は1件で1世代になる。
@@ -7419,31 +7456,55 @@
     state.decisions = [];
     state.decisionSeq = 0;
     state.decisionGeneration = 0;
+    state.generation = 0;
+    state.nextCandidateSeq = 1;
+    state.lastRederivation = null;
+    state.lastRederivationAdded = 0;
+    state.lastRederivationWithdrawn = 0;
     openDecisionGeneration = null;
+  }
+
+  // candidate_id は state.nextCandidateSeq から振り、世代をまたいで再利用しない(3.3)。
+  // 証跡は candidate_id で追うため、一意性が要る。
+  function nextCandidateId() {
+    const id = `cand_${String(state.nextCandidateSeq).padStart(3, "0")}`;
+    state.nextCandidateSeq += 1;
+    return id;
   }
 
   // 「同じ箇所への同じルールの指摘」を世代をまたいで同一視するための指紋(3.3)。
   // 対象の中身(content_hash)は含めない。中身が別の修正で変わっても同じ問題だからである。
+  //
+  // 設計書の `rule_id|method_label|node_id` だけでは一意にならない。1つの段落に
+  // 「全　長→全長」と「高　さ→高さ」の text.spaced-characters が2件、「22m」「17.5m」「4m」の
+  // text.unit-notation が3件、というように、同じルールが同じ要素の別々の箇所に出るためである
+  // (MULTI_FIX_PARAGRAPH で実測)。指紋が重なると、1件採用しただけで残りが「決定済みの指紋」と
+  // 見なされて候補一覧から消える。そこで replace-text のパッチに限り、置換前の文字列を
+  // 指紋に足して箇所を区別する。
+  //
+  // 置換「後」を入れないのは、AIの補完が置換後の文言を書き換える候補(set-text のリンク文言、
+  // set-attribute の alt など)で指紋が変わってしまうと、世代をまたいだ引き継ぎが切れるためで
+  // ある。replace-text はAIの補完が触らないパッチ型なので、置換前の文字列は世代をまたいで安定する。
   function candidateFingerprint(candidate) {
-    return `${candidate?.rule_id || ""}|${candidate?.method_label || ""}|${candidate?.target?.node_id || ""}`;
+    const patch = candidate?.proposal?.patch;
+    const occurrence = patch?.type === "replace-text" ? `|${patch.before ?? ""}` : "";
+    return `${candidate?.rule_id || ""}|${candidate?.method_label || ""}|${candidate?.target?.node_id || ""}${occurrence}`;
   }
 
   // methodCandidate は「選んだ手段」の候補(既定は候補自身)。別の手段を選んだ決定では、
   // 当てるのは選んだ手段の操作なので、op はそちらから写す(3.7のS2)。
-  // order は候補配列の添字。第1段の当て順に使う(3.7)。S3で seq 順に切り替えるときに落とす。
-  function decisionLogEntry(candidate, decision, seq, generation, methodCandidate = candidate, order = null) {
+  // S2まで持っていた order(候補配列の添字)は、S3で当て順が seq になったので落とした(3.7)。
+  function decisionLogEntry(candidate, decision, seq, generation, methodCandidate = candidate) {
     return {
       seq,
       generation,
-      order: Number.isFinite(order) && order >= 0 ? order : null,
       candidate_id: candidate.candidate_id,
       fingerprint: candidateFingerprint(candidate),
       rule_id: candidate.rule_id,
       method_label: candidate.method_label || null,
       node_id: candidate.target?.node_id || null,
-      // 3.8の排他グループ。S1では誰も読まないが、ログを「何がいつどう決まったか」の
-      // 完全な記録にするため、いま導ける値(表の構造変換の手段)は入れておく。
-      exclusive_group: isTableStructuralCandidate(candidate) ? "table-structure" : null,
+      // 3.8の排他グループ。S3の照合が「この箇所の構造は決定済み」を判定するために読む。
+      exclusive_group: exclusiveGroupFor(candidate),
       status: decision.status,
       reason: decision.reason ?? null,
       actor: decision.actor ?? null,
@@ -7457,26 +7518,24 @@
       selected_method_rule_id: decision.selected_method_rule_id ?? null,
       selected_method_title: decision.selected_method_title ?? null,
       selected_method_label: decision.selected_method_label ?? null,
-      // 3.6の取り下げ。S3で再導出と照合を入れるまで発生しない。
+      // 3.6の取り下げ。reconcile() が積む withdrawn の決定だけが値を持つ。
       withdrawn_by_seq: null,
       // 3.7の3。リプレイで対象要素が見つからなかった決定に立つ。
       orphaned: false,
     };
   }
 
-  // 候補に下した決定をログへ積む。採用・編集・却下・要確認と、調停ロジックが付ける
-  // conflicted のすべてを通す。conflicted はリプレイでは当てない(記録だけ)。
-  // candidateList は order(候補配列の添字)を数える対象。画面は state.candidates だが、
-  // ヘッドレス経路(goal2Engine.autoAcceptSafe)は渡された配列を使う。
-  function recordDecision(candidate, decision, methodCandidate = candidate, candidateList = state.candidates) {
+  // 候補に下した決定をログへ積む。採用・編集・却下・要確認のすべてを通す。
+  // S3で調停ロジックを廃止したので、ここを通る AGENT の決定は reconcile() の取り下げだけになる
+  // (取り下げは recordWithdrawal() が別に積む)。
+  function recordDecision(candidate, decision, methodCandidate = candidate) {
     state.decisionSeq += 1;
     const entry = decisionLogEntry(
       candidate,
       decision,
       state.decisionSeq,
       currentDecisionGeneration(),
-      methodCandidate,
-      (candidateList || []).indexOf(candidate)
+      methodCandidate
     );
     state.decisions.push(entry);
     return entry;
@@ -7484,7 +7543,8 @@
 
   // 候補配列から決定ログを組み立てる(設計書 3.12)。goal2Engine.buildFinalHtml() は
   // 引数を変えないため、候補が持つ decision からログを作ってリプレイする。
-  // 候補配列の並び順で seq と order を振り、全件を同じ1世代に置く。
+  // 候補配列の並び順で seq を振り、全件を同じ1世代に置く。S3で当て順が seq になっても、
+  // ここが振る seq は候補配列の並び順そのものなので、GOAL1の出力は変わらない。
   function decisionsFromCandidates(candidates) {
     const list = candidates || [];
     const byId = new Map(list.map((candidate) => [candidate.candidate_id, candidate]));
@@ -7496,10 +7556,295 @@
       const selectedId = candidate.decision.selected_method_id;
       const methodCandidate = selectedId ? byId.get(selectedId) || candidate : candidate;
       decisions.push(
-        decisionLogEntry(candidate, candidate.decision, decisions.length + 1, 1, methodCandidate, index)
+        decisionLogEntry(candidate, candidate.decision, decisions.length + 1, 1, methodCandidate)
       );
     });
     return decisions;
+  }
+
+  // ---- 再導出と照合(設計書 3.5・3.6) ----------------------------------------
+
+  // 照合(3.6)が読むフィールドを候補に足す(3.3)。指紋は「同じ箇所への同じルールの指摘」を
+  // 世代をまたいで同一視するための鍵で、中身(content_hash)は含めない。
+  function withReconcileFields(candidate, generation) {
+    return {
+      ...candidate,
+      fingerprint: candidateFingerprint(candidate),
+      generation,
+      origin: candidate.origin || "mechanical",
+      exclusive_group: exclusiveGroupFor(candidate),
+      target: {
+        ...candidate.target,
+        content_hash: hashText(candidate.proposal?.before_html || ""),
+      },
+    };
+  }
+
+  // 作業中HTMLを読み直す。元のHTMLと違い、既に data-goal2-node-id を持つ要素があるので
+  // 振り直さない(派生ID nX.s{seq}.{k} を壊すと、次のリプレイで対象を見失う)。IDを持たない
+  // 要素(insert-caption が足した<caption>など)にだけ、既存の n#### と衝突しない番号を振る。
+  function parseWorkingForRederivation() {
+    const template = document.createElement("template");
+    template.innerHTML = state.workingHtml || "";
+    assignMissingNodeIds(template.content);
+    return template;
+  }
+
+  function assignMissingNodeIds(root) {
+    let maxIndex = 0;
+    root.querySelectorAll("[data-goal2-node-id]").forEach((element) => {
+      const matched = /^n(\d+)$/.exec(element.getAttribute("data-goal2-node-id") || "");
+      if (matched) {
+        maxIndex = Math.max(maxIndex, Number(matched[1]));
+      }
+    });
+    let index = maxIndex;
+    root.querySelectorAll("*").forEach((element) => {
+      if (element.hasAttribute("data-goal2-node-id")) {
+        return;
+      }
+      index += 1;
+      element.setAttribute("data-goal2-node-id", `n${String(index).padStart(4, "0")}`);
+    });
+  }
+
+  // 決定の一かたまり(1世代)ごとに1回走らせる(設計書 3.5、3.14の確定)。
+  //
+  //  1. 決定ログを元のHTMLへ当て直して作業中HTMLを作る。
+  //  2. 作業中HTMLを読み直して候補を作り直す。AIの補完は呼ばない(3.9)。
+  //  3. 前の候補と照合して candidate_id と決定を引き継ぐ。
+  //  4. 世代を1つ進める。
+  //  5. 選択中の候補・一括選択・簡易編集の状態を整理する。
+  //
+  // GOAL1の goal2Engine.autoAcceptSafe() はS3では単一パスのままで、ここを通らない(S5)。
+  function rederiveCandidates() {
+    state.workingHtml = replay(state.sourceHtml, state.decisions);
+    if (!state.sourceHtml) {
+      return;
+    }
+
+    const fragment = parseWorkingForRederivation();
+    // 新しく振ったIDを作業中HTMLへ残す。残さないと、画面の「修正後」欄が読む
+    // parseWorkingFragment() に同じIDが無く、候補が対象を見失う。
+    state.workingHtml = fragment.innerHTML;
+
+    let fresh = generateCandidates(fragment).filter((item) => !isNoticeItem(item));
+    if (state.ruleScopeMode === "michecker") {
+      // 初回の runAnalysis() と同じ絞り込みをかける。かけないと、決定のたびに
+      // miCheckerモードで非対応のルールが候補一覧へ紛れ込む。
+      fresh = fresh.filter((item) => isMicheckerRelevantRule(item.rule_id));
+    }
+    fresh.forEach((item) => {
+      item.review_type = "fix";
+      item.origin = "mechanical";
+      item.enriched = false;
+    });
+
+    const before = state.candidates.length;
+    state.generation += 1;
+    state.candidates = reconcile(state.candidates, fresh, state.decisions);
+
+    pruneBulkSelection();
+    const selectedStillListed = state.candidates.some(
+      (candidate) => candidate.candidate_id === state.selectedCandidateId
+    );
+    if (!selectedStillListed) {
+      const next = state.candidates.find((candidate) => !candidate.decision.status) || state.candidates[0];
+      state.selectedCandidateId = next?.candidate_id || null;
+      state.selectedFixMethodId = null;
+      state.quickEditOpen = false;
+    }
+    if (
+      state.selectedFixMethodId &&
+      !state.candidates.some((candidate) => candidate.candidate_id === state.selectedFixMethodId)
+    ) {
+      state.selectedFixMethodId = null;
+    }
+    state.lastRederivation = {
+      generation: state.generation,
+      added: state.lastRederivationAdded || 0,
+      withdrawn: state.lastRederivationWithdrawn || 0,
+      before,
+      after: state.candidates.length,
+    };
+  }
+
+  // 再導出で候補が増減したことを作業者に伝える一言(3.10)。バッジや取り下げの一覧表示はS4。
+  function rederivationSummaryText() {
+    const summary = state.lastRederivation;
+    if (!summary || (!summary.added && !summary.withdrawn)) {
+      return "";
+    }
+    const parts = [];
+    if (summary.added) parts.push(`${summary.added}件追加`);
+    if (summary.withdrawn) parts.push(`${summary.withdrawn}件取り下げ`);
+    return `決定により候補を${parts.join("、")}しました。`;
+  }
+
+  // 取り下げ(3.6の3)。未処理の候補が再導出で現れなくなったら、候補一覧から外して
+  // ログへ記録する。withdrawn_by_seq には、原因になった直前の決定の seq を入れる。
+  function recordWithdrawal(candidate, withdrawnBySeq, generation) {
+    state.decisionSeq += 1;
+    const entry = decisionLogEntry(
+      candidate,
+      {
+        status: "withdrawn",
+        reason: "決定により対象が無くなったため取り下げ",
+        actor: "AGENT",
+        decided_at: new Date().toISOString(),
+        after_html: null,
+      },
+      state.decisionSeq,
+      generation
+    );
+    entry.withdrawn_by_seq = Number.isFinite(withdrawnBySeq) && withdrawnBySeq > 0 ? withdrawnBySeq : null;
+    state.decisions.push(entry);
+    return entry;
+  }
+
+  // AIの補完(と、作業者が投入したAI画像名)が書き換えた内容は、機械的な再導出では作り直せない。
+  // 該当する候補は issue と proposal を前の候補から引き継ぐ。before_html と target だけは
+  // 作業中HTMLから作り直した値を使い、対象の中身が変わったことが分かるようにする。
+  //
+  // 設計書 3.6 は「issue.reason と proposal.ai_draft を引き継ぐ」と書いているが、実装では
+  // AIの結果が proposal.patch の値(alt・リンク文言・scope・lang・キャプション)と after_html
+  // にも入る。ここを fresh で上書きすると、決定1件ごとにAIの下書きが機械的な下書きへ
+  // 戻ってしまうため、範囲を広げている(PR本文の「設計書との差異」に記載)。
+  function inheritIntoFresh(fresh, previous) {
+    if (!previous.enriched) {
+      return {
+        ...fresh,
+        candidate_id: previous.candidate_id,
+        generation: Number.isFinite(previous.generation) ? previous.generation : fresh.generation,
+        origin: previous.origin || fresh.origin,
+        enriched: false,
+        decision: previous.decision,
+        status: previous.status,
+        proposal: {
+          ...fresh.proposal,
+          ai_draft: previous.proposal?.ai_draft ?? fresh.proposal?.ai_draft ?? null,
+        },
+      };
+    }
+    return {
+      ...fresh,
+      candidate_id: previous.candidate_id,
+      generation: Number.isFinite(previous.generation) ? previous.generation : fresh.generation,
+      origin: previous.origin || fresh.origin,
+      enriched: true,
+      decision: previous.decision,
+      status: previous.status,
+      issue: previous.issue,
+      proposal: {
+        ...previous.proposal,
+        before_html: fresh.proposal.before_html,
+      },
+    };
+  }
+
+  // 再導出した候補(fresh)と前の候補(previous)を指紋で突き合わせる(設計書 3.6)。
+  //
+  //  1. 同じ指紋の未処理候補があれば candidate_id などを引き継ぐ。patch・after_html・
+  //     before_html・target.snippet は fresh の値を使う(作業中HTMLから作り直した値が正しい)。
+  //  2. 同じ指紋が無ければ新しい candidate_id を振る(state.nextCandidateSeq、再利用しない)。
+  //  3. 未処理の候補で fresh に同じ指紋が無いものは取り下げてログへ積み、一覧から外す。
+  //  4. origin: "llm" の候補は、対象が残り content_hash が変わっていなければ fresh に無くても残す。
+  //  5. 決定済みの候補は「決定済み」として一覧に残す(対象が消えていても証跡のため残す)。
+  //  6. ログに accepted / edited のある node_id + 排他グループの候補は一覧に載せない(3.8)。
+  function reconcile(previous, fresh, decisions) {
+    const previousList = previous || [];
+    const freshList = fresh || [];
+    const generation = state.generation;
+    const fingerprintOf = (candidate) => candidate.fingerprint || candidateFingerprint(candidate);
+
+    const decidedGroups = decidedExclusiveGroupKeys(decisions);
+
+    // 指紋ごとに、前の候補を「未処理」「決定済み」に分けて順に並べておく。fresh の1件が
+    // 引き当てられるのは1件までで、引き当てた候補は取り出して消費する。指紋が万一重なっても、
+    // 件数の帳尻が合う(3件のうち1件を採用したら、残り2件は未処理の2件に引き当たる)。
+    const pools = new Map();
+    const poolFor = (fingerprint) => {
+      if (!pools.has(fingerprint)) {
+        pools.set(fingerprint, { undecided: [], decided: [] });
+      }
+      return pools.get(fingerprint);
+    };
+    previousList.forEach((candidate) => {
+      const pool = poolFor(fingerprintOf(candidate));
+      (candidate.decision?.status ? pool.decided : pool.undecided).push(candidate);
+    });
+
+    const matched = new Map();
+    const entries = [];
+    freshList.forEach((item, freshIndex) => {
+      const prepared = withReconcileFields(item, generation);
+      // 3.8: この箇所の構造はもう決まっている。
+      if (
+        prepared.exclusive_group &&
+        decidedGroups.has(`${prepared.target.node_id || ""}|${prepared.exclusive_group}`)
+      ) {
+        return;
+      }
+      const pool = poolFor(prepared.fingerprint);
+      const previousCandidate = pool.undecided.shift();
+      if (previousCandidate) {
+        const reconciled = inheritIntoFresh(prepared, previousCandidate);
+        matched.set(previousCandidate, reconciled);
+        entries.push({ candidate: reconciled, anchor: freshIndex, tier: 0, tie: 0 });
+        return;
+      }
+      // 3.6の5: 決定済みの候補は一覧に「決定済み」として残っているので、同じ問題を
+      // 未処理の候補としてもう一度載せない(却下や要確認にした候補が毎回よみがえらないように)。
+      if (pool.decided.shift()) {
+        return;
+      }
+      prepared.candidate_id = nextCandidateId();
+      entries.push({ candidate: prepared, anchor: freshIndex, tier: 0, tie: 0 });
+    });
+
+    // 前の候補のうち fresh に現れなかったもの。決定済みと、対象が変わっていない llm の候補は
+    // 残し、それ以外は取り下げる。並びは、前の一覧で直前にあった「fresh にも出た候補」の
+    // 位置へ寄せる(一覧の並びが決定のたびに大きく動かないようにするため)。
+    const workingFragment = parseWorkingFragment();
+    const currentContentHash = (nodeId) => {
+      const element = nodeId
+        ? workingFragment.content.querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`)
+        : null;
+      return element ? hashText(cleanHtml(element.outerHTML)) : null;
+    };
+    const withdrawnBySeq = state.decisionSeq;
+    const causeGeneration =
+      state.decisions[state.decisions.length - 1]?.generation ?? state.decisionGeneration;
+    let anchor = -1;
+    let withdrawnCount = 0;
+    previousList.forEach((candidate, previousIndex) => {
+      const reconciled = matched.get(candidate);
+      if (reconciled) {
+        anchor = entries.find((entry) => entry.candidate === reconciled)?.anchor ?? anchor;
+        return;
+      }
+      if (candidate.decision?.status) {
+        entries.push({ candidate, anchor, tier: 1, tie: previousIndex });
+        return;
+      }
+      if (
+        candidate.origin === "llm" &&
+        currentContentHash(candidate.target?.node_id) === candidate.target?.content_hash
+      ) {
+        entries.push({ candidate, anchor, tier: 1, tie: previousIndex });
+        return;
+      }
+      recordWithdrawal(candidate, withdrawnBySeq, causeGeneration);
+      state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
+      withdrawnCount += 1;
+    });
+
+    entries.sort((a, b) => a.anchor - b.anchor || a.tier - b.tier || a.tie - b.tie);
+    state.lastRederivationAdded = entries.filter(
+      (entry) => entry.tier === 0 && entry.candidate.generation === generation
+    ).length;
+    state.lastRederivationWithdrawn = withdrawnCount;
+    return entries.map((entry) => entry.candidate);
   }
 
   function applyCandidateDecision(candidate, status, reason, afterHtml, selectedMethodCandidate = candidate) {
@@ -7517,48 +7862,6 @@
     };
     recordDecision(candidate, candidate.decision, selectedMethodCandidate);
     state.bulkSelectedCandidateIds.delete(candidate.candidate_id);
-    resolveSupersededTableCandidates(candidate);
-    resolveAlternativeMethodCandidates(candidate);
-  }
-
-  // 同じtarget.node_idを持ち、どちらも要素ごと差し替える候補は、1箇所に対する「代替手段」である。
-  // 1つを採用した時点で残りは選ばれなかった手段なので、未処理のまま残さず自動解決する。
-  // 残していると、一括採用が同じ箇所へ2つ以上の置き換えを当ててしまう。どの候補も変換後HTMLを
-  // 「元の要素」から作っているため、後から当てた方が前の修正を丸ごと上書きし、出力が適用順で
-  // 決まってしまう(実データで table.layout-table と table.simple-structure の両方が採用された)。
-  //
-  // 一方、同じ要素に対する「単位の言い換え」「単語内空白の除去」のように要素を残すパッチは、
-  // 1つの段落に何件あっても互いに独立して当たる(replay()が同じnode_idの中で要素を残す
-  // パッチを先に当てる)。これらを代替手段として片付けると修正が失われるため、対象にしない。
-  function resolveAlternativeMethodCandidates(candidate, candidates = state.candidates) {
-    if (!["accepted", "edited"].includes(candidate.decision.status)) {
-      return;
-    }
-    if (!isElementReplacingCandidate(candidate)) {
-      return;
-    }
-    const decidedAt = new Date().toISOString();
-    candidates.forEach((other) => {
-      if (other === candidate || other.decision.status) {
-        return;
-      }
-      if (other.target.node_id !== candidate.target.node_id) {
-        return;
-      }
-      if (!isElementReplacingCandidate(other)) {
-        return;
-      }
-      other.status = "conflicted";
-      other.decision = {
-        status: "conflicted",
-        reason: "同じ箇所で別の修正方法を採用したため自動解決",
-        actor: "AGENT",
-        decided_at: decidedAt,
-        after_html: null,
-      };
-      recordDecision(other, other.decision, other, candidates);
-      state.bulkSelectedCandidateIds.delete(other.candidate_id);
-    });
   }
 
   function toggleBulkSelection() {
@@ -7581,6 +7884,8 @@
     );
     let acceptedCount = 0;
     let skippedCount = 0;
+    let deferredCount = 0;
+    const allowReplacement = createGenerationReplacementGuard();
 
     // 一括採用はまとめて1世代に積む(3.14の確定「まとめてログに積んで再導出1回」)。
     beginDecisionBatch(() => {
@@ -7592,20 +7897,25 @@
           skippedCount += 1;
           return;
         }
+        // 同じ箇所の2件目以降の差し替えは、次の世代で作り直された候補を採用してもらう(3.8)。
+        if (!allowReplacement(candidate)) {
+          deferredCount += 1;
+          return;
+        }
         applyCandidateDecision(candidate, "accepted", "チェックした候補を一括採用", candidate.proposal.after_html);
         acceptedCount += 1;
       });
     });
 
     pruneBulkSelection();
-    state.workingHtml = rebuildWorkingHtml();
+    rederiveCandidates();
     if (acceptedCount > 0 && selectedCandidate()?.decision.status) {
       moveToNextUnresolvedCandidate(state.selectedCandidateId);
     }
-    state.bulkActionMessage =
-      skippedCount > 0
-        ? `${acceptedCount}件を一括採用しました。${skippedCount}件は編集または確認が必要なため残しました。`
-        : `${acceptedCount}件を一括採用しました。`;
+    const remarks = [];
+    if (skippedCount > 0) remarks.push(`${skippedCount}件は編集または確認が必要なため残しました。`);
+    if (deferredCount > 0) remarks.push(`${deferredCount}件は同じ箇所の別の修正を採用したため残しました（作り直した候補をもう一度確認してください）。`);
+    state.bulkActionMessage = `${acceptedCount}件を一括採用しました。${remarks.join("")}` + rederivationSummaryText();
     renderAll();
   }
 
@@ -7631,10 +7941,17 @@
     }
 
     const ruleCounts = new Map();
+    let deferredCount = 0;
+    const allowReplacement = createGenerationReplacementGuard();
     // 一括採用はまとめて1世代に積む(3.14)。
     beginDecisionBatch(() => {
       targets.forEach((candidate) => {
         if (candidate.decision.status) {
+          return;
+        }
+        // 同じ箇所の2件目以降の差し替えは、次の世代で作り直された候補を採用してもらう(3.8)。
+        if (!allowReplacement(candidate)) {
+          deferredCount += 1;
           return;
         }
         applyCandidateDecision(candidate, "accepted", "確認不要の候補をまとめて採用", candidate.proposal.after_html);
@@ -7645,12 +7962,17 @@
 
     const accepted = [...ruleCounts.values()].reduce((sum, count) => sum + count, 0);
     pruneBulkSelection();
-    state.workingHtml = rebuildWorkingHtml();
+    rederiveCandidates();
     if (accepted > 0 && selectedCandidate()?.decision.status) {
       moveToNextUnresolvedCandidate(state.selectedCandidateId);
     }
     const breakdown = [...ruleCounts.entries()].map(([title, count]) => `${title} ${count}件`).join("、");
-    state.bulkActionMessage = `確認不要の${accepted}件を採用しました（${breakdown}）。`;
+    state.bulkActionMessage =
+      `確認不要の${accepted}件を採用しました（${breakdown}）。` +
+      (deferredCount > 0
+        ? `${deferredCount}件は同じ箇所の別の修正を採用したため残しました（作り直した候補をもう一度確認してください）。`
+        : "") +
+      rederivationSummaryText();
     renderAll();
   }
 
@@ -7676,22 +7998,63 @@
     return candidate?.proposal?.patch?.type === "shift-headings" || isTableStructuralCandidate(candidate);
   }
 
+  // 同じ世代の中で、同じ node_id に「要素ごと差し替える」候補を2件以上採用しない(設計書 3.8)。
+  //
+  // S3で調停ロジック(resolveAlternativeMethodCandidates)を外したので、一括採用とGOAL1の
+  // 単一パスでは、同じ要素への差し替えが2件以上まとめて採用されうる(例: 同じ<p>への
+  // text.note-symbol と別の差し替え候補が両方とも確認不要)。リプレイは同じ世代の中で後の
+  // 1件が先の1件の結果を上書きするので、出力が採用順で決まってしまう。
+  //
+  // 画面の1件ずつの採用では問題にならない。決定のたびに再導出が走り、2件目は次の世代で
+  // 作業中HTMLから作り直されるためである。そこで一括採用とGOAL1では1件目だけを採用し、
+  // 2件目以降は未処理のまま残す。作業者は次の世代で作り直された候補を採用できる。
+  //
+  // rebuild はリプレイの第2段で内側から当たり、ビルダーが現在の要素を読むので対象外。
+  // patch_mode が "none" の候補はHTMLを変えないので同じく対象外。
+  function isGenerationExclusiveReplacement(candidate) {
+    return Boolean(
+      candidate &&
+        isElementReplacingCandidate(candidate) &&
+        candidate.proposal.patch_mode !== "none" &&
+        candidate.proposal.patch?.type !== "rebuild"
+    );
+  }
+
+  // 1世代分の一括採用を回す間だけ使う。採用してよければ true を返し、同じ node_id の
+  // 2件目以降の要素ごと差し替えには false を返す。
+  function createGenerationReplacementGuard() {
+    const taken = new Set();
+    return (candidate) => {
+      if (!isGenerationExclusiveReplacement(candidate)) {
+        return true;
+      }
+      const nodeId = candidate.target?.node_id || "";
+      if (taken.has(nodeId)) {
+        return false;
+      }
+      taken.add(nodeId);
+      return true;
+    };
+  }
+
   // Reproduces GOAL1's autoAcceptSafe on the goal2 screen for pages handed off with the
   // autoAcceptSafe flag (see loadGoal3Transfer). Goes through the same applyCandidateDecision
-  // path as bulkAcceptSelected/decide() — not a raw decision-state import — so conflict
-  // resolution between same-target candidates (resolveSupersededTableCandidates) still runs.
+  // path as bulkAcceptSelected/decide() — not a raw decision-state import.
   // Applied once per hand-off: analyze() clears the flag right after calling this.
+  // 3.8 の「1世代に同じ node_id の要素ごと差し替えは1件まで」も一括採用と同じく守る。
   function applyPendingAutoAcceptSafe() {
     state.pendingAutoAcceptSafe = false;
+    const allowReplacement = createGenerationReplacementGuard();
     // 引き継ぎ1回分をまとめて1世代に積む(3.14)。
     beginDecisionBatch(() => {
       state.candidates.forEach((candidate) => {
-        if (!canBulkAcceptCandidate(candidate)) {
+        if (!canBulkAcceptCandidate(candidate) || !allowReplacement(candidate)) {
           return;
         }
         applyCandidateDecision(candidate, "accepted", "一括自動採用（機械的・確認不要）", candidate.proposal.after_html);
       });
     });
+    rederiveCandidates();
   }
 
   function unresolvedCandidates() {
@@ -7718,106 +8081,56 @@
     });
   }
 
-  // 表の構造候補が採用されたとき、同じ表への表関連候補(th/scope・キャプション・セル結合など)を
-  // 自動解決する。
+  // ---- 排他グループ(設計書 3.8) ---------------------------------------------
   //
-  // S2で、表内の「内容修正」候補(table.* 以外)に対する処理を外した。以前は、構造候補の
-  // 変換後HTMLへ内容修正を畳み込み(foldDescendantFixIntoAncestor)、未処理だったものを
-  // 「反映済み」として conflicted にしていた。rebuild 操作が現在の要素を読むようになったので
-  // 畳み込みは要らなくなり、内容修正は未処理のまま残す。作業者が採用したものだけが、
-  // リプレイの第1段で当たって最終HTMLに入る(3.7)。
+  // 「同じ箇所に対して1つしか採用できない候補の集まり」をルールIDの集合で宣言する。
+  // S2までは、これを patch の有無(isElementReplacingCandidate)から推測し、採用のたびに
+  // 兄弟候補を conflicted にする調停ロジック(resolveAlternativeMethodCandidates /
+  // resolveSupersededTableCandidates)で後追いしていた。推測は取りこぼす(遠野市の指摘3は
+  // 「bgcolor のときだけ patch を持たない」ことで背景色の候補が構造候補の代替手段と
+  // 見なされていた)ので、S3で宣言に置き換えて調停ロジックを削除した。
   //
-  // 同じ表の表関連候補を conflicted にする処理と、入れ子の表の survivesInAncestorOutput() の
-  // 扱いはS2では変えない(S3で排他グループに置き換える)。
-  function resolveSupersededTableCandidates(candidate, candidates = state.candidates) {
-    if (!["accepted", "edited"].includes(candidate.decision.status)) {
-      return;
+  // rules.jsonl は変えない(KB再生成を伴わないという既存の判断に合わせる)。
+  const EXCLUSIVE_GROUPS = {
+    "table-structure": tableStructuralRuleIds,
+  };
+
+  // 候補がどの排他グループに属するか。属さなければ null。
+  // 同じ node_id でも、グループに属さない候補どうし・グループに属さない候補とグループの
+  // 候補は互いの代替手段ではなく、独立に採用できる(3.8)。
+  function exclusiveGroupFor(candidate) {
+    if (!candidate) {
+      return null;
     }
-    if (!isTableStructuralCandidate(candidate)) {
-      return;
+    const group = Object.keys(EXCLUSIVE_GROUPS).find((name) =>
+      EXCLUSIVE_GROUPS[name].has(candidate.rule_id)
+    );
+    if (!group) {
+      return null;
     }
-
-    const decidedAt = new Date().toISOString();
-    candidates.forEach((other) => {
-      if (other === candidate || other.decision.status) {
-        return;
-      }
-      const isDescendantCandidate = isDescendantOfCandidateTarget(other, candidate);
-      const isSameTableCandidate = other.target.node_id === candidate.target.node_id && isTableRelatedCandidate(other);
-      if (!isSameTableCandidate && !isDescendantCandidate) {
-        return;
-      }
-
-      // 表内の内容修正候補(file.file-display-text でリンク文言から「（PDF：76KB）」を削除する、
-      // text.* の文字修正など、table.* 以外)は未処理のまま残す。リプレイの第1段で、表の変換より
-      // 先に当たるためである。
-      if (isDescendantCandidate && !isSameTableCandidate && !other.rule_id.startsWith("table.")) {
-        return;
-      }
-
-      // 表の中にある表への候補は、親の表を解体しても対象がそのまま残ることがある(セルの中身は
-      // そのまま出力されるため)。以前は「変換後HTMLで再評価する」として一律に自動解決していたが、
-      // 再評価は行われず、入れ子の表が誰も直さないまま最終HTMLへ残っていた。対象が変換後HTMLに
-      // 残っている場合は未処理のままにして、作業者が対処できるようにする。
-      if (isDescendantCandidate && !isSameTableCandidate && survivesInAncestorOutput(candidate, other)) {
-        return;
-      }
-
-      // 表関連(th/scope・キャプション・セル結合など)の候補は、表の構造変換で意味がなくなるため自動解決。
-      other.status = "conflicted";
-      other.decision = {
-        status: "conflicted",
-        reason: isDescendantCandidate
-          ? "表の構造変換候補が採用されたため、表内の表関連候補は変換後HTMLで再評価するものとして自動解決"
-          : "同じ表の構造変換候補が採用されたため、この表への追加の表関連修正は不要として自動解決",
-        actor: "AGENT",
-        decided_at: decidedAt,
-        after_html: null,
-      };
-      recordDecision(other, other.decision, other, candidates);
-      state.bulkSelectedCandidateIds.delete(other.candidate_id);
-    });
-  }
-
-  // 親の変換後HTMLに、その候補が指す要素がそのまま残っているか。表を解体してもセルの中身は
-  // そのまま出力されるため、中にあった表は形を変えずに残る。空白の入り方だけが違うことがあるので
-  // 詰めてから比べる。
-  function survivesInAncestorOutput(ancestor, descendant) {
-    const output = ancestor.decision?.after_html ?? ancestor.proposal?.after_html;
-    const snippet = descendant?.proposal?.before_html || descendant?.target?.snippet || "";
-    if (typeof output !== "string" || !snippet) {
-      return false;
+    // table-structure は「対象が表であること」まで含めて手段になる。image.image-text-layout は
+    // figure / p / div も対象にするので、表でなければグループに入れない(S1からのログと同じ判定)。
+    if (group === "table-structure" && !/^<table[\s>]/i.test(candidate.target?.snippet || "")) {
+      return null;
     }
-    const compact = (html) => String(html).replace(/\s+/g, "");
-    return compact(output).includes(compact(snippet));
+    return group;
   }
 
   function isTableStructuralCandidate(candidate) {
-    return Boolean(
-      candidate &&
-        tableStructuralRuleIds.has(candidate.rule_id) &&
-        /^<table[\s>]/i.test(candidate.target.snippet || "")
-    );
+    return exclusiveGroupFor(candidate) === "table-structure";
   }
 
-  function isTableRelatedCandidate(candidate) {
-    return Boolean(
-      candidate &&
-        tableRelatedRuleIds.has(candidate.rule_id) &&
-        /^<table[\s>]/i.test(candidate.target.snippet || "")
-    );
-  }
-
-  function isDescendantOfCandidateTarget(candidate, ancestorCandidate) {
-    const path = candidate?.target?.dom_path || "";
-    const ancestorPath = ancestorCandidate?.target?.dom_path || "";
-    if (path && ancestorPath && ancestorPath !== "/" && path.startsWith(`${ancestorPath}/`)) {
-      return true;
-    }
-
-    const beforeHtml = ancestorCandidate?.proposal?.before_html || ancestorCandidate?.target?.snippet || "";
-    const childHtml = candidate?.proposal?.before_html || candidate?.target?.snippet || "";
-    return Boolean(beforeHtml && childHtml && beforeHtml !== childHtml && beforeHtml.includes(childHtml));
+  // ログに accepted / edited の決定がある「node_id + 排他グループ」の集合(3.8)。再導出で
+  // 同じ構造候補がもう一度現れても、候補一覧には載せない(「この箇所の構造は決定済み」)。
+  function decidedExclusiveGroupKeys(decisions) {
+    const keys = new Set();
+    (decisions || []).forEach((decision) => {
+      if (!["accepted", "edited"].includes(decision.status) || !decision.exclusive_group) {
+        return;
+      }
+      keys.add(`${decision.node_id || ""}|${decision.exclusive_group}`);
+    });
+    return keys;
   }
 
   function shouldRequireEditedAdoption(candidate) {
@@ -8529,11 +8842,12 @@
         runEnd += 1;
       }
       const run = candidates.slice(index, runEnd + 1);
-      // 同じ要素を指す候補でも、性質が違うものを一緒に見せない。要素ごと差し替える候補は
-      // 「いずれか1つを選ぶ」代替手段、要素を残す候補は「どれも必要」な独立した修正。
+      // 同じ要素を指す候補でも、性質が違うものを一緒に見せない。同じ排他グループの候補は
+      // 「いずれか1つを選ぶ」代替手段、グループに属さない候補は「どれも必要」な独立した修正
+      // (設計書 3.8)。S2までは patch の有無で分けていた。
       const buckets = [
-        { items: run.filter((item) => isElementReplacingCandidate(item)), label: "同じ箇所の代替手段" },
-        { items: run.filter((item) => !isElementReplacingCandidate(item)), label: "同じ箇所の修正" },
+        { items: run.filter((item) => exclusiveGroupFor(item)), label: "同じ箇所の代替手段" },
+        { items: run.filter((item) => !exclusiveGroupFor(item)), label: "同じ箇所の修正" },
       ];
 
       buckets.forEach(({ items, label }) => {
@@ -9079,21 +9393,25 @@
     return state.candidates.filter((other) => other.target.node_id === candidate.target.node_id);
   }
 
-  // 同じ箇所に対する「代替手段」。要素ごと差し替える候補どうしだけが互いの代替手段になる。
-  // 1つの段落にある単位の言い換えや単語内空白の除去は、要素を残したまま別々の箇所を直すため、
-  // 選択肢ではなくそれぞれ独立した修正として扱う(まとめて採用しても互いに打ち消さない)。
+  // 同じ箇所に対する「代替手段」。S3から、同じ node_id かつ同じ排他グループの候補だけを
+  // 数える(設計書 3.8)。S2までは patch の有無(isElementReplacingCandidate)から推測していたが、
+  // 推測は取りこぼす。遠野市の指摘3は「bgcolor のときだけ patch を持たない」ために背景色の
+  // 候補が表の構造候補の代替手段と見なされ、構造候補が選べなくなっていた例である。
+  //
+  // 排他グループに属さない候補は、同じ node_id に何件あっても独立に採用できる。
   function alternativeMethodCandidates(candidate) {
     if (!candidate) return [];
-    if (!isElementReplacingCandidate(candidate)) {
+    const group = exclusiveGroupFor(candidate);
+    if (!group) {
       return [candidate];
     }
-    return candidatesForSameTarget(candidate).filter((other) => isElementReplacingCandidate(other));
+    return candidatesForSameTarget(candidate).filter((other) => exclusiveGroupFor(other) === group);
   }
 
   // 同じ要素を直す、独立した修正(単位の言い換えなど)。代替手段ではない。
   function independentFixCandidates(candidate) {
-    if (!candidate || isElementReplacingCandidate(candidate)) return [];
-    return candidatesForSameTarget(candidate).filter((other) => !isElementReplacingCandidate(other));
+    if (!candidate || exclusiveGroupFor(candidate)) return [];
+    return candidatesForSameTarget(candidate).filter((other) => !exclusiveGroupFor(other));
   }
 
   function activeFixMethodCandidate(candidate) {
@@ -9309,6 +9627,8 @@
       confirmed_by: els.workerInput.value.trim() || "unknown",
       confirmed_at: new Date().toISOString(),
     };
+    // 作業者が投入した画像名は機械的な再導出では作り直せない。照合(3.6)で引き継ぐ印を立てる。
+    candidate.enriched = true;
 
     const decisionReason = els.decisionReason.value.trim() || "AI画像名を確認して修正後HTMLへ投入";
     renderDetail();
@@ -11000,14 +11320,18 @@
     // requires_human_review on its own; candidates flagged for review are still accepted here
     // unless one of the above applies. Mutates the passed candidates' decision in place and
     // returns how many were accepted.
+    // S3では単一パスのまま(再導出のループ化はS5)。調停ロジックを廃止したので、同じ箇所へ
+    // 2件以上の差し替えが同時に採用されないことは 3.8 の「1世代に同じ node_id の要素ごと
+    // 差し替えは1件まで」で守る。2件目以降は未処理のまま残る(S2までは conflicted だった)。
     autoAcceptSafe(candidates) {
       let accepted = 0;
+      const allowReplacement = createGenerationReplacementGuard();
       // 呼び出し1回をまとめて1世代に積む(3.14)。applyCandidateDecision() を通さないのは、
       // actor が goal1-batch であることと candidate.status を触らないことを変えないため。
       // 決定ログへの記録だけ画面側と同じ recordDecision() で揃える。
       beginDecisionBatch(() => {
         candidates.forEach((candidate) => {
-          if (!canBulkAcceptCandidate(candidate)) {
+          if (!canBulkAcceptCandidate(candidate) || !allowReplacement(candidate)) {
             return;
           }
           candidate.decision = {
@@ -11017,12 +11341,8 @@
             decided_at: new Date().toISOString(),
             after_html: null,
           };
-          recordDecision(candidate, candidate.decision, candidate, candidates);
+          recordDecision(candidate, candidate.decision, candidate);
           accepted += 1;
-          // 画面側の採用(applyCandidateDecision)と同じ競合解決を通す。通していなかったため、
-          // 同じ箇所の代替手段がすべて採用され、出力が適用順で決まっていた。
-          resolveSupersededTableCandidates(candidate, candidates);
-          resolveAlternativeMethodCandidates(candidate, candidates);
         });
       });
       return accepted;
