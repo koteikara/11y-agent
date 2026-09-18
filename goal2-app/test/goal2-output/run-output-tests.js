@@ -1701,6 +1701,397 @@ async function main() {
       `構造候補の一覧: ${JSON.stringify(rebuildCoverage.map((r) => `${r.rule_id}/${r.patch_mode}/${r.patch_type}`))}`
     );
 
+
+    // ======================================================================
+    // 20. S3: 再導出と照合(設計書 3.5・3.6)、排他グループ(3.8)
+    // ======================================================================
+
+    // 20-a. 再導出の基本。1件決めるたびに候補が作業中HTMLから作り直される。
+    //     直した箇所の候補は出てこなくなり、直していない箇所の候補は同じ指紋なので
+    //     candidate_id を保つ。state.generation が1つ進む。
+    const TWO_PARAGRAPH_FIXES = `<p>受付は令和５年度から始まります。</p><p>敷地は南北約22mの広さです。</p>`;
+    await analyzeOnScreen(TWO_PARAGRAPH_FIXES);
+    const rederiveBefore = await candidateSnapshot();
+    const rederiveGen0 = await page.evaluate(() => window.goal2Engine.decisionLog.screenState().generation);
+    const firstFix = rederiveBefore.find((c) => c.rule_id === "text.alphanumeric");
+    const otherFix = rederiveBefore.find((c) => c.rule_id === "text.unit-notation");
+    check(
+      "再導出の検査用に2つの段落へ別々の候補が出る",
+      Boolean(firstFix) && Boolean(otherFix) && firstFix.node_id !== otherFix.node_id,
+      JSON.stringify(rederiveBefore)
+    );
+    if (firstFix && otherFix) {
+      await acceptCandidateById(firstFix.id);
+      const rederiveAfter = await candidateSnapshot();
+      const rederiveGen1 = await page.evaluate(() => window.goal2Engine.decisionLog.screenState().generation);
+      check(
+        "決定のたびに再導出の世代が1つ進む",
+        rederiveGen1 === rederiveGen0 + 1,
+        `前=${rederiveGen0} 後=${rederiveGen1}`
+      );
+      check(
+        "直していない箇所の候補は同じ candidate_id で残る",
+        rederiveAfter.some((c) => c.id === otherFix.id && !c.status),
+        JSON.stringify(rederiveAfter)
+      );
+      check(
+        "直した箇所の候補は決定済みとして残り、未処理では出てこない",
+        rederiveAfter.some((c) => c.id === firstFix.id && c.status === "accepted") &&
+          !rederiveAfter.some((c) => c.rule_id === "text.alphanumeric" && !c.status),
+        JSON.stringify(rederiveAfter)
+      );
+    }
+
+    // 20-b. 取り下げ(3.6の3)。装飾タグの解除で <tt> が消えると、その要素を指していた未処理の
+    //     候補は作業中HTMLに対象が無くなるので withdrawn としてログへ積まれ、一覧から消える。
+    //     同じ修正は、解除後の要素に対する新しい候補として出直す。
+    await analyzeOnScreen(MULTI_FIX_PARAGRAPH);
+    const withdrawBefore = await candidateSnapshot();
+    const unwrapCandidate = withdrawBefore.find((c) => c.patch_type === "unwrap-element");
+    const insideCandidates = withdrawBefore.filter(
+      (c) => c.patch_type === "replace-text" && c.node_id === unwrapCandidate?.node_id
+    );
+    if (unwrapCandidate && insideCandidates.length) {
+      await acceptCandidateById(unwrapCandidate.id);
+      const withdrawAfter = await candidateSnapshot();
+      const log = await page.evaluate(() =>
+        window.goal2Engine.decisionLog
+          .screenState()
+          .decisions.filter((d) => d.status === "withdrawn")
+          .map((d) => ({ id: d.candidate_id, by: d.withdrawn_by_seq, actor: d.actor, rule: d.rule_id }))
+      );
+      const acceptedSeq = await page.evaluate(
+        () =>
+          window.goal2Engine.decisionLog
+            .screenState()
+            .decisions.find((d) => d.status === "accepted")?.seq ?? null
+      );
+      check(
+        "対象が無くなった未処理の候補は withdrawn としてログに積まれる",
+        insideCandidates.every((c) => log.some((entry) => entry.id === c.id)) &&
+          log.every((entry) => entry.actor === "AGENT"),
+        JSON.stringify({ inside: insideCandidates.map((c) => c.id), log })
+      );
+      check(
+        "withdrawn は原因になった直前の決定の seq を持つ",
+        log.length > 0 && log.every((entry) => entry.by === acceptedSeq),
+        `acceptedSeq=${acceptedSeq} log=${JSON.stringify(log)}`
+      );
+      check(
+        "取り下げた候補は候補一覧から消える",
+        insideCandidates.every((c) => !withdrawAfter.some((row) => row.id === c.id)),
+        JSON.stringify(withdrawAfter)
+      );
+      check(
+        "同じ修正は解除後の要素に対する新しい候補として出直す",
+        withdrawAfter.some((c) => c.rule_id === "text.unit-notation" && !c.status),
+        JSON.stringify(withdrawAfter)
+      );
+    } else {
+      check("取り下げの検査に使う候補が出る", false, JSON.stringify(withdrawBefore));
+    }
+
+    // 20-c. candidate_id は世代をまたいで一意(3.3)。同じ番号が別の指紋に振られない。
+    //     上の2つの流れで積んだログと、いま出ている候補を突き合わせる。
+    const idUniqueness = await page.evaluate(() => {
+      const { decisions, candidates } = window.goal2Engine.decisionLog.screenState();
+      const byId = new Map();
+      const conflicts = [];
+      const note = (id, fingerprint) => {
+        if (!byId.has(id)) {
+          byId.set(id, fingerprint);
+          return;
+        }
+        if (byId.get(id) !== fingerprint) conflicts.push({ id, a: byId.get(id), b: fingerprint });
+      };
+      decisions.forEach((d) => note(d.candidate_id, d.fingerprint));
+      candidates.forEach((c) => note(c.candidate_id, c.fingerprint));
+      return { conflicts, ids: byId.size };
+    });
+    check(
+      "candidate_id が世代をまたいで一意(同じIDが別の指紋に振られない)",
+      idUniqueness.conflicts.length === 0 && idUniqueness.ids > 0,
+      JSON.stringify(idUniqueness)
+    );
+
+    // 20-d. S1の反例の解消。同じ <a> に「リンク文言の書き戻し(set-text、元の全角の文言を持つ)」と
+    //     「半角化(replace-text)」が出る。S1・S2 は候補配列の順で当てることで順序依存を避けて
+    //     いたが、S3 は半角化を先に採用すると set-text の候補が作業中HTMLから作り直され、
+    //     置換後の文言が半角のものになる。どちらを先に採用しても「第1章 総括」になる。
+    const runLinkOrder = async (reverse) => {
+      await analyzeOnScreen(FILE_LINK_FULLWIDTH_DIGIT);
+      const snap = await candidateSnapshot();
+      const digits = snap.find((c) => c.rule_id === "text.alphanumeric");
+      const display = snap.find((c) => c.rule_id === "file.file-display-text");
+      if (!digits || !display) return { skipped: true, snap };
+      const order = reverse ? ["file.file-display-text", "text.alphanumeric"] : ["text.alphanumeric", "file.file-display-text"];
+      for (const ruleId of order) {
+        await acceptMatchingCandidates((c) => c.rule_id === ruleId, { maxAccepted: 1, rounds: 3 });
+      }
+      return { skipped: false, finalHtml: await readFinalHtml() };
+    };
+    const linkDigitsFirst = await runLinkOrder(false);
+    const linkDisplayFirst = await runLinkOrder(true);
+    check(
+      "半角化を先に採用してもリンク文言が半角のまま書き戻される(S1の反例の解消)",
+      !linkDigitsFirst.skipped && /第1章 総括/.test(linkDigitsFirst.finalHtml) && !/第１章/.test(linkDigitsFirst.finalHtml),
+      linkDigitsFirst.skipped ? JSON.stringify(linkDigitsFirst.snap) : linkDigitsFirst.finalHtml
+    );
+    check(
+      "リンク文言の書き戻しを先に採用しても結果が同じ",
+      !linkDisplayFirst.skipped && linkDisplayFirst.finalHtml === linkDigitsFirst.finalHtml,
+      `半角化が先=${linkDigitsFirst.finalHtml}\n       書き戻しが先=${linkDisplayFirst.finalHtml}`
+    );
+
+    // 20-e. S2の「edited の制限」の解消(3.7のS2)。構造候補を編集して採用したあと、その表の中の
+    //     内容修正を採用できる。S2 では編集後のHTMLに対象が無く orphaned になっていた。
+    await analyzeOnScreen(CONTENT_FIX_TABLE);
+    const editTarget = (await candidateSnapshot()).find((c) => c.builder === "dataTableSemantics");
+    let editedFlow = { picked: false };
+    if (editTarget) {
+      await page.evaluate((id) => {
+        const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+          (b.getAttribute("aria-label") || "").includes(id)
+        );
+        button?.click();
+      }, editTarget.id);
+      await page.waitForTimeout(700);
+      const opened = await page.evaluate(() => {
+        const button = [...document.querySelectorAll("button")].find((b) => /文言を調整/.test(b.textContent));
+        if (!button || button.disabled) return false;
+        button.click();
+        return true;
+      });
+      if (opened) {
+        await page.waitForTimeout(500);
+        await page.fill("#quickEditValue", "史跡の概要の一覧");
+        await page.click("#quickEditApplyButton");
+        await page.waitForTimeout(900);
+        const accepted = await acceptMatchingCandidates((c) => /^text\./.test(c.rule_id));
+        editedFlow = {
+          picked: true,
+          decision: (await candidateSnapshot()).find((c) => c.id === editTarget.id)?.status || null,
+          accepted: accepted.length,
+          orphaned: await page.evaluate(
+            () => window.goal2Engine.decisionLog.screenState().decisions.filter((d) => d.orphaned).length
+          ),
+          finalHtml: await readFinalHtml(),
+        };
+      }
+    }
+    check(
+      "構造候補を編集して採用したあと、表の中の内容修正を採用できる(S2の edited の制限の解消)",
+      editedFlow.picked &&
+        editedFlow.decision === "edited" &&
+        editedFlow.accepted > 0 &&
+        editedFlow.orphaned === 0 &&
+        /史跡の概要の一覧/.test(editedFlow.finalHtml) &&
+        /22メートル/.test(editedFlow.finalHtml),
+      JSON.stringify({ ...editedFlow, finalHtml: (editedFlow.finalHtml || "").replace(/\s+/g, " ").slice(0, 300) })
+    );
+
+    // 20-f. 排他グループ(3.8)。表の構造候補を1件採用すると、同じ表の他の構造候補は候補一覧に
+    //     出ない。表を変えない候補(table.format-clear など)は独立に採用できる。
+    const EXCLUSIVE_TABLE = `<h2>利用案内</h2><table border="1" style="font-size:12px"><tbody>
+      <tr><th>区分</th><td>金額</td></tr>
+      <tr><th>一般</th><td>500円</td></tr>
+      <tr><th>学生</th><td>300円</td></tr>
+    </tbody></table>`;
+    await analyzeOnScreen(EXCLUSIVE_TABLE);
+    const exclusiveBefore = await candidateSnapshot();
+    const structuralBefore = exclusiveBefore.filter((c) => c.patch_type === "rebuild");
+    const structuralBeforeNodeIds = new Set(structuralBefore.map((c) => c.node_id));
+    // 表を変えない候補は「同じ表の要素を指すが、排他グループに属さない候補」で見る。
+    // table.th-scope は <th> を指す別の要素の候補で、構造変換がその指摘自体を直してしまう
+    // (dataTableSemantics が scope="row" を付ける)ため、比較には使えない。
+    const independentBefore = exclusiveBefore.filter(
+      (c) =>
+        c.patch_type &&
+        c.patch_type !== "rebuild" &&
+        structuralBeforeNodeIds.has(c.node_id)
+    );
+    if (structuralBefore.length > 1) {
+      await acceptCandidateById(structuralBefore[0].id);
+      const exclusiveAfter = await candidateSnapshot();
+      check(
+        "表の構造候補を採用すると、同じ表の他の構造候補は候補一覧に出ない",
+        structuralBefore
+          .slice(1)
+          .every((c) => !exclusiveAfter.some((row) => row.id === c.id && !row.status)) &&
+          !exclusiveAfter.some(
+            (row) => !row.status && row.patch_type === "rebuild" && row.node_id === structuralBefore[0].node_id
+          ),
+        JSON.stringify({ before: structuralBefore, after: exclusiveAfter })
+      );
+      if (independentBefore.length) {
+        const independentAccepted = await acceptMatchingCandidates(
+          (c) => independentBefore.some((row) => row.rule_id === c.rule_id),
+          { maxAccepted: 1, rounds: 3 }
+        );
+        check(
+          "表を変えない候補は構造候補の採用後も独立に採用できる",
+          independentAccepted.length === 1,
+          JSON.stringify({ independentBefore, after: await candidateSnapshot() })
+        );
+      }
+    } else {
+      check("排他グループの検査に使う構造候補が2件以上出る", false, JSON.stringify(exclusiveBefore));
+    }
+
+    // 20-g. 遠野市 指摘3(設計書 4.1)。bgcolor の表で「確認不要をまとめて採用」を押すと背景色が
+    //     消え、再導出では背景色の候補が出ない。表の構造候補3件は同じ指紋で残り、引き続き選べる。
+    await analyzeOnScreen(BGCOLOR_TABLE);
+    const bgBefore = await candidateSnapshot();
+    const bgStructuralBefore = bgBefore.filter((c) => c.patch_type === "rebuild");
+    if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) === null) {
+      await page.click("#bulkAcceptReviewFreeButton");
+      await page.waitForTimeout(900);
+    }
+    const bgAfter = await candidateSnapshot();
+    const bgWorking = await page.evaluate(() => window.goal2Engine.decisionLog.screenState().workingHtml);
+    check(
+      "指摘3: 背景色をまとめて採用しても表の構造候補が同じ candidate_id で残る",
+      bgStructuralBefore.length >= 3 &&
+        bgStructuralBefore.every((c) => bgAfter.some((row) => row.id === c.id && !row.status)),
+      JSON.stringify({ before: bgStructuralBefore, after: bgAfter })
+    );
+    check(
+      "指摘3: 再導出では背景色の候補が出ない(bgcolor が消えているため)",
+      !/bgcolor/i.test(bgWorking) && !bgAfter.some((c) => c.rule_id === "text.background-color" && !c.status),
+      `${bgWorking}\n       ${JSON.stringify(bgAfter)}`
+    );
+
+    // 20-h. 同じ世代の同一箇所(3.8)。差し替えが決まった範囲の中にある候補は、その世代では
+    //     採用せず未処理のまま残す。次の世代では、作り直された候補を採用できる。
+    //
+    //     「同じ node_id に要素ごと差し替えの確認不要候補が2件」という形は、佐賀市の実ページ
+    //     51件には1件も無かった(全ページの候補を走査して確認)。実際に出るのは
+    //     replace-paragraph-sequence が複数の段落をまとめて差し替える形で、その範囲の中の
+    //     修正が消える(sg04015)。ここではその形を最小の入力で再現する。
+    const SEQUENCE_WITH_INNER_FIXES = `<p>１．申請書</p><p>２．令和５年度の<u>本人確認書類</u></p><p>３．印鑑</p>`;
+    const sequenceFacts = await page.evaluate(async (h) => {
+      const res = await window.goal2Engine.analyze({ html: h });
+      return res.candidates.map((c) => {
+        const facts = window.goal2Engine.decisionLog.candidateFacts(c);
+        return {
+          rule_id: c.rule_id,
+          node_id: c.target.node_id,
+          review_free: c.proposal.requires_human_review === false,
+          patch_type: facts.patch_type,
+          node_ids: c.proposal.patch?.node_ids || null,
+        };
+      });
+    }, SEQUENCE_WITH_INNER_FIXES);
+    const sequenceCandidate = sequenceFacts.find((c) => c.patch_type === "replace-paragraph-sequence");
+    const insideSequence = sequenceFacts.filter(
+      (c) => c !== sequenceCandidate && (sequenceCandidate?.node_ids || []).includes(c.node_id)
+    );
+    check(
+      "まとめて差し替える候補と、その範囲の中の候補が同じ世代に並ぶ入力である",
+      Boolean(sequenceCandidate) && sequenceCandidate.review_free && insideSequence.length > 0,
+      JSON.stringify(sequenceFacts)
+    );
+    if (sequenceCandidate && insideSequence.length) {
+      await analyzeOnScreen(SEQUENCE_WITH_INNER_FIXES);
+      if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) === null) {
+        await page.click("#bulkAcceptReviewFreeButton");
+        await page.waitForTimeout(900);
+      }
+      const afterFirstBulk = await page.evaluate(() => {
+        const { decisions, candidates, generation } = window.goal2Engine.decisionLog.screenState();
+        return {
+          generation,
+          acceptedInFirst: decisions.filter((d) => d.status === "accepted" && d.generation === 1).length,
+          unresolved: candidates.filter((c) => !c.decision.status).map((c) => `${c.rule_id}/${c.target.node_id}`),
+          orphaned: decisions.filter((d) => d.orphaned).length,
+        };
+      });
+      check(
+        "一括採用は差し替えの範囲にある候補を採用せず、未処理のまま残す",
+        afterFirstBulk.acceptedInFirst >= 1 && afterFirstBulk.unresolved.length > 0,
+        JSON.stringify(afterFirstBulk)
+      );
+      // 作業者がもう一度「確認不要をまとめて採用」を押す。作り直された候補が採用される。
+      for (let round = 0; round < 4; round += 1) {
+        if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) !== null) break;
+        await page.click("#bulkAcceptReviewFreeButton");
+        await page.waitForTimeout(900);
+      }
+      const sequenceFinal = await readFinalHtml();
+      const sequenceState = await page.evaluate(() => {
+        const { decisions, candidates } = window.goal2Engine.decisionLog.screenState();
+        return {
+          orphaned: decisions.filter((d) => d.orphaned).map((d) => `${d.rule_id}/${d.node_id}`),
+          unresolved: candidates.filter((c) => !c.decision.status).length,
+        };
+      });
+      check(
+        "次の世代で作り直された候補を採用でき、範囲の中の修正が最終HTMLに残る",
+        /令和5年度/.test(sequenceFinal) &&
+          !/令和５年度/.test(sequenceFinal) &&
+          !/<u[\s>]/i.test(sequenceFinal) &&
+          sequenceState.orphaned.length === 0,
+        `${sequenceFinal.replace(/\s+/g, " ").slice(0, 300)}\n       ${JSON.stringify(sequenceState)}`
+      );
+    }
+
+    // 20-j. conflicted を新しく作る経路が無いこと(3.8・3.14)。値は過去の証跡CSVとの互換のため
+    //     残すが、S3以降は誰も書き込まない。ソースを読んで代入の形が無いことを確かめる。
+    const appSource = require("fs").readFileSync(path.join(rootDir, "public/app.js"), "utf8");
+    const conflictedAssignments = appSource
+      .split("\n")
+      .map((line, index) => ({ line: line.trim(), no: index + 1 }))
+      .filter(
+        (row) =>
+          /conflicted/.test(row.line) &&
+          !row.line.startsWith("//") &&
+          /(status\s*[:=]\s*"conflicted"|=\s*"conflicted")/.test(row.line)
+      );
+    check(
+      "conflicted を新しく作る経路がソースに無い",
+      conflictedAssignments.length === 0,
+      JSON.stringify(conflictedAssignments)
+    );
+
+    // 20-i. sg04015(3.13 で S3 送りになった1件)。replace-paragraph-sequence の固定の変換後HTMLが、
+    //     同じ範囲に先に当たった修正を元のHTMLで上書きしていた。S3 では再導出で変換後HTMLが
+    //     作業中HTMLから作り直されるので、先に採用した半角化が残る。
+    const sg04015Html = require("../../agents-cli/datasets/saga-a11y-eval.json").find((entry) =>
+      String(entry.id).includes("sg04015")
+    )?.input?.old_html;
+    check("sg04015 の入力HTMLをデータセットから取れる", Boolean(sg04015Html), "見つからない");
+    if (sg04015Html) {
+      await analyzeOnScreen(sg04015Html);
+      // sg04015 の text.list は requires_human_review が false なので、「確認不要をまとめて採用」に
+      // 含まれる。差し替えの範囲にある候補は1回目では採用されず未処理で残るので、作業者が
+      // もう一度押す。押すたびに再導出が走り、作り直された候補が採用される。
+      let bulkRounds = 0;
+      for (; bulkRounds < 6; bulkRounds += 1) {
+        if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) !== null) break;
+        await page.click("#bulkAcceptReviewFreeButton");
+        await page.waitForTimeout(1200);
+      }
+      const listAccepted = await page.evaluate(() =>
+        window.goal2Engine.decisionLog
+          .screenState()
+          .decisions.filter((d) => d.status === "accepted" && d.rule_id === "text.list")
+      );
+      const sg04015Final = await readFinalHtml();
+      const sg04015Orphaned = await page.evaluate(() =>
+        window.goal2Engine.decisionLog
+          .screenState()
+          .decisions.filter((d) => d.orphaned)
+          .map((d) => `${d.rule_id}/${d.node_id}`)
+      );
+      check(
+        "sg04015: 箇条書き化を採用しても、半角化(令和5年度)が残る",
+        listAccepted.length > 0 && /令和5年度/.test(sg04015Final) && !/令和５年度/.test(sg04015Final),
+        `採用した text.list=${listAccepted.length}件 一括採用${bulkRounds}回 orphaned=${JSON.stringify(sg04015Orphaned)}\n       ${
+          (sg04015Final.match(/.{0,40}令和.{0,20}/g) || []).slice(0, 6).join(" / ")
+        }`
+      );
+    }
+
   } finally {
     if (browser) await browser.close();
     server.kill();

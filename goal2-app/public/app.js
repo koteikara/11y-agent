@@ -888,6 +888,11 @@
     // KB全ルールモードの挙動・性能には一切影響させない。既存候補生成には影響を与えず、
     // 結果はマージ・重複排除もしない(呼び出し元が独立表示する)。
     const micheckerEngineResult = ruleScopeMode === "michecker" ? runMicheckerEngine(html) : null;
+    // 候補を作った元のHTMLを state に揃えておく。3.8 のガードと画面の「修正後」欄が読む
+    // 作業中HTMLは data-goal2-node-id を持っている必要があり、ヘッドレス経路
+    // (goal2Engine.analyze → autoAcceptSafe)には画面の analyze() のような設定箇所が無い。
+    state.sourceHtml = html;
+    state.workingHtml = replay(html, []);
     return { candidates, notices, micheckerEngineResult };
   }
 
@@ -8020,19 +8025,87 @@
     );
   }
 
-  // 1世代分の一括採用を回す間だけ使う。採用してよければ true を返し、同じ node_id の
-  // 2件目以降の要素ごと差し替えには false を返す。
+  // 変換後HTMLで差し替えるため、対象の子孫がまるごと入れ替わるパッチ型。同じ世代の中で
+  // これらが当たると、その範囲にあった他の修正は当たっても消える(先に当てれば固定の変換後
+  // HTMLに上書きされ、後に当てれば対象が見つからない)。
+  //
+  // unwrap-element と rename-element はここに入れない。どちらも子要素をそのまま残し、
+  // data-goal2-node-id も引き継ぐので、範囲の中の修正は当たる。
+  // rebuild も入れない。リプレイの第2段で当たり、ビルダーが現在の要素を読むので、同じ世代の
+  // 内容修正はむしろ変換結果に含まれる(3.7)。
+  const SUBTREE_REPLACING_PATCH_TYPES = new Set([
+    "replace-html",
+    "merge-following-note",
+    "replace-paragraph-sequence",
+    "remove-element",
+  ]);
+
+  function replacesSubtree(candidate) {
+    const patch = candidate?.proposal?.patch;
+    // パッチを持たない候補の操作は replace-html(3.3の op)。
+    return !patch || SUBTREE_REPLACING_PATCH_TYPES.has(patch.type);
+  }
+
+  // 1世代分の一括採用を回す間だけ使う。採用してよければ true を返す。
+  //
+  //  (1) 同じ node_id の2件目以降の要素ごと差し替えには false を返す。
+  //  (2) 変換後HTMLで差し替わった範囲(その要素と子孫、replace-paragraph-sequence なら
+  //      まとめられる段落すべてとその子孫)にある候補にも false を返す。
+  //
+  // (2) が要るのは、実データの佐賀市 sg04015 で見つかった形のためである。n0004 の text.list
+  // (replace-paragraph-sequence)が n0004〜n0018 の段落をまとめて差し替え、同じ一括採用で
+  // 採用された n0015 の text.alphanumeric(「令和５年度」→「令和5年度」)が消えていた。
+  // 差し替える候補の変換後HTMLは、その世代では作り直されていないので元のHTML由来である。
+  // 次の世代では作業中HTMLから作り直されるため、そこで採用すれば両方が残る(3.8)。
   function createGenerationReplacementGuard() {
-    const taken = new Set();
-    return (candidate) => {
-      if (!isGenerationExclusiveReplacement(candidate)) {
-        return true;
+    const claimedNodes = new Set();
+    const replacedNodes = new Set();
+    const replacedRoots = [];
+    let root = null;
+    const dom = () => {
+      if (!root) {
+        const template = document.createElement("template");
+        template.innerHTML = state.workingHtml || state.sourceHtml || "";
+        root = template.content;
       }
-      const nodeId = candidate.target?.node_id || "";
-      if (taken.has(nodeId)) {
+      return root;
+    };
+    const elementOf = (nodeId) =>
+      nodeId ? dom().querySelector(`[data-goal2-node-id="${cssEscape(nodeId)}"]`) : null;
+
+    return (candidate) => {
+      const nodeId = candidate?.target?.node_id || "";
+      const replacing = isGenerationExclusiveReplacement(candidate);
+      // (1) 同じ node_id への2件目以降の要素ごと差し替え。要素を残すパッチはここで止めない。
+      //     リプレイの第1段が同じ node_id の中で要素を残すパッチを先に当てるので、
+      //     unwrap-element や rename-element と同居していても両方とも残る。
+      if (replacing && claimedNodes.has(nodeId)) {
         return false;
       }
-      taken.add(nodeId);
+      // (2) 固定の変換後HTMLで差し替わる範囲の中。こちらは要素を残すパッチも止める。
+      //     差し替えの変換後HTMLは元のHTML由来なので、先に当てた修正ごと上書きされる。
+      if (replacedNodes.has(nodeId)) {
+        return false;
+      }
+      if (replacedRoots.length) {
+        const element = elementOf(nodeId);
+        if (element && replacedRoots.some((claimed) => claimed !== element && claimed.contains(element))) {
+          return false;
+        }
+      }
+      if (!replacing) {
+        return true;
+      }
+      const patch = candidate.proposal.patch;
+      const nodeIds = [nodeId, ...(patch?.node_ids || [])];
+      nodeIds.forEach((id) => claimedNodes.add(id));
+      if (replacesSubtree(candidate)) {
+        nodeIds.forEach((id) => {
+          replacedNodes.add(id);
+          const element = elementOf(id);
+          if (element) replacedRoots.push(element);
+        });
+      }
       return true;
     };
   }
