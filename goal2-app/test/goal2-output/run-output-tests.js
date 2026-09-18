@@ -1796,10 +1796,20 @@ async function main() {
         insideCandidates.every((c) => !withdrawAfter.some((row) => row.id === c.id)),
         JSON.stringify(withdrawAfter)
       );
+      // 取り下げた件数と同じ数が、新しい candidate_id で戻ること。ルールと件数の内訳まで見る。
+      const countByRule = (rows) =>
+        rows.reduce((acc, row) => {
+          acc[row.rule_id] = (acc[row.rule_id] || 0) + 1;
+          return acc;
+        }, {});
+      const withdrawnIds = new Set(insideCandidates.map((c) => c.id));
+      const returnedAfterWithdraw = withdrawAfter.filter((c) => !c.status && c.patch_type === "replace-text");
       check(
-        "同じ修正は解除後の要素に対する新しい候補として出直す",
-        withdrawAfter.some((c) => c.rule_id === "text.unit-notation" && !c.status),
-        JSON.stringify(withdrawAfter)
+        "取り下げた件数と同じ数が、新しい candidate_id で戻る",
+        returnedAfterWithdraw.length === insideCandidates.length &&
+          returnedAfterWithdraw.every((c) => !withdrawnIds.has(c.id)) &&
+          JSON.stringify(countByRule(returnedAfterWithdraw)) === JSON.stringify(countByRule(insideCandidates)),
+        `取り下げ=${JSON.stringify(insideCandidates)}\n       戻り=${JSON.stringify(returnedAfterWithdraw)}`
       );
     } else {
       check("取り下げの検査に使う候補が出る", false, JSON.stringify(withdrawBefore));
@@ -1982,7 +1992,8 @@ async function main() {
       const workingHtml = await page.evaluate(() => window.goal2Engine.decisionLog.screenState().workingHtml);
       check(
         "構造候補を採用してから却下すると、作業中HTMLが元に戻る",
-        !/<caption>/.test(workingHtml) && !/scope="row"/.test(workingHtml),
+        // <caption data-goal2-node-id="…"> に当たるよう、閉じ「>」を決め打ちにしない。
+        !/<caption[\s>]/i.test(workingHtml) && !/scope="row"/.test(workingHtml),
         workingHtml.replace(/ data-goal2-node-id="[^"]*"/g, "").replace(/\s+/g, " ").slice(0, 200)
       );
       check(
@@ -2096,6 +2107,13 @@ async function main() {
     );
     if (sequenceCandidate && insideSequence.length) {
       await analyzeOnScreen(SEQUENCE_WITH_INNER_FIXES);
+      // 画面に出ている候補から、まとめて差し替える候補と、その範囲の中の候補を取り直す。
+      // 上の sequenceFacts は別の解析の結果なので、candidate_id をそのまま使わない。
+      const screenSnapshot = await candidateSnapshot();
+      const screenSequence = screenSnapshot.find((c) => c.patch_type === "replace-paragraph-sequence");
+      const screenInside = screenSnapshot.filter(
+        (c) => c.id !== screenSequence?.id && (sequenceCandidate.node_ids || []).includes(c.node_id)
+      );
       if ((await page.getAttribute("#bulkAcceptReviewFreeButton", "disabled")) === null) {
         await page.click("#bulkAcceptReviewFreeButton");
         await page.waitForTimeout(900);
@@ -2109,10 +2127,28 @@ async function main() {
           orphaned: decisions.filter((d) => d.orphaned).length,
         };
       });
+      // 候補IDごとに「1回目は未採用（未処理のまま、または取り下げ）」であることを見る。
+      // 件数だけでは、範囲の中の候補を実際に見送ったのかどうかが分からない。node_id で
+      // 見ると、まとめて差し替える候補自身が nodes[0] を対象にしているため区別できない。
+      const insideIds = screenInside.map((c) => c.id);
+      const firstRoundById = await page.evaluate((ids) => {
+        const { decisions, candidates } = window.goal2Engine.decisionLog.screenState();
+        return ids.map((id) => {
+          const decided = decisions.filter((d) => d.candidate_id === id);
+          return {
+            id,
+            accepted: decided.some((d) => ["accepted", "edited"].includes(d.status)),
+            withdrawn: decided.some((d) => d.status === "withdrawn"),
+            unresolved: candidates.some((c) => c.candidate_id === id && !c.decision.status),
+          };
+        });
+      }, insideIds);
       check(
-        "一括採用は差し替えの範囲にある候補を採用せず、未処理のまま残す",
-        afterFirstBulk.acceptedInFirst >= 1 && afterFirstBulk.unresolved.length > 0,
-        JSON.stringify(afterFirstBulk)
+        "1回目の一括採用は、差し替えの範囲にある候補を候補ごとに採用しない",
+        afterFirstBulk.acceptedInFirst >= 1 &&
+          firstRoundById.length > 0 &&
+          firstRoundById.every((row) => !row.accepted && (row.withdrawn || row.unresolved)),
+        `${JSON.stringify(afterFirstBulk)}\n       範囲の中=${JSON.stringify(screenInside)}\n       候補ごと=${JSON.stringify(firstRoundById)}`
       );
       // 作業者がもう一度「確認不要をまとめて採用」を押す。作り直された候補が採用される。
       for (let round = 0; round < 4; round += 1) {
@@ -2126,8 +2162,20 @@ async function main() {
         return {
           orphaned: decisions.filter((d) => d.orphaned).map((d) => `${d.rule_id}/${d.node_id}`),
           unresolved: candidates.filter((c) => !c.decision.status).length,
+          // 2世代目以降に採用された候補。1回目に見送った修正が、新しいIDで当たったことを見る。
+          acceptedAfterFirstGeneration: decisions
+            .filter((d) => d.status === "accepted" && d.generation > 1)
+            .map((d) => d.candidate_id),
         };
       });
+      check(
+        "次の世代で作り直された候補が新しい candidate_id で採用される",
+        sequenceState.acceptedAfterFirstGeneration.length > 0 &&
+          sequenceState.acceptedAfterFirstGeneration.every(
+            (id) => !screenInside.some((c) => c.id === id)
+          ),
+        JSON.stringify(sequenceState)
+      );
       check(
         "次の世代で作り直された候補を採用でき、範囲の中の修正が最終HTMLに残る",
         /令和5年度/.test(sequenceFinal) &&
