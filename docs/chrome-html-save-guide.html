@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chrome でページの HTML を保存する手順</title>
+<style>
+  /* デザイントークンは goal2-app/public/verification-guide.html と同じ値（/styles.css 由来）。
+     この資料は単体で配布・印刷できるように、必要な分だけ写している。 */
+  :root {
+    color-scheme: light;
+    --bg: #eef2f7;
+    --surface: #fdfeff;
+    --surface-2: #eaf0f7;
+    --line: #d7dfe9;
+    --line-strong: #b7c3d3;
+    --text: #101a2c;
+    --muted: #56637a;
+    --primary: #2f5fdb;
+    --primary-strong: #17274d;
+    --primary-container: #dbe6fb;
+    --sun: #0f6e86;
+    --sun-container: #d6f1f7;
+    --warning: #8a5a00;
+    --warning-container: #ffe6b3;
+    --success: #1f7a43;
+    --success-container: #d8f2e2;
+    --font-sans: "Yu Gothic UI", "Hiragino Sans", "Segoe UI", "Noto Sans JP", sans-serif;
+    --font-mono: "Cascadia Code", "SF Mono", Consolas, "Yu Gothic UI", monospace;
+    --radius-sm: 12px;
+    --radius-md: 15px;
+    --shadow-soft: 0 1px 2px rgba(13, 20, 38, 0.10), 0 1px 3px rgba(13, 20, 38, 0.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.8;
+  }
+  .page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  header.title {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-soft);
+    padding: 24px 28px;
+    margin-bottom: 24px;
+  }
+  header.title h1 { margin: 0 0 8px; font-size: 25px; line-height: 1.4; color: var(--primary-strong); }
+  header.title p { margin: 0; color: var(--muted); }
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 14px 20px;
+    margin-bottom: 24px;
+  }
+  nav.toc ol { margin: 0; padding-left: 1.4em; columns: 2; column-gap: 32px; }
+  nav.toc li { break-inside: avoid; }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-soft);
+    padding: 20px 28px 24px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary-container);
+    font-size: 19px;
+    color: var(--primary-strong);
+  }
+  h3 { margin: 20px 0 8px; font-size: 16px; color: var(--primary-strong); }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px; padding-left: 1.6em; }
+  li { margin-bottom: 4px; }
+  ol.steps > li { margin-bottom: 8px; }
+  a { color: var(--primary); }
+  code, kbd {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+  kbd { border: 1px solid var(--line-strong); box-shadow: 0 1px 0 var(--line-strong); background: #fff; }
+  figure {
+    margin: 16px 0 20px;
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+  }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: #fff;
+  }
+  figure img.narrow { max-width: 640px; margin: 0 auto; }
+  figcaption { margin-top: 8px; font-size: 13.5px; color: var(--muted); }
+  figcaption b { color: var(--text); }
+  .callout {
+    border-left: 4px solid var(--sun);
+    background: var(--sun-container);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 10px 16px;
+    margin: 12px 0 14px;
+  }
+  .callout.warn { border-left-color: var(--warning); background: var(--warning-container); }
+  .callout.ok { border-left-color: var(--success); background: var(--success-container); }
+  .callout p:last-child { margin-bottom: 0; }
+  .tablewrap { overflow-x: auto; margin: 8px 0 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: top; text-align: left; }
+  th { background: var(--surface-2); white-space: nowrap; }
+  .method {
+    display: inline-block;
+    min-width: 2.2em;
+    text-align: center;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--primary-container);
+    color: var(--primary-strong);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 12px; }
+  @media print {
+    body { background: #fff; font-size: 12.5px; }
+    .page { max-width: none; padding: 0; }
+    section, header.title, nav.toc { box-shadow: none; break-inside: avoid; }
+    figure { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="title">
+  <h1>Chrome でページの HTML を保存する手順</h1>
+  <p>取込パターンの再現用に、元ページと取込後ページの HTML を手元に残すための手順書。作成日 2026-09-18。Windows の Google Chrome を前提にしている。</p>
+</header>
+
+<nav class="toc" aria-label="目次">
+  <ol>
+    <li><a href="#purpose">目的と前提</a></li>
+    <li><a href="#prep">1. 準備</a></li>
+    <li><a href="#method-a">2. 方法A（原則）: Ctrl+S で「HTML のみ」</a></li>
+    <li><a href="#method-b">3. 方法B: 「ウェブページ、完全」</a></li>
+    <li><a href="#method-c">4. 方法C: ページのソースを表示で確かめる</a></li>
+    <li><a href="#method-d">5. 方法D: 本文の一部だけを取り出す（DevTools）</a></li>
+    <li><a href="#cms">6. 取込後のページ（CMS 側）の注意</a></li>
+    <li><a href="#targets">7. 今回保存してほしいもの</a></li>
+    <li><a href="#handover">8. 渡し方</a></li>
+  </ol>
+</nav>
+
+<section id="purpose">
+  <h2>目的と前提</h2>
+  <p><code>memory/cms-migration-import-failure-patterns.md</code> の各項目を再現するための HTML を、ページが消える前に手元へ残す。対象は2種類ある。</p>
+  <ul>
+    <li>取込前の元ページ（自治体サイト）。</li>
+    <li>取込後のページ（<code>migrate.smart-lgov.jp</code> など。ログインが要る）。</li>
+  </ul>
+  <div class="callout">
+    <p>図は Linux の Chromium で撮ったため、メニューの並びは同じだが細部が異なる。アドレスバーに「保護されていない通信」と出ているのは撮影環境の都合で、実際は鍵マークになる。DevTools の表記が英語なのも同じ理由で、お手元の Chrome では日本語になる。</p>
+  </div>
+</section>
+
+<section id="prep">
+  <h2>1. 準備</h2>
+  <ul>
+    <li>元ページが VPN 経由でしか開けない場合は、先に VPN につなぐ。</li>
+    <li>取込後のページは、先に CMS にログインしておく。</li>
+    <li>保存先のフォルダを1つ決める（例: <code>ダウンロード\torikomi-samples</code>）。</li>
+    <li>ファイル名は <code>&lt;項目番号&gt;-&lt;自治体&gt;-&lt;before|after&gt;.html</code> にする。例: <code>1-1-koryo-before.html</code>、<code>1-4-wake-after.html</code>。同じページを「完全」でも保存するときは <code>-complete</code> を足す。</li>
+  </ul>
+</section>
+
+<section id="method-a">
+  <h2>2. <span class="method">A</span> 方法A（原則）: Ctrl+S で「ウェブページ、HTML のみ」</h2>
+  <ol class="steps">
+    <li>保存したいページを開く（図1）。</li>
+    <li><kbd>Ctrl</kbd>+<kbd>S</kbd> を押す。メニューから開くなら、右上の「⋮」→「保存と共有」→「名前を付けてページを保存」（図2）。ページ上で右クリック →「名前を付けて保存」でも同じ（図3）。</li>
+    <li>「名前を付けて保存」のダイアログで、「ファイルの種類」を「ウェブページ、HTML のみ」にし、ファイル名を付けて「保存」を押す（図4）。</li>
+  </ol>
+  <div class="callout ok">
+    <p>「HTML のみ」で保存されるのは、Chrome がサーバーから受け取った HTML そのものである。JavaScript が動いたあとの状態ではない。CMS 取込ツールが読むのもこの形なので、原則はこちらを使う。保存したファイルを Chrome で開くと画像や CSS が外れて見えるが、それで正しい。</p>
+  </div>
+  <figure>
+    <img src="images/chrome-save/01-page.png" alt="Chrome で遠野市のページを開いた画面。右上にメニューの「⋮」ボタンがある。">
+    <figcaption><b>図1</b>　保存したいページを開いたところ。右上の「⋮」がメニュー。</figcaption>
+  </figure>
+  <figure>
+    <img src="images/chrome-save/02-menu-save.png" alt="「⋮」メニューを開き、「保存と共有」のサブメニューに「名前を付けてページを保存 Ctrl+S」が表示されている。">
+    <figcaption><b>図2</b>　「⋮」→「保存と共有」→「名前を付けてページを保存」。ショートカットは Ctrl+S。</figcaption>
+  </figure>
+  <figure>
+    <img src="images/chrome-save/03-context-menu.png" alt="ページ上で右クリックしたメニュー。「名前を付けて保存」「ページのソースを表示」「検証」が並んでいる。">
+    <figcaption><b>図3</b>　ページ上の右クリックメニュー。「名前を付けて保存」「ページのソースを表示」「検証」をこの手順で使う。</figcaption>
+  </figure>
+  <figure>
+    <img class="narrow" src="images/chrome-save/04-save-dialog.png" alt="Windows の「名前を付けて保存」ダイアログの模式図。ファイルの種類で「ウェブページ、HTML のみ」が選ばれている。">
+    <figcaption><b>図4</b>　「ファイルの種類」で「ウェブページ、HTML のみ」を選ぶ。この図は Windows のダイアログを模式化したもので、実際の画面と細部は異なる。</figcaption>
+  </figure>
+</section>
+
+<section id="method-b">
+  <h2>3. <span class="method">B</span> 方法B: 「ウェブページ、完全」で保存する</h2>
+  <p>次の項目は、HTML だけでは足りない。</p>
+  <ul>
+    <li>1-4 CSS の背景画像（画像の指定が CSS 側にある）。</li>
+    <li>1-6 JavaScript で本文を組み立てているページ。</li>
+  </ul>
+  <p>このときは方法Aに加えて、同じダイアログで「ファイルの種類」を「ウェブページ、完全」にしてもう一度保存する。「完全」は表示中の状態（JavaScript が動いたあとの DOM）を書き出し、CSS と画像を <code>&lt;ファイル名&gt;_files</code> というフォルダに保存する。背景画像を指定している CSS もこのフォルダに入る。</p>
+  <p>渡すときは <code>.html</code> と <code>_files</code> フォルダをまとめて zip にする。</p>
+</section>
+
+<section id="method-c">
+  <h2>4. <span class="method">C</span> 方法C: 保存する前に「ページのソースを表示」で中身を確かめる</h2>
+  <p><kbd>Ctrl</kbd>+<kbd>U</kbd>（または右クリック →「ページのソースを表示」）で、Chrome が受け取った HTML をそのまま見られる（図5）。保存する前に、探している形が入っているかを <kbd>Ctrl</kbd>+<kbd>F</kbd> で確かめる。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>項目</th><th>探す文字列</th></tr></thead>
+      <tbody>
+        <tr><td>1-1 リスト内のファイルリンク</td><td><code>&lt;li&gt;</code> の中の <code>.pdf</code></td></tr>
+        <tr><td>1-2 アイコン付きファイルリンク</td><td><code>&lt;a</code> の前後の <code>&lt;img</code></td></tr>
+        <tr><td>1-3 <code>data:</code> 形式の画像</td><td><code>data:image</code></td></tr>
+        <tr><td>1-5 非対応形式</td><td><code>.odt</code>、<code>.webp</code></td></tr>
+        <tr><td>1-7 不要な属性</td><td><code>file_size</code>、<code>data-foreign-domain</code></td></tr>
+        <tr><td>2-② SVG</td><td><code>.svg</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>左上の「行を折り返す」にチェックを入れると、長い行が読みやすい。</p>
+  <figure>
+    <img src="images/chrome-save/05-view-source.png" alt="「ページのソースを表示」の画面。アドレスバーが view-source: で始まり、HTML が行番号付きで表示されている。">
+    <figcaption><b>図5</b>　「ページのソースを表示」。アドレスバーの先頭が <code>view-source:</code> になる。この画面で Ctrl+S を押すと、ソースをそのまま保存できる。</figcaption>
+  </figure>
+</section>
+
+<section id="method-d">
+  <h2>5. <span class="method">D</span> 方法D: 本文の一部だけを取り出す（DevTools）</h2>
+  <p>ページ全体ではなく、本文のブロックだけが要るときに使う。取込後のページからテンプレート部分を除いて本文だけ取るときにも使える。</p>
+  <ol class="steps">
+    <li>取り出したい本文の上で右クリック →「検証」（図3）。</li>
+    <li>DevTools が開き、「要素」（Elements）パネルでその要素が選ばれる（図6）。本文のブロック全体を取りたいときは、ツリーの上の行をクリックして親の要素へ移る。</li>
+    <li>選んだ行を右クリック →「コピー」（Copy）→「outerHTML をコピー」（Copy outerHTML）（図7）。</li>
+    <li>メモ帳などに貼り付け、<code>.html</code> の拡張子で保存する。</li>
+  </ol>
+  <div class="callout warn">
+    <p>方法Dで取れるのは表示中の DOM である。JavaScript で書き換わったあとの形なので、方法Aの HTML と一致しないことがある。どちらを渡したかをファイル名かメモに残す。</p>
+  </div>
+  <figure>
+    <img src="images/chrome-save/06-devtools-inspect.png" alt="DevTools が右側に開き、Elements パネルで body 要素の行が選ばれている。">
+    <figcaption><b>図6</b>　DevTools の「要素」パネル。選ばれている行が、右クリックした場所の要素。</figcaption>
+  </figure>
+  <figure>
+    <img src="images/chrome-save/07-devtools-copy.png" alt="Elements パネルの行を右クリックしたメニュー。Copy のサブメニューに Copy outerHTML がある。">
+    <figcaption><b>図7</b>　ツリーの行を右クリックすると出るメニュー。「コピー」→「outerHTML をコピー」でその要素の HTML がクリップボードに入る。</figcaption>
+  </figure>
+</section>
+
+<section id="cms">
+  <h2>6. 取込後のページ（CMS 側）の注意</h2>
+  <ul>
+    <li>ログインしたあとに同じ手順で保存する。<code>www03.migrate4.smart-lgov.jp</code> の <code>torikomi_test</code> はログイン画面へ飛ぶので、先にログインする。</li>
+    <li>取込後のページには CMS のテンプレート（ヘッダー、ナビゲーション、フッター）が含まれる。本文だけが要るときは方法Dで <code>free-layout-area</code> の中を取る。</li>
+    <li>顧客コードや内部の URL など、外に出せない情報が入っていないかを確かめてから共有する。</li>
+    <li>取込後の URL が 404 のもの（広陵町、神栖市、那珂川町の元ページ）は、CMS 側の取込履歴から取込時の HTML を取り出す。取り出し方は CMS の担当に確認する。</li>
+  </ul>
+</section>
+
+<section id="targets">
+  <h2>7. 今回保存してほしいもの</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>項目</th><th>ページ</th><th>方法</th><th>ファイル名の例</th></tr></thead>
+      <tbody>
+        <tr><td>1-1</td><td>広陵町 元ページ（<code>contents_detail.php?co=kak&amp;frmId=5993</code>）</td><td><span class="method">A</span></td><td><code>1-1-koryo-before.html</code></td></tr>
+        <tr><td>1-1</td><td>広陵町 取込後（6822）</td><td>404。CMS の取込履歴</td><td><code>1-1-koryo-after.html</code></td></tr>
+        <tr><td>1-4</td><td>和気町 取込後（migrate4 の 239、ログイン要）</td><td><span class="method">A</span> と <span class="method">B</span></td><td><code>1-4-wake-after.html</code>、<code>1-4-wake-after-complete.zip</code></td></tr>
+        <tr><td>1-7</td><td>神栖市 取込後（5833）</td><td>404。CMS の取込履歴</td><td><code>1-7-kamisu-after.html</code></td></tr>
+        <tr><td>1-2、1-3</td><td>那珂川町 元ページ（105、25）</td><td>404。CMS の取込履歴があれば</td><td><code>1-2-nakagawa-before.html</code>、<code>1-3-nakagawa-before.html</code></td></tr>
+        <tr><td>1-5</td><td>飯島町（webp の例）</td><td>404。同じサイトで webp を使う別のページがあれば <span class="method">A</span></td><td><code>1-5-iijima-before.html</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>このほかは、検証環境から取れている（上板町の ODT、神栖市の現在の HTML、遠野市の SVG、那珂川町の取込後2件）。</p>
+</section>
+
+<section id="handover">
+  <h2>8. 渡し方</h2>
+  <ul>
+    <li>保存したファイルは、チャットに添付するか、共有フォルダに置いてパスを知らせる。</li>
+    <li>元ページ（公開されている自治体サイト）の HTML は、内容を確認したうえでリポジトリの <code>goal2-app/test/fixtures/</code> 配下に置ける。取込後のページは内部情報を含むので、リポジトリに入れる前に判断する。</li>
+  </ul>
+</section>
+
+<footer>この資料の Markdown 版は <code>docs/chrome-html-save-guide.md</code>。図は <code>docs/images/chrome-save/</code>。</footer>
+
+</div>
+</body>
+</html>

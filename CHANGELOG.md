@@ -23,7 +23,7 @@
 
 - 背景・目的: ユーザーから共有された SMART L-Gov CMS への取込作業の現場知見（取り込めない／パーツにハマらないパターン、よくあるエラー、速度改善の要望）を記録し、課題として起票できる条件がそろっているかを検証した。再現用の HTML を集めるため、Chrome でページの HTML を保存する手順をキャプチャ付きでまとめた。
 - 主な変更内容: メモ本文（原文のまま14項目）と、着手条件の検証（発生条件・サンプル・期待結果・担当の4条件。そろっているのは5項目、残りは CMS 取込ツールの仕様か再現例が要る）。掲載URL 13件の到達性と、那珂川町の取込後ページで確認した取込後の形（アイコンだけになったファイルリンク、落ちた `data:` 画像）。手順書は Ctrl+S の「HTML のみ」「完全」、ページのソースを表示、DevTools の outerHTML コピーの4方法と、今回保存してほしいページの一覧。図は仮想ディスプレイ上の Chromium の実写6点と、Windows の保存ダイアログの模式図1点。
-- 関連ファイル: `memory/cms-migration-import-failure-patterns.md`、`docs/chrome-html-save-guide.md`、`docs/images/chrome-save/`
+- 関連ファイル: `memory/cms-migration-import-failure-patterns.md`、`docs/chrome-html-save-guide.md`、`docs/chrome-html-save-guide.html`（同じ内容の HTML 版。検証ガイドと同じデザイントークン）、`docs/images/chrome-save/`
 - 関連PR/コミット: PR #137
 
 ## 2026-09-17: PR #133レビュー指摘を課題一覧へ反映
