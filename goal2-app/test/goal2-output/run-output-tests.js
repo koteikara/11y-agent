@@ -1342,6 +1342,20 @@ async function main() {
         }))
       );
 
+    // 「全選択 → チェックした候補を一括採用」を1回押す。押せなければ false。
+    const bulkAcceptAll = async () => {
+      if ((await page.getAttribute("#bulkSelectAll", "disabled")) !== null) return false;
+      await page.evaluate(() => {
+        const all = document.getElementById("bulkSelectAll");
+        if (!all.checked) all.click();
+      });
+      await page.waitForTimeout(250);
+      if ((await page.getAttribute("#bulkAcceptButton", "disabled")) !== null) return false;
+      await page.click("#bulkAcceptButton");
+      await page.waitForTimeout(900);
+      return true;
+    };
+
     // S3から、決定のたびに候補は作業中HTMLから作り直される(設計書 3.5)。対象の要素が
     // 差し替わった候補は取り下げられ、作り直された要素に新しい candidate_id の候補が出る。
     // そのため「先に控えた candidate_id を順に採用する」形は使えない。採用のたびに候補一覧を
@@ -2180,6 +2194,56 @@ async function main() {
         afterRejectSnapshot.some((c) => c.id === rejectTarget.id && c.status === "rejected") &&
           !afterRejectSnapshot.some((c) => !c.status && c.rule_id === "text.unit-notation"),
         JSON.stringify(afterRejectSnapshot)
+      );
+    }
+
+    // 20-l. merge-following-note が消す側の段落(note_node_id)とその子孫も、差し替えの範囲に
+    //     入れる(3.8)。入れないと、統合の決定が消した段落の中の候補が同じ世代に採用され、
+    //     対象を失う(orphaned)。画面では次の世代の候補で直せるが、GOAL1 の単一パスでは
+    //     全角が残ったまま「採用済み」の記録だけが残る。
+    const NOTE_RANGE = `<p>申請（※）が必要です。</p><p>※<span>令和５年度</span>の書類</p>`;
+    await analyzeOnScreen(NOTE_RANGE);
+    const noteBefore = await candidateSnapshot();
+    const mergeCandidate = noteBefore.find((c) => c.patch_type === "merge-following-note");
+    const insideNote = noteBefore.find(
+      (c) => c.rule_id === "text.alphanumeric" && c.id !== mergeCandidate?.id
+    );
+    check(
+      "統合の候補と、消される段落の中の候補が同じ世代に並ぶ入力である",
+      Boolean(mergeCandidate) && Boolean(insideNote),
+      JSON.stringify(noteBefore)
+    );
+    if (mergeCandidate && insideNote) {
+      await bulkAcceptAll();
+      const noteAfterFirst = await page.evaluate(() => {
+        const { decisions, candidates } = window.goal2Engine.decisionLog.screenState();
+        return {
+          decisions: decisions.map((d) => ({ id: d.candidate_id, st: d.status, orphaned: d.orphaned })),
+          candidates: candidates.map((c) => ({ id: c.candidate_id, rule: c.rule_id, st: c.decision.status })),
+        };
+      });
+      const insideDecision = noteAfterFirst.decisions.find((d) => d.id === insideNote.id);
+      check(
+        "1回目の一括採用で、消される段落の中の候補は採用されない",
+        noteAfterFirst.decisions.some((d) => d.id === mergeCandidate.id && d.st === "accepted") &&
+          (!insideDecision || insideDecision.st === "withdrawn") &&
+          !noteAfterFirst.decisions.some((d) => d.orphaned),
+        JSON.stringify(noteAfterFirst)
+      );
+      const returnedInside = noteAfterFirst.candidates.filter(
+        (c) => !c.st && c.rule === "text.alphanumeric"
+      );
+      check(
+        "同じ修正が、統合後の要素に対する新しい candidate_id の候補として出直す",
+        returnedInside.length === 1 && returnedInside[0].id !== insideNote.id,
+        JSON.stringify(noteAfterFirst.candidates)
+      );
+      await bulkAcceptAll();
+      const noteFinal = await readFinalHtml();
+      check(
+        "2回目の一括採用で、統合後の半角化が最終HTMLに残る",
+        /令和5年度/.test(noteFinal) && !/令和５年度/.test(noteFinal) && /申請（令和5年度の書類）/.test(noteFinal),
+        noteFinal
       );
     }
 

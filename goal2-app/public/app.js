@@ -8153,7 +8153,14 @@
         return true;
       }
       const patch = candidate.proposal.patch;
+      // merge-following-note は note_node_id の段落を消す。消される段落とその子孫も範囲に
+      // 入れないと、その中の候補が同じ世代に採用されて対象を失う(実データの形:
+      // <p>申請（※）が必要です。</p><p>※<span>令和５年度</span>の書類</p> で、統合の決定が
+      // n0002 を消すため n0003 の半角化が orphaned になっていた)。
       const nodeIds = [nodeId, ...(patch?.node_ids || [])];
+      if (patch?.note_node_id) {
+        nodeIds.push(patch.note_node_id);
+      }
       nodeIds.forEach((id) => claimedNodes.add(id));
       if (replacesSubtree(candidate)) {
         nodeIds.forEach((id) => {
