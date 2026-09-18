@@ -2124,6 +2124,65 @@ async function main() {
       );
     }
 
+    // 20-k. 同じ置換前文字列が同じ要素に2回以上あるとき、1件採用しても残りの出現が消えない(3.6)。
+    //     replace-text は要素の中の最初の一致だけを直すので、採用後も2つ目の「22m」は残る。
+    //     再導出はこれを同じ指紋の候補として出すが、決定済みプールに消費されると一覧から
+    //     消えてしまう。当て終わった文字の置換は fresh を消費しない、という規則で救う。
+    const REPEATED_REPLACEMENT = `<p>長さ22m、幅22mです。</p>`;
+    await analyzeOnScreen(REPEATED_REPLACEMENT);
+    const repeatedBefore = await candidateSnapshot();
+    const repeatedFirst = repeatedBefore.find((c) => c.rule_id === "text.unit-notation");
+    check(
+      "同じ置換前文字列が2回出る入力で、生成時の候補は1件にまとまる",
+      Boolean(repeatedFirst) &&
+        repeatedBefore.filter((c) => c.rule_id === "text.unit-notation").length === 1,
+      JSON.stringify(repeatedBefore)
+    );
+    if (repeatedFirst) {
+      await acceptCandidateById(repeatedFirst.id);
+      const repeatedAfter = await candidateSnapshot();
+      const returned = repeatedAfter.filter((c) => !c.status && c.rule_id === "text.unit-notation");
+      check(
+        "1件採用したあと、残りの出現が新しい candidate_id で未処理として出る",
+        returned.length === 1 &&
+          returned[0].id !== repeatedFirst.id &&
+          returned[0].node_id === repeatedFirst.node_id &&
+          repeatedAfter.some((c) => c.id === repeatedFirst.id && c.status === "accepted"),
+        JSON.stringify(repeatedAfter)
+      );
+      if (returned.length === 1) {
+        await acceptCandidateById(returned[0].id);
+        const repeatedFinal = await readFinalHtml();
+        check(
+          "2件目も採用すると、両方の出現が言い換えられる",
+          /長さ22メートル、幅22メートル/.test(repeatedFinal) && !/22m/.test(repeatedFinal),
+          repeatedFinal
+        );
+      }
+    }
+
+    // 20-k-2. 却下した候補は再導出でよみがえらない(既存の規則)。上と同じ入力で確かめる。
+    await analyzeOnScreen(REPEATED_REPLACEMENT);
+    const rejectTarget = (await candidateSnapshot()).find((c) => c.rule_id === "text.unit-notation");
+    if (rejectTarget) {
+      await page.evaluate((id) => {
+        const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+          (b.getAttribute("aria-label") || "").includes(id)
+        );
+        button?.click();
+      }, rejectTarget.id);
+      await page.waitForTimeout(400);
+      await page.click("#rejectButton");
+      await page.waitForTimeout(800);
+      const afterRejectSnapshot = await candidateSnapshot();
+      check(
+        "却下した文字の置換は再導出でよみがえらない",
+        afterRejectSnapshot.some((c) => c.id === rejectTarget.id && c.status === "rejected") &&
+          !afterRejectSnapshot.some((c) => !c.status && c.rule_id === "text.unit-notation"),
+        JSON.stringify(afterRejectSnapshot)
+      );
+    }
+
     // 20-j. conflicted を新しく作る経路が無いこと(3.8・3.14)。値は過去の証跡CSVとの互換のため
     //     残すが、S3以降は誰も書き込まない。ソースを読んで代入の形が無いことを確かめる。
     const appSource = require("fs").readFileSync(path.join(rootDir, "public/app.js"), "utf8");

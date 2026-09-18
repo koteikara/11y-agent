@@ -7801,9 +7801,38 @@
       }
       return pools.get(fingerprint);
     };
+    // 決定済みの候補のうち、「当て終わった文字の置換」は fresh を消費しない(3.6)。
+    //
+    // replace-text は要素の中の最初の一致だけを直す。同じ文字列が同じ要素に2回以上あると、
+    // 1件採用したあとも残りの出現がそのまま残り、再導出で同じ指紋の候補がもう一度出る
+    // (実データの形: <p>長さ22m、幅22mです。</p>)。この候補は「同じ問題の再出現」ではなく
+    // 「同じ文字列の別の出現」なので、決定済みとして捨ててはいけない。
+    //
+    // 却下・要確認は今までどおり消費する。作業者が「直さない」と決めた指摘が、再導出のたびに
+    // 未処理でよみがえるのを防ぐためである。対象を失った決定(orphaned)も消費する。その置換は
+    // 当たっていないので、fresh に出るのは同じ問題の再出現である。
+    const latestByCandidateId = new Map(
+      latestDecisions(decisions).map((decision) => [decision.candidate_id, decision])
+    );
+    const appliedTextReplacement = (candidate) => {
+      const decision = latestByCandidateId.get(candidate.candidate_id);
+      return Boolean(
+        decision &&
+          ["accepted", "edited"].includes(decision.status) &&
+          decision.op?.type === "replace-text" &&
+          !decision.orphaned
+      );
+    };
     previousList.forEach((candidate) => {
       const pool = poolFor(fingerprintOf(candidate));
-      (candidate.decision?.status ? pool.decided : pool.undecided).push(candidate);
+      if (!candidate.decision?.status) {
+        pool.undecided.push(candidate);
+        return;
+      }
+      if (appliedTextReplacement(candidate)) {
+        return;
+      }
+      pool.decided.push(candidate);
     });
 
     const matched = new Map();
