@@ -168,6 +168,17 @@ candidate.proposal.patch = { type: "rebuild", builder: "dataTableSemantics", par
 - これで `replay()` は候補配列を参照しなくなり、`replay(sourceHtml, decisions)` の2引数になった。旧実装 `rebuildWorkingHtmlFor()` と `decisionLog.legacyRebuild` は削除した。
 - `candidate.fingerprint`、`candidate.generation`、`candidate.origin`、`candidate.target.content_hash`、`state.generation` はS2でも足していない。S3で入れる。
 
+**S3での段階差（実装済み）**。
+
+- `candidate.fingerprint`、`candidate.generation`、`candidate.origin`、`candidate.target.content_hash`、`candidate.exclusive_group`、`state.generation`、`state.nextCandidateSeq` を入れた。照合（3.6）と排他グループ（3.8）が読む。
+- `order` を決定ログから落とした。当て順が `seq` になったためである（3.7）。
+- **`state.decisionGeneration` と `state.generation` は統合しない**。意味が違い、値も一致しない。
+  - `state.decisionGeneration`（決定の一かたまりの番号）は決定ログの各行が `generation` として持ち、**リプレイが当て順を決めるために読む**。`decide()` 1回、一括採用1回がそれぞれ1つ。
+  - `state.generation`（再導出の回数）は**候補が生まれた世代**を `candidate.generation` に記録するために使う。
+  - 一致しない経路が2つある。(1) GOAL1 の `goal2Engine.autoAcceptSafe()` は S3 では単一パスで再導出を挟まないので、決定の世代は進むが再導出の回数は進まない（ループ化は S5）。(2) `decisionsFromCandidates()`（`buildFinalHtml()` が使う）は全件を `generation: 1` に置く、画面の state を持たない経路である。
+- 指紋は `rule_id|method_label|node_id` だけでは一意にならない。1つの段落に「全　長→全長」と「高　さ→高さ」の `text.spaced-characters` が2件、「22m」「17.5m」「4m」の `text.unit-notation` が3件というように、同じルールが同じ要素の別々の箇所に出る。指紋が重なると、1件採用しただけで残りが「決定済みの指紋」と見なされて候補一覧から消える。そこで **`replace-text` のパッチに限り、置換前の文字列を指紋に足す**。置換「後」を入れないのは、AIの補完が置換後の文言を書き換える候補（`set-text` のリンク文言、`set-attribute` の `alt` など）で指紋が変わり、世代をまたいだ引き継ぎが切れるためである。`replace-text` はAIの補完が触らないパッチ型なので、置換前の文字列は世代をまたいで安定する。
+- `candidate.enriched` を足した。AIの補完（と、作業者が投入したAI画像名）が候補の内容を書き換えたかどうかの印で、照合の引き継ぎ範囲を決める（3.6）。
+
 ### 3.4 ノード識別子の派生
 
 差し替えで生まれた要素にもIDが要る。
@@ -206,6 +217,14 @@ IDの書式に依存するコードは無い（`grep` で確認済み）。
 1件ずつ再導出する方式にすると、候補数×再導出の時間がかかる。
 再導出の時間は、遠野市の最も長いページで計測し、300ミリ秒を超えるなら影響範囲を部分木に絞る最適化を次段で検討する。
 
+**S3での段階差（実装済み）**。
+
+- `rederiveCandidates()` を `decide()`、`bulkAcceptSelected()`、`bulkAcceptReviewFree()`、`applyPendingAutoAcceptSafe()` の後に1回走らせる。**GOAL1 の `goal2Engine.autoAcceptSafe()` は単一パスのままで、再導出を入れない**（ループ化は S5）。
+- 作業中HTMLの読み直しは `parseFragment()` ではなく専用の `parseWorkingForRederivation()` を通す。作業中HTMLには派生ID（`nX.s{seq}.{k}`）付きの要素があるので、既存の `data-goal2-node-id` を振り直さない。IDを持たない要素（`insert-caption` が足した `<caption>` など）にだけ、既存の `n####` と衝突しない番号を振り、**振った結果を `state.workingHtml` へ書き戻す**。書き戻さないと、画面の「修正後」欄が読む `parseWorkingFragment()` に同じIDが無く、候補が対象を見失う。
+- miChecker モードでは、初回の `runAnalysis()` と同じ絞り込み（`isMicheckerRelevantRule()`）を再導出でもかける。かけないと、決定のたびに非対応のルールが候補一覧へ紛れ込む。
+- 注意（`state.notices`）は再導出で作り直さない。決定の対象ではなく、証跡の列も S4 で扱うためである。
+- 選択中の候補が一覧から消えていれば、次の未処理候補へ移す。一括選択（`bulkSelectedCandidateIds`）は `pruneBulkSelection()` で整理し、選択中の手段（`selectedFixMethodId`）と簡易編集の開閉も、対象が消えていれば閉じる。
+
 ### 3.6 照合の規則
 
 `reconcile(previous, fresh, decisions)` は次の順で決める。
@@ -218,6 +237,20 @@ IDの書式に依存するコードは無い（`grep` で確認済み）。
 
 指紋に `content_hash` を含めない理由は、対象の中身が別の修正で変わっても「同じ箇所への同じルールの指摘」は同じ問題だからである。
 中身が変わったことで指摘が消えるなら `fresh` に現れないので、3で取り下げになる。
+
+**S3での段階差（実装済み）**。
+
+- `reconcile(previous, fresh, decisions)` を実装した。上の1〜5に加えて、3.8 の排他グループによる除外（ログに `accepted`／`edited` の決定がある `node_id`＋グループに属する `fresh` の候補は一覧に載せない）を行う。
+- 引き継ぐのは `candidate_id`、`generation`、`origin`、`decision`（ログの写し）。**`patch`・`after_html`・`before_html`・`target.snippet`・`target.content_hash` は `fresh` の値を使う**。これが S1 のレビューで出た「リンク文言の書き戻しが元の全角の文言で上書きする」問題と、3.13 の sg04015（`replace-paragraph-sequence` の固定の変換後HTMLが同じ範囲の他の修正を上書きする）を解消する。
+- **AIの補完が書き換えた候補（`candidate.enriched`）は、`issue` と `proposal` を前の候補から引き継ぐ**（`before_html` だけは `fresh` の値）。本書の1は「`issue.reason` と `proposal.ai_draft` を引き継ぐ」と書いていたが、実装ではAIの結果が `proposal.patch` の値（`alt`、リンク文言、`scope`、`lang`、キャプション）と `proposal.after_html` にも入る。ここを `fresh` で上書きすると、決定1件ごとにAIの下書きが機械的な下書きへ戻ってしまう。再導出はAIを呼び直さない（3.9）ので、前の候補の値が唯一の手がかりである。
+  - 印が立つのは、`runAnalysis()` が補完の前後で候補の内容（`issue.message`、`issue.reason`、`proposal.after_html`、`proposal.patch`、`proposal.confidence`、`proposal.requires_human_review`、`proposal.ai_draft`）を比べて差があった候補と、補完が足した `origin: "llm"` の候補、それに作業者が「AI画像名を修正後HTMLへ投入」した候補である。
+  - 残る制限。AIが書き換えた候補の対象が別の修正で変わっても、`proposal.after_html` は生成時点のままである。`patch` を持つ候補では出力に影響しない（リプレイは `op`＝パッチを当てる）が、`patch` を持たないAI候補では古い変換後HTMLが当たる。3.9 の「AIで再確認」ボタン（S4以降で判断）が入るまでの制限である。
+- **指紋が重なったときの引き当て**は「消費する」形にした。指紋ごとに前の候補を未処理・決定済みの2列に並べ、`fresh` の1件が引き当てられるのは1件までとする。未処理を先に引き当て、無ければ決定済みを引き当てて `fresh` の候補を落とす（決定済みとして一覧に残っているので二重に載せない）。件数の帳尻が合うので、指紋が万一重なっても候補が消えない。
+- **当て終わった文字の置換は `fresh` を消費しない**。`replace-text` は要素の中の最初の一致だけを直す。同じ文字列が同じ要素に2回以上あると、1件採用したあとも残りの出現がそのまま残り、再導出で同じ指紋の候補がもう一度出る（`<p>長さ22m、幅22mです。</p>`）。これは「同じ問題の再出現」ではなく「同じ文字列の別の出現」なので、決定済みとして捨ててはいけない。
+  - 消費しないのは、候補ごとの最新の決定が `accepted`／`edited` で、操作が `replace-text` で、`orphaned` でないものである。当て終わった置換はその出現を消しているので、同じ置換前の文字列が同じ要素に残っているなら別の出現である。
+  - 却下・要確認は今までどおり消費する。作業者が「直さない」と決めた指摘が、再導出のたびに未処理でよみがえるのを防ぐためである。対象を失った決定（`orphaned`）も消費する。その置換は当たっていないので、`fresh` に出るのは同じ問題の再出現である。
+  - 「1つの候補で要素の中の同じ文字列を全部置換する」案は採らない。候補の意味と GOAL1 の出力が変わる。S5 でループ化すれば、この照合の規則だけで全出現が世代を追って直る。
+- **候補一覧の並び**は、`fresh` の並びを軸に、`fresh` に現れなかった生き残り（決定済み・`origin: "llm"`）を「前の一覧で直前にあった候補の位置」へ寄せる。決定のたびに一覧が大きく動かないようにするためである。
 
 ### 3.7 リプレイと rebuild 操作
 
@@ -318,6 +351,14 @@ S1では、上の2が書く「`seq` 順に走査し、世代の境目で区切�
 
 **`orphaned` の意味**。畳み込みが無くなったので、S2の `orphaned` は本来の意味、つまり「その決定の操作が当たらなかった」になった。ただし `patch_mode` が `"none"` の候補（通知だけの候補）も、対象が見つからなければ印が立つ。HTMLは元から変えない候補なので「修正が失われた」わけではない。画面に出すS4で、この区別を付けるか判断する。
 
+**S3での段階差（実装済み）**。
+
+- 当て順を `seq` 順にした。`replay()` は決定を**世代ごとにまとめ**、世代の中を S2 の2段（第1段: `rebuild` 以外を `seq` 順に並べ、同じ `node_id` を1組にして要素を残すパッチを先。第2段: `rebuild` を内側から）で当てる。世代の順は「その世代で最小の `seq`」の順にする（世代番号そのもので並べないのは、入れ子の一括採用のように後から始まった世代に大きい番号が付きうるためである）。
+- `order` をログから落とした。`decisionsFromCandidates()`（GOAL1 の `buildFinalHtml()`）は候補配列の並び順で `seq` を振り全件を1世代に置くので、当て順は S2 と同じになり、GOAL1 の出力は変わらない。
+- `seq` を当て順にできるようになったのは、候補が「そのときの作業中HTML」から作り直されるようになったためである。S1・S2 では、候補の `after_html` が元のHTMLから固定で作られていたので、採用順で当てると出力が採用順で変わった。
+- **決定ログは「操作の列」であって「集合」ではなくなった**。派生ID `nX.s{seq}.{k}` はその要素を生んだ決定の `seq` を含むので、再導出で作り直された要素への決定がログに入ると、`seq` を振り直した時点で後の決定が対象を見失う。並べ替えても同じ出力になる、という性質は、派生IDを指す決定を含まないログに限られる。回帰テストもその線で分けている。
+- 同じ世代の中でも、**同じ `node_id` への複数の決定は順序で結果が変わりうる**（第1段が「要素を残すパッチを先」と決めているのはそのためである）。1世代の中のこの順は候補配列の並び（＝一括採用が積む順）で決まり、作業者が触れるものではない。世代をまたげば、2件目は再導出で作り直されるので順序によらず正しくなる。
+
 ### 3.8 調停ロジックの廃止と排他グループ
 
 `app.js` に排他グループの宣言を置く。
@@ -343,6 +384,57 @@ const EXCLUSIVE_GROUPS = {
 `bgcolor` の表で「確認不要をまとめて採用」を押すと、`text.background-color` が採用される。
 再導出すると、表からは `bgcolor` が消えているので背景色候補は出ず、表の構造候補3件は同じ指紋で残る。
 3件は排他グループ `table-structure` に属するが、ログにこのグループの決定は無いので、引き続き選べる。
+
+**同じ世代の中の同一箇所の扱い**。
+
+調停を外すと、一括採用や GOAL1 の単一パスで、同じ `node_id` に要素ごと差し替える候補が2件以上同時に採用される経路が残る（例: 同じ `<p>` への `text.note-symbol` と別の差し替え候補が両方とも確認不要）。
+リプレイは同じ世代の中では後の1件が先の1件の結果を上書きするので、出力が採用順で決まってしまう。
+画面の1件ずつの採用では問題にならない。
+決定のたびに再導出が走り、2件目は次の世代で作業中HTMLから作り直されるためである。
+
+そこで、**一括採用と GOAL1 の単一パスでは、1世代に同じ `node_id` の要素ごと差し替えは1件まで**とし、2件目以降は採用せず未処理のまま残す。
+作業者は次の世代で作り直された候補を採用できる（GOAL1 は S5 のループ化で再導出に置き換える）。
+`rebuild` はリプレイの第2段で内側から当たり、ビルダーが現在の要素を読むので、この制限の対象外である。
+`patch_mode` が `"none"` の候補もHTMLを変えないので対象外である。
+
+**この規則は「同じ `node_id`」では足りない（S3 の実装で広げた）**。
+佐賀市の実ページ51件の候補を全件走査したところ、「同じ `node_id` に要素ごと差し替えの確認不要候補が2件」という形は1件も無かった。
+実際に出るのは 3.13 の sg04015 の形である。
+
+- `n0004` の `text.list`（`replace-paragraph-sequence`）は `requires_human_review` が `false` なので「確認不要をまとめて採用」に入る。この候補は `n0004`〜`n0018` の段落をまとめて差し替える。
+- 同じ一括採用で採用される `n0015` の `text.alphanumeric`（「令和５年度」→「令和5年度」）は、その範囲の中にある。
+- 差し替える候補の変換後HTMLは、その世代では作り直されていないので元のHTML由来である。先に当たれば上書きされ、後に当たれば対象が見つからない。どちらにしても修正は消える。
+
+そこで規則を次まで広げる。
+
+> 1世代の中で、**固定の変換後HTMLで差し替わる範囲**（その要素と子孫。`replace-paragraph-sequence` ならまとめられる段落すべてとその子孫）にある候補は、要素を残すパッチであっても採用しない。
+> 次の世代で、作業中HTMLから作り直された候補を採用する。
+
+範囲を主張するのは、変換後HTMLで差し替えるパッチ型だけにする。
+`replace-html`、`merge-following-note`、`replace-paragraph-sequence`、`remove-element` と、パッチを持たない候補（操作は `replace-html`）である。
+`unwrap-element` と `rename-element` は入れない。
+どちらも子要素と `data-goal2-node-id` をそのまま残すので、範囲の中の修正は当たる。
+`rebuild` も入れない（上記の理由）。
+
+また、「同じ `node_id` への2件目以降」の方は、要素ごと差し替える候補にだけ適用する。
+リプレイの第1段が同じ `node_id` の中で要素を残すパッチを先に当てるため、`<p><tt>…</tt></p>` で装飾タグの解除（`unwrap-element`）と単位の言い換え（`replace-text`）が同居していても、両方とも最終HTMLに残る。
+
+**S3での段階差（実装済み）**。
+
+- `EXCLUSIVE_GROUPS = { "table-structure": tableStructuralRuleIds }` を置き、`exclusiveGroupFor()` で候補と決定ログの `exclusive_group` を導く。`table-structure` は「対象が表であること」まで含めて判定する（`image.image-text-layout` は `figure` / `p` / `div` も対象にするため）。`isTableStructuralCandidate()` はこの関数の薄い包みになった。
+- 候補一覧の「同じ箇所の代替手段 N件中」と、代替手段のグループ表示（`renderCandidates()` のバケット分け）、手段の選択（`activeFixMethodCandidate()`）を、`isElementReplacingCandidate()` ではなく排他グループで数えるようにした。
+- `resolveSupersededTableCandidates()`、`resolveAlternativeMethodCandidates()`、`survivesInAncestorOutput()`、`isDescendantOfCandidateTarget()`、`isTableRelatedCandidate()`、`tableRelatedRuleIds` を削除した。`conflicted` を新しく作る経路は無い（`grep` で確認。残るのは状態ラベルの定義とCSS、コメントだけ）。
+- 上の規則を `createGenerationReplacementGuard()` として、`bulkAcceptSelected()`、`bulkAcceptReviewFree()`、`applyPendingAutoAcceptSafe()`、`goal2Engine.autoAcceptSafe()` に入れた。範囲の判定に作業中HTMLのDOMを使うため、`runAnalysis()` が `state.sourceHtml` と `state.workingHtml` を候補の元のHTMLに揃えるようにした（ヘッドレス経路には画面の `analyze()` のような設定箇所が無く、前のページのHTMLが残っていた）。
+- **「この箇所の構造は決定済み」は、候補ごとの最新の決定だけを見る**。リプレイが候補ごとに `seq` が最大の1件だけを当てる（3.7）のと同じ見方にする。ログの全行を見ると、構造候補を採用したあとに却下へ決め直しても採用の行が残り、リプレイで元へ戻った表に対して構造候補が二度と候補一覧へ出なくなる。絞り込みは `latestDecisions()` に切り出し、`replay()` と共有する。
+- **判定は2段で、候補配列の並び順には依存しない**（`planGenerationAcceptance()`）。
+  - 第1段: 同じ `node_id` への要素ごと差し替えは1件まで。ここだけは候補配列の順で先に来た方が残る（同じ箇所の代替手段どうしの勝ち負けを変えないため）。
+  - 第2段: 第1段を通った「固定の変換後HTMLで差し替える候補」が範囲を主張し、範囲の中の候補を次の世代へ回す。第1段の結果から作るので並び順に依存しない。
+  - 1段で回すと、内容修正が候補配列で先に並ぶ組で内容修正を採用したあとに差し替えも採用してしまい、差し替えの固定の変換後HTMLが先の修正を上書きする（`<p>令和５年度の申請（※）が必要です。</p><p>※書類を添付</p>` で半角化が「令和５年度」に戻る）。
+  - 「範囲を主張する候補を先に通す」並べ替えでは直らない。同じ `node_id` に `html-structure.heading-order`（`rename-element`、範囲を主張しない）と `html-structure.heading-required`（変換後HTMLで差し替える）が並ぶ実ページ sg04009 で第1段の勝ち負けが入れ替わり、GOAL1 の出力が変わる。
+  - 範囲を主張する候補どうしが入れ子の場合は外側が残る。内側は次の世代で、外側の変換結果から作り直された候補を採用する。
+  - 逆向き（先に採用した内容修正の対象を記録し、後から来た差し替えを次の世代へ回す）は採らない。並び順が逆の組では内容修正がいま上書きされて消えているので、内容修正を次の世代へ回しても最終HTMLは変わらないが、差し替えを回すと構造の修正が単一パスから抜けて GOAL1 の出力が変わる。
+- 範囲には `merge-following-note` の `note_node_id`（消される段落）とその子孫も含める。含めないと、その中の候補が同じ世代に採用されて対象を失う（`<p>申請（※）が必要です。</p><p>※<span>令和５年度</span>の書類</p>`）。
+- **挙動の変更**。S2 まで `conflicted`（決定済み）になっていた「同じ箇所の採用されなかった代替手段」は、S3 では未処理のまま残る。GOAL1 の証跡では、その分だけ `unresolved` が増え `complete` が偽になりうる。S5 で `autoAcceptSafe()` をループ化すれば、これらは再導出で取り下げられるか、作業者が選ぶべき手段として正しく残る。
 
 ### 3.9 AIによる補完
 
@@ -418,17 +510,53 @@ GOAL1と同じ決定の集合（`autoAcceptSafe()`）でも、佐賀市の実ペ
 下2件の「先祖にも同じ要素にも採用済みの候補が無い」は誤りで、S1のレビューで疑われていたとおり `replace-paragraph-sequence` が他の `node_id` を消していた。
 S3で直すのは sg04015 の1件と、その一般形である「固定の `after_html` を持つ候補が、他の修正が当たった範囲を元のHTMLで上書きする」問題である。
 
-**S3 再導出と照合**。
+**S3 再導出と照合**。実装済み（PR #135）。
 `reconcile()` を実装し、決定の後に3.5の流れを入れる。
 `EXCLUSIVE_GROUPS` を導入し、調停ロジック3関数を削除する。
 検証: 指摘3の再現ケース（4.1）が通る。`conflicted` を新規に作る経路が無いことを `grep` で確認。
+
+S3で決めた段階差は 3.3・3.5・3.6・3.7・3.8 に書いた。要点は次のとおり。
+
+- 指紋 `rule_id|method_label|node_id` は一意にならないので、`replace-text` のときは置換前の文字列まで含める（3.3）。
+- AIの補完が書き換えた候補は `issue` と `proposal` を引き継ぐ。本書の「`issue.reason` と `proposal.ai_draft`」より広い（3.6）。
+- `state.decisionGeneration`（決定の一かたまり）と `state.generation`（再導出の回数）は統合しない（3.3）。
+- 決定ログは操作の列であって集合ではない。派生IDを指す決定を含むログは並べ替えられない（3.7）。
+- 一括採用と GOAL1 では「1世代に同じ `node_id` の要素ごと差し替えは1件まで」（3.8）。
+- S2 で `conflicted` になっていた代替手段は、S3 では未処理のまま残る（3.8）。
+- 排他グループの判定は各候補の最新の決定だけを見る。決め直しに追随させるためである（3.8、レビュー1回目の指摘）。
+
+S3で確かめた S2 からの持ち越し。
+
+| 項目 | S3の結果 |
+| --- | --- |
+| `edited` の制限（3.7のS2） | 解消。構造候補を編集したあとでも、編集後のHTMLに対する内容修正候補が再導出で出るので採用できる |
+| 入れ子の表のID引き継ぎ廃止による画面側の制限（3.4のS2） | 解消。外側を解体したあと、解体後に残った内側の表に派生IDの新しい候補が出る |
+| sg04015（`replace-paragraph-sequence` が同じ範囲の修正を上書きする） | 解消。ただし再導出だけでは足りず、3.8 の規則を「差し替わる範囲」まで広げる必要があった（同じ世代で両方採用されるため）。画面の経路（「確認不要をまとめて採用」を押し直す）で「令和5年度」が最終HTMLに残ることを回帰テストで確認 |
+| 指摘3（4.1） | 背景色を採用しても表の構造候補3件は同じ指紋で残り、引き続き選べる |
+
+S3で新しく分かった制限（S4以降の判断に回す）。
+
+- `tableAsList`（箇条書きに変換する）は、ビルダーがセルの文言を作るときに全角空白を半角へ直す。そのため変換後HTMLでは `text.spaced-characters` の条件（全角空白・NBSP・半角空白2つ以上）を満たさず、この候補が作り直されない。構造候補を先に採用すると文字間空白が残る（内容修正を先に採用すれば残らない）。ビルダー側の問題で、S3の範囲では直さない。
+- 取り下げた候補は候補一覧から消えるので、証跡（3.11、S4）にも出なくなる。S4 の申し送りに書いた。
+- 候補は「現在の文書への操作」なので、提示される手段そのものが決定によって変わる。入れ子の表で内側をデータ表に変換すると、外側の「表をやめて見出し・段落へ解体」が `planTableTreatments()` から出なくなる（実測）。これは設計どおりだが、「採用順を変えても同じ最終HTMLになる」という S2 までの回帰テストは成り立たなくなる。
+- 排他グループに属さない「同じ箇所の代替手段」（`html-structure.heading-required` と `text.list` など）と、`text.partial-date` の誤検出は、S5 の申し送りに書いた。
 
 **S4 画面と証跡**。
 バッジ、取り下げの表示、証跡の列追加。
 検証: 証跡CSVの既存列が変わっていないことをファイル比較で確認。
 
+S3からの申し送り。
+
+- 取り下げた候補は候補一覧から消えるので、いまは証跡にも出ない。3.11 の `withdrawn_by_seq` の列を足すときに、決定ログから拾って並べる。
+- `orphaned` の表示では、`patch_mode` が `"none"` の通知候補（HTMLを元から変えない）と、本当に修正が当たらなかった決定を分ける（3.7のS2）。構造候補を決め直すと `seq` が変わるため、その中の派生IDを対象にした決定が `orphaned` になる。これも「修正が失われた」ではない。
+
 **S5 GOAL1のループ化**。
 検証: `goal1.html` のサンプル一括処理で、採用件数が S5 前以上であること。
+
+S3からの申し送り。
+
+- **段落を作り替える候補の排他グループ**。3.8 の「排他グループに属さない候補は独立に採用できる」により、`html-structure.heading-required` と `text.list` のように同じ段落を別の形へ作り替える候補が、S2では代替手段（`conflicted`）だったのに S3 では両方採用できる（実ページ sg04003 で `<h3>手数料 1通300円</h3>` が `<ul><li><strong>手数料 1通300円</strong></li></ul>` になる）。`html-structure.heading-required`、`text.list` の `replace-with-list`、`replace-paragraph-sequence`、`merge-following-note` の排他グループを足し、あわせて `replace-with-list` を `ELEMENT_REPLACING_PATCH_TYPES` と `SUBTREE_REPLACING_PATCH_TYPES` に入れる。S5と同時に行う理由は、いま入れると GOAL1 の単一パスで sg02562 の `n0141`（`text.list` と半角化）のような組の半角化が次の世代へ回り、GOAL1 の出力が変わるためである。ループ化と同時なら次の世代が回る。
+- **`text.partial-date` の誤検出**。分数の「1/2」を「1月2日」と判定する（実ページ sg02548 の「退職所得の金額=（退職金等の額-退職所得控除額）×1/2」）。S2 までは同じ範囲の別の修正で対象を失って当たっていなかったが、S3 の再導出で当たるようになった。ルール側の別件として起票済み（issue #136）で、構造変更1では触らない。
 
 ### 3.14 確定済みの判断（2026-09-15、ユーザー確認済み）
 

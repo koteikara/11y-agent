@@ -19,6 +19,22 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-18: 構造変更1 S3（再導出と照合、排他グループ）
+
+- 背景・目的: 候補の変換後HTMLが元のHTMLから固定で作られ、決定後に作り直されないために、依存する候補が古いままになる問題（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 2章の問題1・2）を、決定のたびの再導出で解消する。調停ロジックによる後追いをやめ、排他グループの宣言に置き換える。
+- 主な変更内容:
+  - 決定の一かたまりごとに1回、リプレイ→候補の作り直し→照合を走らせる（`rederiveCandidates()`）。AIの補完は呼ばない。
+  - `reconcile()` で指紋により前の候補と突き合わせ、`candidate_id`・決定・AIの補完の結果を引き継ぐ。`patch`・`after_html`・`before_html`・`target.snippet` は作業中HTMLから作り直した値を使う。対象が無くなった未処理の候補は `withdrawn` としてログへ積む。
+  - `EXCLUSIVE_GROUPS` を導入し、調停ロジック5関数（`resolveSupersededTableCandidates`・`resolveAlternativeMethodCandidates`・`survivesInAncestorOutput`・`isDescendantOfCandidateTarget`・`isTableRelatedCandidate`）を削除した。`conflicted` を新しく作る経路は無い。
+  - リプレイの当て順を `seq` 順にし、決定を世代ごとにまとめるようにした。`order` はログから落とした。
+  - 一括採用とGOAL1では「固定の変換後HTMLで差し替わる範囲の中にある候補は、その世代では採用しない」を守る。sg04015 で「令和５年度」の半角化が消えていた原因への対応。
+  - 指紋 `rule_id|method_label|node_id` は一意にならないため、`replace-text` では置換前の文字列まで含めるようにした。
+- 挙動の変更: S2まで `conflicted`（決定済み）になっていた「同じ箇所の採用されなかった代替手段」は、未処理のまま残る。佐賀市の実ページ51件の画面の経路で、対象を失う決定（`orphaned`）が9件から0件になった。GOAL1経路の最終HTMLは51件すべてS2と同一。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
+- 二次レビュー（Codex）対応: 同じ置換前文字列が同じ要素に2回以上あるとき、1件採用すると残りの出現の候補が一覧から消えていた（照合の決定済みプールの消費を決定の種類で分けた）。`merge-following-note` が消す段落が1世代のガードの範囲に入っていなかった。内容修正が候補配列で先に並ぶ組で、後続の固定HTML差し替えが先の修正を上書きしていた（採用計画を2段に分け、候補配列の並び順に依存しない形にした）。
+- レビュー対応: 構造候補を採用してから却下すると、その表の構造候補が再導出で二度と候補一覧に出なくなっていた。排他グループの判定が決定ログの全行を見ていたためで、各候補の最新の決定だけを見るようにした（`latestDecisions()`）。あわせて `insert-caption` がリプレイで作る `<caption>` にも派生IDを振るようにした。
+- 関連PR/コミット: PR #135（構造変更1 S3）。S1はPR #131、S2はPR #132。`text.partial-date` の誤検出は issue #136 へ分離。
+
 ## 2026-09-17: PR #133レビュー指摘を課題一覧へ反映
 
 - 背景・目的: 表の表示崩れを修正し、初期資料の課題候補を現在の実装・設計・検証記録と区別する。
