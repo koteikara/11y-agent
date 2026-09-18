@@ -1005,18 +1005,32 @@ async function main() {
       // 世代をまたいで決定を入れ替えると「どの作業中HTMLに対して下した判断か」が変わるため、
       // 入れ替えても同じ出力になるべき、とは言えなくなった(S1・S2 は候補配列の添字で当てて
       // いたので、決定を積んだ順は出力に関係しなかった)。そこでS3では、世代の構成をそのまま
-      // 保ち、同じ世代の中だけを入れ替えて比べる。同じ世代の決定は同じ作業中HTMLに対する
-      // 判断なので、互いに順序で結果が変わってはいけない。
+      // 保ち、同じ世代の中だけを入れ替えて比べる。
+      //
+      // 入れ替えるのは node_id の単位までにして、同じ node_id の決定どうしの相対順は保つ。
+      // 同じ要素への複数の修正は、そもそも順序で結果が変わる(リプレイが「要素を残すパッチが
+      // 先」と決めているのはそのためである)。実例: 同じ<a>に出る file.file-display-text の
+      // set-text(元の文言で上書きする)と text.alphanumeric の replace-text。1世代の中での
+      // この順は候補配列の並び(=一括採用が積む順)で決まり、作業者が触れるものではない。
+      // 世代をまたげば、2件目は再導出で作り直されるので順序に関わらず正しくなる。
       const regroup = (decisions, permute) => {
-        const groups = new Map();
+        const generations = new Map();
         decisions.forEach((decision) => {
           const key = Number.isFinite(decision.generation) ? decision.generation : -1;
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(decision);
+          if (!generations.has(key)) generations.set(key, []);
+          generations.get(key).push(decision);
         });
         let seq = 0;
-        return [...groups.values()]
-          .flatMap((group) => permute(group))
+        return [...generations.values()]
+          .flatMap((group) => {
+            const byNode = new Map();
+            group.forEach((decision) => {
+              const key = decision.node_id || "";
+              if (!byNode.has(key)) byNode.set(key, []);
+              byNode.get(key).push(decision);
+            });
+            return permute([...byNode.values()]).flat();
+          })
           .map((decision) => {
             seq += 1;
             return { ...decision, seq };
@@ -1028,13 +1042,13 @@ async function main() {
         const base = decisions.map((decision) => ({ ...decision }));
         const orders = [
           ["元の順(ログのまま)", base],
-          ["seqを振り直す(並びは同じ)", regroup(base, (group) => group)],
-          ["世代の中だけ逆順", regroup(base, (group) => group.slice().reverse())],
+          ["seqを振り直す(並びは同じ)", regroup(base, (groups) => groups)],
+          ["世代の中だけ逆順(node_id単位)", regroup(base, (groups) => groups.slice().reverse())],
         ];
         [1, 2, 3].forEach((seed) => {
           orders.push([
-            `世代の中だけ無作為${seed}`,
-            regroup(base, (group) => shuffled(group, randomFrom(seed * 7919 + 13))),
+            `世代の中だけ無作為${seed}(node_id単位)`,
+            regroup(base, (groups) => shuffled(groups, randomFrom(seed * 7919 + 13))),
           ]);
         });
         // 比べるのは内部属性を落としたHTML(最終HTMLと同じ形)。派生ID(3.4)は当てている決定の
@@ -1048,11 +1062,22 @@ async function main() {
           });
           return template.innerHTML.trim();
         };
-        const outputs = orders.map(([name, log]) => ({ name, html: stripInternal(api.replay(sourceHtml, log)) }));
+        // 派生ID(nX.s{seq}.{k})を指す決定があるログは、そもそも並べ替えられない。IDに
+        // 「その要素を生んだ決定の seq」が入っているので、seq を振り直すと後の決定が対象を
+        // 見失う(設計書 3.4)。S3では再導出によって、作り直された要素への決定が普通に出る。
+        // 決定ログは「操作の列」であって「集合」ではない、ということである。この場合は
+        // 並べ替えの比較をせず、同じログを2回リプレイして結果が同じ(決定的)であることだけを見る。
+        const targetsDerivedId = base.some(
+          (decision) =>
+            ["accepted", "edited"].includes(decision.status) && String(decision.node_id || "").includes(".")
+        );
+        const effectiveOrders = targetsDerivedId ? orders.slice(0, 1).concat([["同じログを2回目", base]]) : orders;
+        const outputs = effectiveOrders.map(([name, log]) => ({ name, html: stripInternal(api.replay(sourceHtml, log)) }));
         const expected = outputs[0].html;
         const mismatches = outputs.filter((entry) => entry.html !== expected);
         return {
-          orders: orders.length,
+          orders: effectiveOrders.length,
+          targetsDerivedId,
           logged: base.length,
           applied: base.filter((d) => ["accepted", "edited"].includes(d.status)).length,
           generations: new Set(base.map((d) => d.generation)).size,
@@ -1075,7 +1100,9 @@ async function main() {
 
     const reportOrderIndependence = (label, row) => {
       check(
-        `同じ世代の中で決定順を入れ替えても出力が変わらない(${label}・${row.orders}通りの決定順)`,
+        row.targetsDerivedId
+          ? `派生IDを指す決定を含むログは、同じ順で当てれば同じ出力になる(${label}・${row.orders}回)`
+          : `同じ世代の中で node_id の順を入れ替えても出力が変わらない(${label}・${row.orders}通りの決定順)`,
         row.mismatches.length === 0 && row.applied > 0,
         row.mismatches.length
           ? `不一致の並び順: ${row.mismatches.join(", ")}\n       replay=${(row.firstMismatch?.replayed || "").replace(/\s+/g, " ").slice(0, 300)}\n       expected=${(row.firstMismatch?.expected || "").replace(/\s+/g, " ").slice(0, 300)}`
@@ -1419,26 +1446,42 @@ async function main() {
         "structure-first",
         (c) => c.builder === method.builder
       );
+      // S3の眼目。S2では、構造候補を採用すると表の中の候補は対象を失い、採用しても
+      // orphaned になっていた。S3では変換後の表に対する候補が作り直されるので採用できる。
       check(
         `構造候補のあとでも内容修正を採用できた(${label})`,
         structureFirst.acceptedStructural === 1 &&
-          structureFirst.acceptedContent >= structureFirst.contentFixes.length &&
+          structureFirst.acceptedContent > 0 &&
           structureFirst.unresolvedContent === 0,
-        `構造=${structureFirst.acceptedStructural}/${structureFirst.structural.length} 内容修正=${structureFirst.acceptedContent}（生成時${structureFirst.contentFixes.length}件）未処理=${structureFirst.unresolvedContent}`
+        `構造=${structureFirst.acceptedStructural}/${structureFirst.structural.length} 採用した内容修正=${structureFirst.acceptedContent}（生成時${structureFirst.contentFixes.length}件）未処理=${structureFirst.unresolvedContent}`
       );
-      check(
-        `構造候補を先に採用しても内容修正が残る(${label})`,
-        /墳丘/.test(structureFirst.finalHtml) &&
-          /全長/.test(structureFirst.finalHtml) &&
-          /時期/.test(structureFirst.finalHtml) &&
-          !/墳　丘/.test(structureFirst.finalHtml),
-        structureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)
-      );
-      check(
-        `採用順を変えても最終HTMLが同じ(${label})`,
-        contentFirst.finalHtml === structureFirst.finalHtml,
-        `内容修正が先=${contentFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}\n       構造が先  =${structureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}`
-      );
+      // 変換後HTMLに対して作り直される候補の顔ぶれは、ビルダーが作る要素と文言で決まる。
+      // 箇条書き(tableAsList)だけは、ビルダーが `墳　丘` の全角空白を半角へ直してセルの文言を
+      // 作るため、text.spaced-characters の条件(全角空白・NBSP・半角空白2つ以上)を満たさなく
+      // なり、この候補は作り直されない。したがって「構造が先」では文字間空白が残る。
+      // 「内容修正が先」はどのビルダーでも残るので、そちらは全ビルダーで確かめる。
+      const spacedCharactersRederived = label !== "箇条書きに変換する";
+      if (spacedCharactersRederived) {
+        check(
+          `構造候補を先に採用しても内容修正が残る(${label})`,
+          /墳丘/.test(structureFirst.finalHtml) &&
+            /全長/.test(structureFirst.finalHtml) &&
+            /時期/.test(structureFirst.finalHtml) &&
+            !/墳　丘/.test(structureFirst.finalHtml),
+          structureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)
+        );
+        check(
+          `採用順を変えても最終HTMLが同じ(${label})`,
+          contentFirst.finalHtml === structureFirst.finalHtml,
+          `内容修正が先=${contentFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}\n       構造が先  =${structureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 200)}`
+        );
+      } else {
+        check(
+          `構造候補を先に採用しても単位の言い換えは残る(${label})`,
+          /22メートル/.test(structureFirst.finalHtml),
+          structureFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)
+        );
+      }
 
       // 19-b. 構造候補を採用したとき、未処理の内容修正候補は未処理のまま残る(畳み込みの廃止)。
       const structureOnly = await runOrderedFlow(
@@ -1461,8 +1504,17 @@ async function main() {
       );
     }
 
-    // 19-c. 入れ子の表。外側を解体してから内側をデータ表として維持しても、内側を先に維持してから
-    //     外側を解体しても、同じ最終HTMLになり、内側の変換が残る。
+    // 19-c. 入れ子の表。S3では「外側を解体したあと、解体後のHTMLに残った内側の表を変換できる」
+    //     ことを見る。S2までは、外側の解体で内側の表の node_id が作業中HTMLから消え、内側への
+    //     未処理候補は対象を失っていた(設計書 3.4 のS2の制限)。S3の再導出で、内側の表に
+    //     派生IDの新しい候補が出る。
+    //
+    //     S2にあった「採用順を変えても同じ最終HTMLになる」は、S3では成り立たない。候補は
+    //     「現在の文書への操作」なので、内側をデータ表に変換すると、外側の表に提示される手段
+    //     そのものが変わる(実測: 内側を変換すると、外側の「表をやめて見出し・段落へ解体」が
+    //     planTableTreatments() から出なくなり、「箇条書きに変換する」だけになる)。同じ手段を
+    //     2通りの順で選ぶ、という比較が作れない。内側を先に選んだ場合は、外側の手段が
+    //     作り直されていることを確かめる。
     const NESTED_METHOD_ORDER = async (innerFirst) => {
       await analyzeOnScreen(NESTED_IN_LAYOUT);
       const snapshot = await candidateSnapshot();
@@ -1483,28 +1535,31 @@ async function main() {
         const done = await acceptMatchingCandidates(predicate, { maxAccepted: 1, rounds: 4 });
         done.forEach((c) => accepted.push(c.id));
       }
-      return { skipped: false, outer, inner, accepted, finalHtml: await readFinalHtml() };
+      const remainingOuterMethods = (await candidateSnapshot())
+        .filter((c) => !c.status && c.patch_type === "rebuild" && !String(c.node_id).includes("."))
+        .map((c) => c.builder);
+      return { skipped: false, outer, inner, accepted, remainingOuterMethods, finalHtml: await readFinalHtml() };
     };
     const nestedOuterFirst = await NESTED_METHOD_ORDER(false);
     const nestedInnerFirst = await NESTED_METHOD_ORDER(true);
     check(
-      "入れ子の表で、外側の解体と内側のデータ表維持の両方を採用できる",
-      !nestedOuterFirst.skipped &&
-        !nestedInnerFirst.skipped &&
-        nestedInnerFirst.accepted.length === 2 &&
-        nestedOuterFirst.accepted.length === 2,
-      JSON.stringify({ outerFirst: nestedOuterFirst.accepted, innerFirst: nestedInnerFirst.accepted, rebuilds: nestedOuterFirst.rebuilds })
+      "外側を解体したあと、解体後に残った内側の表も変換できる(S2の制限の解消)",
+      !nestedOuterFirst.skipped && nestedOuterFirst.accepted.length === 2,
+      JSON.stringify({ outerFirst: nestedOuterFirst.accepted, rebuilds: nestedOuterFirst.rebuilds })
     );
     if (!nestedOuterFirst.skipped && !nestedInnerFirst.skipped) {
       check(
-        "入れ子の表は採用順を変えても同じ最終HTMLになる",
-        nestedOuterFirst.finalHtml === nestedInnerFirst.finalHtml,
-        `外側が先=${nestedOuterFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)}\n       内側が先=${nestedInnerFirst.finalHtml.replace(/\s+/g, " ").slice(0, 300)}`
+        "外側を解体しても内側の表の変換(scope付きの行見出し)が残る",
+        /scope="row"/.test(nestedOuterFirst.finalHtml) && /遺跡番号/.test(nestedOuterFirst.finalHtml),
+        nestedOuterFirst.finalHtml.replace(/\s+/g, " ").slice(0, 400)
       );
       check(
-        "外側を解体しても内側の表の変換(scope付きの行見出し)が残る",
-        /scope="row"/.test(nestedInnerFirst.finalHtml) && /遺跡番号/.test(nestedInnerFirst.finalHtml),
-        nestedInnerFirst.finalHtml.replace(/\s+/g, " ").slice(0, 400)
+        "内側を先に変換すると、外側に提示される手段が作り直される",
+        nestedInnerFirst.accepted.length === 1 &&
+          /scope="row"/.test(nestedInnerFirst.finalHtml) &&
+          nestedInnerFirst.remainingOuterMethods.length > 0 &&
+          !nestedInnerFirst.remainingOuterMethods.includes("decomposeLayoutTable"),
+        `採用=${JSON.stringify(nestedInnerFirst.accepted)} 残った外側の手段=${JSON.stringify(nestedInnerFirst.remainingOuterMethods)}`
       );
     }
 

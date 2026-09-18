@@ -11382,7 +11382,7 @@
       },
       // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
       screenState() {
-        return { sourceHtml: state.sourceHtml, decisions: state.decisions, candidates: state.candidates };
+        return { sourceHtml: state.sourceHtml, workingHtml: state.workingHtml, decisions: state.decisions, candidates: state.candidates, generation: state.generation };
       },
     },
 
