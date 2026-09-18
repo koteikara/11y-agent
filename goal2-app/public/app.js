@@ -7623,10 +7623,12 @@
   //
   // GOAL1の goal2Engine.autoAcceptSafe() はS3では単一パスのままで、ここを通らない(S5)。
   function rederiveCandidates() {
+    const startedAt = nowMs();
     state.workingHtml = replay(state.sourceHtml, state.decisions);
     if (!state.sourceHtml) {
       return;
     }
+    const replayedAt = nowMs();
 
     const fragment = parseWorkingForRederivation();
     // 新しく振ったIDを作業中HTMLへ残す。残さないと、画面の「修正後」欄が読む
@@ -7645,9 +7647,11 @@
       item.enriched = false;
     });
 
+    const generatedAt = nowMs();
     const before = state.candidates.length;
     state.generation += 1;
     state.candidates = reconcile(state.candidates, fresh, state.decisions);
+    const reconciledAt = nowMs();
 
     pruneBulkSelection();
     const selectedStillListed = state.candidates.some(
@@ -7671,7 +7675,18 @@
       withdrawn: state.lastRederivationWithdrawn || 0,
       before,
       after: state.candidates.length,
+      // 3.14 の「再導出の時間は300ミリ秒まで」を測るための内訳。
+      timing: {
+        replay: replayedAt - startedAt,
+        generate: generatedAt - replayedAt,
+        reconcile: reconciledAt - generatedAt,
+        total: reconciledAt - startedAt,
+      },
     };
+  }
+
+  function nowMs() {
+    return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
   }
 
   // 再導出で候補が増減したことを作業者に伝える一言(3.10)。バッジや取り下げの一覧表示はS4。
@@ -11455,7 +11470,14 @@
       },
       // 画面が実際に積んだログ(世代付き)と、その時点の候補配列を同じページ内から見るための窓口。
       screenState() {
-        return { sourceHtml: state.sourceHtml, workingHtml: state.workingHtml, decisions: state.decisions, candidates: state.candidates, generation: state.generation };
+        return {
+          sourceHtml: state.sourceHtml,
+          workingHtml: state.workingHtml,
+          decisions: state.decisions,
+          candidates: state.candidates,
+          generation: state.generation,
+          lastRederivation: state.lastRederivation,
+        };
       },
     },
 

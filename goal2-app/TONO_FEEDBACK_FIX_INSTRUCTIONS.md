@@ -389,12 +389,28 @@ const EXCLUSIVE_GROUPS = {
 そこで、**一括採用と GOAL1 の単一パスでは、1世代に同じ `node_id` の要素ごと差し替えは1件まで**とし、2件目以降は採用せず未処理のまま残す。作業者は次の世代で作り直された候補を採用できる（GOAL1 は S5 のループ化で再導出に置き換える）。
 `rebuild` はリプレイの第2段で内側から当たり、ビルダーが現在の要素を読むので、この制限の対象外である。`patch_mode` が `"none"` の候補もHTMLを変えないので対象外である。
 
+**この規則は「同じ `node_id`」では足りない（S3 の実装で広げた）**。佐賀市の実ページ51件の候補を全件走査したところ、「同じ `node_id` に要素ごと差し替えの確認不要候補が2件」という形は**1件も無かった**。実際に出るのは 3.13 の sg04015 の形である。
+
+- `n0004` の `text.list`（`replace-paragraph-sequence`）は `requires_human_review` が `false` なので「確認不要をまとめて採用」に入る。この候補は `n0004`〜`n0018` の段落をまとめて差し替える。
+- 同じ一括採用で採用される `n0015` の `text.alphanumeric`（「令和５年度」→「令和5年度」）は、その範囲の中にある。
+- 差し替える候補の変換後HTMLは、その世代では作り直されていないので元のHTML由来である。先に当たれば上書きされ、後に当たれば対象が見つからない。どちらにしても修正は消える。
+
+そこで規則を次まで広げる。
+
+> 1世代の中で、**固定の変換後HTMLで差し替わる範囲**（その要素と子孫。`replace-paragraph-sequence` ならまとめられる段落すべてとその子孫）にある候補は、要素を残すパッチであっても採用しない。次の世代で、作業中HTMLから作り直された候補を採用する。
+
+範囲を主張するのは、変換後HTMLで差し替えるパッチ型だけにする。`replace-html`、`merge-following-note`、`replace-paragraph-sequence`、`remove-element` と、パッチを持たない候補（操作は `replace-html`）である。
+`unwrap-element` と `rename-element` は入れない。どちらも子要素と `data-goal2-node-id` をそのまま残すので、範囲の中の修正は当たる。`rebuild` も入れない（上記の理由）。
+
+また、「同じ `node_id` への2件目以降」の方は、**要素ごと差し替える候補にだけ**適用する。リプレイの第1段が同じ `node_id` の中で要素を残すパッチを先に当てるため、`<p><tt>…</tt></p>` で装飾タグの解除（`unwrap-element`）と単位の言い換え（`replace-text`）が同居していても、両方とも最終HTMLに残る。
+
 **S3での段階差（実装済み）**。
 
 - `EXCLUSIVE_GROUPS = { "table-structure": tableStructuralRuleIds }` を置き、`exclusiveGroupFor()` で候補と決定ログの `exclusive_group` を導く。`table-structure` は「対象が表であること」まで含めて判定する（`image.image-text-layout` は `figure` / `p` / `div` も対象にするため）。`isTableStructuralCandidate()` はこの関数の薄い包みになった。
 - 候補一覧の「同じ箇所の代替手段 N件中」と、代替手段のグループ表示（`renderCandidates()` のバケット分け）、手段の選択（`activeFixMethodCandidate()`）を、`isElementReplacingCandidate()` ではなく排他グループで数えるようにした。
 - `resolveSupersededTableCandidates()`、`resolveAlternativeMethodCandidates()`、`survivesInAncestorOutput()`、`isDescendantOfCandidateTarget()`、`isTableRelatedCandidate()`、`tableRelatedRuleIds` を削除した。`conflicted` を新しく作る経路は無い（`grep` で確認。残るのは状態ラベルの定義とCSS、コメントだけ）。
-- 上の「1世代に1件まで」を `createGenerationReplacementGuard()` として、`bulkAcceptSelected()`、`bulkAcceptReviewFree()`、`applyPendingAutoAcceptSafe()`、`goal2Engine.autoAcceptSafe()` に入れた。
+- 上の規則を `createGenerationReplacementGuard()` として、`bulkAcceptSelected()`、`bulkAcceptReviewFree()`、`applyPendingAutoAcceptSafe()`、`goal2Engine.autoAcceptSafe()` に入れた。範囲の判定に作業中HTMLのDOMを使うため、`runAnalysis()` が `state.sourceHtml` と `state.workingHtml` を候補の元のHTMLに揃えるようにした（ヘッドレス経路には画面の `analyze()` のような設定箇所が無く、前のページのHTMLが残っていた）。
+- ガードは候補配列の順に判定するので、**先に来た候補が勝つ**。コレクターの並びは「要素をまとめて差し替える候補（`collectPseudoListCandidate` / `collectSequentialNumberedParagraphCandidates`、どちらも要素の走査で先に出る）→ 文字の修正（テキストノードの走査）」なので、sg04015 の形では差し替えが先に採用され、範囲の中の文字修正が次の世代へ回る。
 - **挙動の変更**。S2 まで `conflicted`（決定済み）になっていた「同じ箇所の採用されなかった代替手段」は、S3 では未処理のまま残る。GOAL1 の証跡では、その分だけ `unresolved` が増え `complete` が偽になりうる。S5 で `autoAcceptSafe()` をループ化すれば、これらは再導出で取り下げられるか、作業者が選ぶべき手段として正しく残る。
 
 ### 3.9 AIによる補完
@@ -491,7 +507,7 @@ S3で確かめた S2 からの持ち越し。
 | --- | --- |
 | `edited` の制限（3.7のS2） | 解消。構造候補を編集したあとでも、編集後のHTMLに対する内容修正候補が再導出で出るので採用できる |
 | 入れ子の表のID引き継ぎ廃止による画面側の制限（3.4のS2） | 解消。外側を解体したあと、解体後に残った内側の表に派生IDの新しい候補が出る |
-| sg04015（`replace-paragraph-sequence` が同じ範囲の修正を上書きする） | 解消。`after_html` が作業中HTMLから作り直されるため |
+| sg04015（`replace-paragraph-sequence` が同じ範囲の修正を上書きする） | 解消。ただし再導出だけでは足りず、3.8 の規則を「差し替わる範囲」まで広げる必要があった（同じ世代で両方採用されるため）。画面の経路（「確認不要をまとめて採用」を押し直す）で「令和5年度」が最終HTMLに残ることを回帰テストで確認 |
 | 指摘3（4.1） | 背景色を採用しても表の構造候補3件は同じ指紋で残り、引き続き選べる |
 
 S3で新しく分かった制限（S4以降の判断に回す）。
