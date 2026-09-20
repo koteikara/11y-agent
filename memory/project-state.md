@@ -32,6 +32,10 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - Goal 2開発に必要な画面、API、データ構造、ルール処理、証跡、Cloud Run要件、検証項目を記載する。
 - `memory/ai-accessibility-skills-policy.md`
   - AIによるアクセシビリティ生成を、共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離で扱う方針を記載する。
+- `memory/agent-context-relevance-compaction-research.md`
+  - 「エージェント履歴を関連度スコアで圧縮する」設計仮説（ユーザーのノート）を、Goal 2 と構造変更1 に照らして検討した結果を記載する。大半は既存の設計と一致し、伸びしろは限定判断の小型分類器と案件内の判断履歴の活用にある。
+- `memory/cms-migration-import-failure-patterns.md`
+  - CMS の機械取込みが失敗するパターン（ユーザー共有の現場知見）と、課題として起票できる条件の検証を記載する。
 - `memory/verification-2026-08-summary.md`
   - 2026年8月に実施した3方式比較の検証作業について、実施状況、所要時間の記録、AI移行で出た指摘、未実施の項目を記載する。
 - `goal2-app/`
