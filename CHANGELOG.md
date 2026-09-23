@@ -24,7 +24,14 @@
 - 背景・目的: リポジトリの技術構成、設計判断、実行方法を1か所にまとめ、Obsidian の ForLLM Vault（`05_Projects/11y-agent.md`）から参照できるようにする。
 - 主な変更内容: `PROJECT_CONTEXT.md` を新規作成（技術構成の根拠ファイル、アーキテクチャ、設計判断、環境変数名、READMEと実装の不一致を含む未解決事項）。`AGENTS.md` の作業方針に、作業開始時に `PROJECT_CONTEXT.md` を読み、構成変更時に更新する指示を追加。
 - 関連ファイル: `PROJECT_CONTEXT.md`、`AGENTS.md`
-- 関連PR/コミット: 本PR
+- 関連PR/コミット: PR #139
+
+## 2026-09-20: 「エージェント履歴を関連度スコアで圧縮する」設計仮説の研究メモ
+
+- 背景・目的: ユーザーの Obsidian ノート（X 投稿由来の設計仮説）が、Goal 2 実行画面を発展させる余地になるかを検討し、結果を研究メモとして残す。
+- 主な変更内容: ノートの要点の書き起こし、本プロジェクトの現状（LLM は無履歴の 1 往復、履歴に当たるのは決定ログと案件内の判断）、設計案と既存設計の対応表（S3 の再導出、一括採用、confidence／processing_class、AI は下書きまで）、発展の余地 4 件（限定判断の小型分類器、案件内の判断履歴の関連度圧縮、再導出の部分木化、CMS 登録の自動化は対象外）、前提と未決事項。`memory/project-state.md` のファイル一覧に、この文書と取込パターンのメモを足した。
+- 関連ファイル: `memory/agent-context-relevance-compaction-research.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #138
 
 ## 2026-09-18: 機械取込みが失敗するパターンのメモと、Chrome で HTML を保存する手順書
 
