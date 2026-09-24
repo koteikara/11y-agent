@@ -281,7 +281,7 @@ L0 と同じ PR にしてもよい。分ける場合は L0 を先にマージす
 L2 には、さくらの API キーと、評価する環境から `api.ai.sakura.ad.jp` へつなげることが要る。
 Gemini との比較には Gemini の API キーも要る。
 
-実施（PR #TBD）。結果は `memory/llm-provider-eval-2026-09.md`、人の判定用の CSV は `memory/llm-eval/`、道具は `tools/llm-provider-eval.js` にある。
+実施（PR #146）。結果は `memory/llm-provider-eval-2026-09.md`、人の判定用の CSV は `memory/llm-eval/`、道具は `tools/llm-provider-eval.js` にある。
 設計との差は次のとおり。
 
 - 佐賀市の画像は元の URL がすべて 404 で、保存版（`web.archive.org`）も評価の環境から取れなかった。画像のタスクは遠野市の画像だけで評価し、遠野市のページを 20 件に増やした。

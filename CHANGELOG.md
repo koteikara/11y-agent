@@ -26,7 +26,7 @@
 - 結果の要点: 文字のタスクはさくらの gpt-oss-120b が機械の目安を満たした（JSON 100%、一致率 91.6%、p95 1.9 秒、費用は約3分の1）。ただしスキーマで任意の項目（`explanation`、`extracted_text`、`complex_detail`）をほとんど返さない。画像のタスクは Qwen3-VL が数字や固有名詞を読み違え、gemma-4 は `system` のメッセージを付けると画像を読まないため、Gemini のままにする。
 - 設計との差: 佐賀市の画像が 404 で取れず、画像は遠野市のページだけで評価した（遠野市を 20 ページに増やした）。呼び出しの上限を 180 秒にし、A をもう一度流して揺れの基準（A2）にした。
 - 関連ファイル: `goal2-app/tools/llm-provider-eval.js`（新規）、`memory/llm-provider-eval-2026-09.md`（新規）、`memory/llm-eval/`（新規）、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（4章 L2）、`memory/project-state.md`
-- 関連PR/コミット: PR #TBD
+- 関連PR/コミット: PR #146
 
 ## 2026-09-24: LLM L1（提供元の切り替えの仕組み、さくらの AI Engine）
 
