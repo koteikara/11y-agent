@@ -126,6 +126,24 @@ gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed 
 
 いずれの方式でも、有効化後は実際に候補生成を実行し、画面上のコスト概算表示が出ること・候補の内容がLLMで改善されていること(`(AI判定)`等の注記が付く)を確認する。
 
+### さくらの AI Engine を使う場合
+
+本番を切り替えるのは評価(設計書 [LLM_PROVIDER_SWITCH_INSTRUCTIONS.md](LLM_PROVIDER_SWITCH_INSTRUCTIONS.md) の L2)のあとである。
+トークンはシークレットにして渡し、`--set-env-vars` に平文で書かない。
+
+```powershell
+# 1回だけ: シークレットを作成してトークンを登録
+echo "ここに実際のトークン" | gcloud secrets create sakura-ai-api-key --data-file=-
+
+gcloud run services update $SERVICE --region $REGION `
+  --update-secrets="SAKURA_AI_API_KEY=sakura-ai-api-key:latest" `
+  --update-env-vars="LLM_TEXT_PROVIDER=sakura,LLM_FALLBACK_PROVIDER=gemini" `
+  --no-traffic --tag sakura
+```
+
+各変数の意味は [README.md](README.md#提供元の切り替えさくらの-ai-engine) を参照。
+評価用の書き出し `LLM_RECORD_DIR` は、本番の Cloud Run には設定しない。
+
 ### gemini-2.5-flash の廃止(2026-10-20)に向けたつなぎの設定
 
 Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。

@@ -19,6 +19,15 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-24: LLM L1（提供元の切り替えの仕組み、さくらの AI Engine）
+
+- 背景・目的: LLM の提供元をさくらの AI Engine を主とする構成へ移すため、提供元を設定で選べるようにした（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 3.1〜3.7、3.9、3.10）。本番の切り替えは評価（L2）のあとで、この変更では既定の挙動を変えない。
+- 主な変更内容: `lib/llm.js` に `callLlm()` を置き、gemini と openai-compatible（さくら）のアダプターに分けた。スキーマを標準の JSON Schema に変換し、応答を取り出して検証する。失敗したら同じ提供元で1回やり直し、なお失敗すれば受け皿で1回呼ぶ。`LLM_RECORD_DIR` で評価用の要求を書き出す。`server.js` の `/api/llm/*` を `callLlm()` に替え、応答に `provider`、`model`、`fallback_used` を足した。テストを30件に増やした。README、`CLOUD_RUN_DEPLOY.md`、`PROJECT_CONTEXT.md` に変数と手順を書いた。
+- 検証: 設計書 5章のコマンドをすべて通した。`run-llm-tests.js` 30件、`run-output-tests.js` 198件、`run-table-tests.js` 7件、`run-parity-tests.js` 223件、`run-tests.js` 正常終了、`npm run test:saga-gold` は指標一致648、差分15で変更前と同じ。`GEMINI_API_KEY` だけのときに送る本文が変更前と1バイトも変わらないことをテストで確かめた。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/server.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/README.md`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（4章 L1）、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- レビューを受けて、設計書 3.7 に、やり直さずに受け皿へ回す失敗（429 と通信の失敗）を書き足した。
+- 関連PR/コミット: PR #144（PR #143 のブランチを基点にした）
+
 ## 2026-09-24: LLM L0（gemini-2.5-flash 廃止に向けたつなぎの Gemini 設定）
 
 - 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止される。本番は東京の Vertex AI でこのモデルを使っているので、Gemini 3 系へ設定だけで移れるようにした（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 3.8）。
