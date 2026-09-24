@@ -2,7 +2,7 @@
 project: 11y-agent
 repository: https://github.com/koteikara/11y-agent
 status: active
-updated: 2026-09-21
+updated: 2026-09-24
 knowledge_mocs:
   - AI・自動化
   - UI・デザイン
@@ -70,6 +70,7 @@ flowchart LR
 - **修正対象を本文コンテンツに限定**する。テンプレート起因の指摘は `content`、`old-site-template`、`new-cms-template`、`unknown` に分類し、本文起因のものだけを修正候補にする（`AGENTS.md`）。
 - **miCheckerを主基準ではなく品質ゲート候補**として扱う。KB全ルールを既定とし、miChecker指摘のみへ絞るモードは案件の検収条件を確認したうえで使う（`AGENTS.md`）。
 - **LLM連携は既定で無効**。実案件HTMLと画像を外部LLMへ送る合意が未確定のため、`GEMINI_API_KEY` の設定を運用判断に委ねている（`goal2-app/LLM_DATA_POLICY.md`）。
+- **LLM の提供元はさくらの AI Engine に寄せる**（2026-09-24、ユーザー確定、未実装）。他のプロジェクトで使っていて契約が済んでいるためで、Gemini は受け皿とつなぎとして残す。ISMAP は、公開済みページで機密性が低いため、いまは求めない。段階と検証は `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、比較は `memory/llm-provider-alternatives-research.md` にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。認証、永続保存、ログ方針は未決定のまま公開URLで運用している。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
