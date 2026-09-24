@@ -144,6 +144,9 @@ OneDrive上の暗号化・オンライン専用ファイルに依存しないた
 | `LLM_MAX_CALLS_PER_MINUTE` | `30` | 1分あたりのGemini呼び出し上限。超過分は429エラーとなり、呼び出し元は既存ヒューリスティックの案へ自動フォールバックする。 |
 | `GEMINI_INPUT_PRICE_PER_1M_TOKENS` | `0.3` (USD) | コスト概算に使う入力トークン単価。既定モデル(`gemini-2.5-flash`)の[公式料金](https://ai.google.dev/gemini-api/docs/pricing)を2026-07-10時点で確認した値。**料金は変動するため、`GEMINI_MODEL`を変更した場合や時間が経過した場合は必ず最新値を確認して設定すること。** |
 | `GEMINI_OUTPUT_PRICE_PER_1M_TOKENS` | `2.5` (USD) | コスト概算に使う出力トークン単価。同上、2026-07-10時点の公式料金で確認済み。 |
+| `GEMINI_TEMPERATURE` | `0` | Geminiに送る温度。Gemini 3系は公式に既定の1.0のまま使うよう推奨されている(1.0より下げると繰り返し等が起きることがある)ため、3系のモデルに替えるときは `1` を設定する。数でない値は `0` として扱う。 |
+| `GEMINI_THINKING_LEVEL` | (未設定) | Gemini 3系の考える量(`generationConfig.thinkingConfig.thinkingLevel`)。`minimal`、`low`、`medium`、`high` のいずれか。未設定なら送らず、モデルの既定(3系は `high`)になる。2.5系に送るとエラーになるので、2.5系では設定しない。 |
+| `GEMINI_API_BASE_URL` | (未設定) | APIキー方式の宛先の根元。テストでモックのサーバーへ向けるためのもので、本番では設定しない。 |
 | `USD_JPY_RATE` | `162` | UIに円換算コストを併記するための為替レート。2026-07-10時点の実勢レート(約161.7円)で確認済み。為替は日々変動するため、必要に応じて最新値へ更新する。 |
 
 候補一覧の生成ごとに、画面上へ概算コスト(USD/円換算・呼び出し回数)が表示される。実際の請求額は Google Cloud 側のコンソールで確認すること。
@@ -153,8 +156,23 @@ OneDrive上の暗号化・オンライン専用ファイルに依存しないた
 - **APIキー方式(既定)**: `GEMINI_API_KEY` を設定するだけで動く。ローカル開発・Cloud Run両方で使えるが、キーの管理(Cloud Runでは Secret Manager 経由推奨)が必要。
 - **ADC/Vertex AI方式(`GEMINI_AUTH_MODE=adc`)**: Cloud Run上でのみ動作する。APIキー不要で、Cloud Runサービスアカウントの権限でVertex AI経由のGemini呼び出しができる。ローカル開発では使えない(メタデータサーバーに到達できないため)。有効化には以下も設定する。
   - `GEMINI_VERTEX_PROJECT`(未設定時はメタデータサーバーから自動取得)
-  - `GEMINI_VERTEX_LOCATION`(既定 `us-central1`)
+  - `GEMINI_VERTEX_LOCATION`(既定 `us-central1`)。`global` も指定できる(宛先は `aiplatform.googleapis.com` になる)。
   - Cloud Runサービスアカウントに Vertex AI 呼び出し権限(`roles/aiplatform.user`)を付与し、プロジェクトで `aiplatform.googleapis.com` を有効化する必要がある。手順は [CLOUD_RUN_DEPLOY.md](CLOUD_RUN_DEPLOY.md) を参照。
+
+### gemini-2.5-flash の廃止(2026-10-20)に向けたつなぎの設定
+
+Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。
+さくらの AI Engine へ移すまでのつなぎとして、次の3案から選ぶ(設計は [LLM_PROVIDER_SWITCH_INSTRUCTIONS.md](LLM_PROVIDER_SWITCH_INSTRUCTIONS.md) の 3.8)。
+推奨は案 A である。
+
+| 案 | 設定 | 単価(現行比) | 処理する場所 | 備考 |
+|---|---|---|---|---|
+| A | `GEMINI_VERTEX_LOCATION=asia-northeast1`、`GEMINI_MODEL=gemini-3.5-flash`、`GEMINI_TEMPERATURE=1` | 入力5.5倍、出力4倍 | 東京 | 東京で使える後継はこれだけ。単価の変数も `GEMINI_INPUT_PRICE_PER_1M_TOKENS=1.65`、`GEMINI_OUTPUT_PRICE_PER_1M_TOKENS=9.9` に替える |
+| B | `GEMINI_VERTEX_LOCATION=global`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`GEMINI_TEMPERATURE=1` | 同じ | 保証なし | `global` の宛先の修正(2026-09-24)を含む版が要る |
+| C | APIキー方式(`GEMINI_API_KEY`)に戻し、`gemini-2.5-flash` のまま | 同じ | 保証なし | 廃止日は未発表。入出力は55日保存される。課金を有効にしたキーが要る |
+
+案 A と B では、費用と応答時間を抑えたいときに `GEMINI_THINKING_LEVEL=low` も足せる。
+本番への出し方(トラフィックを流さないリビジョンで先に確かめる手順)は [CLOUD_RUN_DEPLOY.md](CLOUD_RUN_DEPLOY.md) を参照。
 
 ## Cloud Run
 
