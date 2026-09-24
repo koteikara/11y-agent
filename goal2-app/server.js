@@ -11,7 +11,7 @@ const { loadCheckitems } = require("./lib/michecker-checkitems");
 const { defaultSagaFixtureRoot } = require("./lib/sagaAutoFix");
 const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
-const { callGemini, isConfigured: isLlmConfigured } = require("./lib/llm");
+const { callLlm, getStatus: getLlmStatus } = require("./lib/llm");
 const { getTaskConfig } = require("./lib/llm-prompts");
 
 const execFileAsync = promisify(execFile);
@@ -574,7 +574,7 @@ const server = http.createServer(async (request, response) => {
   // GOAL1バッチ画面が、実行前にLLM呼び出しが発生するかどうか(=コストが発生し得るか)を
   // 表示するための軽量な状態確認。呼び出しは一切発生させない(env変数の有無を見るだけ)。
   if (request.method === "GET" && url.pathname === "/api/llm/status") {
-    sendJson(response, 200, { configured: isLlmConfigured() });
+    sendJson(response, 200, getLlmStatus());
     return;
   }
 
@@ -597,19 +597,22 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const userText = config.buildUserText(items);
-      const result = await callGemini({
+      // JSONの取り出しと形の検証、やり直し、受け皿はcallLlm()の中で行う。
+      const result = await callLlm({
+        kind: "text",
+        task,
         systemPrompt: config.systemPrompt,
         userText,
         responseSchema: config.responseSchema,
       });
-      let results;
-      try {
-        results = JSON.parse(result.text);
-      } catch {
-        sendJson(response, 502, { ok: false, error: "llm_invalid_response", message: "LLMの応答をJSONとして解釈できませんでした。" });
-        return;
-      }
-      sendJson(response, 200, { ok: true, results, usage: result.usage });
+      sendJson(response, 200, {
+        ok: true,
+        results: result.json,
+        usage: result.usage,
+        provider: result.provider,
+        model: result.model,
+        fallback_used: result.fallback_used,
+      });
     } catch (error) {
       sendJson(response, error.statusCode || 500, {
         ok: false,
@@ -636,21 +639,22 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const { base64, mimeType } = await fetchImageAsBase64(imageUrl);
-      const result = await callGemini({
+      const result = await callLlm({
+        kind: "vision",
+        task,
         systemPrompt: config.systemPrompt,
         userText: config.buildUserText({ caption }),
-        imageBase64: base64,
-        imageMimeType: mimeType,
+        image: { base64, mimeType },
         responseSchema: config.responseSchema,
       });
-      let parsed;
-      try {
-        parsed = JSON.parse(result.text);
-      } catch {
-        sendJson(response, 502, { ok: false, error: "llm_invalid_response", message: "LLMの応答をJSONとして解釈できませんでした。" });
-        return;
-      }
-      sendJson(response, 200, { ok: true, result: parsed, usage: result.usage });
+      sendJson(response, 200, {
+        ok: true,
+        result: result.json,
+        usage: result.usage,
+        provider: result.provider,
+        model: result.model,
+        fallback_used: result.fallback_used,
+      });
     } catch (error) {
       sendJson(response, error.statusCode || 500, {
         ok: false,

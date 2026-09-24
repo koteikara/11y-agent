@@ -159,6 +159,36 @@ OneDrive上の暗号化・オンライン専用ファイルに依存しないた
   - `GEMINI_VERTEX_LOCATION`(既定 `us-central1`)。`global` も指定できる(宛先は `aiplatform.googleapis.com` になる)。
   - Cloud Runサービスアカウントに Vertex AI 呼び出し権限(`roles/aiplatform.user`)を付与し、プロジェクトで `aiplatform.googleapis.com` を有効化する必要がある。手順は [CLOUD_RUN_DEPLOY.md](CLOUD_RUN_DEPLOY.md) を参照。
 
+### 提供元の切り替え(さくらの AI Engine)
+
+文字の11タスクと画像の2タスクで、LLM の提供元を別々に選べる(設計は [LLM_PROVIDER_SWITCH_INSTRUCTIONS.md](LLM_PROVIDER_SWITCH_INSTRUCTIONS.md) の 3章)。
+何も設定しなければ、いまと同じく Gemini を呼ぶか、何も呼ばない。
+本番をさくらへ切り替えるのは、評価(L2)のあとである。
+
+| 環境変数 | 既定値 | 説明 |
+|---|---|---|
+| `LLM_TEXT_PROVIDER` | `gemini` | 文字の11タスクの提供元。`gemini` か `sakura`。ほかの値は `gemini` として扱う。 |
+| `LLM_VISION_PROVIDER` | `gemini` | 画像の2タスクの提供元。`gemini` か `sakura`。 |
+| `LLM_FALLBACK_PROVIDER` | `none` | 主の提供元が失敗したときの受け皿。`gemini` か `none`。主と同じ提供元なら使わない。 |
+| `LLM_REQUEST_TIMEOUT_MS` | `45000` | 1回の呼び出しの上限(ミリ秒)。 |
+| `SAKURA_AI_API_KEY` | (未設定) | さくらのトークン(`<UUID>:<シークレット>`)。Cloud Run では Secret Manager から渡す。 |
+| `SAKURA_AI_BASE_URL` | `https://api.ai.sakura.ad.jp/v1` | 呼び口の根元。テストではモックのサーバーへ向ける。 |
+| `SAKURA_AI_TEXT_MODEL` | `gpt-oss-120b` | 文字のタスクのモデル。 |
+| `SAKURA_AI_VISION_MODEL` | `preview/Qwen3-VL-30B-A3B-Instruct` | 画像のタスクのモデル(プレビュー)。 |
+| `SAKURA_AI_MAX_TOKENS` | `16384` | 出力の上限。gpt-oss-120b は考える過程で上限を使い切ると中身が空になるので大きめにする。 |
+| `SAKURA_AI_TEXT_REASONING_EFFORT` | `low` | 文字のモデルに送る `reasoning_effort`。空にすると送らない。 |
+| `SAKURA_AI_TEXT_INPUT_PRICE_PER_1M_JPY` / `SAKURA_AI_TEXT_OUTPUT_PRICE_PER_1M_JPY` | `15` / `75` | 費用の概算に使う単価(円)。2026-09-24 の公式の料金表の値。 |
+| `SAKURA_AI_VISION_INPUT_PRICE_PER_1M_JPY` / `SAKURA_AI_VISION_OUTPUT_PRICE_PER_1M_JPY` | `10` / `30` | 同上。 |
+| `LLM_RECORD_DIR` | (未設定) | 評価用に、送る予定の要求を `requests.jsonl` と `images/` に書き出すフォルダー。提供元が無くても書き出す。**本番では設定しない。** |
+
+呼び出しの流れは次のとおりである。
+
+- 応答は JSON として取り出し、タスクのスキーマで形を確かめる(コードブロックの囲みは外す。余分な項目は捨てる)。
+- 失敗したら、同じ提供元で1回だけやり直す。429 はやり直さない。
+- それでも失敗し、受け皿があれば受け皿で1回呼ぶ。
+- `/api/llm/enrich` と `/api/llm/image-alt` の応答には、答えた提供元(`provider`)、モデル(`model`)、受け皿を使ったか(`fallback_used`)が付く。費用の概算は、やり直しと受け皿の分も数える。
+- `/api/llm/status` は `{ configured, text: { provider, model }, vision: { provider, model } }` を返す。
+
 ### gemini-2.5-flash の廃止(2026-10-20)に向けたつなぎの設定
 
 Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。
