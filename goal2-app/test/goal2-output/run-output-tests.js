@@ -19,6 +19,9 @@
 //  15. 見出しから導けないとき、1行目のセルを連結したキャプションを作っていた(指摘2)。
 //  16. h3が並ぶページで先頭の見出ししか直らなかった(指摘1)。
 //  17. 表の構造変換の手段が、要確認のまま一括採用で自動採用されていた(PR-2.5)。
+//
+// 構造変更1 S4(画面と証跡):
+//  21. 取り下げた候補が証跡に出ていなかった。orphaned が「修正が失われた」と区別されていなかった。
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -2434,6 +2437,626 @@ async function main() {
         }`
       );
     }
+
+    // ======================================================================
+    // 21. S4: 画面と証跡(設計書 3.10・3.11)
+    // ======================================================================
+
+    // 証跡JSON(出力欄)を読む。
+    const readEvidenceJson = async () => {
+      await page.evaluate(() => {
+        document.querySelector(".output-drawer").open = true;
+      });
+      await page.waitForTimeout(200);
+      return JSON.parse(await page.inputValue("#evidenceOutput"));
+    };
+
+    // 「CSV」ボタンが作る証跡CSVを、ダウンロードさせずに取り出す。
+    const readEvidenceCsv = () =>
+      page.evaluate(async () => {
+        const originalCreate = URL.createObjectURL;
+        const originalRevoke = URL.revokeObjectURL;
+        const originalClick = HTMLAnchorElement.prototype.click;
+        let captured = null;
+        URL.createObjectURL = (blob) => {
+          captured = blob;
+          return "blob:captured";
+        };
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {};
+        try {
+          document.getElementById("downloadCsvButton").click();
+        } finally {
+          URL.createObjectURL = originalCreate;
+          URL.revokeObjectURL = originalRevoke;
+          HTMLAnchorElement.prototype.click = originalClick;
+        }
+        return captured ? captured.text() : "";
+      });
+
+    // すべてのセルを "" で囲む csvCell() の出力を読む。セルの中の改行と "" に対応する。
+    const parseCsv = (text) => {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let quoted = false;
+      for (let i = 0; i < text.length; i += 1) {
+        const ch = text[i];
+        if (quoted) {
+          if (ch === '"' && text[i + 1] === '"') {
+            cell += '"';
+            i += 1;
+          } else if (ch === '"') {
+            quoted = false;
+          } else {
+            cell += ch;
+          }
+        } else if (ch === '"') {
+          quoted = true;
+        } else if (ch === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (ch === "\n") {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+        } else if (ch !== "\r") {
+          cell += ch;
+        }
+      }
+      if (cell || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+      return rows;
+    };
+
+    // main(S3)の証跡CSVの23列。S4 はこの後ろに5列を足すだけで、名前も順序も変えない。
+    const MAIN_EVIDENCE_CSV_COLUMNS = [
+      "page_session_id",
+      "candidate_id",
+      "rule_id",
+      "category",
+      "processing_class",
+      "status",
+      "confidence",
+      "requires_human_review",
+      "patch_mode",
+      "ai_image_name",
+      "ai_image_name_inserted",
+      "ai_image_name_source",
+      "decision_reason",
+      "actor",
+      "decided_at",
+      "before_html",
+      "after_html",
+      "related_wcag",
+      "related_jis",
+      "kb_source",
+      "miChecker_status",
+      "miChecker_classification",
+      "unresolved_reason",
+    ];
+    const S4_EVIDENCE_CSV_COLUMNS = ["generation", "decision_seq", "withdrawn_by_seq", "orphaned", "orphaned_kind"];
+
+    // 21-a. 取り下げた候補を証跡に戻す(3.11)。装飾タグの解除で <tt> の中の候補が取り下げられる。
+    //     証跡の JSON と CSV に withdrawn の行が出て、withdrawn_by_seq は原因の決定の行の
+    //     decision_seq と一致する。before_html は写しから取るので空でない。
+    await analyzeOnScreen(MULTI_FIX_PARAGRAPH + `<p>受付は令和５年度から始まります。</p>`);
+    const s4Before = await candidateSnapshot();
+    const s4Unwrap = s4Before.find((c) => c.patch_type === "unwrap-element");
+    const s4Inherited = s4Before.find((c) => c.rule_id === "text.alphanumeric");
+    const s4Inside = s4Before.filter((c) => c.patch_type === "replace-text" && c.node_id === s4Unwrap?.node_id);
+    check(
+      "S4の検査用に、解除の候補・中の文字の候補・別の段落の候補が出る",
+      Boolean(s4Unwrap) && Boolean(s4Inherited) && s4Inside.length > 0,
+      JSON.stringify(s4Before)
+    );
+    if (s4Unwrap && s4Inherited && s4Inside.length) {
+      await acceptCandidateById(s4Unwrap.id);
+      const s4After = await candidateSnapshot();
+      const evidence = await readEvidenceJson();
+      const rowsById = new Map(evidence.candidates.map((row) => [row.candidate_id, row]));
+      const withdrawnRows = evidence.candidates.filter((row) => row.status === "withdrawn");
+      const causeRow = rowsById.get(s4Unwrap.id);
+      check(
+        "取り下げた候補が証跡JSONに withdrawn の行として出る",
+        s4Inside.every((c) => rowsById.get(c.id)?.status === "withdrawn") && withdrawnRows.length === s4Inside.length,
+        JSON.stringify(evidence.candidates.map((row) => [row.candidate_id, row.status]))
+      );
+      check(
+        "withdrawn_by_seq は原因の決定の行の decision_seq と一致する",
+        Boolean(causeRow) &&
+          causeRow.status === "accepted" &&
+          Number.isInteger(causeRow.decision_seq) &&
+          withdrawnRows.every((row) => row.withdrawn_by_seq === causeRow.decision_seq),
+        JSON.stringify({ cause: causeRow && causeRow.decision_seq, withdrawn: withdrawnRows.map((r) => r.withdrawn_by_seq) })
+      );
+      check(
+        "取り下げの行は before_html・理由・担当・日時を持ち、decision_seq は取り下げの seq",
+        withdrawnRows.every(
+          (row) =>
+            typeof row.before_html === "string" &&
+            row.before_html.length > 0 &&
+            row.actor === "AGENT" &&
+            Boolean(row.decision_reason) &&
+            Boolean(row.decided_at) &&
+            evidence.decision_log.some(
+              (entry) => entry.seq === row.decision_seq && entry.status === "withdrawn" && entry.candidate_id === row.candidate_id
+            )
+        ),
+        JSON.stringify(withdrawnRows.map((r) => [r.candidate_id, r.before_html?.slice(0, 20), r.actor, r.decision_seq]))
+      );
+      check(
+        "取り下げの行は現在の一覧の後ろに seq 順で並ぶ",
+        (() => {
+          const statuses = evidence.candidates.map((row) => row.status);
+          const firstWithdrawn = statuses.indexOf("withdrawn");
+          const seqs = withdrawnRows.map((row) => row.decision_seq);
+          return (
+            firstWithdrawn === evidence.candidates.length - withdrawnRows.length &&
+            seqs.every((seq, index) => index === 0 || seqs[index - 1] < seq)
+          );
+        })(),
+        JSON.stringify(evidence.candidates.map((row) => [row.candidate_id, row.status, row.decision_seq]))
+      );
+      check(
+        "completion の total・unresolved は現在の一覧だけを数え、withdrawn に件数が出る",
+        evidence.completion.total === s4After.length &&
+          evidence.completion.unresolved === s4After.filter((c) => !c.status).length &&
+          evidence.completion.withdrawn === withdrawnRows.length,
+        JSON.stringify(evidence.completion)
+      );
+      check(
+        "決定済みの候補は現在の一覧に残るので、証跡にも決定済みとして出る(3.11 のログ上の決定済み)",
+        causeRow?.status === "accepted" && causeRow.orphaned === false && causeRow.orphaned_kind === null,
+        JSON.stringify(causeRow)
+      );
+      check(
+        "未処理の行は decision_seq・withdrawn_by_seq・orphaned・orphaned_kind が null",
+        evidence.candidates
+          .filter((row) => row.status === "unresolved")
+          .every(
+            (row) =>
+              row.decision_seq === null &&
+              row.withdrawn_by_seq === null &&
+              row.orphaned === null &&
+              row.orphaned_kind === null
+          ),
+        JSON.stringify(evidence.candidates.filter((row) => row.status === "unresolved"))
+      );
+
+      // CSV: 先頭23列が main と同じ名前・順序で、その後ろに新しい5列。取り下げの行も出る。
+      const csvRows = parseCsv(await readEvidenceCsv());
+      const header = csvRows[0] || [];
+      check(
+        "証跡CSVの先頭23列は main と同じ名前・順序で、その後ろに新しい5列が並ぶ",
+        JSON.stringify(header.slice(0, 23)) === JSON.stringify(MAIN_EVIDENCE_CSV_COLUMNS) &&
+          JSON.stringify(header.slice(23)) === JSON.stringify(S4_EVIDENCE_CSV_COLUMNS),
+        JSON.stringify(header)
+      );
+      const column = (name) => header.indexOf(name);
+      const csvWithdrawn = csvRows.slice(1).filter((row) => row[column("status")] === "withdrawn");
+      const csvCause = csvRows.slice(1).find((row) => row[column("candidate_id")] === s4Unwrap.id);
+      check(
+        "証跡CSVにも withdrawn の行が出て、withdrawn_by_seq が原因の行の decision_seq と一致する",
+        csvWithdrawn.length === withdrawnRows.length &&
+          Boolean(csvCause) &&
+          csvWithdrawn.every(
+            (row) =>
+              row[column("withdrawn_by_seq")] === csvCause[column("decision_seq")] &&
+              row[column("before_html")].length > 0
+          ),
+        JSON.stringify({ withdrawn: csvWithdrawn.map((r) => r.slice(23)), cause: csvCause && csvCause.slice(23) })
+      );
+      check(
+        "新しい列の真偽値と空は既存の列と同じ書き方(true/false、null は空)",
+        csvCause?.[column("orphaned")] === "false" &&
+          csvCause?.[column("orphaned_kind")] === "" &&
+          csvWithdrawn.every((row) => row[column("orphaned")] === "" && row[column("generation")] === "0") &&
+          ["true", "false"].includes(csvCause?.[column("requires_human_review")]),
+        JSON.stringify(csvCause)
+      );
+
+      // 21-b. 「再確認」バッジ(3.10)。再導出で生まれた未処理の候補に付き、前の候補から
+      //     引き継いだ候補(別の段落の半角化、generation 0)と決定済みの候補には付かない。
+      const rowLabels = await page.$$eval(".candidate-item", (buttons) =>
+        buttons.map((b) => ({
+          label: b.getAttribute("aria-label") || "",
+          badge: Boolean(b.querySelector(".candidate-recheck-badge")),
+        }))
+      );
+      const labelOf = (id) => rowLabels.find((row) => row.label.includes(id));
+      const reborn = s4After.filter((c) => !c.status && !s4Before.some((row) => row.id === c.id));
+      check(
+        "新しい世代の未処理候補に「再確認」のバッジが付き、aria-label にも入る",
+        reborn.length > 0 &&
+          reborn.every((c) => labelOf(c.id)?.badge && /、再確認/.test(labelOf(c.id)?.label || "")),
+        JSON.stringify({ reborn: reborn.map((c) => c.id), rowLabels })
+      );
+      check(
+        "前の候補から引き継いだ候補と決定済みの候補には「再確認」が付かない",
+        labelOf(s4Inherited.id) &&
+          !labelOf(s4Inherited.id).badge &&
+          !/再確認/.test(labelOf(s4Inherited.id).label) &&
+          labelOf(s4Unwrap.id) &&
+          !labelOf(s4Unwrap.id).badge,
+        JSON.stringify(rowLabels)
+      );
+      if (reborn.length) {
+        await acceptCandidateById(reborn[0].id);
+        const rebornBadge = await page.evaluate((id) => {
+          const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+            (b.getAttribute("aria-label") || "").includes(id)
+          );
+          return button ? { badge: Boolean(button.querySelector(".candidate-recheck-badge")), label: button.getAttribute("aria-label") } : null;
+        }, reborn[0].id);
+        check(
+          "再導出で生まれた候補も、決定すると「再確認」が外れる",
+          Boolean(rebornBadge) && !rebornBadge.badge && !/再確認/.test(rebornBadge.label),
+          JSON.stringify(rebornBadge)
+        );
+      }
+
+      // 21-c. 取り下げた候補の折りたたみ(3.10)。件数と各行が出て、中から候補を選べない。
+      const withdrawnPanel = await page.evaluate(() => {
+        const host = document.getElementById("withdrawnCandidates");
+        const details = host?.querySelector("details");
+        return {
+          hidden: host ? host.hidden : true,
+          summary: details?.querySelector("summary")?.textContent || "",
+          items: [...(host?.querySelectorAll(".withdrawn-item") || [])].map((item) => ({
+            id: item.dataset.candidateId,
+            title: item.querySelector(".withdrawn-title")?.textContent || "",
+            cause: item.querySelector(".withdrawn-cause")?.textContent || "",
+          })),
+          controls: host ? host.querySelectorAll("button, input, select, textarea, [role=button], [tabindex]").length : -1,
+        };
+      });
+      check(
+        "取り下げた候補の折りたたみに「取り下げた候補 N件」と各行が出る",
+        !withdrawnPanel.hidden &&
+          withdrawnPanel.summary === `取り下げた候補 ${withdrawnRows.length}件` &&
+          withdrawnPanel.items.length === withdrawnRows.length &&
+          withdrawnPanel.items.every((item) => item.title && withdrawnRows.some((row) => row.candidate_id === item.id)),
+        JSON.stringify(withdrawnPanel)
+      );
+      check(
+        "取り下げの原因は、原因の決定の候補名と決定の種類で示す",
+        withdrawnPanel.items.every((item) => /^「.+」の採用の後$/.test(item.cause) && item.cause.includes("下線")),
+        JSON.stringify(withdrawnPanel.items)
+      );
+      const selectedBefore = await page.evaluate(() => document.querySelector('.candidate-item[aria-selected="true"]')?.getAttribute("aria-label") || null);
+      await page.evaluate(() => {
+        const details = document.querySelector("#withdrawnCandidates details");
+        if (details) details.open = true;
+        document.querySelector("#withdrawnCandidates .withdrawn-item")?.click();
+      });
+      await page.waitForTimeout(300);
+      const selectedAfter = await page.evaluate(() => document.querySelector('.candidate-item[aria-selected="true"]')?.getAttribute("aria-label") || null);
+      check(
+        "折りたたみの中の候補は選択も決定もできない(操作できる要素が無く、押しても選択が変わらない)",
+        withdrawnPanel.controls === 0 && selectedBefore === selectedAfter,
+        JSON.stringify({ controls: withdrawnPanel.controls, selectedBefore, selectedAfter })
+      );
+    }
+
+    // 21-d. 一括採用が原因の取り下げは「一括採用 N件の後」と示す。注記の統合(merge-following-note)が
+    //     消す段落の中の半角化は、範囲の規則(3.8)で1回目には採用されず、統合で対象が消えて
+    //     取り下げになる。同じ一括採用で別の段落の半角化も採用されるので、その世代の決定は2件ある。
+    await analyzeOnScreen(`<p>申請（※）が必要です。</p><p>※<span>令和５年度</span>の書類</p><p>受付は令和５年度から始まります。</p>`);
+    await bulkAcceptAll();
+    const bulkWithdrawn = await page.evaluate(() => {
+      const { decisions } = window.goal2Engine.decisionLog.screenState();
+      const withdrawn = decisions.filter((d) => d.status === "withdrawn");
+      const cause = decisions.find((d) => d.seq === withdrawn[0]?.withdrawn_by_seq);
+      const sameGeneration = cause
+        ? decisions.filter((d) => d.generation === cause.generation && d.status !== "withdrawn").length
+        : 0;
+      return {
+        withdrawn: withdrawn.length,
+        sameGeneration,
+        causes: [...document.querySelectorAll("#withdrawnCandidates .withdrawn-cause")].map((e) => e.textContent),
+      };
+    });
+    check(
+      "一括採用が原因の取り下げは「一括採用 N件の後」と示す",
+      bulkWithdrawn.withdrawn > 0 &&
+        bulkWithdrawn.sameGeneration >= 2 &&
+        bulkWithdrawn.causes.length === bulkWithdrawn.withdrawn &&
+        bulkWithdrawn.causes.every((text) => text === `一括採用 ${bulkWithdrawn.sameGeneration}件の後`),
+      JSON.stringify(bulkWithdrawn)
+    );
+
+    // 21-e. 決め直し。採用→却下と決め直した候補の行は decision_seq が却下の seq になり、
+    //     decision_log には両方の行がある。構造候補の中の内容修正を採用してから構造候補を却下すると、
+    //     内容修正の決定は対象(派生ID)を失って orphaned になるが、分類は target-replaced で、
+    //     同じ内容修正が元の表の要素への未処理候補として出直す。
+    const S4_TABLE = `<h2>利用案内</h2><table border="1"><tbody>
+      <tr><th>区分</th><td>金額</td></tr>
+      <tr><th>一般</th><td>５００円</td></tr>
+      <tr><th>学生</th><td>300円</td></tr>
+    </tbody></table>`;
+    await analyzeOnScreen(S4_TABLE);
+    const tableBefore = await candidateSnapshot();
+    const tableStructural = tableBefore.find((c) => c.builder === "dataTableSemantics");
+    const tableFixBefore = tableBefore.find((c) => c.rule_id === "text.alphanumeric");
+    if (tableStructural && tableFixBefore) {
+      await acceptCandidateById(tableStructural.id);
+      const tableMid = await candidateSnapshot();
+      const derivedFix = tableMid.find((c) => c.rule_id === "text.alphanumeric" && !c.status);
+      check(
+        "構造候補の採用後、表の中の内容修正が派生IDの対象に作り直される",
+        Boolean(derivedFix) && /\.s\d+\./.test(derivedFix.node_id),
+        JSON.stringify(tableMid)
+      );
+      if (derivedFix) {
+        await acceptCandidateById(derivedFix.id);
+        await page.evaluate((id) => {
+          const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+            (b.getAttribute("aria-label") || "").includes(id)
+          );
+          button?.click();
+        }, tableStructural.id);
+        await page.waitForTimeout(500);
+        await page.click("#rejectButton");
+        await page.waitForTimeout(900);
+        const tableAfter = await candidateSnapshot();
+        const evidence = await readEvidenceJson();
+        const structuralRow = evidence.candidates.find((row) => row.candidate_id === tableStructural.id);
+        const structuralLog = evidence.decision_log.filter((entry) => entry.candidate_id === tableStructural.id);
+        const rejectEntry = structuralLog.find((entry) => entry.status === "rejected");
+        check(
+          "採用→却下と決め直した候補の行は、decision_seq が却下の seq になる",
+          structuralRow?.status === "rejected" && Boolean(rejectEntry) && structuralRow.decision_seq === rejectEntry.seq,
+          JSON.stringify({ structuralRow, structuralLog })
+        );
+        check(
+          "decision_log には決め直した候補の採用と却下の両方の行がある",
+          structuralLog.length === 2 &&
+            structuralLog[0].status === "accepted" &&
+            structuralLog[1].status === "rejected" &&
+            structuralLog[0].seq < structuralLog[1].seq &&
+            structuralLog.every((entry) => !("op" in entry) && !("after_html" in entry)),
+          JSON.stringify(structuralLog)
+        );
+        const fixRow = evidence.candidates.find((row) => row.candidate_id === derivedFix.id);
+        check(
+          "構造候補を決め直したために対象を失った内容修正は orphaned_kind が target-replaced",
+          fixRow?.status === "accepted" && fixRow.orphaned === true && fixRow.orphaned_kind === "target-replaced",
+          JSON.stringify(fixRow)
+        );
+        const reissued = tableAfter.filter(
+          (c) => c.rule_id === "text.alphanumeric" && !c.status && c.node_id === tableFixBefore.node_id
+        );
+        check(
+          "同じ内容修正が、元に戻った表の要素への未処理候補として出直す",
+          reissued.length === 1 && reissued[0].id !== tableFixBefore.id && reissued[0].id !== derivedFix.id,
+          JSON.stringify(tableAfter)
+        );
+        const tableView = await page.evaluate((id) => {
+          const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+            (b.getAttribute("aria-label") || "").includes(id)
+          );
+          button?.click();
+          return {
+            lostBadges: document.querySelectorAll(".candidate-lost-badge").length,
+            summary: document.getElementById("candidateSummary").textContent,
+          };
+        }, derivedFix.id);
+        await page.waitForTimeout(400);
+        const tableMeta = await page.textContent("#candidateMeta");
+        check(
+          "target-replaced は「未反映」のバッジを付けず、詳細欄で修正が失われていないと説明する",
+          tableView.lostBadges === 0 &&
+            !/未反映/.test(tableView.summary) &&
+            /作り直されました/.test(tableMeta) &&
+            /失われておらず/.test(tableMeta),
+          JSON.stringify({ tableView, tableMeta: tableMeta.replace(/\s+/g, " ").slice(0, 400) })
+        );
+      }
+    } else {
+      check("決め直しの検査に使う構造候補と内容修正が出る", false, JSON.stringify(tableBefore));
+    }
+
+    // 21-f. orphaned_kind の3分類を、決定ログの窓口で1件ずつ作る。
+    const orphanKinds = await page.evaluate(() => {
+      const engine = window.goal2Engine.decisionLog;
+      const source = `<p>受付は令和５年度から始まります。</p>`;
+      const base = (seq, extra) => ({
+        seq,
+        generation: seq,
+        candidate_id: `cand_t${seq}`,
+        rule_id: "test.rule",
+        status: "accepted",
+        after_html: null,
+        withdrawn_by_seq: null,
+        orphaned: false,
+        ...extra,
+      });
+      const run = (decisions, candidates = {}) => {
+        engine.replay(source, decisions);
+        return decisions.map((d) => ({
+          seq: d.seq,
+          orphaned: Boolean(d.orphaned),
+          kind: engine.orphanedKind(d, decisions, candidates[d.candidate_id]),
+        }));
+      };
+      return {
+        // 通知だけの候補(patch_mode "none" → op.apply false)。対象が無くても HTML は元から変えない。
+        noopApplyFalse: run([
+          base(1, { node_id: "n9999", op: { type: "set-attribute", name: "lang", value: "ja", apply: false } }),
+        ]),
+        // 変換後HTMLが変換前と同じ候補。
+        noopSameHtml: run(
+          [base(1, { node_id: "n9999", op: { type: "replace-html", after_html: "<p>同じ</p>" } })],
+          { cand_t1: { proposal: { patch_mode: "auto", before_html: "<p>同じ</p>", after_html: "<p>同じ</p>" } } }
+        ),
+        // 存在しない node_id への採用。修正は最終HTMLに入らない。
+        lost: run([base(1, { node_id: "n9999", op: { type: "set-attribute", name: "lang", value: "ja" } })]),
+        // 派生IDの参照先の決定はいま効いているが、それ自体が orphaned(要素が作られなかった)。
+        lostDerived: run([
+          base(1, { node_id: "n9998", op: { type: "replace-html", after_html: "<div><p>x</p></div>" } }),
+          base(2, { node_id: "n9998.s1.1", op: { type: "set-attribute", name: "lang", value: "ja" } }),
+        ]),
+        // 派生IDの参照先の決定が、同じ候補の後の却下で効かなくなった。
+        replaced: run([
+          base(1, { candidate_id: "cand_s", node_id: "n0001", op: { type: "replace-html", after_html: "<div><p>x</p></div>" } }),
+          base(2, { node_id: "n0001.s1.1", op: { type: "set-attribute", name: "lang", value: "ja" } }),
+          base(3, { candidate_id: "cand_s", node_id: "n0001", status: "rejected", op: null }),
+        ]),
+        // 当たった決定は分類しない。
+        applied: run([base(1, { node_id: "n0001", op: { type: "set-attribute", name: "lang", value: "ja" } })]),
+      };
+    });
+    check(
+      "orphaned_kind: 通知だけの候補(op.apply が false)は no-op",
+      orphanKinds.noopApplyFalse[0].orphaned && orphanKinds.noopApplyFalse[0].kind === "no-op",
+      JSON.stringify(orphanKinds.noopApplyFalse)
+    );
+    check(
+      "orphaned_kind: 変換後HTMLが変換前と同じ候補は no-op",
+      orphanKinds.noopSameHtml[0].orphaned && orphanKinds.noopSameHtml[0].kind === "no-op",
+      JSON.stringify(orphanKinds.noopSameHtml)
+    );
+    check(
+      "orphaned_kind: 存在しない node_id への採用は lost",
+      orphanKinds.lost[0].orphaned && orphanKinds.lost[0].kind === "lost",
+      JSON.stringify(orphanKinds.lost)
+    );
+    check(
+      "orphaned_kind: 派生IDの参照先が効いていて、それ自体が orphaned なら target-replaced ではなく lost",
+      orphanKinds.lostDerived[1].orphaned && orphanKinds.lostDerived[1].kind === "lost",
+      JSON.stringify(orphanKinds.lostDerived)
+    );
+    check(
+      "orphaned_kind: 派生IDの参照先の決定が決め直しで効かなくなったら target-replaced",
+      orphanKinds.replaced[1].orphaned && orphanKinds.replaced[1].kind === "target-replaced",
+      JSON.stringify(orphanKinds.replaced)
+    );
+    check(
+      "orphaned_kind: 当たった決定は分類しない(null)",
+      !orphanKinds.applied[0].orphaned && orphanKinds.applied[0].kind === null,
+      JSON.stringify(orphanKinds.applied)
+    );
+
+    // 21-g. lost の表示。画面の決定ログの1件を「存在しない要素への採用」に書き換えて再描画し、
+    //     候補の行の「最終HTMLに未反映」バッジ、要約の件数、詳細欄の説明を見る。完了判定は変えない。
+    await analyzeOnScreen(`<p>受付は令和５年度から始まります。</p>`);
+    const lostTarget = (await candidateSnapshot()).find((c) => c.rule_id === "text.alphanumeric");
+    if (lostTarget) {
+      await acceptCandidateById(lostTarget.id);
+      const lostView = await page.evaluate((id) => {
+        const { decisions } = window.goal2Engine.decisionLog.screenState();
+        const decision = decisions.find((d) => d.candidate_id === id && d.status === "accepted");
+        decision.node_id = "n9999";
+        decision.orphaned = true;
+        const button = [...document.querySelectorAll(".candidate-item")].find((b) =>
+          (b.getAttribute("aria-label") || "").includes(id)
+        );
+        button.click();
+        const row = [...document.querySelectorAll(".candidate-item")].find((b) =>
+          (b.getAttribute("aria-label") || "").includes(id)
+        );
+        return {
+          badge: Boolean(row?.querySelector(".candidate-lost-badge")),
+          label: row?.getAttribute("aria-label") || "",
+          summary: document.getElementById("candidateSummary").textContent,
+          pill: document.getElementById("completionPill").textContent,
+        };
+      }, lostTarget.id);
+      await page.waitForTimeout(300);
+      const lostMeta = await page.textContent("#candidateMeta");
+      const lostEvidence = await readEvidenceJson();
+      const lostRow = lostEvidence.candidates.find((row) => row.candidate_id === lostTarget.id);
+      check(
+        "lost の決定を持つ候補の行に「最終HTMLに未反映」のバッジが付き、aria-label にも入る",
+        lostView.badge && /最終HTMLに未反映/.test(lostView.label),
+        JSON.stringify(lostView)
+      );
+      check(
+        "候補一覧の上の要約に「最終HTMLに未反映 N件」が出る",
+        /最終HTMLに未反映 1件/.test(lostView.summary),
+        lostView.summary
+      );
+      check(
+        "詳細欄に lost の説明が出る",
+        /最終HTMLに入っていません/.test(lostMeta),
+        lostMeta.replace(/\s+/g, " ").slice(0, 400)
+      );
+      check(
+        "lost が残っていても完了判定は変えない(3.10)",
+        lostView.pill === "完了可" && lostEvidence.completion.complete === true && lostRow?.orphaned_kind === "lost",
+        JSON.stringify({ pill: lostView.pill, completion: lostEvidence.completion, lostRow })
+      );
+    } else {
+      check("lost の表示の検査に使う候補が出る", false, "text.alphanumeric が出ない");
+    }
+
+    // 21-h. GOAL1(goal2Engine.buildEvidence)は決定ログを渡さないので、新しいキーは null
+    //     (generation だけは候補の値)。goal1.js の CSV(13列)は変えない。
+    const goal1Evidence = await page.evaluate(async (h) => {
+      const engine = window.goal2Engine;
+      const result = await engine.analyze({ html: h });
+      engine.autoAcceptSafe(result.candidates);
+      const finalHtml = engine.buildFinalHtml(h, result.candidates);
+      return engine.buildEvidence(
+        {
+          sessionId: "goal1_test",
+          pageTitle: "",
+          oldUrl: "",
+          generatedAt: result.generatedAt,
+          ruleScopeMode: "kb",
+          sourceHtml: h,
+          candidates: result.candidates,
+          notices: result.notices,
+        },
+        finalHtml
+      );
+    }, MULTI_FIX_PARAGRAPH + `<p>受付は令和５年度から始まります。</p>`);
+    check(
+      "GOAL1の証跡は、決定ログ由来の新しいキーが null で、generation は候補の値",
+      goal1Evidence.candidates.length > 0 &&
+        goal1Evidence.candidates.every(
+          (row) =>
+            row.generation === 0 &&
+            row.decision_seq === null &&
+            row.withdrawn_by_seq === null &&
+            row.orphaned === null &&
+            row.orphaned_kind === null
+        ) &&
+        goal1Evidence.decision_log === null &&
+        goal1Evidence.completion.withdrawn === null &&
+        goal1Evidence.candidates.some((row) => row.status === "accepted"),
+      JSON.stringify({
+        rows: goal1Evidence.candidates.map((row) => [row.status, row.generation, row.decision_seq, row.orphaned]),
+        log: goal1Evidence.decision_log,
+        completion: goal1Evidence.completion,
+      })
+    );
+    const goal1Source = require("fs").readFileSync(path.join(rootDir, "public/goal1.js"), "utf8");
+    const goal1Header = (/function downloadEvidenceCsv\(\)[\s\S]*?const header = \[([\s\S]*?)\];/.exec(goal1Source) || [])[1] || "";
+    check(
+      "goal1.js の証跡CSVの見出し(13列)は変わらない",
+      JSON.stringify([...goal1Header.matchAll(/"([^"]+)"/g)].map((m) => m[1])) ===
+        JSON.stringify([
+          "移行管理ID",
+          "ページ名",
+          "URL",
+          "カテゴリ",
+          "candidate_id",
+          "rule_id",
+          "category",
+          "processing_class",
+          "status",
+          "confidence",
+          "requires_human_review",
+          "decision_reason",
+          "actor",
+        ]),
+      goal1Header
+    );
 
   } finally {
     if (browser) await browser.close();
