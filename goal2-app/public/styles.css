@@ -1101,6 +1101,20 @@ label {
   background: var(--link);
 }
 
+/* 最終HTMLに未反映(orphaned の lost、設計書 3.7 の S2・S4)。 */
+.candidate-lost-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--error-container);
+  color: var(--error);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .status-badge,
 .completion-pill {
   display: inline-flex;

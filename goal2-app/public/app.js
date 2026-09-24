@@ -9063,17 +9063,44 @@
     return "";
   }
 
+  // 候補ごとの最新の決定の orphaned の分類(3.7 の S2、S4)。candidate_id → 分類。
+  // orphaned でない候補は入らない。
+  function currentOrphanedKinds() {
+    const byId = new Map(state.candidates.map((candidate) => [candidate.candidate_id, candidate]));
+    const kinds = new Map();
+    latestDecisions(state.decisions).forEach((decision) => {
+      const kind = orphanedKindOf(decision, state.decisions, byId.get(decision.candidate_id));
+      if (kind) {
+        kinds.set(decision.candidate_id, kind);
+      }
+    });
+    return kinds;
+  }
+
+  // 詳細欄に出す orphaned の説明。no-op と target-replaced は修正が失われていないことを伝える。
+  const orphanedKindDescriptions = {
+    "no-op": "この候補はHTMLを変えない候補なので、対象が見つからなくても失われた修正はありません。",
+    "target-replaced":
+      "構造候補を決め直したために対象の要素が作り直されました。修正は失われておらず、同じ問題は新しい対象への候補として出直しています。",
+    lost: "この決定の修正は対象が見つからずに当たらなかったため、最終HTMLに入っていません。",
+  };
+
   function renderCandidates() {
     els.candidateList.innerHTML = "";
     pruneBulkSelection();
     const total = state.candidates.length;
     const unresolved = state.candidates.filter((candidate) => !candidate.decision.status).length;
     const done = total > 0 && unresolved === 0;
+    const orphanedKinds = currentOrphanedKinds();
+    const lostCount = [...orphanedKinds.values()].filter((kind) => kind === "lost").length;
 
+    // 最終HTMLに未反映(lost)が残っていても完了判定は変えない(3.10)。件数だけを知らせる。
     els.candidateSummary.textContent =
       (total === 0
         ? `修正候補はありません。注意 ${state.notices.length}件は出力欄にあります。`
-        : `${total}件中 ${unresolved}件が未処理です。注意 ${state.notices.length}件は出力欄。`) + llmUsageSummaryText();
+        : `${total}件中 ${unresolved}件が未処理です。注意 ${state.notices.length}件は出力欄。`) +
+      (lostCount ? `最終HTMLに未反映 ${lostCount}件。` : "") +
+      llmUsageSummaryText();
     els.completionPill.textContent = done ? "完了可" : total === 0 && state.notices.length > 0 ? "注意のみ" : total === 0 ? "未生成" : "未完了";
     els.completionPill.className = `completion-pill ${done ? "done" : total > 0 ? "blocked" : ""}`;
     renderBulkControls();
@@ -9116,7 +9143,7 @@
           host.appendChild(labelElement);
         }
         items.forEach((item) => {
-          const row = buildCandidateRow(item);
+          const row = buildCandidateRow(item, orphanedKinds.get(item.candidate_id) || null);
           host.appendChild(row);
           if (item.candidate_id === state.selectedCandidateId) {
             selectedButton = row.querySelector("button");
@@ -9168,7 +9195,8 @@
     return after ? `${clip(before)} → ${clip(after)}` : `${clip(before)} を削除`;
   }
 
-  function buildCandidateRow(candidate) {
+  // orphanedKind は currentOrphanedKinds() の値。"lost" のときだけ「最終HTMLに未反映」を出す。
+  function buildCandidateRow(candidate, orphanedKind = null) {
     const row = document.createElement("div");
     const button = document.createElement("button");
     const checkbox = document.createElement("input");
@@ -9197,7 +9225,8 @@
     button.setAttribute(
       "aria-label",
       `${candidateDisplayTitle(candidate)}、${statusLabels[status] || status}、${candidate.candidate_id}` +
-        (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
+        (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "") +
+        (orphanedKind === "lost" ? "、最終HTMLに未反映" : "")
     );
     button.addEventListener("click", () => {
       state.selectedCandidateId = candidate.candidate_id;
@@ -9209,6 +9238,7 @@
     button.innerHTML = `
       <div class="candidate-title">${escapeHtml(candidateDisplayTitle(candidate))}</div>
       ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
+      ${orphanedKind === "lost" ? `<div class="candidate-lost-badge">最終HTMLに未反映</div>` : ""}
     `;
     row.append(checkbox, button);
     return row;
@@ -9357,6 +9387,7 @@
         chosenMethodCandidate.proposal.patch_mode === "none"
       );
     }
+    const orphanedKind = currentOrphanedKinds().get(candidate.candidate_id) || null;
     const candidateMeta = document.getElementById("candidateMeta");
     if (candidateMeta) {
       candidateMeta.innerHTML = `
@@ -9365,6 +9396,7 @@
           <div class="detail-row"><dt>状態</dt><dd>${escapeHtml(statusLabels[candidate.decision.status || "unresolved"])}</dd></div>
           <div class="detail-row"><dt>確度</dt><dd>${escapeHtml(candidate.proposal.confidence)}${candidate.proposal.requires_human_review ? " / 要人間確認" : ""}</dd></div>
           <div class="detail-row"><dt>反映</dt><dd>${escapeHtml(candidate.proposal.patch_mode === "none" ? "HTML自動反映なし" : "HTMLへ反映可能")}</dd></div>
+          ${orphanedKind ? `<div class="detail-row detail-orphaned ${escapeHtml(orphanedKind)}"><dt>最終HTML</dt><dd>${escapeHtml(orphanedKindDescriptions[orphanedKind])}</dd></div>` : ""}
           ${isImageNameCandidate(candidate) ? `<div class="detail-row"><dt>AI画像名</dt><dd>${escapeHtml(candidate.proposal.ai_draft.name)}<br><span class="detail-note">${escapeHtml(candidate.proposal.ai_draft.source)}</span></dd></div>` : ""}
           <div class="detail-row"><dt>問題</dt><dd>${escapeHtml(candidate.issue.message)}</dd></div>
           <div class="detail-row"><dt>理由</dt><dd>${escapeHtml(candidate.issue.reason)}</dd></div>
