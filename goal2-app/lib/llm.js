@@ -1,8 +1,40 @@
 const crypto = require("crypto");
 
-const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const REQUEST_TIMEOUT_MS = 45000;
+
+// Gemini API (api-key) endpoint root. Overridable only so tests can point it at a local mock
+// server; production leaves it unset.
+function getApiBase() {
+  return (process.env.GEMINI_API_BASE_URL || DEFAULT_API_BASE).replace(/\/+$/, "");
+}
+
+// Gemini 3 models are officially recommended to run at the default temperature 1.0 (lower
+// values can cause looping), while 2.5 models were tuned here at 0. GEMINI_TEMPERATURE lets
+// the stopgap switch to 3.x set 1 without a code change; unset/invalid keeps 0.
+function getTemperature() {
+  const raw = (process.env.GEMINI_TEMPERATURE || "").trim();
+  if (!raw) return 0;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
+// generationConfig.thinkingConfig.thinkingLevel (Gemini 3+; confirmed against
+// ai.google.dev/api/generate-content on 2026-09-24). Sending it to 2.5 models is an error,
+// so it is only sent when GEMINI_THINKING_LEVEL is set to one of the documented values.
+const THINKING_LEVELS = new Set(["MINIMAL", "LOW", "MEDIUM", "HIGH"]);
+function getThinkingLevel() {
+  const raw = (process.env.GEMINI_THINKING_LEVEL || "").trim().toUpperCase();
+  return THINKING_LEVELS.has(raw) ? raw : "";
+}
+
+// Vertex AI regional endpoints are {location}-aiplatform.googleapis.com, but the "global"
+// location has no such host and must use aiplatform.googleapis.com instead.
+function buildVertexUrl({ location, projectId, model }) {
+  const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+  return `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+}
 
 // ADC auth mode (Stage B): when GEMINI_AUTH_MODE=adc, calls go through Vertex AI using an
 // access token from the Cloud Run metadata server instead of GEMINI_API_KEY. This only works
@@ -166,11 +198,13 @@ async function callGemini({ systemPrompt, userText, imageBase64, imageMimeType, 
     parts.push({ inlineData: { mimeType: imageMimeType || "image/jpeg", data: imageBase64 } });
   }
 
+  const thinkingLevel = getThinkingLevel();
   const body = {
     contents: [{ role: "user", parts }],
     generationConfig: {
-      temperature: 0,
+      temperature: getTemperature(),
       ...(responseSchema ? { responseMimeType: "application/json", responseSchema } : {}),
+      ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
     },
   };
   if (systemPrompt) {
@@ -183,19 +217,19 @@ async function callGemini({ systemPrompt, userText, imageBase64, imageMimeType, 
     // Vertex AI's generateContent request/response shape is compatible with the Developer
     // API used below (same contents/generationConfig/usageMetadata fields), so only the
     // endpoint and auth header differ here — everything after this branch is shared.
-    const [accessToken, projectId] = await Promise.all([getAccessToken(), getVertexProjectId()]);
+    const [accessToken, projectId] = await Promise.all([testHooks.getAccessToken(), testHooks.getVertexProjectId()]);
     const location = process.env.GEMINI_VERTEX_LOCATION || "us-central1";
-    requestUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${resolvedModel}:generateContent`;
+    requestUrl = buildVertexUrl({ location, projectId, model: resolvedModel });
     headers.authorization = `Bearer ${accessToken}`;
   } else {
-    requestUrl = `${API_BASE}/${resolvedModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    requestUrl = `${getApiBase()}/${resolvedModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(requestUrl, {
+    response = await testHooks.fetch(requestUrl, {
       method: "POST",
       headers,
       signal: controller.signal,
@@ -234,9 +268,26 @@ async function callGemini({ systemPrompt, userText, imageBase64, imageMimeType, 
   return result;
 }
 
+// Tests replace these to exercise the Vertex AI (adc) path without a metadata server.
+// Production never touches them.
+const defaultTestHooks = {
+  getAccessToken: () => getAccessToken(),
+  getVertexProjectId: () => getVertexProjectId(),
+  fetch: (...args) => fetch(...args),
+};
+const testHooks = { ...defaultTestHooks };
+
+function setTestHooks(overrides) {
+  Object.assign(testHooks, defaultTestHooks, overrides || {});
+  responseCache.clear();
+  callTimestamps.length = 0;
+}
+
 module.exports = {
   callGemini,
   isConfigured,
   estimateCostUsd,
   estimateCostJpy,
+  buildVertexUrl,
+  __setTestHooks: setTestHooks,
 };

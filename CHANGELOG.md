@@ -19,6 +19,14 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-24: LLM L0（gemini-2.5-flash 廃止に向けたつなぎの Gemini 設定）
+
+- 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止される。本番は東京の Vertex AI でこのモデルを使っているので、Gemini 3 系へ設定だけで移れるようにした（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 3.8）。
+- 主な変更内容: `GEMINI_VERTEX_LOCATION=global` の宛先を `aiplatform.googleapis.com` に直した。`GEMINI_TEMPERATURE`（既定 0）と `GEMINI_THINKING_LEVEL`（既定は送らない）を足した。テスト用に `GEMINI_API_BASE_URL` と `__setTestHooks()` を足し、`test/llm/run-llm-tests.js` と `npm run test:llm` を新設した。設定なしと `GEMINI_API_KEY` だけのときに送る本文が変更前と1バイトも変わらないことを、origin/main の `lib/llm.js` から取った基準と比べて確かめる。README と `CLOUD_RUN_DEPLOY.md` に案 A〜C の設定のしかたを書いた。
+- 検証: 設計書 5章のコマンドをすべて通した。`run-llm-tests.js` 8件、`run-output-tests.js` 198件、`run-table-tests.js` 7件、`run-parity-tests.js` 223件、`run-tests.js` 正常終了。`npm run test:saga-gold` は指標一致648、差分15で変更前と同じ。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/`（新規）、`goal2-app/package.json`、`goal2-app/README.md`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（4章 L0）、`memory/project-state.md`
+- 関連PR/コミット: PR #143
+
 ## 2026-09-24: LLM の提供元の見直しの研究メモと、さくらの AI Engine への移行の設計書
 
 - 背景・目的: Goal 2 実行画面の LLM 呼び出しを Gemini から移す検討をした。ユーザーは、他のプロジェクトで使っているさくらの AI Engine に寄せること、ISMAP をいまは求めないこと(公開済みページで機密性が低い)、Google から離れることは条件でないことを決めた。あわせて、Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されることが分かった。

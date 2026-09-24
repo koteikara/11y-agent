@@ -239,6 +239,13 @@ README と `CLOUD_RUN_DEPLOY.md` に、案 A、B、C の設定のしかたを書
 本番の設定を変えるのはユーザーで、変えたら結果を記録する。
 構造変更1 の S4 と触るファイルが重ならないので、並行して進めてよい。
 
+実装済み（PR #143）。
+設計との差異は次のとおり。
+
+- `GEMINI_API_BASE_URL`（3.10）を L0 で前倒しで入れた。L0 のテストで API キー方式の本文を確かめるためである。
+- Vertex AI 経由のテストのために、`lib/llm.js` に `__setTestHooks()` を足した。トークン、プロジェクト ID、fetch を差し替えられる。
+- `GEMINI_THINKING_LEVEL` は、公式の API リファレンス（ThinkingConfig、2026-09-24 確認）に従い `generationConfig.thinkingConfig.thinkingLevel` で送る。値は `MINIMAL`、`LOW`、`MEDIUM`、`HIGH` で、小文字で入れても大文字にする。一覧に無い値は送らない。
+
 **L1 提供元の切り替えの仕組み**。
 3.1〜3.7、3.9、3.10 を実装する。
 画面（`public/app.js`）には触れない。
