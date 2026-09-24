@@ -6840,6 +6840,73 @@
     return [...latestByCandidate.values()];
   }
 
+  // orphaned(リプレイで操作が当たらなかった決定)の分類(設計書 3.7 の S2、3.13 の S4)。
+  // orphaned は「対象の要素が見つからなかった、または操作が当たらなかった」で一律に立つが、
+  // 修正が本当に失われたのはそのうち "lost" だけである。
+  //
+  //  "no-op"           候補が HTML を元から変えない(patch_mode が "none"、op が無い、または
+  //                    変換後HTMLが変換前と同じ)。修正は失われていない。
+  //  "target-replaced" 対象が派生ID(nX.s{seq}.{k})で、その中のいずれかの seq の決定がいま
+  //                    効いていない(その候補の最新の決定でない、または採用・編集でない)。
+  //                    構造候補を決め直したために対象が作り直されたもので、修正は失われて
+  //                    いない。同じ問題は再導出で新しい対象への候補として出直す。
+  //  "lost"            上のどちらでもない。修正が最終HTMLに入っていない。
+  //
+  // 参照先の決定が効いているのに、それ自体が orphaned のとき(派生IDの要素がそもそも
+  // 作られなかった)は "target-replaced" ではなく "lost" にする。
+  // candidate は分類の手がかり(patch_mode・変換前後のHTML)で、無ければログの op だけで見る。
+  function orphanedKindOf(decision, decisions, candidate) {
+    if (!decision?.orphaned || !["accepted", "edited"].includes(decision.status)) {
+      return null;
+    }
+    if (decisionChangesNothing(decision, candidate)) {
+      return "no-op";
+    }
+    if (derivedTargetReplaced(decision.node_id, decisions)) {
+      return "target-replaced";
+    }
+    return "lost";
+  }
+
+  function decisionChangesNothing(decision, candidate) {
+    if (candidate?.proposal?.patch_mode === "none") {
+      return true;
+    }
+    if (decision.status === "accepted" && (!decision.op || decision.op.apply === false)) {
+      return true;
+    }
+    const beforeHtml = candidate?.proposal?.before_html;
+    const afterHtml =
+      decision.status === "edited"
+        ? decision.after_html
+        : decision.op?.after_html || candidate?.proposal?.after_html;
+    if (typeof beforeHtml !== "string" || typeof afterHtml !== "string") {
+      return false;
+    }
+    return stripInternalFromHtml(beforeHtml) === stripInternalFromHtml(afterHtml);
+  }
+
+  // 派生ID(3.4)は入れ子で .s{seq}.{k} が複数並ぶ(n0001.s3.2.s5.1)。どれか1つでも、その
+  // seq の決定がいま効いていなければ、その要素はいまの作業中HTMLには作られない。
+  function derivedTargetReplaced(nodeId, decisions) {
+    const seqs = [...String(nodeId || "").matchAll(/\.s(\d+)\./g)].map((match) => Number(match[1]));
+    if (!seqs.length) {
+      return false;
+    }
+    const bySeq = new Map((decisions || []).map((decision) => [decision.seq, decision]));
+    const latestByCandidate = new Map(
+      latestDecisions(decisions).map((decision) => [decision.candidate_id, decision])
+    );
+    return seqs.some((seq) => {
+      const source = bySeq.get(seq);
+      if (!source) {
+        return true;
+      }
+      const latest = latestByCandidate.get(source.candidate_id);
+      return !latest || latest.seq !== source.seq || !["accepted", "edited"].includes(source.status);
+    });
+  }
+
   // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
   //
   // S2から、当てる内容は決定ログだけで決まる(候補配列を参照しない)。accepted は決定時点の
@@ -10064,8 +10131,19 @@
   // 決定済みの候補は reconcile() が一覧に残すので、現在の一覧に入っている。取り下げた候補は
   // 一覧から外れるので、recordWithdrawal() が残した写しから、一覧の後ろに seq 順で並べる。
   // completion の total・unresolved は今までどおり現在の一覧だけを数える。
+  //
+  // 決定ログに由来する列(decision_seq・withdrawn_by_seq・orphaned・orphaned_kind)と
+  // decision_log は、context に決定ログがあるときだけ値を持つ。GOAL1(goal2Engine.buildEvidence)
+  // は決定ログを渡さないので null になる(ログを渡すのは S5、3.12)。
   function buildEvidenceFor(context, finalHtml) {
     const withdrawnRecords = context.withdrawnCandidates || [];
+    const decisions = Array.isArray(context.decisions) ? context.decisions : null;
+    const log = decisions
+      ? {
+          decisions,
+          latestById: new Map(latestDecisions(decisions).map((decision) => [decision.candidate_id, decision])),
+        }
+      : null;
     return {
       page_session_id: context.sessionId,
       ...(context.ruleScopeMode === "michecker" && context.micheckerEngineResult
@@ -10093,8 +10171,8 @@
         withdrawn: Array.isArray(context.decisions) ? withdrawnRecords.length : null,
       },
       candidates: [
-        ...context.candidates.map((candidate) => evidenceCandidateRow(candidate, candidate.decision)),
-        ...withdrawnRecords.map(({ candidate, entry }) => evidenceCandidateRow(candidate, entry)),
+        ...context.candidates.map((candidate) => evidenceCandidateRow(candidate, candidate.decision, log)),
+        ...withdrawnRecords.map(({ candidate, entry }) => evidenceCandidateRow(candidate, entry, log)),
       ],
       notices: context.notices.map((notice) => ({
         notice_id: notice.notice_id,
@@ -10110,13 +10188,41 @@
         related_jis: notice.issue.jis,
         kb_source: notice.rule.source,
       })),
+      // 決定ログの各行(3.11)。決め直した候補の前の決定や、一括採用のかたまり(generation)を
+      // 後から追えるようにする。op と after_html は大きくなるので入れない。
+      // orphaned は採用・編集の行だけが値を持つ。決め直しで効かなくなった決定は、最後に
+      // 効いていたときのリプレイの結果のままである。
+      decision_log: decisions
+        ? decisions.map((decision) => ({
+            seq: decision.seq,
+            generation: decision.generation ?? null,
+            candidate_id: decision.candidate_id,
+            rule_id: decision.rule_id,
+            node_id: decision.node_id ?? null,
+            status: decision.status,
+            actor: decision.actor ?? null,
+            decided_at: decision.decided_at ?? null,
+            withdrawn_by_seq: decision.withdrawn_by_seq ?? null,
+            orphaned: ["accepted", "edited"].includes(decision.status) ? Boolean(decision.orphaned) : null,
+          }))
+        : null,
     };
   }
 
   // 証跡の候補1行。decision は、現在の一覧の候補なら candidate.decision(ログの写し)、
   // 取り下げた候補なら取り下げのログの行(status: "withdrawn")。取り下げた候補の before_html・
   // after_html・category などは、recordWithdrawal() が残した写しから取る。
-  function evidenceCandidateRow(candidate, decision) {
+  //
+  // 末尾の5列は S4 で足した(3.11)。既存の23列の名前・順序・値は変えない。
+  //  generation       候補が生まれた再導出の世代(初回の候補は 0)
+  //  decision_seq     その候補の最新の決定の seq(未処理は null)。withdrawn_by_seq が指す決定を
+  //                   証跡の中で引けるようにするため、設計書に無い列を足した
+  //  withdrawn_by_seq 取り下げの原因になった決定の seq(取り下げの行だけ)
+  //  orphaned         最新の決定がリプレイで当たらなかったか(採用・編集の行だけ)
+  //  orphaned_kind    orphanedKindOf() の分類(orphaned が真の行だけ)
+  function evidenceCandidateRow(candidate, decision, log) {
+    const logged = log ? log.latestById.get(candidate.candidate_id) || null : null;
+    const applied = Boolean(logged) && ["accepted", "edited"].includes(logged.status);
     return {
       candidate_id: candidate.candidate_id,
       rule_id: candidate.rule_id,
@@ -10146,6 +10252,11 @@
       miChecker_status: null,
       miChecker_classification: null,
       unresolved_reason: decision.status ? null : "未処理",
+      generation: Number.isFinite(candidate.generation) ? candidate.generation : null,
+      decision_seq: logged ? logged.seq : null,
+      withdrawn_by_seq: logged?.status === "withdrawn" ? logged.withdrawn_by_seq ?? null : null,
+      orphaned: applied ? Boolean(logged.orphaned) : null,
+      orphaned_kind: applied && logged.orphaned ? orphanedKindOf(logged, log.decisions, candidate) : null,
     };
   }
 
@@ -10208,6 +10319,12 @@
         "miChecker_status",
         "miChecker_classification",
         "unresolved_reason",
+        // S4 で足した列(3.11)。既存の23列の後ろに置き、既存の集計を壊さない。
+        "generation",
+        "decision_seq",
+        "withdrawn_by_seq",
+        "orphaned",
+        "orphaned_kind",
       ],
       ...evidence.candidates.map((candidate) => [
         evidence.page_session_id,
@@ -10233,6 +10350,11 @@
         candidate.miChecker_status,
         candidate.miChecker_classification,
         candidate.unresolved_reason,
+        candidate.generation,
+        candidate.decision_seq,
+        candidate.withdrawn_by_seq,
+        candidate.orphaned,
+        candidate.orphaned_kind,
       ]),
     ];
     const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -11571,6 +11693,11 @@
       },
       replay(sourceHtml, decisions) {
         return replay(sourceHtml, decisions);
+      },
+      // テスト用。orphaned の分類(3.7 の S2、S4)。replay() が decisions の各行に orphaned を
+      // 立てたあとで呼ぶ。candidate は省略でき、省略するとログの op だけで判定する。
+      orphanedKind(decision, decisions, candidate) {
+        return orphanedKindOf(decision, decisions, candidate);
       },
       // テスト用。「表を丸ごと差し替える候補はすべて rebuild 操作である」ことを外から
       // 確かめるための窓口(3.7)。
