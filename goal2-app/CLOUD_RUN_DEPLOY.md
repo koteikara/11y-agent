@@ -126,6 +126,78 @@ gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed 
 
 いずれの方式でも、有効化後は実際に候補生成を実行し、画面上のコスト概算表示が出ること・候補の内容がLLMで改善されていること(`(AI判定)`等の注記が付く)を確認する。
 
+### さくらの AI Engine を使う場合
+
+本番を切り替えるのは評価(設計書 [LLM_PROVIDER_SWITCH_INSTRUCTIONS.md](LLM_PROVIDER_SWITCH_INSTRUCTIONS.md) の L2)のあとである。
+トークンはシークレットにして渡し、`--set-env-vars` に平文で書かない。
+
+```powershell
+# 1回だけ: シークレットを作成してトークンを登録
+echo "ここに実際のトークン" | gcloud secrets create sakura-ai-api-key --data-file=-
+
+gcloud run services update $SERVICE --region $REGION `
+  --update-secrets="SAKURA_AI_API_KEY=sakura-ai-api-key:latest" `
+  --update-env-vars="LLM_TEXT_PROVIDER=sakura,LLM_FALLBACK_PROVIDER=gemini" `
+  --no-traffic --tag sakura
+```
+
+各変数の意味は [README.md](README.md#提供元の切り替えさくらの-ai-engine) を参照。
+評価用の書き出し `LLM_RECORD_DIR` は、本番の Cloud Run には設定しない。
+
+### gemini-2.5-flash の廃止(2026-10-20)に向けたつなぎの設定
+
+Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。
+本番は `GEMINI_AUTH_MODE=adc`、`GEMINI_VERTEX_LOCATION=asia-northeast1` で、`GEMINI_MODEL` を設定していないので、このままだと AI の下書きがその日に止まる(画面はルールベースの案で作業を続けられる)。
+次の3案から選ぶ。推奨は案 A である。案の比べ方は [README.md](README.md#gemini-25-flash-の廃止2026-10-20に向けたつなぎの設定) を参照。
+
+どの案でも、トラフィックを流さない新しいリビジョンで先に確かめてから切り替える。
+
+1. 設定を替えたリビジョンを、トラフィックを流さずタグ付きで作る。
+2. 表示されたタグ付きの URL を開き、画像と見出しのあるページを数件処理する。AI の下書きが入ること、代替テキストや見出しの文言に繰り返しや崩れが無いことを見る。
+3. 問題が無ければ、トラフィックを新しいリビジョンへ移す。
+
+   ```powershell
+   gcloud run services update-traffic $SERVICE --region $REGION --to-latest
+   ```
+
+#### 案 A: 東京のまま gemini-3.5-flash に替える
+
+```powershell
+gcloud run services update $SERVICE --region $REGION `
+  --update-env-vars="GEMINI_MODEL=gemini-3.5-flash,GEMINI_TEMPERATURE=1,GEMINI_INPUT_PRICE_PER_1M_TOKENS=1.65,GEMINI_OUTPUT_PRICE_PER_1M_TOKENS=9.9" `
+  --no-traffic --tag gemini35
+```
+
+`GEMINI_TEMPERATURE` は、2026-09-24 の変更を含む版でないと効かない(古い版では温度 0 のまま送る)。
+古い版で試して繰り返しや崩れが出た場合は、新しい版をデプロイしてから同じ手順をやり直す。
+
+#### 案 B: global の gemini-3.5-flash-lite に替える
+
+```powershell
+gcloud run services update $SERVICE --region $REGION `
+  --update-env-vars="GEMINI_VERTEX_LOCATION=global,GEMINI_MODEL=gemini-3.5-flash-lite,GEMINI_TEMPERATURE=1" `
+  --no-traffic --tag gemini35lite
+```
+
+`global` の宛先の修正(2026-09-24)を含む版が要る。古い版では `global-aiplatform.googleapis.com` という存在しない宛先を呼んで失敗する。
+処理する場所は保証されない。
+
+#### 案 C: APIキー方式に戻し、gemini-2.5-flash のまま使う
+
+上の「APIキー方式」の手順でシークレットを作り、ADC の設定を外す。
+課金を有効にしたプロジェクトの API キーを使う(無料枠は送った内容を学習に使う場合がある)。
+
+```powershell
+gcloud run services update $SERVICE --region $REGION `
+  --remove-env-vars="GEMINI_AUTH_MODE,GEMINI_VERTEX_PROJECT,GEMINI_VERTEX_LOCATION" `
+  --update-secrets="GEMINI_API_KEY=gemini-api-key:latest" `
+  --no-traffic --tag geminiapikey
+```
+
+Gemini API の 2.5 系の廃止日は発表されていない。入出力は55日保存され、処理する場所は保証されない。
+
+どの案にしたかと、確かめた結果(日付、リビジョン名、処理したページ、崩れの有無)は `memory/project-state.md` に記録する。
+
 ## よくあるつまずき
 
 ### `git` コマンドが見つからない、または認証を求められる
