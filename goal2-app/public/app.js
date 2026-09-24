@@ -6850,7 +6850,9 @@
   //  "target-replaced" 対象が派生ID(nX.s{seq}.{k})で、その中のいずれかの seq の決定がいま
   //                    効いていない(その候補の最新の決定でない、または採用・編集でない)。
   //                    構造候補を決め直したために対象が作り直されたもので、修正は失われて
-  //                    いない。同じ問題は再導出で新しい対象への候補として出直す。
+  //                    いない。同じ問題が残っていれば、再導出で新しい対象への候補として
+  //                    出直す(編集に決め直したときや、決め直した先の構造で問題そのものが
+  //                    無くなったときは出直さない)。
   //  "lost"            上のどちらでもない。修正が最終HTMLに入っていない。
   //
   // 参照先の決定が効いているのに、それ自体が orphaned のとき(派生IDの要素がそもそも
@@ -6889,6 +6891,8 @@
 
   // 派生ID(3.4)は入れ子で .s{seq}.{k} が複数並ぶ(n0001.s3.2.s5.1)。どれか1つでも、その
   // seq の決定がいま効いていなければ、その要素はいまの作業中HTMLには作られない。
+  // 参照先の seq がログに無いときは、決め直したとは言い切れないので効いているものとして
+  // 扱う(結果は lost になり、作業者に気付かせる側に倒す)。
   function derivedTargetReplaced(nodeId, decisions) {
     const seqs = [...String(nodeId || "").matchAll(/\.s(\d+)\./g)].map((match) => Number(match[1]));
     if (!seqs.length) {
@@ -6901,7 +6905,7 @@
     return seqs.some((seq) => {
       const source = bySeq.get(seq);
       if (!source) {
-        return true;
+        return false;
       }
       const latest = latestByCandidate.get(source.candidate_id);
       return !latest || latest.seq !== source.seq || !["accepted", "edited"].includes(source.status);
@@ -9082,7 +9086,7 @@
   const orphanedKindDescriptions = {
     "no-op": "この候補はHTMLを変えない候補なので、対象が見つからなくても失われた修正はありません。",
     "target-replaced":
-      "構造候補を決め直したために対象の要素が作り直されました。修正は失われておらず、同じ問題は新しい対象への候補として出直しています。",
+      "構造候補を決め直したために対象の要素が作り直されました。修正は失われておらず、同じ問題が残っていれば、新しい対象への候補として出直します。",
     lost: "この決定の修正は対象が見つからずに当たらなかったため、最終HTMLに入っていません。",
   };
 
@@ -10289,8 +10293,9 @@
       })),
       // 決定ログの各行(3.11)。決め直した候補の前の決定や、一括採用のかたまり(generation)を
       // 後から追えるようにする。op と after_html は大きくなるので入れない。
-      // orphaned は採用・編集の行だけが値を持つ。決め直しで効かなくなった決定は、最後に
-      // 効いていたときのリプレイの結果のままである。
+      // orphaned は、その候補の最新の決定で、かつ採用・編集の行だけが値を持つ。リプレイは
+      // 最新の決定にしか印を立て直さないので、決め直しで効かなくなった決定の印は評価されて
+      // いない値であり、null にする。
       decision_log: decisions
         ? decisions.map((decision) => ({
             seq: decision.seq,
@@ -10302,7 +10307,11 @@
             actor: decision.actor ?? null,
             decided_at: decision.decided_at ?? null,
             withdrawn_by_seq: decision.withdrawn_by_seq ?? null,
-            orphaned: ["accepted", "edited"].includes(decision.status) ? Boolean(decision.orphaned) : null,
+            orphaned:
+              ["accepted", "edited"].includes(decision.status) &&
+              log.latestById.get(decision.candidate_id)?.seq === decision.seq
+                ? Boolean(decision.orphaned)
+                : null,
           }))
         : null,
     };
@@ -10314,8 +10323,10 @@
   //
   // 末尾の5列は S4 で足した(3.11)。既存の23列の名前・順序・値は変えない。
   //  generation       候補が生まれた再導出の世代(初回の候補は 0)
-  //  decision_seq     その候補の最新の決定の seq(未処理は null)。withdrawn_by_seq が指す決定を
-  //                   証跡の中で引けるようにするため、設計書に無い列を足した
+  //  decision_seq     その候補の最新の決定の seq(未処理は null)。設計書に無い列を足した。
+  //                   原因の候補を決め直すと値が変わるので、withdrawn_by_seq が指す原因の
+  //                   決定は decision_log の seq で引く。候補の行(CSV)で引けるのは、原因の
+  //                   候補が決め直されていないときだけである
   //  withdrawn_by_seq 取り下げの原因になった決定の seq(取り下げの行だけ)
   //  orphaned         最新の決定がリプレイで当たらなかったか(採用・編集の行だけ)
   //  orphaned_kind    orphanedKindOf() の分類(orphaned が真の行だけ)

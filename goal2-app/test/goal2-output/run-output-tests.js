@@ -2821,6 +2821,39 @@ async function main() {
             structuralLog.every((entry) => !("op" in entry) && !("after_html" in entry)),
           JSON.stringify(structuralLog)
         );
+        // 原因の候補(構造候補)を決め直したので、候補の行の decision_seq は却下の seq になり、
+        // withdrawn_by_seq(採用の seq)に当たる候補の行は無い。原因は decision_log で引く。
+        const redecidedWithdrawn = evidence.candidates.filter((row) => row.status === "withdrawn");
+        const logSeqs = new Set(evidence.decision_log.map((entry) => entry.seq));
+        check(
+          "原因の候補を決め直しても、取り下げの行の withdrawn_by_seq は decision_log の seq で引ける",
+          redecidedWithdrawn.length > 0 &&
+            redecidedWithdrawn.every((row) => logSeqs.has(row.withdrawn_by_seq)) &&
+            redecidedWithdrawn.every(
+              (row) =>
+                evidence.decision_log.find((entry) => entry.seq === row.withdrawn_by_seq)?.candidate_id ===
+                tableStructural.id
+            ),
+          JSON.stringify({
+            withdrawn: redecidedWithdrawn.map((row) => [row.candidate_id, row.withdrawn_by_seq]),
+            log: evidence.decision_log.map((entry) => [entry.seq, entry.candidate_id, entry.status]),
+          })
+        );
+        const derivedFixLatest = evidence.decision_log
+          .filter((entry) => entry.candidate_id === derivedFix.id)
+          .pop();
+        check(
+          "decision_log の orphaned は最新の採用・編集の行だけが持ち、決め直しで効かなくなった採用は null",
+          structuralLog[0]?.status === "accepted" &&
+            structuralLog[0].orphaned === null &&
+            structuralLog[1]?.orphaned === null &&
+            derivedFixLatest?.status === "accepted" &&
+            derivedFixLatest.orphaned === true &&
+            evidence.decision_log
+              .filter((entry) => entry.status === "withdrawn")
+              .every((entry) => entry.orphaned === null),
+          JSON.stringify(evidence.decision_log.map((entry) => [entry.seq, entry.candidate_id, entry.status, entry.orphaned]))
+        );
         const fixRow = evidence.candidates.find((row) => row.candidate_id === derivedFix.id);
         check(
           "構造候補を決め直したために対象を失った内容修正は orphaned_kind が target-replaced",
@@ -2906,6 +2939,10 @@ async function main() {
           base(2, { node_id: "n0001.s1.1", op: { type: "set-attribute", name: "lang", value: "ja" } }),
           base(3, { candidate_id: "cand_s", node_id: "n0001", status: "rejected", op: null }),
         ]),
+        // 派生IDの参照先の seq がログに無い。決め直したとは言い切れないので lost にする。
+        missingSource: run([
+          base(1, { node_id: "n0001.s7.1", op: { type: "set-attribute", name: "lang", value: "ja" } }),
+        ]),
         // 当たった決定は分類しない。
         applied: run([base(1, { node_id: "n0001", op: { type: "set-attribute", name: "lang", value: "ja" } })]),
       };
@@ -2934,6 +2971,11 @@ async function main() {
       "orphaned_kind: 派生IDの参照先の決定が決め直しで効かなくなったら target-replaced",
       orphanKinds.replaced[1].orphaned && orphanKinds.replaced[1].kind === "target-replaced",
       JSON.stringify(orphanKinds.replaced)
+    );
+    check(
+      "orphaned_kind: 派生IDの参照先の seq がログに無いときは target-replaced にせず lost",
+      orphanKinds.missingSource[0].orphaned && orphanKinds.missingSource[0].kind === "lost",
+      JSON.stringify(orphanKinds.missingSource)
     );
     check(
       "orphaned_kind: 当たった決定は分類しない(null)",
