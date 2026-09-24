@@ -19,6 +19,14 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-24: 構造変更1 S4 画面と証跡
+
+- 背景・目的: S3 で取り下げた候補が一覧から消え、証跡にも出なくなっていた。`orphaned` は「修正が失われた」ものと、通知だけの候補や決め直しで対象が作り直されたものを区別していなかった。設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.10・3.11 の画面と証跡を入れる。
+- 主な変更内容: 取り下げた候補の写しを残し、証跡の `candidates` の後ろに `withdrawn` の行として並べる（`completion.withdrawn` を追加、`total`・`unresolved` の意味は変えない）。証跡の候補の行に `generation`・`decision_seq`・`withdrawn_by_seq`・`orphaned`・`orphaned_kind` を足し（CSV は既存の23列の後ろ）、JSON のトップに `decision_log` を足した。`orphaned` を `no-op`・`target-replaced`・`lost` に分ける `orphanedKindOf()` を入れ、`lost` の候補に「最終HTMLに未反映」のバッジと要約の件数、詳細欄に3分類の説明を出す。再導出で生まれた未処理の候補に「再確認」のバッジを付け、候補一覧の下に「取り下げた候補 N件」の折りたたみを置いた。GOAL1 の証跡の新しいキーは `generation` を除いて `null`、`goal1.js` の CSV は変えていない。
+- 検証: 6章のコマンドすべて通過（出力テストは S3 の198件に S4 の36件を足して234件）。`npm run test:saga-gold` は `main` と同じ数値。証跡CSVの既存23列は、同じ入力と同じ操作で `main` と11件すべて一致。実ページ51件の GOAL1 経路の最終HTMLは51件すべて `main` と同一。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/styles.css`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #141
+
 ## 2026-09-21: PROJECT_CONTEXT.md の作成と ForLLM Vault への接続
 
 - 背景・目的: リポジトリの技術構成、設計判断、実行方法を1か所にまとめ、Obsidian の ForLLM Vault（`05_Projects/11y-agent.md`）から参照できるようにする。
