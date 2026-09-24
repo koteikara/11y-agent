@@ -19,6 +19,17 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-24: リポジトリの整備（文書と実装のずれ、不要物、CI）
+
+- 背景・目的: `PROJECT_CONTEXT.md` の未解決事項にあった、文書と実装のずれ、コミットされた一時生成物、CIが無いことを片づける。あわせて、手元にLLMの鍵がある環境でテストが実際のAPIを呼んでいた（出力テストがAIの確認待ちで止まった）のを直した。
+- 文書: `goal2-app/README.md` の冒頭を、Goal 1〜3とmiChecker結果比較の画面一覧に書き替えた。「まだ扱わないもの」の「miCheckerの自動実行」を「Cloud Runのホスト版での自動実行（Windowsでローカルに動かしたときは実装済み）」に直し、「miChecker関連の機能」の節（修正基準の切り替え、ブラウザ内のmiChecker相当の検査、検査結果の比較）を足した。package名を `goal2-a11y-review-poc` から `a11y-migration-app` に替え、`/api/health` の `service` と起動時のログも合わせた。ディレクトリ名 `goal2-app` は、`goal2-app.exe` や手順書が参照しているため変えない。
+- 不要物: 旧複製 `a11y-agent/`（30ファイルのうち23件は現行の過去の版と同じで、残りも現行に引き継がれた初期の下書き）、`goal2-app/server.err.log`、`server.out.log`、`goal2-app/tmp/`（`--write-output` の出力）を削除した。`.gitignore` に `goal2-app/tmp/` と `*.log` を足し、`.tmp-gemini-a11y-agent` はシンボリックリンクでも無視されるよう末尾のスラッシュを外した。fixture、サンプル、評価の記録、一時生成物の分け方を `goal2-app/README.md` の「検証用のデータと一時ファイル」に書いた。
+- CI: `.github/workflows/ci.yml` を足した。pull requestとmainへのpushで、`scripts/ci/check-tracked-files.js`（一時生成物や鍵のファイルの混入）、`scripts/ci/check-kb-build.js`（KB生成物がMarkdownから作り直した結果と一致し、`goal2-app/data/` のコピーとも一致するか）、`goal2-app` のテスト5つ（`npm test`、`test:llm`、`test:table-nesting`、`test:goal2-output`、`test:michecker-parity`）を動かす。`test:saga-gold` は、fixtureが非公開のリポジトリにあるため動かさない。
+- テスト: `goal2-app/test/server-env.js` を足し、`run-tests.js`、出力テスト、表のテストが起動するサーバーへLLM関係の環境変数を渡さないようにした。
+- 検証: 手元の鍵を残したままテスト5つが通ることと、2つの検査が整理前のmainでは失敗（混入139件）し、このブランチでは通ることを確かめた。
+- 関連ファイル: `goal2-app/README.md`、`goal2-app/package.json`、`goal2-app/server.js`、`goal2-app/test/server-env.js`、`goal2-app/test/run-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/test/table-nesting/run-table-tests.js`、`.github/workflows/ci.yml`、`scripts/ci/`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: 本ブランチ `claude/wonderful-dijkstra-c3o55s` のPR
+
 ## 2026-09-24: LLM L1（提供元の切り替えの仕組み、さくらの AI Engine）
 
 - 背景・目的: LLM の提供元をさくらの AI Engine を主とする構成へ移すため、提供元を設定で選べるようにした（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 3.1〜3.7、3.9、3.10）。本番の切り替えは評価（L2）のあとで、この変更では既定の挙動を変えない。
