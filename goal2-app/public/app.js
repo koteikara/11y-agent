@@ -487,6 +487,7 @@
     bulkAcceptReviewFreeButton: document.getElementById("bulkAcceptReviewFreeButton"),
     bulkActionStatus: document.getElementById("bulkActionStatus"),
     candidateList: document.getElementById("candidateList"),
+    withdrawnCandidates: document.getElementById("withdrawnCandidates"),
     previewFrame: document.getElementById("previewFrame"),
     previewExpandButton: document.getElementById("previewExpandButton"),
     previewExpandOverlay: document.getElementById("previewExpandOverlay"),
@@ -9159,6 +9160,67 @@
     if (selectedButton) {
       requestAnimationFrame(() => selectedButton.scrollIntoView({ block: "nearest" }));
     }
+    renderWithdrawnCandidates();
+  }
+
+  // 取り下げた候補の折りたたみ(3.10)。候補一覧からは消えるが、何がなぜ消えたかを
+  // 作業者が確かめられるように、候補一覧の下へ並べる。この欄の候補は選択も決定もできない
+  // (ボタンにしない)。開閉の状態は描き直しても保つ。
+  function renderWithdrawnCandidates() {
+    const host = els.withdrawnCandidates;
+    if (!host) {
+      return;
+    }
+    const records = withdrawnCandidateRecords();
+    const wasOpen = Boolean(host.querySelector("details")?.open);
+    host.innerHTML = "";
+    host.hidden = records.length === 0;
+    if (!records.length) {
+      return;
+    }
+    const details = document.createElement("details");
+    details.open = wasOpen;
+    const summary = document.createElement("summary");
+    summary.textContent = `取り下げた候補 ${records.length}件`;
+    const list = document.createElement("ul");
+    list.className = "withdrawn-list";
+    records.forEach(({ candidate, entry }) => {
+      const item = document.createElement("li");
+      item.className = "withdrawn-item";
+      item.dataset.candidateId = candidate.candidate_id;
+      const title = document.createElement("span");
+      title.className = "withdrawn-title";
+      title.textContent = candidateDisplayTitle(candidate);
+      const cause = document.createElement("span");
+      cause.className = "withdrawn-cause";
+      cause.textContent = withdrawalCauseText(entry);
+      item.append(title, cause);
+      list.appendChild(item);
+    });
+    details.append(summary, list);
+    host.appendChild(details);
+  }
+
+  // 取り下げの原因(withdrawn_by_seq の決定)を「「○○」の採用の後」の形で示す。その決定と
+  // 同じ世代(一括採用1回)に決定が2件以上あるときは「一括採用 N件の後」とする。
+  // 取り下げの行も原因の決定と同じ世代に積まれるので、数えるのは取り下げ以外の決定だけ。
+  function withdrawalCauseText(entry) {
+    const cause = state.decisions.find((decision) => decision.seq === entry.withdrawn_by_seq);
+    if (!cause) {
+      return "決定の後";
+    }
+    const sameGeneration = state.decisions.filter(
+      (decision) => decision.generation === cause.generation && decision.status !== "withdrawn"
+    ).length;
+    if (sameGeneration >= 2) {
+      return `一括採用 ${sameGeneration}件の後`;
+    }
+    const causeCandidate =
+      state.candidates.find((candidate) => candidate.candidate_id === cause.candidate_id) ||
+      state.withdrawnCandidates.get(cause.candidate_id)?.candidate ||
+      null;
+    const causeTitle = causeCandidate ? candidateDisplayTitle(causeCandidate) : cause.rule_id;
+    return `「${causeTitle}」の${statusLabels[cause.status] || cause.status}の後`;
   }
 
   // table.cell-merge-* candidates share a KB rule.title using a "セル結合①〜⑥" numbering
@@ -9219,6 +9281,9 @@
       renderBulkControls();
     });
     const siblingCount = alternativeMethodCandidates(candidate).length;
+    // 決定のあと再導出で生まれた未処理の候補(3.10)。前の候補から引き継いだ候補は
+    // inheritIntoFresh() が generation を保つので付かない。決定済みの候補にも付けない。
+    const needsRecheck = isUnresolved && Number(candidate.generation) > 0;
     button.type = "button";
     button.className = `candidate-item ${status}`;
     button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
@@ -9226,6 +9291,7 @@
       "aria-label",
       `${candidateDisplayTitle(candidate)}、${statusLabels[status] || status}、${candidate.candidate_id}` +
         (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "") +
+        (needsRecheck ? "、再確認" : "") +
         (orphanedKind === "lost" ? "、最終HTMLに未反映" : "")
     );
     button.addEventListener("click", () => {
@@ -9238,6 +9304,7 @@
     button.innerHTML = `
       <div class="candidate-title">${escapeHtml(candidateDisplayTitle(candidate))}</div>
       ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
+      ${needsRecheck ? `<div class="candidate-recheck-badge">再確認</div>` : ""}
       ${orphanedKind === "lost" ? `<div class="candidate-lost-badge">最終HTMLに未反映</div>` : ""}
     `;
     row.append(checkbox, button);
