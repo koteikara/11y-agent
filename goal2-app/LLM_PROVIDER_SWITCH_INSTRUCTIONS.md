@@ -63,7 +63,7 @@ Goal 2 実行画面の LLM 呼び出しを、いまの Google Gemini から、�
 ### 2.5 期限
 
 - Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される（公式の「Model versions and lifecycle」、2026-09-22 更新）。
-- 本番の Cloud Run が Vertex AI 経由か API キー経由かは、まだ確かめていない。記録には、ユーザーが Cloud Run で Vertex AI 経由の呼び出しを確かめたことが残っている（`memory/project-state.md`）。
+- 本番の Cloud Run（2026-09-24 にユーザーが確認）は、`GEMINI_AUTH_MODE=adc`（Vertex AI 経由）、`GEMINI_VERTEX_LOCATION=asia-northeast1` で、`GEMINI_MODEL` は設定していない。つまり東京の `gemini-2.5-flash` を使っており、設定を替えなければ 2026-10-20 に AI の下書きが止まる。止まっても画面はルールベースの案で作業を続けられる（2.1）。
 
 ## 3. 設計
 
@@ -174,7 +174,27 @@ Vertex AI の `gemini-2.5-flash` が 2026-10-20 に止まるので、さくら�
 | C | API キー経由（Gemini API）に戻し、`gemini-2.5-flash` のまま | 同じ | 保証なし | 廃止日は未発表。55日保存。課金を有効にしたキーが要る |
 
 A と B は Gemini 3 系なので、`GEMINI_TEMPERATURE=1` を合わせて設定する。
-本番がすでに API キー経由なら、L0 の設定変更は要らない。
+
+**推奨は案 A** とする（2026-09-24）。
+本番はすでに東京の Vertex AI を使っているので、モデル名を替えるだけで動き、コードの変更を待たない。
+処理する場所も変わらない。
+単価は上がるが、さくらへ移すまでのつなぎで、呼び出しの量も少ない。
+温度は、L0 の変更が入るまでは 0 のままになる。Gemini 3 系を温度 0 で使うと繰り返しなどが起きることがあるので、次の手順で本番に出す前に確かめる。
+
+1. トラフィックを流さない新しいリビジョンを、タグ付きで作る。費用の概算も新しい単価に合わせる。
+
+   ```
+   gcloud run services update goal2-a11y-review --region asia-northeast1 --update-env-vars GEMINI_MODEL=gemini-3.5-flash,GEMINI_INPUT_PRICE_PER_1M_TOKENS=1.65,GEMINI_OUTPUT_PRICE_PER_1M_TOKENS=9.9 --no-traffic --tag gemini35
+   ```
+
+2. 表示されたタグ付きの URL を開き、画像と見出しのあるページを数件処理する。AI の下書きが入ること、代替テキストや見出しの文言に繰り返しや崩れが無いことを見る。
+3. 問題が無ければ、トラフィックを新しいリビジョンへ移す。
+
+   ```
+   gcloud run services update-traffic goal2-a11y-review --region asia-northeast1 --to-latest
+   ```
+
+4. 崩れが出た場合は、トラフィックを移さずに L0 の変更（`GEMINI_TEMPERATURE`）のマージを待ち、`GEMINI_TEMPERATURE=1` を足して同じ手順をやり直す。
 
 ### 3.9 評価用の書き出し（`LLM_RECORD_DIR`）
 
@@ -273,7 +293,7 @@ npm run test:saga-gold
 
 ## 6. 決めてほしいこと
 
-- L0 の本番の設定（案 A、B、C）。本番がすでに API キー経由なら不要。
+- L0 の本番の設定（案 A、B、C）。推奨は案 A（3.8）。本番を替えるのはユーザーで、10月20日より前に行う。
 - 画像のタスクをさくらのプレビューのモデルに載せるか。L2 の結果を見て決める。
 - 評価と本番で使う、さくらの API キー。他のプロジェクトとは別に、このプロジェクト専用のものを発行するのが望ましい（費用を分けて見られ、止めるときに他へ響かない）。
 - 発注元と自治体への説明の要否と時期。
