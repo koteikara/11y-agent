@@ -8,6 +8,7 @@
     rejected: "却下",
     needs_review: "要確認",
     conflicted: "競合",
+    withdrawn: "取り下げ",
   };
 
   const noticeRuleIds = new Set([
@@ -417,6 +418,9 @@
     lastRederivation: null,
     lastRederivationAdded: 0,
     lastRederivationWithdrawn: 0,
+    // 取り下げた候補の写し(3.11)。candidate_id → { candidate, entry }。取り下げた候補は
+    // 候補一覧から外れ、ログの行には before_html などが無いので、証跡に並べるためにここへ残す。
+    withdrawnCandidates: new Map(),
     selectedCandidateId: null,
     bulkSelectedCandidateIds: new Set(),
     bulkActionMessage: "",
@@ -7478,6 +7482,7 @@
     state.lastRederivation = null;
     state.lastRederivationAdded = 0;
     state.lastRederivationWithdrawn = 0;
+    state.withdrawnCandidates = new Map();
     openDecisionGeneration = null;
   }
 
@@ -7731,7 +7736,18 @@
     );
     entry.withdrawn_by_seq = Number.isFinite(withdrawnBySeq) && withdrawnBySeq > 0 ? withdrawnBySeq : null;
     state.decisions.push(entry);
+    // 取り下げた時点の候補の写しを残す(3.11)。ログの行は before_html・after_html・category を
+    // 持たないので、これが無いと証跡に並べられない。candidate_id は再利用しないので上書きは起きない。
+    state.withdrawnCandidates.set(candidate.candidate_id, {
+      candidate: { ...candidate, decision: { ...(candidate.decision || {}) } },
+      entry,
+    });
     return entry;
+  }
+
+  // 取り下げた候補を、取り下げの seq 順に並べる(証跡と画面の折りたたみが使う)。
+  function withdrawnCandidateRecords() {
+    return [...state.withdrawnCandidates.values()].sort((a, b) => a.entry.seq - b.entry.seq);
   }
 
   // AIの補完(と、作業者が投入したAI画像名)が書き換えた内容は、機械的な再導出では作り直せない。
@@ -10034,6 +10050,8 @@
         candidates: state.candidates,
         notices: state.notices,
         micheckerEngineResult: state.micheckerEngineResult,
+        decisions: state.decisions,
+        withdrawnCandidates: withdrawnCandidateRecords(),
       },
       finalHtml
     );
@@ -10041,7 +10059,13 @@
 
   // Context-parameterized evidence builder shared by the goal2 screen (via buildEvidence
   // above) and the GOAL1 batch engine, which has no input fields to read from.
+  //
+  // 証跡の candidates は「現在の候補一覧」と「取り下げた候補」を合わせたもの(設計書 3.11)。
+  // 決定済みの候補は reconcile() が一覧に残すので、現在の一覧に入っている。取り下げた候補は
+  // 一覧から外れるので、recordWithdrawal() が残した写しから、一覧の後ろに seq 順で並べる。
+  // completion の total・unresolved は今までどおり現在の一覧だけを数える。
   function buildEvidenceFor(context, finalHtml) {
+    const withdrawnRecords = context.withdrawnCandidates || [];
     return {
       page_session_id: context.sessionId,
       ...(context.ruleScopeMode === "michecker" && context.micheckerEngineResult
@@ -10066,37 +10090,12 @@
         unresolved: context.candidates.filter((candidate) => !candidate.decision.status).length,
         complete: isProcessingCompleteFor(context.candidates, context.notices, context.generatedAt, context.sourceHtml),
         notices: context.notices.length,
+        withdrawn: Array.isArray(context.decisions) ? withdrawnRecords.length : null,
       },
-      candidates: context.candidates.map((candidate) => ({
-        candidate_id: candidate.candidate_id,
-        rule_id: candidate.rule_id,
-        category: candidate.category,
-        processing_class: candidate.processing_class,
-        status: candidate.decision.status || "unresolved",
-        confidence: candidate.proposal.confidence,
-        requires_human_review: candidate.proposal.requires_human_review,
-        patch_mode: candidate.proposal.patch_mode,
-        ai_image_name: isImageNameCandidate(candidate)
-          ? candidate.proposal.ai_draft?.confirmed_name || candidate.proposal.ai_draft?.name || null
-          : null,
-        ai_image_name_inserted: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.inserted || false : false,
-        ai_image_name_source: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.source || null : null,
-        before_html: candidate.proposal.before_html,
-        after_html: candidateAfterHtmlForEvidence(candidate),
-        selected_method_id: candidate.decision.selected_method_id || null,
-        selected_method_rule_id: candidate.decision.selected_method_rule_id || null,
-        selected_method_title: candidate.decision.selected_method_title || null,
-        selected_method_label: candidate.decision.selected_method_label || null,
-        decision_reason: candidate.decision.reason,
-        actor: candidate.decision.actor,
-        decided_at: candidate.decision.decided_at,
-        related_wcag: candidate.issue.wcag,
-        related_jis: candidate.issue.jis,
-        kb_source: candidate.rule.source,
-        miChecker_status: null,
-        miChecker_classification: null,
-        unresolved_reason: candidate.decision.status ? null : "未処理",
-      })),
+      candidates: [
+        ...context.candidates.map((candidate) => evidenceCandidateRow(candidate, candidate.decision)),
+        ...withdrawnRecords.map(({ candidate, entry }) => evidenceCandidateRow(candidate, entry)),
+      ],
       notices: context.notices.map((notice) => ({
         notice_id: notice.notice_id,
         rule_id: notice.rule_id,
@@ -10111,6 +10110,42 @@
         related_jis: notice.issue.jis,
         kb_source: notice.rule.source,
       })),
+    };
+  }
+
+  // 証跡の候補1行。decision は、現在の一覧の候補なら candidate.decision(ログの写し)、
+  // 取り下げた候補なら取り下げのログの行(status: "withdrawn")。取り下げた候補の before_html・
+  // after_html・category などは、recordWithdrawal() が残した写しから取る。
+  function evidenceCandidateRow(candidate, decision) {
+    return {
+      candidate_id: candidate.candidate_id,
+      rule_id: candidate.rule_id,
+      category: candidate.category,
+      processing_class: candidate.processing_class,
+      status: decision.status || "unresolved",
+      confidence: candidate.proposal.confidence,
+      requires_human_review: candidate.proposal.requires_human_review,
+      patch_mode: candidate.proposal.patch_mode,
+      ai_image_name: isImageNameCandidate(candidate)
+        ? candidate.proposal.ai_draft?.confirmed_name || candidate.proposal.ai_draft?.name || null
+        : null,
+      ai_image_name_inserted: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.inserted || false : false,
+      ai_image_name_source: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.source || null : null,
+      before_html: candidate.proposal.before_html,
+      after_html: candidateAfterHtmlForEvidence(candidate),
+      selected_method_id: decision.selected_method_id || null,
+      selected_method_rule_id: decision.selected_method_rule_id || null,
+      selected_method_title: decision.selected_method_title || null,
+      selected_method_label: decision.selected_method_label || null,
+      decision_reason: decision.reason,
+      actor: decision.actor,
+      decided_at: decision.decided_at,
+      related_wcag: candidate.issue.wcag,
+      related_jis: candidate.issue.jis,
+      kb_source: candidate.rule.source,
+      miChecker_status: null,
+      miChecker_classification: null,
+      unresolved_reason: decision.status ? null : "未処理",
     };
   }
 
