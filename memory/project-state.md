@@ -853,7 +853,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 表の構造変換の手段を一括採用とGOAL1の `autoAcceptSafe` の対象から外した（PR-2.5）。`TABLE_FIX_METHODS_INSTRUCTIONS.md` 2章の確定済み判断がコード側で満たされていなかったのを、`isBulkExcludedCandidate()` を広げる形で直した。`requires_human_review` を一般の条件にするB案は見送り。構造の手段でもキャプション必須にする揃え方は PR-2.6 の候補として残している。
 - LLM の提供元の切り替え（`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`）の L0「つなぎの Gemini 設定」を実装した（PR #143）。`global` の宛先の修正、`GEMINI_TEMPERATURE`、`GEMINI_THINKING_LEVEL` と、LLM の呼び出しの初めてのテスト `test/llm/run-llm-tests.js` を入れた。本番の設定（案 A〜C、推奨は A）を 2026-10-20 より前に替えるのはユーザー。
 - 同じ設計書の L1「提供元の切り替えの仕組み」を実装した（PR #144、PR #143 のブランチを基点）。`callLlm()` と gemini、openai-compatible（さくら）のアダプター、スキーマの変換と検証、やり直しと受け皿、`LLM_RECORD_DIR` を入れた。既定の挙動は変えていない。次は L2 の評価で、さくらの API キーが要る。
-- リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
+- リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（PR #145。詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
 
 ## Decisions
 

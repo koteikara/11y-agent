@@ -28,7 +28,7 @@
 - テスト: `goal2-app/test/server-env.js` を足し、`run-tests.js`、出力テスト、表のテストが起動するサーバーへLLM関係の環境変数を渡さないようにした。
 - 検証: 手元の鍵を残したままテスト5つが通ることと、2つの検査が整理前のmainでは失敗（混入139件）し、このブランチでは通ることを確かめた。
 - 関連ファイル: `goal2-app/README.md`、`goal2-app/package.json`、`goal2-app/server.js`、`goal2-app/test/server-env.js`、`goal2-app/test/run-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/test/table-nesting/run-table-tests.js`、`.github/workflows/ci.yml`、`scripts/ci/`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
-- 関連PR/コミット: 本ブランチ `claude/wonderful-dijkstra-c3o55s` のPR
+- 関連PR/コミット: PR #145
 
 ## 2026-09-24: LLM L1（提供元の切り替えの仕組み、さくらの AI Engine）
 
