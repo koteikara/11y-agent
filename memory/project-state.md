@@ -36,6 +36,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - 「エージェント履歴を関連度スコアで圧縮する」設計仮説（ユーザーのノート）を、Goal 2 と構造変更1 に照らして検討した結果を記載する。大半は既存の設計と一致し、伸びしろは限定判断の小型分類器と案件内の判断履歴の活用にある。
 - `memory/cms-migration-import-failure-patterns.md`
   - CMS の機械取込みが失敗するパターン（ユーザー共有の現場知見）と、課題として起票できる条件の検証を記載する。
+- `memory/llm-provider-alternatives-research.md`
+  - LLM の提供元を Gemini から移す検討の記録。Google Workspace 経由、さくらの AI Engine、Bedrock、Azure、国産 LLM、自前で動かすモデルの比較と出典、ユーザーの判断を記載する。
 - `memory/verification-2026-08-summary.md`
   - 2026年8月に実施した3方式比較の検証作業について、実施状況、所要時間の記録、AI移行で出た指摘、未実施の項目を記載する。
 - `goal2-app/`
@@ -46,6 +48,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - `server.js` の `/api/fetch-html` が、Goal 3のURL取得(簡易SSRF対策付き)を提供する。
 - `goal2-app/CLOUD_RUN_DEPLOY.md`
   - Cloud Run初心者向けに、Google Cloud ConsoleのCloud Run概要画面から始めるステップバイステップのデプロイ手順を記載する。
+- `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`
+  - LLM の提供元をさくらの AI Engine を主とする構成へ移す設計書。つなぎの Gemini 設定（L0）、提供元の切り替えの仕組み（L1）、評価（L2）、本番の切り替え（L3）の段階と検証を記載する。
 - `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
   - 遠野市の指摘15件のうちツール側で直す8件の設計と、決定のたびに依存候補を作り直す構造変更1の設計、実装ステージ、検証手順を記載する。
 - `a11y-migration-kb/`
@@ -849,6 +853,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 ## Decisions
 
 - レビュー体制（2026-09-17 ユーザー確定。2026-09-24 に設計・レビュー担当を Fable から Opus 5.5 へ置き換え、ユーザー確定）: Opus 5.5 が設計とレビューを担当し、実装は別セッションの Opus が行う。設計書・記録・課題一覧の文書 PR と、構造変更1の各ステージのように段階の区切りになるコード PR には、設計・レビュー担当が「承認相当」を付けたあとに Codex の二次レビューを付け、両方が出そろってからユーザーがマージを判断する。小さな修正 PR は設計・レビュー担当のレビューだけで進める。Codex には `main` の最新を参照させる。指摘が食い違ったときは設計・レビュー担当が再現と根拠で裁定して PR に書く。2026-09-23 までの記録にある「Fable」は、当時の設計・レビュー担当を指す。
+- LLM の提供元（2026-09-24、ユーザー確定）: さくらの AI Engine に寄せる。他のプロジェクトですでに使っており、契約と支払いの手続きが済んでいるためである。Google から離れることは条件ではなく、Gemini は受け皿とつなぎとして残す。移行は `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の段階に従い、文字のタスクから移す。画像のタスクは、さくらの画像モデルがプレビューのため、評価の結果を見て決める。
+- LLM へのデータ送信と ISMAP（2026-09-24、ユーザー確定）: ISMAP の登録はいまは求めない。送るのは公開済みの自治体ページの HTML と画像で、機密性が低いためである。
 - 一括採用の対象から表の構造変換を外す（A案、2026-09-16、ユーザー確定）。`requires_human_review` を一般の条件にするB案は採らない。
 - 効率化対象は、移行作業とアクセシビリティ修正作業を一体で扱う。
 - AGENTはLLMなどを活用し、機械的に対応できる部分を先に処理する。

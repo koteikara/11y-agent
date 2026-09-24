@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-24: LLM の提供元の見直しの研究メモと、さくらの AI Engine への移行の設計書
+
+- 背景・目的: Goal 2 実行画面の LLM 呼び出しを Gemini から移す検討をした。ユーザーは、他のプロジェクトで使っているさくらの AI Engine に寄せること、ISMAP をいまは求めないこと(公開済みページで機密性が低い)、Google から離れることは条件でないことを決めた。あわせて、Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されることが分かった。
+- 主な変更内容: 研究メモに、Google Workspace 経由、さくらの AI Engine、AWS Bedrock、Azure、Anthropic と OpenAI の直接契約、国産 LLM、自前で動かすモデルの比較と出典を残した。設計書に、つなぎの Gemini 設定(L0: `global` の宛先、温度と考える量の変数)、提供元の切り替えの仕組み(L1: アダプター、スキーマの変換、応答の検証、やり直しと受け皿、評価用の書き出し、モックを使ったテスト)、評価(L2: 佐賀市51件と遠野市のページで Gemini とさくらを比べる、合格の目安)、本番の切り替え(L3)を書いた。`LLM_DATA_POLICY.md` と `memory/project-state.md` の Decisions に判断を記録し、ファイル一覧に2文書を足した。
+- 関連ファイル: `memory/llm-provider-alternatives-research.md`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、`goal2-app/LLM_DATA_POLICY.md`、`memory/project-state.md`、`PROJECT_CONTEXT.md`（重要な設計判断に1行、`updated`）
+- 関連PR/コミット: (PR 作成後に記入)
+
 ## 2026-09-24: 設計・レビュー担当を Fable から Opus 5.5 へ置き換え
 
 - 背景・目的: ユーザーの指示で、構造変更1などで Fable が受け持っていた設計とレビューを Opus 5.5 が引き継ぐことになった。体制の記録を現状に合わせる。
