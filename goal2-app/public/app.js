@@ -8,6 +8,7 @@
     rejected: "却下",
     needs_review: "要確認",
     conflicted: "競合",
+    withdrawn: "取り下げ",
   };
 
   const noticeRuleIds = new Set([
@@ -417,6 +418,9 @@
     lastRederivation: null,
     lastRederivationAdded: 0,
     lastRederivationWithdrawn: 0,
+    // 取り下げた候補の写し(3.11)。candidate_id → { candidate, entry }。取り下げた候補は
+    // 候補一覧から外れ、ログの行には before_html などが無いので、証跡に並べるためにここへ残す。
+    withdrawnCandidates: new Map(),
     selectedCandidateId: null,
     bulkSelectedCandidateIds: new Set(),
     bulkActionMessage: "",
@@ -483,6 +487,7 @@
     bulkAcceptReviewFreeButton: document.getElementById("bulkAcceptReviewFreeButton"),
     bulkActionStatus: document.getElementById("bulkActionStatus"),
     candidateList: document.getElementById("candidateList"),
+    withdrawnCandidates: document.getElementById("withdrawnCandidates"),
     previewFrame: document.getElementById("previewFrame"),
     previewExpandButton: document.getElementById("previewExpandButton"),
     previewExpandOverlay: document.getElementById("previewExpandOverlay"),
@@ -6836,6 +6841,77 @@
     return [...latestByCandidate.values()];
   }
 
+  // orphaned(リプレイで操作が当たらなかった決定)の分類(設計書 3.7 の S2、3.13 の S4)。
+  // orphaned は「対象の要素が見つからなかった、または操作が当たらなかった」で一律に立つが、
+  // 修正が本当に失われたのはそのうち "lost" だけである。
+  //
+  //  "no-op"           候補が HTML を元から変えない(patch_mode が "none"、op が無い、または
+  //                    変換後HTMLが変換前と同じ)。修正は失われていない。
+  //  "target-replaced" 対象が派生ID(nX.s{seq}.{k})で、その中のいずれかの seq の決定がいま
+  //                    効いていない(その候補の最新の決定でない、または採用・編集でない)。
+  //                    構造候補を決め直したために対象が作り直されたもので、修正は失われて
+  //                    いない。同じ問題が残っていれば、再導出で新しい対象への候補として
+  //                    出直す(編集に決め直したときや、決め直した先の構造で問題そのものが
+  //                    無くなったときは出直さない)。
+  //  "lost"            上のどちらでもない。修正が最終HTMLに入っていない。
+  //
+  // 参照先の決定が効いているのに、それ自体が orphaned のとき(派生IDの要素がそもそも
+  // 作られなかった)は "target-replaced" ではなく "lost" にする。
+  // candidate は分類の手がかり(patch_mode・変換前後のHTML)で、無ければログの op だけで見る。
+  function orphanedKindOf(decision, decisions, candidate) {
+    if (!decision?.orphaned || !["accepted", "edited"].includes(decision.status)) {
+      return null;
+    }
+    if (decisionChangesNothing(decision, candidate)) {
+      return "no-op";
+    }
+    if (derivedTargetReplaced(decision.node_id, decisions)) {
+      return "target-replaced";
+    }
+    return "lost";
+  }
+
+  function decisionChangesNothing(decision, candidate) {
+    if (candidate?.proposal?.patch_mode === "none") {
+      return true;
+    }
+    if (decision.status === "accepted" && (!decision.op || decision.op.apply === false)) {
+      return true;
+    }
+    const beforeHtml = candidate?.proposal?.before_html;
+    const afterHtml =
+      decision.status === "edited"
+        ? decision.after_html
+        : decision.op?.after_html || candidate?.proposal?.after_html;
+    if (typeof beforeHtml !== "string" || typeof afterHtml !== "string") {
+      return false;
+    }
+    return stripInternalFromHtml(beforeHtml) === stripInternalFromHtml(afterHtml);
+  }
+
+  // 派生ID(3.4)は入れ子で .s{seq}.{k} が複数並ぶ(n0001.s3.2.s5.1)。どれか1つでも、その
+  // seq の決定がいま効いていなければ、その要素はいまの作業中HTMLには作られない。
+  // 参照先の seq がログに無いときは、決め直したとは言い切れないので効いているものとして
+  // 扱う(結果は lost になり、作業者に気付かせる側に倒す)。
+  function derivedTargetReplaced(nodeId, decisions) {
+    const seqs = [...String(nodeId || "").matchAll(/\.s(\d+)\./g)].map((match) => Number(match[1]));
+    if (!seqs.length) {
+      return false;
+    }
+    const bySeq = new Map((decisions || []).map((decision) => [decision.seq, decision]));
+    const latestByCandidate = new Map(
+      latestDecisions(decisions).map((decision) => [decision.candidate_id, decision])
+    );
+    return seqs.some((seq) => {
+      const source = bySeq.get(seq);
+      if (!source) {
+        return false;
+      }
+      const latest = latestByCandidate.get(source.candidate_id);
+      return !latest || latest.seq !== source.seq || !["accepted", "edited"].includes(source.status);
+    });
+  }
+
   // 元のHTMLに決定ログを当て直して作業中HTMLを作る(設計書 3.7)。
   //
   // S2から、当てる内容は決定ログだけで決まる(候補配列を参照しない)。accepted は決定時点の
@@ -7478,6 +7554,7 @@
     state.lastRederivation = null;
     state.lastRederivationAdded = 0;
     state.lastRederivationWithdrawn = 0;
+    state.withdrawnCandidates = new Map();
     openDecisionGeneration = null;
   }
 
@@ -7731,7 +7808,18 @@
     );
     entry.withdrawn_by_seq = Number.isFinite(withdrawnBySeq) && withdrawnBySeq > 0 ? withdrawnBySeq : null;
     state.decisions.push(entry);
+    // 取り下げた時点の候補の写しを残す(3.11)。ログの行は before_html・after_html・category を
+    // 持たないので、これが無いと証跡に並べられない。candidate_id は再利用しないので上書きは起きない。
+    state.withdrawnCandidates.set(candidate.candidate_id, {
+      candidate: { ...candidate, decision: { ...(candidate.decision || {}) } },
+      entry,
+    });
     return entry;
+  }
+
+  // 取り下げた候補を、取り下げの seq 順に並べる(証跡と画面の折りたたみが使う)。
+  function withdrawnCandidateRecords() {
+    return [...state.withdrawnCandidates.values()].sort((a, b) => a.entry.seq - b.entry.seq);
   }
 
   // AIの補完(と、作業者が投入したAI画像名)が書き換えた内容は、機械的な再導出では作り直せない。
@@ -8980,17 +9068,44 @@
     return "";
   }
 
+  // 候補ごとの最新の決定の orphaned の分類(3.7 の S2、S4)。candidate_id → 分類。
+  // orphaned でない候補は入らない。
+  function currentOrphanedKinds() {
+    const byId = new Map(state.candidates.map((candidate) => [candidate.candidate_id, candidate]));
+    const kinds = new Map();
+    latestDecisions(state.decisions).forEach((decision) => {
+      const kind = orphanedKindOf(decision, state.decisions, byId.get(decision.candidate_id));
+      if (kind) {
+        kinds.set(decision.candidate_id, kind);
+      }
+    });
+    return kinds;
+  }
+
+  // 詳細欄に出す orphaned の説明。no-op と target-replaced は修正が失われていないことを伝える。
+  const orphanedKindDescriptions = {
+    "no-op": "この候補はHTMLを変えない候補なので、対象が見つからなくても失われた修正はありません。",
+    "target-replaced":
+      "構造候補を決め直したために対象の要素が作り直されました。修正は失われておらず、同じ問題が残っていれば、新しい対象への候補として出直します。",
+    lost: "この決定の修正は対象が見つからずに当たらなかったため、最終HTMLに入っていません。",
+  };
+
   function renderCandidates() {
     els.candidateList.innerHTML = "";
     pruneBulkSelection();
     const total = state.candidates.length;
     const unresolved = state.candidates.filter((candidate) => !candidate.decision.status).length;
     const done = total > 0 && unresolved === 0;
+    const orphanedKinds = currentOrphanedKinds();
+    const lostCount = [...orphanedKinds.values()].filter((kind) => kind === "lost").length;
 
+    // 最終HTMLに未反映(lost)が残っていても完了判定は変えない(3.10)。件数だけを知らせる。
     els.candidateSummary.textContent =
       (total === 0
         ? `修正候補はありません。注意 ${state.notices.length}件は出力欄にあります。`
-        : `${total}件中 ${unresolved}件が未処理です。注意 ${state.notices.length}件は出力欄。`) + llmUsageSummaryText();
+        : `${total}件中 ${unresolved}件が未処理です。注意 ${state.notices.length}件は出力欄。`) +
+      (lostCount ? `最終HTMLに未反映 ${lostCount}件。` : "") +
+      llmUsageSummaryText();
     els.completionPill.textContent = done ? "完了可" : total === 0 && state.notices.length > 0 ? "注意のみ" : total === 0 ? "未生成" : "未完了";
     els.completionPill.className = `completion-pill ${done ? "done" : total > 0 ? "blocked" : ""}`;
     renderBulkControls();
@@ -9033,7 +9148,7 @@
           host.appendChild(labelElement);
         }
         items.forEach((item) => {
-          const row = buildCandidateRow(item);
+          const row = buildCandidateRow(item, orphanedKinds.get(item.candidate_id) || null);
           host.appendChild(row);
           if (item.candidate_id === state.selectedCandidateId) {
             selectedButton = row.querySelector("button");
@@ -9049,6 +9164,67 @@
     if (selectedButton) {
       requestAnimationFrame(() => selectedButton.scrollIntoView({ block: "nearest" }));
     }
+    renderWithdrawnCandidates();
+  }
+
+  // 取り下げた候補の折りたたみ(3.10)。候補一覧からは消えるが、何がなぜ消えたかを
+  // 作業者が確かめられるように、候補一覧の下へ並べる。この欄の候補は選択も決定もできない
+  // (ボタンにしない)。開閉の状態は描き直しても保つ。
+  function renderWithdrawnCandidates() {
+    const host = els.withdrawnCandidates;
+    if (!host) {
+      return;
+    }
+    const records = withdrawnCandidateRecords();
+    const wasOpen = Boolean(host.querySelector("details")?.open);
+    host.innerHTML = "";
+    host.hidden = records.length === 0;
+    if (!records.length) {
+      return;
+    }
+    const details = document.createElement("details");
+    details.open = wasOpen;
+    const summary = document.createElement("summary");
+    summary.textContent = `取り下げた候補 ${records.length}件`;
+    const list = document.createElement("ul");
+    list.className = "withdrawn-list";
+    records.forEach(({ candidate, entry }) => {
+      const item = document.createElement("li");
+      item.className = "withdrawn-item";
+      item.dataset.candidateId = candidate.candidate_id;
+      const title = document.createElement("span");
+      title.className = "withdrawn-title";
+      title.textContent = candidateDisplayTitle(candidate);
+      const cause = document.createElement("span");
+      cause.className = "withdrawn-cause";
+      cause.textContent = withdrawalCauseText(entry);
+      item.append(title, cause);
+      list.appendChild(item);
+    });
+    details.append(summary, list);
+    host.appendChild(details);
+  }
+
+  // 取り下げの原因(withdrawn_by_seq の決定)を「「○○」の採用の後」の形で示す。その決定と
+  // 同じ世代(一括採用1回)に決定が2件以上あるときは「一括採用 N件の後」とする。
+  // 取り下げの行も原因の決定と同じ世代に積まれるので、数えるのは取り下げ以外の決定だけ。
+  function withdrawalCauseText(entry) {
+    const cause = state.decisions.find((decision) => decision.seq === entry.withdrawn_by_seq);
+    if (!cause) {
+      return "決定の後";
+    }
+    const sameGeneration = state.decisions.filter(
+      (decision) => decision.generation === cause.generation && decision.status !== "withdrawn"
+    ).length;
+    if (sameGeneration >= 2) {
+      return `一括採用 ${sameGeneration}件の後`;
+    }
+    const causeCandidate =
+      state.candidates.find((candidate) => candidate.candidate_id === cause.candidate_id) ||
+      state.withdrawnCandidates.get(cause.candidate_id)?.candidate ||
+      null;
+    const causeTitle = causeCandidate ? candidateDisplayTitle(causeCandidate) : cause.rule_id;
+    return `「${causeTitle}」の${statusLabels[cause.status] || cause.status}の後`;
   }
 
   // table.cell-merge-* candidates share a KB rule.title using a "セル結合①〜⑥" numbering
@@ -9085,7 +9261,8 @@
     return after ? `${clip(before)} → ${clip(after)}` : `${clip(before)} を削除`;
   }
 
-  function buildCandidateRow(candidate) {
+  // orphanedKind は currentOrphanedKinds() の値。"lost" のときだけ「最終HTMLに未反映」を出す。
+  function buildCandidateRow(candidate, orphanedKind = null) {
     const row = document.createElement("div");
     const button = document.createElement("button");
     const checkbox = document.createElement("input");
@@ -9108,13 +9285,18 @@
       renderBulkControls();
     });
     const siblingCount = alternativeMethodCandidates(candidate).length;
+    // 決定のあと再導出で生まれた未処理の候補(3.10)。前の候補から引き継いだ候補は
+    // inheritIntoFresh() が generation を保つので付かない。決定済みの候補にも付けない。
+    const needsRecheck = isUnresolved && Number(candidate.generation) > 0;
     button.type = "button";
     button.className = `candidate-item ${status}`;
     button.setAttribute("aria-selected", String(candidate.candidate_id === state.selectedCandidateId));
     button.setAttribute(
       "aria-label",
       `${candidateDisplayTitle(candidate)}、${statusLabels[status] || status}、${candidate.candidate_id}` +
-        (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "")
+        (siblingCount > 1 ? `、同じ箇所への代替手段が他に${siblingCount - 1}件あります` : "") +
+        (needsRecheck ? "、再確認" : "") +
+        (orphanedKind === "lost" ? "、最終HTMLに未反映" : "")
     );
     button.addEventListener("click", () => {
       state.selectedCandidateId = candidate.candidate_id;
@@ -9126,6 +9308,8 @@
     button.innerHTML = `
       <div class="candidate-title">${escapeHtml(candidateDisplayTitle(candidate))}</div>
       ${siblingCount > 1 ? `<div class="candidate-alt-badge">同じ箇所の代替手段 ${siblingCount}件中</div>` : ""}
+      ${needsRecheck ? `<div class="candidate-recheck-badge">再確認</div>` : ""}
+      ${orphanedKind === "lost" ? `<div class="candidate-lost-badge">最終HTMLに未反映</div>` : ""}
     `;
     row.append(checkbox, button);
     return row;
@@ -9274,6 +9458,7 @@
         chosenMethodCandidate.proposal.patch_mode === "none"
       );
     }
+    const orphanedKind = currentOrphanedKinds().get(candidate.candidate_id) || null;
     const candidateMeta = document.getElementById("candidateMeta");
     if (candidateMeta) {
       candidateMeta.innerHTML = `
@@ -9282,6 +9467,7 @@
           <div class="detail-row"><dt>状態</dt><dd>${escapeHtml(statusLabels[candidate.decision.status || "unresolved"])}</dd></div>
           <div class="detail-row"><dt>確度</dt><dd>${escapeHtml(candidate.proposal.confidence)}${candidate.proposal.requires_human_review ? " / 要人間確認" : ""}</dd></div>
           <div class="detail-row"><dt>反映</dt><dd>${escapeHtml(candidate.proposal.patch_mode === "none" ? "HTML自動反映なし" : "HTMLへ反映可能")}</dd></div>
+          ${orphanedKind ? `<div class="detail-row detail-orphaned ${escapeHtml(orphanedKind)}"><dt>最終HTML</dt><dd>${escapeHtml(orphanedKindDescriptions[orphanedKind])}</dd></div>` : ""}
           ${isImageNameCandidate(candidate) ? `<div class="detail-row"><dt>AI画像名</dt><dd>${escapeHtml(candidate.proposal.ai_draft.name)}<br><span class="detail-note">${escapeHtml(candidate.proposal.ai_draft.source)}</span></dd></div>` : ""}
           <div class="detail-row"><dt>問題</dt><dd>${escapeHtml(candidate.issue.message)}</dd></div>
           <div class="detail-row"><dt>理由</dt><dd>${escapeHtml(candidate.issue.reason)}</dd></div>
@@ -10034,6 +10220,8 @@
         candidates: state.candidates,
         notices: state.notices,
         micheckerEngineResult: state.micheckerEngineResult,
+        decisions: state.decisions,
+        withdrawnCandidates: withdrawnCandidateRecords(),
       },
       finalHtml
     );
@@ -10041,7 +10229,24 @@
 
   // Context-parameterized evidence builder shared by the goal2 screen (via buildEvidence
   // above) and the GOAL1 batch engine, which has no input fields to read from.
+  //
+  // 証跡の candidates は「現在の候補一覧」と「取り下げた候補」を合わせたもの(設計書 3.11)。
+  // 決定済みの候補は reconcile() が一覧に残すので、現在の一覧に入っている。取り下げた候補は
+  // 一覧から外れるので、recordWithdrawal() が残した写しから、一覧の後ろに seq 順で並べる。
+  // completion の total・unresolved は今までどおり現在の一覧だけを数える。
+  //
+  // 決定ログに由来する列(decision_seq・withdrawn_by_seq・orphaned・orphaned_kind)と
+  // decision_log は、context に決定ログがあるときだけ値を持つ。GOAL1(goal2Engine.buildEvidence)
+  // は決定ログを渡さないので null になる(ログを渡すのは S5、3.12)。
   function buildEvidenceFor(context, finalHtml) {
+    const withdrawnRecords = context.withdrawnCandidates || [];
+    const decisions = Array.isArray(context.decisions) ? context.decisions : null;
+    const log = decisions
+      ? {
+          decisions,
+          latestById: new Map(latestDecisions(decisions).map((decision) => [decision.candidate_id, decision])),
+        }
+      : null;
     return {
       page_session_id: context.sessionId,
       ...(context.ruleScopeMode === "michecker" && context.micheckerEngineResult
@@ -10066,37 +10271,12 @@
         unresolved: context.candidates.filter((candidate) => !candidate.decision.status).length,
         complete: isProcessingCompleteFor(context.candidates, context.notices, context.generatedAt, context.sourceHtml),
         notices: context.notices.length,
+        withdrawn: Array.isArray(context.decisions) ? withdrawnRecords.length : null,
       },
-      candidates: context.candidates.map((candidate) => ({
-        candidate_id: candidate.candidate_id,
-        rule_id: candidate.rule_id,
-        category: candidate.category,
-        processing_class: candidate.processing_class,
-        status: candidate.decision.status || "unresolved",
-        confidence: candidate.proposal.confidence,
-        requires_human_review: candidate.proposal.requires_human_review,
-        patch_mode: candidate.proposal.patch_mode,
-        ai_image_name: isImageNameCandidate(candidate)
-          ? candidate.proposal.ai_draft?.confirmed_name || candidate.proposal.ai_draft?.name || null
-          : null,
-        ai_image_name_inserted: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.inserted || false : false,
-        ai_image_name_source: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.source || null : null,
-        before_html: candidate.proposal.before_html,
-        after_html: candidateAfterHtmlForEvidence(candidate),
-        selected_method_id: candidate.decision.selected_method_id || null,
-        selected_method_rule_id: candidate.decision.selected_method_rule_id || null,
-        selected_method_title: candidate.decision.selected_method_title || null,
-        selected_method_label: candidate.decision.selected_method_label || null,
-        decision_reason: candidate.decision.reason,
-        actor: candidate.decision.actor,
-        decided_at: candidate.decision.decided_at,
-        related_wcag: candidate.issue.wcag,
-        related_jis: candidate.issue.jis,
-        kb_source: candidate.rule.source,
-        miChecker_status: null,
-        miChecker_classification: null,
-        unresolved_reason: candidate.decision.status ? null : "未処理",
-      })),
+      candidates: [
+        ...context.candidates.map((candidate) => evidenceCandidateRow(candidate, candidate.decision, log)),
+        ...withdrawnRecords.map(({ candidate, entry }) => evidenceCandidateRow(candidate, entry, log)),
+      ],
       notices: context.notices.map((notice) => ({
         notice_id: notice.notice_id,
         rule_id: notice.rule_id,
@@ -10111,6 +10291,82 @@
         related_jis: notice.issue.jis,
         kb_source: notice.rule.source,
       })),
+      // 決定ログの各行(3.11)。決め直した候補の前の決定や、一括採用のかたまり(generation)を
+      // 後から追えるようにする。op と after_html は大きくなるので入れない。
+      // orphaned は、その候補の最新の決定で、かつ採用・編集の行だけが値を持つ。リプレイは
+      // 最新の決定にしか印を立て直さないので、決め直しで効かなくなった決定の印は評価されて
+      // いない値であり、null にする。
+      decision_log: decisions
+        ? decisions.map((decision) => ({
+            seq: decision.seq,
+            generation: decision.generation ?? null,
+            candidate_id: decision.candidate_id,
+            rule_id: decision.rule_id,
+            node_id: decision.node_id ?? null,
+            status: decision.status,
+            actor: decision.actor ?? null,
+            decided_at: decision.decided_at ?? null,
+            withdrawn_by_seq: decision.withdrawn_by_seq ?? null,
+            orphaned:
+              ["accepted", "edited"].includes(decision.status) &&
+              log.latestById.get(decision.candidate_id)?.seq === decision.seq
+                ? Boolean(decision.orphaned)
+                : null,
+          }))
+        : null,
+    };
+  }
+
+  // 証跡の候補1行。decision は、現在の一覧の候補なら candidate.decision(ログの写し)、
+  // 取り下げた候補なら取り下げのログの行(status: "withdrawn")。取り下げた候補の before_html・
+  // after_html・category などは、recordWithdrawal() が残した写しから取る。
+  //
+  // 末尾の5列は S4 で足した(3.11)。既存の23列の名前・順序・値は変えない。
+  //  generation       候補が生まれた再導出の世代(初回の候補は 0)
+  //  decision_seq     その候補の最新の決定の seq(未処理は null)。設計書に無い列を足した。
+  //                   原因の候補を決め直すと値が変わるので、withdrawn_by_seq が指す原因の
+  //                   決定は decision_log の seq で引く。候補の行(CSV)で引けるのは、原因の
+  //                   候補が決め直されていないときだけである
+  //  withdrawn_by_seq 取り下げの原因になった決定の seq(取り下げの行だけ)
+  //  orphaned         最新の決定がリプレイで当たらなかったか(採用・編集の行だけ)
+  //  orphaned_kind    orphanedKindOf() の分類(orphaned が真の行だけ)
+  function evidenceCandidateRow(candidate, decision, log) {
+    const logged = log ? log.latestById.get(candidate.candidate_id) || null : null;
+    const applied = Boolean(logged) && ["accepted", "edited"].includes(logged.status);
+    return {
+      candidate_id: candidate.candidate_id,
+      rule_id: candidate.rule_id,
+      category: candidate.category,
+      processing_class: candidate.processing_class,
+      status: decision.status || "unresolved",
+      confidence: candidate.proposal.confidence,
+      requires_human_review: candidate.proposal.requires_human_review,
+      patch_mode: candidate.proposal.patch_mode,
+      ai_image_name: isImageNameCandidate(candidate)
+        ? candidate.proposal.ai_draft?.confirmed_name || candidate.proposal.ai_draft?.name || null
+        : null,
+      ai_image_name_inserted: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.inserted || false : false,
+      ai_image_name_source: isImageNameCandidate(candidate) ? candidate.proposal.ai_draft?.source || null : null,
+      before_html: candidate.proposal.before_html,
+      after_html: candidateAfterHtmlForEvidence(candidate),
+      selected_method_id: decision.selected_method_id || null,
+      selected_method_rule_id: decision.selected_method_rule_id || null,
+      selected_method_title: decision.selected_method_title || null,
+      selected_method_label: decision.selected_method_label || null,
+      decision_reason: decision.reason,
+      actor: decision.actor,
+      decided_at: decision.decided_at,
+      related_wcag: candidate.issue.wcag,
+      related_jis: candidate.issue.jis,
+      kb_source: candidate.rule.source,
+      miChecker_status: null,
+      miChecker_classification: null,
+      unresolved_reason: decision.status ? null : "未処理",
+      generation: Number.isFinite(candidate.generation) ? candidate.generation : null,
+      decision_seq: logged ? logged.seq : null,
+      withdrawn_by_seq: logged?.status === "withdrawn" ? logged.withdrawn_by_seq ?? null : null,
+      orphaned: applied ? Boolean(logged.orphaned) : null,
+      orphaned_kind: applied && logged.orphaned ? orphanedKindOf(logged, log.decisions, candidate) : null,
     };
   }
 
@@ -10173,6 +10429,12 @@
         "miChecker_status",
         "miChecker_classification",
         "unresolved_reason",
+        // S4 で足した列(3.11)。既存の23列の後ろに置き、既存の集計を壊さない。
+        "generation",
+        "decision_seq",
+        "withdrawn_by_seq",
+        "orphaned",
+        "orphaned_kind",
       ],
       ...evidence.candidates.map((candidate) => [
         evidence.page_session_id,
@@ -10198,6 +10460,11 @@
         candidate.miChecker_status,
         candidate.miChecker_classification,
         candidate.unresolved_reason,
+        candidate.generation,
+        candidate.decision_seq,
+        candidate.withdrawn_by_seq,
+        candidate.orphaned,
+        candidate.orphaned_kind,
       ]),
     ];
     const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -11536,6 +11803,11 @@
       },
       replay(sourceHtml, decisions) {
         return replay(sourceHtml, decisions);
+      },
+      // テスト用。orphaned の分類(3.7 の S2、S4)。replay() が decisions の各行に orphaned を
+      // 立てたあとで呼ぶ。candidate は省略でき、省略するとログの op だけで判定する。
+      orphanedKind(decision, decisions, candidate) {
+        return orphanedKindOf(decision, decisions, candidate);
       },
       // テスト用。「表を丸ごと差し替える候補はすべて rebuild 操作である」ことを外から
       // 確かめるための窓口(3.7)。

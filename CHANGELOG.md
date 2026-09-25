@@ -26,6 +26,15 @@
 - 関連ファイル: `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`(L0 の本番への適用)、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_DATA_POLICY.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: PR #145(記録だけを同じブランチに足した)
 
+## 2026-09-24: 構造変更1 S4 画面と証跡
+
+- 背景・目的: S3 で取り下げた候補が一覧から消え、証跡にも出なくなっていた。`orphaned` は「修正が失われた」ものと、通知だけの候補や決め直しで対象が作り直されたものを区別していなかった。設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.10・3.11 の画面と証跡を入れる。
+- 主な変更内容: 取り下げた候補の写しを残し、証跡の `candidates` の後ろに `withdrawn` の行として並べる（`completion.withdrawn` を追加、`total`・`unresolved` の意味は変えない）。証跡の候補の行に `generation`・`decision_seq`・`withdrawn_by_seq`・`orphaned`・`orphaned_kind` を足し（CSV は既存の23列の後ろ）、JSON のトップに `decision_log` を足した。`orphaned` を `no-op`・`target-replaced`・`lost` に分ける `orphanedKindOf()` を入れ、`lost` の候補に「最終HTMLに未反映」のバッジと要約の件数、詳細欄に3分類の説明を出す。再導出で生まれた未処理の候補に「再確認」のバッジを付け、候補一覧の下に「取り下げた候補 N件」の折りたたみを置いた。GOAL1 の証跡の新しいキーは `generation` を除いて `null`、`goal1.js` の CSV は変えていない。
+- 検証: 6章のコマンドすべて通過（出力テストは S3 の198件に S4 の36件を足して234件）。`npm run test:saga-gold` は `main` と同じ数値。証跡CSVの既存23列は、同じ入力と同じ操作で `main` と11件すべて一致。実ページ51件の GOAL1 経路の最終HTMLは51件すべて `main` と同一。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/styles.css`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
+- レビュー1回目の対応: 取り下げの原因は `decision_log` の `seq` で引くと決め、設計書とコメントを書き替えた（候補の行の `decision_seq` は最新の決定なので、原因の構造候補を採用から却下へ決め直すと当たる行が無くなるため）。`decision_log` の `orphaned` は最新の採用・編集の行だけに出し、決め直しで効かなくなった採用は `null` にした（評価されていない `false` が「当たった採用」と読めるため）。派生IDの参照先の `seq` がログに無いときは `target-replaced` ではなく `lost` にし、`target-replaced` の説明を「同じ問題が残っていれば出直す」に直した。
+- 関連PR/コミット: PR #141
+
 ## 2026-09-24: リポジトリの整備（文書と実装のずれ、不要物、CI）
 
 - 背景・目的: `PROJECT_CONTEXT.md` の未解決事項にあった、文書と実装のずれ、コミットされた一時生成物、CIが無いことを片づける。あわせて、手元にLLMの鍵がある環境でテストが実際のAPIを呼んでいた（出力テストがAIの確認待ちで止まった）のを直した。
