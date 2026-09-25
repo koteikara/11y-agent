@@ -26,6 +26,15 @@
 - 関連ファイル: `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`(L0 の本番への適用)、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_DATA_POLICY.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: PR #145(記録だけを同じブランチに足した)
 
+## 2026-09-24: LLM L2（提供元の評価）
+
+- 背景・目的: さくらの AI Engine へ移す前に、画面が実際に送る要求で Gemini とさくらを比べた（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 4章 L2）。
+- 主な変更内容: 評価の道具 `goal2-app/tools/llm-provider-eval.js` を新設した。`LLM_RECORD_DIR` を付けたサーバーを Playwright で操作して要求を集め（capture）、4つの構成に1件ずつ流し直し（run）、妥当率、応答時間、費用、A との一致率、人の判定用の CSV を出す（report）。佐賀市 51 ページと遠野市 20 ページの 213 件の要求で評価し、結果を `memory/llm-provider-eval-2026-09.md`、CSV を `memory/llm-eval/` に置いた。`lib/llm.js` と `public/app.js` は変えていない。
+- 結果の要点: 文字のタスクはさくらの gpt-oss-120b が機械の目安を満たした（JSON 100%、一致率 91.6%、p95 1.9 秒、費用は約3分の1）。ただしスキーマで任意の項目（`explanation`、`extracted_text`、`complex_detail`）をほとんど返さない。画像のタスクは Qwen3-VL が数字や固有名詞を読み違え、gemma-4 は `system` のメッセージを付けると画像を読まないため、Gemini のままにする。
+- 設計との差: 佐賀市の画像が 404 で取れず、画像は遠野市のページだけで評価した（遠野市を 20 ページに増やした）。呼び出しの上限を 180 秒にし、A をもう一度流して揺れの基準（A2）にした。
+- 関連ファイル: `goal2-app/tools/llm-provider-eval.js`（新規）、`memory/llm-provider-eval-2026-09.md`（新規）、`memory/llm-eval/`（新規）、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（4章 L2）、`memory/project-state.md`
+- 関連PR/コミット: PR #146
+
 ## 2026-09-24: 構造変更1 S4 画面と証跡
 
 - 背景・目的: S3 で取り下げた候補が一覧から消え、証跡にも出なくなっていた。`orphaned` は「修正が失われた」ものと、通知だけの候補や決め直しで対象が作り直されたものを区別していなかった。設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.10・3.11 の画面と証跡を入れる。
