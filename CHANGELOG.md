@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-25: 本番運用の段階の設計書
+
+- 背景・目的: 本番運用の3つの方針(Cloud Run のアクセス制御、送信の同意の記録、証跡の置き場所)をユーザーが決めた。IAP で会社の Google Workspace のアカウントに絞る、同意は営業が案件ごとに取り記録は持たない、証跡は共有ドライブに置き承認者が見る(保存期間の決まりは無い)。これを実施の段階にまとめる。
+- 内容: `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` を足した。段階は P0(手元で動くサーバーの守り)、P1(IAP)、P2(同意と証跡の運用)、P3(さくらへの切り替え L3 の条件)、P4(Node 24)。調べる中で、Windows 版が 0.0.0.0 で待ち受け、POST の送り元も htmlchecker.exe のパスの形も確かめていないため、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから任意の実行ファイルを動かせる作りだと分かった。これを P0 として最初に塞ぐ。決定と未実施の事項を `PROJECT_CONTEXT.md`、`goal2-app/LLM_DATA_POLICY.md`、`memory/project-state.md` に反映した。
+- 関連ファイル: `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`goal2-app/LLM_DATA_POLICY.md`、`goal2-app/README.md`、`memory/project-state.md`
+- 関連PR/コミット: このブランチの PR
+
 ## 2026-09-25: ForLLM Vault の MOC 名を確認した
 
 - 背景・目的: `PROJECT_CONTEXT.md` の `knowledge_mocs`(AI・自動化、UI・デザイン、開発・トラブルシューティング)は、Vault 側に実在するかを確かめられず、要確認のまま残っていた。ユーザーが Vault の `03_MOC` フォルダーに3つとも実在することを確かめた。
