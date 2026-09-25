@@ -72,6 +72,7 @@ flowchart LR
 - **miCheckerを主基準ではなく品質ゲート候補**として扱う。KB全ルールを既定とし、miChecker指摘のみへ絞るモードは案件の検収条件を確認したうえで使う（`AGENTS.md`）。
 - **LLM連携は既定で無効**。実案件HTMLと画像を外部LLMへ送る合意が未確定のため、提供元の設定（`GEMINI_API_KEY`、`GEMINI_AUTH_MODE=adc`、`SAKURA_AI_API_KEY` など）を運用判断に委ねている（`goal2-app/LLM_DATA_POLICY.md`）。
 - **LLM の提供元はさくらの AI Engine に寄せる**（2026-09-24、ユーザー確定）。切り替えの仕組み（L1、`lib/llm.js` の `callLlm()` とアダプター）は入ったが、本番はまだ Gemini のままである。他のプロジェクトで使っていて契約が済んでいるためで、Gemini は受け皿とつなぎとして残す。ISMAP は、公開済みページで機密性が低いため、いまは求めない。段階と検証は `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、比較は `memory/llm-provider-alternatives-research.md` にある。
+- **本番運用は、Cloud Run を IAP で守り、証跡を共有ドライブに置く**（2026-09-25、ユーザー確定）。作業者は会社の Google Workspace のアカウントでログインする。LLM への送信の同意は営業が案件ごとに取り、記録は持たない。どの提供元に送ったかは証跡の JSON に残す（L3）。証跡は承認者が共有ドライブで見る。保存期間の決まりは無い。段階（手元で動くサーバーの守り、IAP、同意と証跡、L3、Node 24）は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
 - **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。認証、永続保存、ログ方針は未決定のまま公開URLで運用している。
@@ -136,12 +137,9 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 - `[[UI・デザイン]]` — 作業者向けの候補確認画面、miChecker比較画面、検証ガイドを素のHTML/CSSで作っている。アクセシビリティ規則（WCAG/JIS、miChecker）の適用先として参照する。
 - `[[開発・トラブルシューティング]]` — Cloud Runの手動デプロイ、Node SEAによるWindows `.exe` ビルド、htmlchecker.exe連携の障害対応の知識を蓄積する。
 
-MOC名はVault側で未確認のため、上記は要確認候補である（本ファイル末尾の未解決事項を参照）。
-
 ## 未解決事項
 
 - lockファイルが無い。npm依存が0件のため現状は問題にならないが、ビルド時に `npx esbuild` と `npx postject` を未固定バージョンで取得している。
-- Cloud Run上の認証、実案件データの送信ポリシー、証跡の永続保存先は未決定（`memory/project-state.md` の「Not Completed Yet」）。
+- Cloud Run の IAP、証跡の置き場所と名前の決まり、Windows 版の待ち受けの守りは、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0〜P2）。Windows 版は、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせる作りになっており、P0 で塞ぐ。
 - CMS入力欄で許可されるHTMLタグと属性の制約は未確認で、最終HTML出力に反映されていない。
-- `goal2-app/Dockerfile`（`node:20-alpine`）とCIはNode 20で動かしているが、Node 20は2026-04-30にサポートが終わっている。本番運用の段階でNode 22以上へ上げる。
-- ForLLM VaultのMOC名は本ファイル作成時に確認できなかった。Vault側で実在するMOC名に合わせて `knowledge_mocs` を修正する必要がある。
+- `goal2-app/Dockerfile`（`node:20-alpine`）とCIはNode 20で動かしているが、Node 20は2026-04-30にサポートが終わっている。Node 24 へ上げる（同じ設計書の P4）。

@@ -45,7 +45,7 @@
 - A11yc libraryやaxe-coreの組み込み
 - 認証、IAP、Secret Managerの実設定
 
-LLM連携は実装済みだが、提供元の設定(Geminiは `GEMINI_API_KEY` か `GEMINI_AUTH_MODE=adc`、さくらのAI Engineは `LLM_TEXT_PROVIDER`/`LLM_VISION_PROVIDER` と `SAKURA_AI_API_KEY`)が無い既定の状態では一切呼び出されない。実案件HTML・画像を外部LLMへ送信してよいかの最終的なデータポリシー合意は自治体・発注元との間で未確定のため、有効化は運用判断に委ねる。詳細は [LLM (Gemini) 連携](#llm-gemini-連携) と [LLM_DATA_POLICY.md](LLM_DATA_POLICY.md)(Googleのデータ利用規約の調査結果・実案件投入前の最低条件たたき台)を参照。
+LLM連携は実装済みだが、提供元の設定(Geminiは `GEMINI_API_KEY` か `GEMINI_AUTH_MODE=adc`、さくらのAI Engineは `LLM_TEXT_PROVIDER`/`LLM_VISION_PROVIDER` と `SAKURA_AI_API_KEY`)が無い既定の状態では一切呼び出されない。実案件HTML・画像を外部LLMへ送る同意は、営業が自治体(案件)ごとに取る(2026-09-25決定。本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md))。詳細は [LLM (Gemini) 連携](#llm-gemini-連携) と [LLM_DATA_POLICY.md](LLM_DATA_POLICY.md)(Googleのデータ利用規約の調査結果・実案件投入前の最低条件たたき台)を参照。
 
 ## Local Run
 
