@@ -698,6 +698,78 @@ async function main() {
     }
   });
 
+  await test("L1: さくらに送るスキーマは、入れ子を含むすべての object で required がすべての項目になる(任意の 14 項目も必須にする)", async () => {
+    const { toOpenAiResponseSchema } = require(llmPath);
+    let optionalCount = 0;
+    const walk = (converted, original, where) => {
+      if (!converted || typeof converted !== "object") return;
+      if (converted.type === "object") {
+        const names = Object.keys(converted.properties);
+        assertEqual(JSON.stringify(converted.required), JSON.stringify(names), `${where}: required がすべての項目`);
+        for (const name of names) {
+          const originalChild = original.properties[name];
+          if (!(original.required || []).includes(name)) {
+            optionalCount += 1;
+            assertEqual(converted.properties[name].type, String(originalChild.type).toLowerCase(), `${where}.${name}: 型は変えない`);
+            assert(!("nullable" in converted.properties[name]), `${where}.${name}: null は許さない`);
+          }
+          walk(converted.properties[name], originalChild, `${where}.${name}`);
+        }
+      } else if (converted.type === "array") {
+        walk(converted.items, original.items, `${where}[]`);
+      }
+    };
+    for (const [name, task] of Object.entries(TASKS)) {
+      const { wrapped, schema } = toOpenAiResponseSchema(task.responseSchema);
+      walk(wrapped ? schema.properties.results : schema, task.responseSchema, name);
+    }
+    assertEqual(optionalCount, 14, "元が任意の項目の数");
+  });
+
+  await test("L1: さくらが任意の string に \"\" を返したら、その項目を捨てる。値のある項目と任意の boolean は残す", async () => {
+    mock.reset();
+    mock.setRoutes({
+      sakura: () =>
+        sakuraReply(
+          JSON.stringify({
+            results: [
+              { id: "c1", is_foreign: true, lang_code: "en", language_name_ja: "英語" },
+              { id: "c2", is_foreign: false, lang_code: "", language_name_ja: "" },
+            ],
+          })
+        ),
+    });
+    const text = await withLlm(sakuraEnv(), (llm) => llm.callLlm(BASELINE_TEXT_INPUT));
+    assertEqual(
+      JSON.stringify(text.json),
+      '[{"id":"c1","is_foreign":true,"lang_code":"en","language_name_ja":"英語"},{"id":"c2","is_foreign":false}]',
+      "文字のタスクの結果"
+    );
+
+    mock.reset();
+    mock.setRoutes({
+      sakura: () => sakuraReply('{"alt_text":"市役所の外観の写真","is_decorative":false,"is_complex":false,"complex_detail":""}'),
+    });
+    const image = await withLlm(sakuraEnv({ LLM_VISION_PROVIDER: "sakura" }), (llm) => llm.callLlm(BASELINE_IMAGE_INPUT));
+    assertEqual(
+      JSON.stringify(image.json),
+      '{"alt_text":"市役所の外観の写真","is_decorative":false,"is_complex":false}',
+      "画像のタスクの結果(任意の boolean の false は残す)"
+    );
+  });
+
+  await test("L1: 必須の string の \"\" は捨てない。Gemini の応答の \"\" には手を加えない", async () => {
+    const { dropEmptyOptionalStrings } = require(llmPath);
+    const schema = TASKS["heading-review"].responseSchema;
+    const value = [{ id: "", vague_headings: [{ block_id: "b1", reason: "" }], missing_headings: [], heading_level_fixes: [] }];
+    assertEqual(JSON.stringify(dropEmptyOptionalStrings(schema, value)), JSON.stringify(value), "入れ子の必須も残す");
+
+    mock.reset();
+    mock.setRoutes({ gemini: () => geminiReply('[{"id":"c2","is_foreign":false,"lang_code":""}]') });
+    const result = await withLlm(geminiEnv(), (llm) => llm.callLlm(BASELINE_TEXT_INPUT));
+    assertEqual(JSON.stringify(result.json), '[{"id":"c2","is_foreign":false,"lang_code":""}]', "Gemini の結果");
+  });
+
   await test("L1: 未対応の提供元の値は gemini として扱う(いまと同じ)", async () => {
     mock.reset();
     mock.setRoutes({ gemini: () => geminiReply("[]") });

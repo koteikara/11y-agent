@@ -386,10 +386,25 @@ function toJsonSchema(schema) {
   return converted;
 }
 
+// Structured Outputs with strict: true expects every property of every object in required.
+// Sending only the original required list made gpt-oss-120b leave most optional properties
+// out (L2 finding 1), so every property is required here, types unchanged and no null.
+// An optional string answers "" for "no value" and dropEmptyOptionalStrings() removes it
+// again; an optional boolean (is_decorative, is_complex) is simply answered false.
+function requireAllProperties(schema) {
+  if (!schema || typeof schema !== "object") return schema;
+  if (schema.properties) {
+    for (const child of Object.values(schema.properties)) requireAllProperties(child);
+    schema.required = Object.keys(schema.properties);
+  }
+  if (schema.items) requireAllProperties(schema.items);
+  return schema;
+}
+
 // Most OpenAI-compatible servers require an object at the top level, so a top-level array
 // is wrapped as { results: [...] } and unwrapped again after parsing.
 function toOpenAiResponseSchema(schema) {
-  const converted = toJsonSchema(schema);
+  const converted = requireAllProperties(toJsonSchema(schema));
   if (converted && converted.type === "array") {
     return {
       wrapped: true,
@@ -467,8 +482,30 @@ async function requestOpenAiCompatible({ kind, task, systemPrompt, userText, ima
     text: typeof choice.message?.content === "string" ? choice.message.content : "",
     finishReason: choice.finish_reason || "",
     unwrapResults: Boolean(converted && converted.wrapped),
+    dropEmptyOptionalStrings: Boolean(converted),
     usage: { ...usage, ...estimateSakuraCost(usage, kind) },
   };
+}
+
+// Undo the "" placeholder above: an optional string property (per the original schema)
+// that came back as "" is removed, so validation and the screen see the property missing,
+// the same shape a Gemini reply has. Required strings are left alone.
+function dropEmptyOptionalStrings(schema, value) {
+  if (!schema || !schema.type || value === null || typeof value !== "object") return value;
+  const type = String(schema.type).toUpperCase();
+  if (type === "ARRAY" && Array.isArray(value)) {
+    return value.map((item) => dropEmptyOptionalStrings(schema.items, item));
+  }
+  if (type !== "OBJECT" || Array.isArray(value)) return value;
+  const required = new Set(schema.required || []);
+  const cleaned = { ...value };
+  for (const [name, childSchema] of Object.entries(schema.properties || {})) {
+    if (!(name in cleaned)) continue;
+    const childType = String(childSchema.type || "").toUpperCase();
+    if (!required.has(name) && childType === "STRING" && cleaned[name] === "") delete cleaned[name];
+    else cleaned[name] = dropEmptyOptionalStrings(childSchema, cleaned[name]);
+  }
+  return cleaned;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -612,6 +649,9 @@ async function attemptOnce(provider, request, usageTotal) {
   if (reply.unwrapResults && json && !Array.isArray(json) && typeof json === "object" && "results" in json) {
     json = json.results;
   }
+  if (reply.dropEmptyOptionalStrings) {
+    json = dropEmptyOptionalStrings(request.responseSchema, json);
+  }
   return request.responseSchema ? validateAgainstSchema(request.responseSchema, json) : json;
 }
 
@@ -696,6 +736,7 @@ module.exports = {
   buildVertexUrl,
   toJsonSchema,
   toOpenAiResponseSchema,
+  dropEmptyOptionalStrings,
   validateAgainstSchema,
   __setTestHooks: setTestHooks,
 };
