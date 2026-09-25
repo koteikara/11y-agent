@@ -18,6 +18,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
 const { chromium } = require("playwright");
+const { serverEnv } = require("../server-env");
 
 const rootDir = path.resolve(__dirname, "../..");
 const PORT = Number(process.env.TABLE_TEST_PORT || 8123);
@@ -97,7 +98,7 @@ function countOccurrences(haystack, needle) {
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
-    env: { ...process.env, PORT: String(PORT) },
+    env: serverEnv({ PORT: String(PORT) }),
     stdio: "ignore",
   });
 

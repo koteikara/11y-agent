@@ -26,6 +26,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
 const { chromium } = require("playwright");
+const { serverEnv } = require("../server-env");
 
 const rootDir = path.resolve(__dirname, "../..");
 const PORT = Number(process.env.OUTPUT_TEST_PORT || 8124);
@@ -194,7 +195,7 @@ const HEADINGS_H3_H4_H3 = `<h3>章1</h3><p>本文a</p><h4>節1</h4><p>本文b</p
 async function main() {
   const server = spawn(process.execPath, [path.join(rootDir, "server.js")], {
     cwd: rootDir,
-    env: { ...process.env, PORT: String(PORT) },
+    env: serverEnv({ PORT: String(PORT) }),
     stdio: "ignore",
   });
 

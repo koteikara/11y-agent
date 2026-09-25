@@ -1,8 +1,8 @@
 {
-  "name": "goal2-a11y-review-poc",
+  "name": "a11y-migration-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Goal 2 accessibility migration review screen PoC for Cloud Run",
+  "description": "Accessibility review, batch optimization, content extraction and miChecker comparison screens for migrating municipal sites to the CMS (Goal 1-3)",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",

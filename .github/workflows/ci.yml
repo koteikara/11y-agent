@@ -1,0 +1,68 @@
+# main への push と pull request で、次の3つを確かめる。
+# - 一時生成物や鍵のファイルが入っていないか(scripts/ci/check-tracked-files.js)
+# - KB の生成物が Markdown から作り直した結果と一致し、goal2-app/data/ のコピーとも一致するか(scripts/ci/check-kb-build.js)
+# - goal2-app のテスト(npm test ほか)
+# 佐賀市 fixture を使う npm run test:saga-gold は、fixture が別の非公開リポジトリにあるため CI では動かさない。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-checks:
+    name: リポジトリの検査
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: 一時生成物や鍵のファイルの混入
+        run: node scripts/ci/check-tracked-files.js
+      - name: KB の生成物とアプリ内のコピーの一致
+        run: node scripts/ci/check-kb-build.js
+
+  app-tests:
+    name: goal2-app のテスト
+    runs-on: ubuntu-latest
+    # 出力テストだけで手元で6分ほどかかる。
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: goal2-app
+    steps:
+      - uses: actions/checkout@v5
+      # Dockerfile(node:20-alpine)と同じ版で動かす。
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      # アプリの依存は0件で、Playwright はブラウザを使うテストだけが使う。
+      # package.json には入れず、開発環境と同じ版をここで入れる。
+      - name: Playwright と Chromium を入れる
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+          echo "PLAYWRIGHT_CHROMIUM_PATH=$(node -e "process.stdout.write(require('playwright').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: npm test
+        run: npm test
+      - name: LLM の呼び出し(モック)
+        run: npm run test:llm
+      - name: 表の入れ子
+        run: npm run test:table-nesting
+      - name: 出力
+        run: npm run test:goal2-output
+      - name: miChecker との一致
+        run: npm run test:michecker-parity

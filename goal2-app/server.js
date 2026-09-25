@@ -699,7 +699,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === "/api/health") {
-    sendJson(response, 200, { ok: true, service: "goal2-a11y-review-poc" });
+    sendJson(response, 200, { ok: true, service: "a11y-migration-app" });
     return;
   }
 
@@ -805,7 +805,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Goal2 review PoC listening on port ${port}`);
+  console.log(`a11y-migration-app listening on port ${port}`);
   // パッケージ化した.exe版(SEA)で起動した場合のみ、ブラウザを自動で開く。
   // 通常のnode server.js実行(開発・Cloud Runデプロイ)では自動起動しない。
   if (isSeaBuild) {
