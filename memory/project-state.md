@@ -854,6 +854,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - LLM の提供元の切り替え（`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`）の L0「つなぎの Gemini 設定」を実装した（PR #143）。`global` の宛先の修正、`GEMINI_TEMPERATURE`、`GEMINI_THINKING_LEVEL` と、LLM の呼び出しの初めてのテスト `test/llm/run-llm-tests.js` を入れた。本番の設定（案 A〜C、推奨は A）を 2026-10-20 より前に替えるのはユーザー。
 - 同じ設計書の L1「提供元の切り替えの仕組み」を実装した（PR #144、PR #143 のブランチを基点）。`callLlm()` と gemini、openai-compatible（さくら）のアダプター、スキーマの変換と検証、やり直しと受け皿、`LLM_RECORD_DIR` を入れた。既定の挙動は変えていない。次は L2 の評価で、さくらの API キーが要る。
 - リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（PR #145。詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
+- 本番の Cloud Run を、Vertex AI の `gemini-2.5-flash`(2026-10-20 に廃止)から `gemini-3.5-flash` に替えた(2026-09-25 10:27 日本時間、ユーザーが実施)。`CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、タグ `gemini35` で確かめてからトラフィックを移した。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。確認用の API 3件(設定、文字のタスク、画像のタスク)と画面の確認で問題は無かった
 
 ## Decisions
 

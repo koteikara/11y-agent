@@ -249,6 +249,12 @@ README と `CLOUD_RUN_DEPLOY.md` に、案 A、B、C の設定のしかたを書
 - Vertex AI 経由のテストのために、`lib/llm.js` に `__setTestHooks()` を足した。トークン、プロジェクト ID、fetch を差し替えられる。
 - `GEMINI_THINKING_LEVEL` は、公式の API リファレンス（ThinkingConfig、2026-09-24 確認）に従い `generationConfig.thinkingConfig.thinkingLevel` で送る。値は `MINIMAL`、`LOW`、`MEDIUM`、`HIGH` で、小文字で入れても大文字にする。一覧に無い値は送らない。
 
+本番への適用（2026-09-25 10:27 日本時間、ユーザーが実施）。
+案 A を選んだ。main（`c8131ee`）をビルドし、`GEMINI_MODEL=gemini-3.5-flash`、`GEMINI_TEMPERATURE=1`、単価 1.65/9.9 を足して、トラフィックを流さずにタグ `gemini35` でデプロイした。
+タグ付きの URL で `/api/llm/status`、文字のタスク（外国語の判定）、画像のタスク（代替テキスト）を確かめ、画面でも候補の生成を確かめてから、トラフィックを移した。
+いま利用者に届いているのは `goal2-a11y-review-00094-sev`（100%）で、戻し先は `goal2-a11y-review-00093-7gf` である。
+L2 の評価で、2.5 Flash は画像の要求で止まることがあり、3.5 Flash は止まらなかったことも、この判断の材料にした。
+
 **L1 提供元の切り替えの仕組み**。
 3.1〜3.7、3.9、3.10 を実装する。
 画面（`public/app.js`）には触れない。

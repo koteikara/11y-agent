@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
+
+- 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されるため、本番の Cloud Run の設定を替えた(ユーザーが実施)。その結果を残す。
+- 内容: `CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、`GEMINI_MODEL=gemini-3.5-flash`、`GEMINI_TEMPERATURE=1`、単価 1.65/9.9 を足して、タグ `gemini35` でトラフィックを流さずにデプロイした。確認用の API 3件と画面で確かめてから、トラフィックを移した(2026-09-25 10:27 日本時間)。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。
+- 関連ファイル: `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`(L0 の本番への適用)、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_DATA_POLICY.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #145(記録だけを同じブランチに足した)
+
 ## 2026-09-24: リポジトリの整備（文書と実装のずれ、不要物、CI）
 
 - 背景・目的: `PROJECT_CONTEXT.md` の未解決事項にあった、文書と実装のずれ、コミットされた一時生成物、CIが無いことを片づける。あわせて、手元にLLMの鍵がある環境でテストが実際のAPIを呼んでいた（出力テストがAIの確認待ちで止まった）のを直した。

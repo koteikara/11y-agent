@@ -7,7 +7,7 @@
 - 送信先の主をさくらの AI Engine に移す。移行の段階は [LLM_PROVIDER_SWITCH_INSTRUCTIONS.md](LLM_PROVIDER_SWITCH_INSTRUCTIONS.md) にあり、Gemini は受け皿とつなぎとして残す。比較と出典は `memory/llm-provider-alternatives-research.md` にある。
 - ISMAP の登録は、いまは送信先の条件にしない。送るのは公開済みの自治体ページの HTML と画像で、機密性が低いためである。個人情報を含むページの扱い(下の最低条件3)は変えない。
 - さくらの AI Engine の約款は、入力を学習に使わないこと、モデルの提供者を含む第三者に渡さないことを定めている。入出力は原則として保存しないが、保守や障害対応のために一定期間保存することがある(期間は非公開)。この節は、本番を切り替える段階(L3)で最低条件と合わせて書き直す。
-- Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。本番が Vertex AI 経由なら、それまでに設定を替える(設計書 3.8)。
+- Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。本番は 2026-09-25 に、同じ東京の Vertex AI の `gemini-3.5-flash` へ替えた(設計書 3.8 の案 A)。送信先が東京の Vertex AI であることは変わらない。
 
 ## Googleのデータ利用規約(2026-07-10確認)
 

@@ -28,7 +28,7 @@ knowledge_mocs:
 | UI | 素のHTML/CSS/JS | Goal 2候補確認画面 (`index.html`/`app.js`)、Goal 3抽出画面 (`goal3.html`)、Goal 1画面 (`goal1.html`)、miChecker比較画面 (`michecker-compare.html`)、検証ガイド | `goal2-app/public/` |
 | データ保存 | JSONL/JSONファイル（読み取り専用） | KBルール62件とmiChecker公式チェック項目を起動時に読み込む。永続化DBは無い | `goal2-app/data/rules.jsonl`、`goal2-app/data/michecker-checkitems.json`、`a11y-migration-kb/build/` |
 | ナレッジ形式 | OKF (Open Knowledge Format) Markdown + フロントマター | 1ルール1ファイルの移行ルールグラフ。ジェネレータでJSONL化 | `a11y-migration-kb/README.md`、`a11y-migration-kb/rules/` |
-| 外部サービス | Google Gemini API / Vertex AI (Gemini 2.5 Flash) | 画像alt下書きなどのLLM補助。`GEMINI_API_KEY` 未設定時は呼び出されない | `goal2-app/lib/llm.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/LLM_DATA_POLICY.md` |
+| 外部サービス | Google Gemini API / Vertex AI（本番は東京の Vertex AI の Gemini 3.5 Flash、2026-09-25 から）、さくらの AI Engine（切り替えの仕組みのみ、本番は未使用） | 画像alt下書きなどのLLM補助。`GEMINI_API_KEY` 未設定時は呼び出されない | `goal2-app/lib/llm.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/LLM_DATA_POLICY.md` |
 | 外部ツール | miChecker / htmlchecker.exe (Eclipse ACTF) | ローカルWindows版でのアクセシビリティ検査の自動実行。公式チェック項目定義を同梱 | `goal2-app/server.js`（`MICHECKER_HTMLCHECKER_EXE`）、`a11y-migration-kb/vendor/eclipse-actf/` |
 | インフラ・配信 | Google Cloud Run (asia-northeast1) + Cloud Build + Artifact Registry | ホスト版の配信。手元PowerShellから `gcloud builds submit` と `gcloud run deploy` で手動デプロイ | `goal2-app/Dockerfile`、`goal2-app/CLOUD_RUN_DEPLOY.md` |
 | インフラ・配信 | Node.js SEA (Single Executable Applications) + esbuild + postject | Windows向け単一 `.exe` 配布 | `goal2-app/build-windows-app.bat`、`goal2-app/sea-config.json`、`goal2-app/LOCAL_WINDOWS_APP.md` |
