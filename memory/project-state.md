@@ -41,7 +41,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `memory/verification-2026-08-summary.md`
   - 2026年8月に実施した3方式比較の検証作業について、実施状況、所要時間の記録、AI移行で出た指摘、未実施の項目を記載する。
 - `goal2-app/`
-  - Goal 2実行画面の初期PoC実装を格納する。
+  - 実行画面群（Goal 1〜3とmiChecker結果比較）を格納する。Goal 2の画面から始まったためこの名前で、package名は `a11y-migration-app`。
   - Node.jsの標準HTTPサーバーで静的UIとKBルールAPIを提供する。
   - Cloud Run互換の `PORT` 環境変数、Dockerfile、テストを含む。
   - `public/goal3.html` / `public/goal3.js` として、Goal 3(旧ページ全体HTMLからのコンテンツ抽出)のPoC画面を同居させている。
@@ -52,6 +52,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - LLM の提供元をさくらの AI Engine を主とする構成へ移す設計書。つなぎの Gemini 設定（L0）、提供元の切り替えの仕組み（L1）、評価（L2）、本番の切り替え（L3）の段階と検証を記載する。
 - `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`
   - 遠野市の指摘15件のうちツール側で直す8件の設計と、決定のたびに依存候補を作り直す構造変更1の設計、実装ステージ、検証手順を記載する。
+- `.github/workflows/ci.yml`、`scripts/ci/`
+  - GitHub ActionsのCI。一時生成物や鍵のファイルの混入、KB生成物とアプリ内コピーの一致、`goal2-app` のテストを確かめる。
 - `a11y-migration-kb/`
   - 既存の移行・アクセシビリティ関連ナレッジを格納する。
 
@@ -848,10 +850,13 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S1「決定ログの導入」を実装した（PR #131）。`state.decisions` に決定を順序付きで積み、作業中HTMLと最終HTMLを `replay()` で作るようにした。挙動は変えておらず、6章の5コマンドの結果はS1前と同じ（同値テスト17件を新設）。S1で決めた段階差は、`op` の写しをS2へ回すこと、当て順を `seq` ではなく候補配列の添字が決める（ログが決めるのは「どの決定を当てるか」だけ）こと、旧実装 `rebuildWorkingHtmlFor()` をS2で削除すること、`orphaned` がS1では畳み込み済みの決定にも立つことの4つ。当て順は当初 `seq` 順にしていたが、レビューで「画面では作業者の採用順で出力が変わる（S1前は変わらなかった）」ことが佐賀市の実ページで示されたため直した。S2（派生IDと `rebuild` 操作）以降は未着手。
 - 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S2「派生IDと `rebuild` 操作」を実装した（PR #132）。表の構造ビルダー7件をレジストリ化して `(element, params) => htmlString` に揃え、表を丸ごと差し替える構造候補（`planTableTreatments()` の6手段と、`buildMergedCellProposal()` が作るセル結合の5候補）を `{ type: "rebuild", builder, params }` の操作に変えた。決定ログを正本にし（`op`・`order`、`replay()` は2引数、旧実装 `rebuildWorkingHtmlFor()` は削除）、リプレイの当て順を「`rebuild` 以外が先、`rebuild` は内側から」の2段にして、差し替えで生まれた要素に派生ID `nX.s{seq}.{k}` を振るようにした。畳み込み（`foldDescendantFixIntoAncestor()`）は廃止。これは挙動の変更で、構造候補の採用時に未処理だった内容修正は、これまで作業者の採用なしに出力へ入っていたが、S2からは未処理のまま残り、採用したものだけが入る（採用が後になってもリプレイが先に当てるので反映される）。佐賀市の実ページ51件でGOAL1経路の出力はS1と同一。S3（再導出と照合）以降は未着手。
 - 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S3「再導出と照合」を実装した（PR #135）。決定の一かたまりごとに1回、リプレイ→候補の作り直し→照合を走らせるようにし（`rederiveCandidates()`・`reconcile()`）、指紋で前の候補と突き合わせて `candidate_id` と決定を引き継ぐ。対象が無くなった未処理の候補は `withdrawn` としてログへ積み、一覧から外す。`EXCLUSIVE_GROUPS` を入れて調停ロジック5関数を削除し、`conflicted` を新しく作る経路を無くした。リプレイの当て順は世代ごとの `seq` 順になり、`order` は落とした。設計との差は3点で、(1) 指紋 `rule_id|method_label|node_id` は一意にならないため `replace-text` では置換前の文字列まで含める、(2) AIの補完が書き換えた候補は `issue` と `proposal` をまとめて引き継ぐ（結果が `patch` の値と `after_html` にも入るため）、(3) 「1世代に同じ `node_id` の要素ごと差し替えは1件まで」を「固定の変換後HTMLで差し替わる範囲の中の候補は採用しない」まで広げる（実ページでは同じ `node_id` の形は出ず、sg04015 のように範囲で消えるため）。佐賀市の実ページ51件で、GOAL1経路の最終HTMLは51件すべてS2と同一。画面の経路では40件が同一で11件に差が出るが、すべて「再導出で作り直された候補が当たるようになった」か「取り下げで消えた」で説明できる。対象を失う決定（`orphaned`）は9件から0件になった。再導出の時間は要素数が最も多い sg00761（708要素）で決定1件あたり平均71.6ミリ秒・最大108.7ミリ秒で、3.14 の上限300ミリ秒に収まる。S4（画面と証跡）以降は未着手。
+- 構造変更1（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3章）の S4「画面と証跡」を実装した（PR #141）。取り下げた候補を写しから証跡に戻し（`status: "withdrawn"`、`completion.withdrawn`）、証跡の候補の行に `generation`・`decision_seq`・`withdrawn_by_seq`・`orphaned`・`orphaned_kind` を、JSON のトップに `decision_log` を足した。`decision_seq` と `orphaned_kind`・`decision_log` は設計書に無い追加で、取り下げの原因の決定と決め直しの履歴を証跡の中で引けるようにし、`orphaned` のうち修正が本当に失われたもの（`lost`）を通知だけの候補（`no-op`）や構造候補の決め直しで対象が作り直されたもの（`target-replaced`）と分けるためである。画面には「再確認」「最終HTMLに未反映」のバッジと「取り下げた候補 N件」の折りたたみを足した。`lost` が残っていても完了判定は変えていない。証跡CSVの既存23列は同じ操作で `main` と一致し、実ページ51件の GOAL1 経路の最終HTMLも51件すべて同一。S5（GOAL1のループ化）は未着手。
 - 表の構造変換の手段を一括採用とGOAL1の `autoAcceptSafe` の対象から外した（PR-2.5）。`TABLE_FIX_METHODS_INSTRUCTIONS.md` 2章の確定済み判断がコード側で満たされていなかったのを、`isBulkExcludedCandidate()` を広げる形で直した。`requires_human_review` を一般の条件にするB案は見送り。構造の手段でもキャプション必須にする揃え方は PR-2.6 の候補として残している。
 - LLM の提供元の切り替え（`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`）の L0「つなぎの Gemini 設定」を実装した（PR #143）。`global` の宛先の修正、`GEMINI_TEMPERATURE`、`GEMINI_THINKING_LEVEL` と、LLM の呼び出しの初めてのテスト `test/llm/run-llm-tests.js` を入れた。本番の設定（案 A〜C、推奨は A）を 2026-10-20 より前に替えるのはユーザー。
 - 同じ設計書の L1「提供元の切り替えの仕組み」を実装した（PR #144、PR #143 のブランチを基点）。`callLlm()` と gemini、openai-compatible（さくら）のアダプター、スキーマの変換と検証、やり直しと受け皿、`LLM_RECORD_DIR` を入れた。既定の挙動は変えていない。次は L2 の評価で、さくらの API キーが要る。
 - 同じ設計書の L2「評価」を行った（PR #146）。佐賀市 51 ページと遠野市 20 ページから集めた 213 件の要求を、Gemini 2.5 Flash、Gemini 3.5 Flash、さくら（gpt-oss-120b と Qwen3-VL）、さくら（gemma-4）に流した。文字はさくらが機械の目安を満たしたが任意の項目を返さず、画像は Gemini のままとする結果になった。人の判定用の CSV を `memory/llm-eval/` に置いた。詳細は `memory/llm-provider-eval-2026-09.md`。
+- リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（PR #145。詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
+- 本番の Cloud Run を、Vertex AI の `gemini-2.5-flash`(2026-10-20 に廃止)から `gemini-3.5-flash` に替えた(2026-09-25 10:27 日本時間、ユーザーが実施)。`CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、タグ `gemini35` で確かめてからトラフィックを移した。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。確認用の API 3件(設定、文字のタスク、画像のタスク)と画面の確認で問題は無かった
 
 ## Decisions
 

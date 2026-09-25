@@ -1,4 +1,5 @@
-.tmp-gemini-a11y-agent/
+# 佐賀市 fixture の置き場(koteikara/gemini-a11y-agent の複製かシンボリックリンク)
+.tmp-gemini-a11y-agent
 *.zip
 
 .env
@@ -21,3 +22,7 @@ goal2-app/dist/
 goal2-app/*.exe
 goal2-app/sea-prep.blob
 goal2-app/server.bundled.js
+
+# 一時生成物(--write-output の出力、サーバーのログ)
+goal2-app/tmp/
+*.log

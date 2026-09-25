@@ -7,6 +7,7 @@ const { loadRules } = require("../lib/rules");
 const { loadCheckitems } = require("../lib/michecker-checkitems");
 const { autoFixHtml, compareHtml } = require("../lib/sagaAutoFix");
 const { learnGoldHintsForPair } = require("../lib/sagaGoldHints");
+const { serverEnv } = require("./server-env");
 
 const rootDir = path.resolve(__dirname, "..");
 
@@ -1382,7 +1383,7 @@ async function main() {
   const port = 9099;
   const child = spawn(process.execPath, ["server.js"], {
     cwd: rootDir,
-    env: { ...process.env, PORT: String(port) },
+    env: serverEnv({ PORT: String(port) }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 

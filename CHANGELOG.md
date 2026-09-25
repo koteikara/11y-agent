@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
+
+- 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されるため、本番の Cloud Run の設定を替えた(ユーザーが実施)。その結果を残す。
+- 内容: `CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、`GEMINI_MODEL=gemini-3.5-flash`、`GEMINI_TEMPERATURE=1`、単価 1.65/9.9 を足して、タグ `gemini35` でトラフィックを流さずにデプロイした。確認用の API 3件と画面で確かめてから、トラフィックを移した(2026-09-25 10:27 日本時間)。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。
+- 関連ファイル: `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`(L0 の本番への適用)、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_DATA_POLICY.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #145(記録だけを同じブランチに足した)
+
 ## 2026-09-24: LLM L2（提供元の評価）
 
 - 背景・目的: さくらの AI Engine へ移す前に、画面が実際に送る要求で Gemini とさくらを比べた（設計書 `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` の 4章 L2）。
@@ -27,6 +34,27 @@
 - 設計との差: 佐賀市の画像が 404 で取れず、画像は遠野市のページだけで評価した（遠野市を 20 ページに増やした）。呼び出しの上限を 180 秒にし、A をもう一度流して揺れの基準（A2）にした。
 - 関連ファイル: `goal2-app/tools/llm-provider-eval.js`（新規）、`memory/llm-provider-eval-2026-09.md`（新規）、`memory/llm-eval/`（新規）、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（4章 L2）、`memory/project-state.md`
 - 関連PR/コミット: PR #146
+
+## 2026-09-24: 構造変更1 S4 画面と証跡
+
+- 背景・目的: S3 で取り下げた候補が一覧から消え、証跡にも出なくなっていた。`orphaned` は「修正が失われた」ものと、通知だけの候補や決め直しで対象が作り直されたものを区別していなかった。設計書 `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.10・3.11 の画面と証跡を入れる。
+- 主な変更内容: 取り下げた候補の写しを残し、証跡の `candidates` の後ろに `withdrawn` の行として並べる（`completion.withdrawn` を追加、`total`・`unresolved` の意味は変えない）。証跡の候補の行に `generation`・`decision_seq`・`withdrawn_by_seq`・`orphaned`・`orphaned_kind` を足し（CSV は既存の23列の後ろ）、JSON のトップに `decision_log` を足した。`orphaned` を `no-op`・`target-replaced`・`lost` に分ける `orphanedKindOf()` を入れ、`lost` の候補に「最終HTMLに未反映」のバッジと要約の件数、詳細欄に3分類の説明を出す。再導出で生まれた未処理の候補に「再確認」のバッジを付け、候補一覧の下に「取り下げた候補 N件」の折りたたみを置いた。GOAL1 の証跡の新しいキーは `generation` を除いて `null`、`goal1.js` の CSV は変えていない。
+- 検証: 6章のコマンドすべて通過（出力テストは S3 の198件に S4 の36件を足して234件）。`npm run test:saga-gold` は `main` と同じ数値。証跡CSVの既存23列は、同じ入力と同じ操作で `main` と11件すべて一致。実ページ51件の GOAL1 経路の最終HTMLは51件すべて `main` と同一。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/styles.css`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`memory/project-state.md`
+- レビュー1回目の対応: 取り下げの原因は `decision_log` の `seq` で引くと決め、設計書とコメントを書き替えた（候補の行の `decision_seq` は最新の決定なので、原因の構造候補を採用から却下へ決め直すと当たる行が無くなるため）。`decision_log` の `orphaned` は最新の採用・編集の行だけに出し、決め直しで効かなくなった採用は `null` にした（評価されていない `false` が「当たった採用」と読めるため）。派生IDの参照先の `seq` がログに無いときは `target-replaced` ではなく `lost` にし、`target-replaced` の説明を「同じ問題が残っていれば出直す」に直した。
+- 関連PR/コミット: PR #141
+
+## 2026-09-24: リポジトリの整備（文書と実装のずれ、不要物、CI）
+
+- 背景・目的: `PROJECT_CONTEXT.md` の未解決事項にあった、文書と実装のずれ、コミットされた一時生成物、CIが無いことを片づける。あわせて、手元にLLMの鍵がある環境でテストが実際のAPIを呼んでいた（出力テストがAIの確認待ちで止まった）のを直した。
+- 文書: `goal2-app/README.md` の冒頭を、Goal 1〜3とmiChecker結果比較の画面一覧に書き替えた。「まだ扱わないもの」の「miCheckerの自動実行」を「Cloud Runのホスト版での自動実行（Windowsでローカルに動かしたときは実装済み）」に直し、「miChecker関連の機能」の節（修正基準の切り替え、ブラウザ内のmiChecker相当の検査、検査結果の比較）を足した。package名を `goal2-a11y-review-poc` から `a11y-migration-app` に替え、`/api/health` の `service` と起動時のログも合わせた。ディレクトリ名 `goal2-app` は、`goal2-app.exe` や手順書が参照しているため変えない。
+- 不要物: 旧複製 `a11y-agent/`（30ファイルのうち23件は現行の過去の版と同じで、残りも現行に引き継がれた初期の下書き）、`goal2-app/server.err.log`、`server.out.log`、`goal2-app/tmp/`（`--write-output` の出力）を削除した。`.gitignore` に `goal2-app/tmp/` と `*.log` を足し、`.tmp-gemini-a11y-agent` はシンボリックリンクでも無視されるよう末尾のスラッシュを外した。fixture、サンプル、評価の記録、一時生成物の分け方を `goal2-app/README.md` の「検証用のデータと一時ファイル」に書いた。
+- CI: `.github/workflows/ci.yml` を足した。pull requestとmainへのpushで、`scripts/ci/check-tracked-files.js`（一時生成物や鍵のファイルの混入）、`scripts/ci/check-kb-build.js`（KB生成物がMarkdownから作り直した結果と一致し、`goal2-app/data/` のコピーとも一致するか）、`goal2-app` のテスト5つ（`npm test`、`test:llm`、`test:table-nesting`、`test:goal2-output`、`test:michecker-parity`）を動かす。`test:saga-gold` は、fixtureが非公開のリポジトリにあるため動かさない。
+- テスト: `goal2-app/test/server-env.js` を足し、`run-tests.js`、出力テスト、表のテストが起動するサーバーへLLM関係の環境変数を渡さないようにした。
+- 検証: 手元の鍵を残したままテスト5つが通ることと、2つの検査が整理前のmainでは失敗（混入139件）し、このブランチでは通ることを確かめた。
+- Codex の二次レビューへの対応: 要修正4件を直した。(1) KBの生成物の検査がWindowsで改行コードだけを理由に失敗しないよう、比べるときにCRLFとLFを同じものとして扱い、ジェネレーター2本の出力もLFに固定した。(2) READMEの「LLM (Gemini) 連携」の節と `PROJECT_CONTEXT.md` に残っていた「`GEMINI_API_KEY` が未設定なら呼び出されない」を、実装の条件(APIキー、`GEMINI_AUTH_MODE=adc`、さくらの提供元と鍵のどれか)に合わせた。(3) 設計書6章の「決めてほしいこと」のL0を適用済みにした。(4) READMEと `PROJECT_CONTEXT.md` の画面の一覧に概要スライド(`/verification-slides.html`)を足した。任意の指摘のうち、名前がちょうど `.key`・`.pem` のファイルも検出するようにし、`PROJECT_CONTEXT.md` の `updated` を 2026-09-25 にした。`.env.example` を検出する点は、`.gitignore` も `.env.*` を無視していて両者がそろっているため、変えていない。
+- 関連ファイル: `goal2-app/README.md`、`goal2-app/package.json`、`goal2-app/server.js`、`goal2-app/test/server-env.js`、`goal2-app/test/run-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/test/table-nesting/run-table-tests.js`、`.github/workflows/ci.yml`、`scripts/ci/`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #145
 
 ## 2026-09-24: LLM L1（提供元の切り替えの仕組み、さくらの AI Engine）
 

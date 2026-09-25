@@ -148,7 +148,8 @@ gcloud run services update $SERVICE --region $REGION `
 
 Vertex AI の `gemini-2.5-flash` は 2026-10-20 に廃止される。
 本番は `GEMINI_AUTH_MODE=adc`、`GEMINI_VERTEX_LOCATION=asia-northeast1` で、`GEMINI_MODEL` を設定していないので、このままだと AI の下書きがその日に止まる(画面はルールベースの案で作業を続けられる)。
-次の3案から選ぶ。推奨は案 A である。案の比べ方は [README.md](README.md#gemini-25-flash-の廃止2026-10-20に向けたつなぎの設定) を参照。
+次の3案から選ぶ。推奨は案 A である。
+2026-09-25 に案 A を本番に適用した(リビジョン `goal2-a11y-review-00094-sev`、戻し先 `goal2-a11y-review-00093-7gf`。記録は `memory/project-state.md`)。案の比べ方は [README.md](README.md#gemini-25-flash-の廃止2026-10-20に向けたつなぎの設定) を参照。
 
 どの案でも、トラフィックを流さない新しいリビジョンで先に確かめてから切り替える。
 
