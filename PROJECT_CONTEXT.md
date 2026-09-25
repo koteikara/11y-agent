@@ -136,12 +136,9 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 - `[[UI・デザイン]]` — 作業者向けの候補確認画面、miChecker比較画面、検証ガイドを素のHTML/CSSで作っている。アクセシビリティ規則（WCAG/JIS、miChecker）の適用先として参照する。
 - `[[開発・トラブルシューティング]]` — Cloud Runの手動デプロイ、Node SEAによるWindows `.exe` ビルド、htmlchecker.exe連携の障害対応の知識を蓄積する。
 
-MOC名はVault側で未確認のため、上記は要確認候補である（本ファイル末尾の未解決事項を参照）。
-
 ## 未解決事項
 
 - lockファイルが無い。npm依存が0件のため現状は問題にならないが、ビルド時に `npx esbuild` と `npx postject` を未固定バージョンで取得している。
 - Cloud Run上の認証、実案件データの送信ポリシー、証跡の永続保存先は未決定（`memory/project-state.md` の「Not Completed Yet」）。
 - CMS入力欄で許可されるHTMLタグと属性の制約は未確認で、最終HTML出力に反映されていない。
 - `goal2-app/Dockerfile`（`node:20-alpine`）とCIはNode 20で動かしているが、Node 20は2026-04-30にサポートが終わっている。本番運用の段階でNode 22以上へ上げる。
-- ForLLM VaultのMOC名は本ファイル作成時に確認できなかった。Vault側で実在するMOC名に合わせて `knowledge_mocs` を修正する必要がある。

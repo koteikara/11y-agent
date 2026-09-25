@@ -857,6 +857,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 同じ設計書の L2「評価」を行った（PR #146）。佐賀市 51 ページと遠野市 20 ページから集めた 213 件の要求を、Gemini 2.5 Flash、Gemini 3.5 Flash、さくら（gpt-oss-120b と Qwen3-VL）、さくら（gemma-4）に流した。文字はさくらが機械の目安を満たしたが任意の項目を返さず、画像は Gemini のままとする結果になった。人の判定用の CSV を `memory/llm-eval/` に置いた。詳細は `memory/llm-provider-eval-2026-09.md`。
 - リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（PR #145。詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
 - 本番の Cloud Run を、Vertex AI の `gemini-2.5-flash`(2026-10-20 に廃止)から `gemini-3.5-flash` に替えた(2026-09-25 10:27 日本時間、ユーザーが実施)。`CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、タグ `gemini35` で確かめてからトラフィックを移した。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。確認用の API 3件(設定、文字のタスク、画像のタスク)と画面の確認で問題は無かった
+- `PROJECT_CONTEXT.md` の `knowledge_mocs` の3つの MOC が ForLLM Vault の `03_MOC` に実在することを、ユーザーが確かめた(2026-09-25)。要確認の注記と未解決事項の項目を消した
 
 ## Decisions
 

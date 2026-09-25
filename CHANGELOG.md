@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-25: ForLLM Vault の MOC 名を確認した
+
+- 背景・目的: `PROJECT_CONTEXT.md` の `knowledge_mocs`(AI・自動化、UI・デザイン、開発・トラブルシューティング)は、Vault 側に実在するかを確かめられず、要確認のまま残っていた。ユーザーが Vault の `03_MOC` フォルダーに3つとも実在することを確かめた。
+- 内容: `PROJECT_CONTEXT.md` の「ForLLMとの関連」の要確認の注記と、未解決事項の MOC の項目を消した。`knowledge_mocs` の値は変えていない。
+- 関連ファイル: `PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: このブランチの PR
+
 ## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
 
 - 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されるため、本番の Cloud Run の設定を替えた(ユーザーが実施)。その結果を残す。
