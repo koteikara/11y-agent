@@ -31,6 +31,13 @@
 - 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/tools/llm-provider-eval.js`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（3.3、L1 の差異）、`memory/llm-provider-eval-2026-09.md`（L1 修正後の再評価）、`memory/project-state.md`
 - 関連PR/コミット: PR #149
 
+## 2026-09-25: 履歴の関連度圧縮で費用と時間を減らせるかの検証
+
+- 背景・目的: ユーザーが ForLLM ノート「エージェント履歴を関連度スコアで圧縮する」の改訂版（fast-jev-compaction、Jev、laya-mlx などの実装例つき）を共有し、費用や時間の削減に使えるかの検証を求めた。前回（2026-09-20）の検討は一次資料も数値も確かめていなかった。
+- 主な変更内容: 一次資料 5 件（コード、公式ドキュメント、論文）を読み、ノートとの食い違いを記録した。Claude Code の会話記録に同じ固定範囲と 3 段階の選別を当て、プロンプトキャッシュ込みの入力費用を試算するスクリプトを新設した。結果は、本番アプリの LLM は無履歴の 1 往復で対象外、開発エージェントでは組み込みの要約より入力費用が 17〜136% 増える代わりに圧縮の待ち時間が約 100 秒から 1 秒未満になる（いずれも試算）。限定判断を判定器へ任せる使い方は、データの送信方針を決めてから比べる。
+- 関連ファイル: `memory/agent-history-compaction-cost-verification.md`（新規）、`scripts/research/simulate-history-compaction.js`（新規）、`memory/agent-context-relevance-compaction-research.md`、`memory/project-state.md`
+- 関連PR/コミット: （この PR）
+
 ## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
 
 - 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されるため、本番の Cloud Run の設定を替えた(ユーザーが実施)。その結果を残す。
