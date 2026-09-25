@@ -119,7 +119,10 @@ JSON の取り出しは `callLlm()` の中に移し、呼び口では行わな�
 gemini アダプターには、いまと同じ形で渡す。
 
 - 型名を小文字にする（`OBJECT` → `object` など）。
-- `object` には `additionalProperties: false` を足す。`required` はそのまま写す。
+- `object` には `additionalProperties: false` を足す。
+- `required` には、入れ子の配列の中の `object` も含めて、すべての `object` のすべての項目を入れる。Structured Outputs の `strict: true` は、すべての項目が `required` にあることを求めるためである。元の `required` だけを写していたときは、gpt-oss-120b が任意の項目をほとんど返さなかった（L2 の所見1）。型は変えず、`null` も許さない。
+- 元が任意の `string` の項目は、空の文字列 `""` を「値なし」として受ける。応答を取り出したあと、元のスキーマで任意の `string` の項目が `""` なら、その項目を捨てる。これで、検証と画面には、Gemini のときと同じ「項目が無い」形で渡る。元が必須の `string` の `""` は捨てない。
+- 元が任意の `boolean`（代替テキストの `is_decorative` と `is_complex`）は、そのまま必須にし、該当しなければ `false` で答えさせる。
 - 一番外側が `array` のときは、`{ "type": "object", "properties": { "results": <元の配列> }, "required": ["results"], "additionalProperties": false }` で包む。返ってきた JSON は `results` を取り出して、元の配列の形に戻す。包む理由は、OpenAI 互換の呼び口の多くが、一番外側にオブジェクトを求めるためである。
 - 送り方は `response_format: { "type": "json_schema", "json_schema": { "name": <タスク名>, "schema": <変換後>, "strict": true } }` とする。
 - さくらでは JSON Schema による強制が公式に保証されていない。そのため、openai-compatible アダプターはシステム指示の末尾にも「出力は次の JSON Schema に従う JSON だけにし、説明やコードブロックを付けない」という一文と、変換後のスキーマを足す。
@@ -268,6 +271,7 @@ L0 と同じ PR にしてもよい。分ける場合は L0 を先にマージす
 - 主の提供元が未設定で受け皿が設定済みのときは、受け皿で答える。
 - 未対応の提供元の値は `gemini`、未対応の受け皿の値は `none` として扱う。
 - さくらが `results` で包まずに配列を返したときも受け付ける。任意の項目の `null` は無いものとして捨てる。
+- さくらに送るスキーマは、すべての項目を `required` にし、任意の `string` の `""` は取り出したあとに捨てる（3.3）。最初の実装は元の `required` だけを写しており、L2 で任意の項目がほとんど返らなかったため、あとから直した（PR #147）。
 - 受け皿も失敗したときは、主のエラーを返し、メッセージに受け皿のエラーを足す。
 
 **L2 評価**。

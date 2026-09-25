@@ -19,6 +19,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-25: LLM L1 の修正（さくらに送るスキーマの required を全項目にする）
+
+- 背景・目的: L2 の評価で、さくらの gpt-oss-120b が、スキーマで任意になっている項目（感覚的な特徴の `explanation`、リンクの `confidence` など）をほとんど返さなかった（所見1）。`strict: true` で送りながら、`required` に元の必須項目しか入れていなかったことが有力な原因だった。
+- 主な変更内容:
+  - `goal2-app/lib/llm.js`: `toOpenAiResponseSchema()` で、入れ子を含むすべての `object` の `required` を全項目にした。型は変えず、`null` も許さない。openai-compatible アダプターの応答は、取り出したあとに、元のスキーマで任意の `string` の項目が `""` なら捨てる（`dropEmptyOptionalStrings()`）。Gemini に送る本文、プロンプト、画面は変えていない。
+  - `goal2-app/test/llm/run-llm-tests.js`: 全タスクで `required` が全項目になること（任意の 14 項目）、任意の `string` の `""` を捨て、値と任意の `boolean` は残すこと、必須の `""` と Gemini の応答には手を加えないことのテストを足した。
+  - `goal2-app/tools/llm-provider-eval.js`: 構成 C2、`--kind`（文字か画像だけを流す）、`--app-root`（別の作業ツリーの `lib/llm.js` を使う）、集計の「任意の項目が返る割合」を足した。
+  - 再評価: 要求を集め直し、A（文字だけ）、修正前の C、C2 を同じ要求で流した。任意の項目は C2 ですべて返るようになり、文字のタスクの JSON の妥当性、分類の一致（C と同じ 9 件の食い違い）、応答時間、費用は変わらなかった。画像のタスクでは、`extracted_text` の繰り返しと `is_complex` の偏りが新しく出た。人の判定用の CSV は作り直していない。
+  - 評価の報告書の 17 行（佐賀市の画像 82 種類の内訳が 81 件しかなかった点）を、数え直した結果で直した。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/tools/llm-provider-eval.js`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（3.3、L1 の差異）、`memory/llm-provider-eval-2026-09.md`（L1 修正後の再評価）、`memory/project-state.md`
+- 関連PR/コミット: PR #147
+
 ## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
 
 - 背景・目的: Vertex AI の `gemini-2.5-flash` が 2026-10-20 に廃止されるため、本番の Cloud Run の設定を替えた(ユーザーが実施)。その結果を残す。
