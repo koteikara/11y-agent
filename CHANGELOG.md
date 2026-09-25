@@ -29,7 +29,7 @@
   - 再評価: 要求を集め直し、A（文字だけ）、修正前の C、C2 を同じ要求で流した。任意の項目は C2 ですべて返るようになり、文字のタスクの JSON の妥当性、分類の一致（C と同じ 9 件の食い違い）、応答時間、費用は変わらなかった。画像のタスクでは、`extracted_text` の繰り返しと `is_complex` の偏りが新しく出た。人の判定用の CSV は作り直していない。
   - 評価の報告書の 17 行（佐賀市の画像 82 種類の内訳が 81 件しかなかった点）を、数え直した結果で直した。
 - 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/tools/llm-provider-eval.js`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（3.3、L1 の差異）、`memory/llm-provider-eval-2026-09.md`（L1 修正後の再評価）、`memory/project-state.md`
-- 関連PR/コミット: PR #147
+- 関連PR/コミット: PR #149
 
 ## 2026-09-25: 本番の Gemini のモデルを gemini-3.5-flash に替えた記録
 
