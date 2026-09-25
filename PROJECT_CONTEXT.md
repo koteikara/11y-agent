@@ -2,7 +2,7 @@
 project: 11y-agent
 repository: https://github.com/koteikara/11y-agent
 status: active
-updated: 2026-09-24
+updated: 2026-09-25
 knowledge_mocs:
   - AI・自動化
   - UI・デザイン
@@ -25,10 +25,10 @@ knowledge_mocs:
 | 言語 | Google Apps Script | 移行記録スプレッドシートの作業時間計測サイドバー | `spreadsheet-gas/Code.gs`、`Index.html`、`appsscript.json` |
 | ランタイム | Node.js 20以上 | 実行画面群（Goal 1〜3、miChecker結果比較）のHTTPサーバー | `goal2-app/package.json` (`engines.node >=20`)、`goal2-app/Dockerfile` (`node:20-alpine`) |
 | フレームワーク | なし（Node標準 `http` モジュール） | 静的配信、ルールAPI、URL取得API、LLM中継API。npm依存は0件 | `goal2-app/server.js`、`goal2-app/package.json` (`dependencies` なし) |
-| UI | 素のHTML/CSS/JS | Goal 2候補確認画面 (`index.html`/`app.js`)、Goal 3抽出画面 (`goal3.html`)、Goal 1画面 (`goal1.html`)、miChecker比較画面 (`michecker-compare.html`)、検証ガイド | `goal2-app/public/` |
+| UI | 素のHTML/CSS/JS | Goal 2候補確認画面 (`index.html`/`app.js`)、Goal 3抽出画面 (`goal3.html`)、Goal 1画面 (`goal1.html`)、miChecker比較画面 (`michecker-compare.html`)、検証ガイド (`verification-guide.html`)、概要スライド (`verification-slides.html`) | `goal2-app/public/` |
 | データ保存 | JSONL/JSONファイル（読み取り専用） | KBルール62件とmiChecker公式チェック項目を起動時に読み込む。永続化DBは無い | `goal2-app/data/rules.jsonl`、`goal2-app/data/michecker-checkitems.json`、`a11y-migration-kb/build/` |
 | ナレッジ形式 | OKF (Open Knowledge Format) Markdown + フロントマター | 1ルール1ファイルの移行ルールグラフ。ジェネレータでJSONL化 | `a11y-migration-kb/README.md`、`a11y-migration-kb/rules/` |
-| 外部サービス | Google Gemini API / Vertex AI（本番は東京の Vertex AI の Gemini 3.5 Flash、2026-09-25 から）、さくらの AI Engine（切り替えの仕組みのみ、本番は未使用） | 画像alt下書きなどのLLM補助。`GEMINI_API_KEY` 未設定時は呼び出されない | `goal2-app/lib/llm.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/LLM_DATA_POLICY.md` |
+| 外部サービス | Google Gemini API / Vertex AI（本番は東京の Vertex AI の Gemini 3.5 Flash、2026-09-25 から）、さくらの AI Engine（切り替えの仕組みのみ、本番は未使用） | 画像alt下書きなどのLLM補助。提供元（`GEMINI_API_KEY`、`GEMINI_AUTH_MODE=adc`、さくらの `LLM_*_PROVIDER` と `SAKURA_AI_API_KEY`）を何も設定していなければ呼び出されない | `goal2-app/lib/llm.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/LLM_DATA_POLICY.md` |
 | 外部ツール | miChecker / htmlchecker.exe (Eclipse ACTF) | ローカルWindows版でのアクセシビリティ検査の自動実行。公式チェック項目定義を同梱 | `goal2-app/server.js`（`MICHECKER_HTMLCHECKER_EXE`）、`a11y-migration-kb/vendor/eclipse-actf/` |
 | インフラ・配信 | Google Cloud Run (asia-northeast1) + Cloud Build + Artifact Registry | ホスト版の配信。手元PowerShellから `gcloud builds submit` と `gcloud run deploy` で手動デプロイ | `goal2-app/Dockerfile`、`goal2-app/CLOUD_RUN_DEPLOY.md` |
 | インフラ・配信 | Node.js SEA (Single Executable Applications) + esbuild + postject | Windows向け単一 `.exe` 配布 | `goal2-app/build-windows-app.bat`、`goal2-app/sea-config.json`、`goal2-app/LOCAL_WINDOWS_APP.md` |
@@ -48,7 +48,7 @@ flowchart LR
   BUILD -->|手動コピー（CIで一致を検査）| DATA[goal2-app/data/]
   DATA --> SRV[goal2-app/server.js<br>Node標準http]
   SRV -->|/api/rules 等| UI[public/ ブラウザUI<br>Goal 1 / 2 / 3 / miChecker比較]
-  SRV -->|GEMINI_API_KEY設定時のみ| GEMINI[Gemini API / Vertex AI]
+  SRV -->|提供元の設定時のみ| GEMINI[Gemini API / Vertex AI<br>さくらの AI Engine]
   SRV -->|Windows .exe版のみ| MIC[htmlchecker.exe]
   UI -->|最終HTML + 証跡JSON/CSV| OUT[CMS登録 / スプレッドシート]
   GAS[spreadsheet-gas/] --> OUT
@@ -70,7 +70,7 @@ flowchart LR
 - **ナレッジベースを1ルール1Markdown（OKF）で管理**し、JSONLは生成物として扱う。ルール本文と根拠（WCAG/JIS、miCheckerチェック項目ID）を人が読める形で保つためである（`a11y-migration-kb/README.md`）。
 - **修正対象を本文コンテンツに限定**する。テンプレート起因の指摘は `content`、`old-site-template`、`new-cms-template`、`unknown` に分類し、本文起因のものだけを修正候補にする（`AGENTS.md`）。
 - **miCheckerを主基準ではなく品質ゲート候補**として扱う。KB全ルールを既定とし、miChecker指摘のみへ絞るモードは案件の検収条件を確認したうえで使う（`AGENTS.md`）。
-- **LLM連携は既定で無効**。実案件HTMLと画像を外部LLMへ送る合意が未確定のため、`GEMINI_API_KEY` の設定を運用判断に委ねている（`goal2-app/LLM_DATA_POLICY.md`）。
+- **LLM連携は既定で無効**。実案件HTMLと画像を外部LLMへ送る合意が未確定のため、提供元の設定（`GEMINI_API_KEY`、`GEMINI_AUTH_MODE=adc`、`SAKURA_AI_API_KEY` など）を運用判断に委ねている（`goal2-app/LLM_DATA_POLICY.md`）。
 - **LLM の提供元はさくらの AI Engine に寄せる**（2026-09-24、ユーザー確定）。切り替えの仕組み（L1、`lib/llm.js` の `callLlm()` とアダプター）は入ったが、本番はまだ Gemini のままである。他のプロジェクトで使っていて契約が済んでいるためで、Gemini は受け皿とつなぎとして残す。ISMAP は、公開済みページで機密性が低いため、いまは求めない。段階と検証は `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、比較は `memory/llm-provider-alternatives-research.md` にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。

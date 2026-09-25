@@ -34,6 +34,7 @@
 - CI: `.github/workflows/ci.yml` を足した。pull requestとmainへのpushで、`scripts/ci/check-tracked-files.js`（一時生成物や鍵のファイルの混入）、`scripts/ci/check-kb-build.js`（KB生成物がMarkdownから作り直した結果と一致し、`goal2-app/data/` のコピーとも一致するか）、`goal2-app` のテスト5つ（`npm test`、`test:llm`、`test:table-nesting`、`test:goal2-output`、`test:michecker-parity`）を動かす。`test:saga-gold` は、fixtureが非公開のリポジトリにあるため動かさない。
 - テスト: `goal2-app/test/server-env.js` を足し、`run-tests.js`、出力テスト、表のテストが起動するサーバーへLLM関係の環境変数を渡さないようにした。
 - 検証: 手元の鍵を残したままテスト5つが通ることと、2つの検査が整理前のmainでは失敗（混入139件）し、このブランチでは通ることを確かめた。
+- Codex の二次レビューへの対応: 要修正4件を直した。(1) KBの生成物の検査がWindowsで改行コードだけを理由に失敗しないよう、比べるときにCRLFとLFを同じものとして扱い、ジェネレーター2本の出力もLFに固定した。(2) READMEの「LLM (Gemini) 連携」の節と `PROJECT_CONTEXT.md` に残っていた「`GEMINI_API_KEY` が未設定なら呼び出されない」を、実装の条件(APIキー、`GEMINI_AUTH_MODE=adc`、さくらの提供元と鍵のどれか)に合わせた。(3) 設計書6章の「決めてほしいこと」のL0を適用済みにした。(4) READMEと `PROJECT_CONTEXT.md` の画面の一覧に概要スライド(`/verification-slides.html`)を足した。任意の指摘のうち、名前がちょうど `.key`・`.pem` のファイルも検出するようにし、`PROJECT_CONTEXT.md` の `updated` を 2026-09-25 にした。`.env.example` を検出する点は、`.gitignore` も `.env.*` を無視していて両者がそろっているため、変えていない。
 - 関連ファイル: `goal2-app/README.md`、`goal2-app/package.json`、`goal2-app/server.js`、`goal2-app/test/server-env.js`、`goal2-app/test/run-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/test/table-nesting/run-table-tests.js`、`.github/workflows/ci.yml`、`scripts/ci/`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: PR #145
 

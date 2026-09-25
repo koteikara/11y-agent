@@ -9,6 +9,7 @@
 | 本文抽出(Goal 3) | `/goal3.html` | 旧ページ全体のHTMLから、CMSに登録する本文部分を抽出して候補レビューへ渡す([Goal 3](#goal-3-content-extractor)) |
 | miChecker結果比較 | `/michecker-compare.html` | 移行前と移行後のmiCheckerの検査結果を比べ、指摘を新規・未解消・解消に分けてKBのルールへ逆引きする([miChecker関連の機能](#michecker関連の機能)) |
 | 検証ガイド | `/verification-guide.html` | 3パターン(通常移行 / AI移行 / miChecker移行)の比較検証の作業手順書。実体は `public/verification-guide.html`、画面キャプチャは `public/images/verification/` |
+| 概要スライド | `/verification-slides.html` | 検証の概要を説明するスライド(「移行作業はこう変わる」)。検証ガイドからリンクしている |
 
 作業者向けの操作マニュアルは [WORKER_GUIDE.md](WORKER_GUIDE.md) にあります。
 
@@ -179,7 +180,7 @@ OneDrive上の暗号化・オンライン専用ファイルに依存しないた
 
 ## LLM (Gemini) 連携
 
-一部の候補生成(`text.foreign-language`、`text.sensory-characteristics`、`link.link-text`/`mail-link`/`toppage-link`、`table.caption`/`cell-merge-*`/`th-scope`、`image.alt-text`/`complex-image-report`/`avoid-text-as-image`、`html-structure.heading-required`/`heading-content-quality`)は、Google Gemini APIを使って候補の内容を改善する後処理(enrichment)に対応している。**`GEMINI_API_KEY` が未設定の場合(既定)、LLM関連コードは一切呼び出されず、課金も発生しない。** 既存のヒューリスティック(正規表現・DOM解析)による候補生成だけで動作し、検出結果はLLM無効時と完全に同じになる。
+一部の候補生成(`text.foreign-language`、`text.sensory-characteristics`、`link.link-text`/`mail-link`/`toppage-link`、`table.caption`/`cell-merge-*`/`th-scope`、`image.alt-text`/`complex-image-report`/`avoid-text-as-image`、`html-structure.heading-required`/`heading-content-quality`)は、LLMを使って候補の内容を改善する後処理(enrichment)に対応している。**提供元を何も設定していない場合(既定)、LLM関連コードは一切呼び出されず、課金も発生しない。** LLMが有効になるのは、`GEMINI_API_KEY`(GeminiのAPIキー方式)、`GEMINI_AUTH_MODE=adc`(Vertex AI経由)、`LLM_TEXT_PROVIDER`/`LLM_VISION_PROVIDER` を `sakura` にしたうえでの `SAKURA_AI_API_KEY`(さくらのAI Engine)のどれかを設定したときである。 既存のヒューリスティック(正規表現・DOM解析)による候補生成だけで動作し、検出結果はLLM無効時と完全に同じになる。
 
 **実案件データで有効化する前に [LLM_DATA_POLICY.md](LLM_DATA_POLICY.md) を確認すること。** Googleの無料枠は送信内容をモデル学習・製品改善に利用する場合があるため、実案件データには使用できない(有料枠またはVertex AI経由のみ)。
 
@@ -187,7 +188,7 @@ OneDrive上の暗号化・オンライン専用ファイルに依存しないた
 
 | 環境変数 | 既定値 | 説明 |
 |---|---|---|
-| `GEMINI_API_KEY` | (未設定) | 設定するとLLM連携が有効になる(APIキー方式)。未設定なら他の`GEMINI_*`変数は全て無視され、費用は発生しない。 |
+| `GEMINI_API_KEY` | (未設定) | 設定するとGeminiがAPIキー方式で有効になる。Vertex AI経由(`GEMINI_AUTH_MODE=adc`)なら不要。Geminiがどちらの方式でも設定されていなければ、他の`GEMINI_*`変数は使われない。 |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | 使用するGeminiモデル。安価な高速ティアを既定にしている。 |
 | `LLM_MAX_CALLS_PER_MINUTE` | `30` | 1分あたりのGemini呼び出し上限。超過分は429エラーとなり、呼び出し元は既存ヒューリスティックの案へ自動フォールバックする。 |
 | `GEMINI_INPUT_PRICE_PER_1M_TOKENS` | `0.3` (USD) | コスト概算に使う入力トークン単価。既定モデル(`gemini-2.5-flash`)の[公式料金](https://ai.google.dev/gemini-api/docs/pricing)を2026-07-10時点で確認した値。**料金は変動するため、`GEMINI_MODEL`を変更した場合や時間が経過した場合は必ず最新値を確認して設定すること。** |

@@ -17,7 +17,7 @@ const FORBIDDEN = [
   { pattern: /\.log$/, reason: "ログ" },
   { pattern: /(^|\/)node_modules\//, reason: "npm の依存" },
   { pattern: /^goal2-app\/(dist\/|\.goal2-app-local\/|sea-prep\.blob$|server\.bundled\.js$|[^/]+\.exe$)/, reason: "Windows 版のビルド生成物と手元の設定" },
-  { pattern: /(^|\/)(\.env(\..*)?|credentials\.json|token\.json|service-account[^/]*\.json|client_secret[^/]*\.json|[^/]+\.key|[^/]+\.pem)$/, reason: "鍵や認証情報" },
+  { pattern: /(^|\/)(\.env(\..*)?|credentials\.json|token\.json|service-account[^/]*\.json|client_secret[^/]*\.json|[^/]*\.key|[^/]*\.pem)$/, reason: "鍵や認証情報" },
   { pattern: /^a11y-agent\//, reason: "削除した旧複製(a11y-agent/)。KB の正本は a11y-migration-kb/" },
 ];
 

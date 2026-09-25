@@ -6,6 +6,7 @@
 //
 // 食い違ったときの直し方は PROJECT_CONTEXT.md の「実行と検証」にある。
 // 生成し直して build/ に書き、同じ2ファイルを goal2-app/data/ へコピーする。
+// 改行コードの違い(Windows の CRLF と LF)は、中身の違いとして扱わない。
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -25,8 +26,12 @@ function relative(file) {
   return path.relative(repoRoot, file).split(path.sep).join("/");
 }
 
-function sameBytes(a, b) {
-  return fs.existsSync(a) && fs.existsSync(b) && fs.readFileSync(a).equals(fs.readFileSync(b));
+function readNormalized(file) {
+  return fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+}
+
+function sameContent(a, b) {
+  return fs.existsSync(a) && fs.existsSync(b) && readNormalized(a) === readNormalized(b);
 }
 
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-build-check-"));
@@ -40,10 +45,10 @@ try {
     });
     const built = path.join(kbDir, "build", name);
     const copied = path.join(appDataDir, name);
-    if (!sameBytes(regenerated, built)) {
+    if (!sameContent(regenerated, built)) {
       problems.push({ file: relative(built), reason: `Markdown から作り直した結果と違う(tools/${generator} で生成し直す)` });
     }
-    if (!sameBytes(built, copied)) {
+    if (!sameContent(built, copied)) {
       problems.push({ file: relative(copied), reason: `${relative(built)} と違う(build/ からコピーし直す)` });
     }
   }
