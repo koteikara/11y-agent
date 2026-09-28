@@ -126,7 +126,7 @@ Cloud Run の本番を、全員で共通の1つのパスワードで守る。
 4. **設定し忘れの守り。** Cloud Run（`K_SERVICE` がある）で `APP_PASSWORD` が無いか16文字より短いときは、`GET /api/health` を除くすべての要求に 503 を返し、起動時にエラーを1行出す。設定し忘れて誰でも開ける状態にならないようにするためと、短いパスワードで総当たりされないようにするためである。
 5. **手元では求めない。** Cloud Run 以外（Windows 版、開発、テスト）では、`APP_PASSWORD` が無ければパスワードを求めない。P0 の守りで、同じ PC からしか届かないためである。
 6. **記録に残さない。** パスワードと `Authorization` ヘッダーを、ログにも応答にも出さない。ヘッダーを読み損ねたときの例外の内容も、ログに出さない。
-7. **別のサイトから起こされた API の要求を止める。** `/api/` で始まる要求（`GET /api/health` を除く）で、`Sec-Fetch-Site` ヘッダーがあり、その値が `same-origin` と `none` のどちらでもなければ 403 を返す。ブラウザーは覚えたパスワードを、別のサイトの画像や iframe が起こした要求にも付けることがある。そのとき、外部のページを取りに行く GET（`/api/fetch-html`、`/api/link-title`）が動いてしまうためである。`Sec-Fetch-Site` は、いまの主なブラウザーがすべての要求に付けるヘッダーで、画面自身の `fetch()` は `same-origin`、アドレス欄に直接打ったときは `none` になる。`same-site` も止める。`run.app` は公開サフィックスなので、ほかの人の Cloud Run のサービスが `same-site` になりうるためである。ヘッダーが無い要求（ブラウザー以外の道具やテスト）は通すが、パスワードは要る。この確認は、パスワードの有無にかかわらず、手元の Windows 版でも行う。
+7. **別のサイトから起こされた API の要求を止める。** `/api/` で始まる要求（`GET /api/health` を除く）で、`Sec-Fetch-Site` ヘッダーがあり、その値が `same-origin` と `none` のどちらでもなければ 403 を返す。ブラウザーは覚えたパスワードを、別のサイトの画像や iframe が起こした要求にも付けることがある。そのとき、外部のページを取りに行く GET（`/api/fetch-html`、`/api/link-title`）が動いてしまうためである。`Sec-Fetch-Site` は、いまの主なブラウザーがすべての要求に付けるヘッダーで、画面自身の `fetch()` は `same-origin`、アドレス欄に直接打ったときは `none` になる。`same-site` も止める。この API は、同じサイトではなく同じオリジンの画面からだけ使う設計で、同じサイトの別のオリジンから呼ばせる用途が無いためである。あとから同じサイトに別のオリジン（独自ドメインや前段のプロキシなど）が加わっても、パスワードの付いた API を起こさせないようにする。ヘッダーが無い要求（ブラウザー以外の道具やテスト）は通すが、パスワードは要る。この確認は、パスワードの有無にかかわらず、手元の Windows 版でも行う。
 
 Cloud Run の設定（誰でも呼べる `allUsers` の権限と `--allow-unauthenticated`）は変えない。
 アプリの前に Google の仕組みを置かず、アプリ自身が確かめるためである。
@@ -311,7 +311,7 @@ PowerShell で行う。
    gcloud secrets add-iam-policy-binding app-password --project=$PROJECT_ID --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/secretmanager.secretAccessor"
    ```
 
-3. いまトラフィックを受けているリビジョンの名前を、「P1 より前の最後のリビジョン」として控える。そのうえで、実装をマージしたあとの main でイメージを作り（`CLOUD_RUN_DEPLOY.md` の手順）、パスワードの版を付けて、トラフィックを流さずにデプロイする。いまの環境変数（Gemini のモデルなど）は、そのまま引き継がれる。
+3. いまトラフィックを受けているリビジョンの名前を、「P1 より前の最後のリビジョン」として控える。このリビジョンとそれより前には、あとで戻さない（8）。そのうえで、実装をマージしたあとの main でイメージを作り（`CLOUD_RUN_DEPLOY.md` の手順）、パスワードの版を付けて、トラフィックを流さずにデプロイする。いまの環境変数（Gemini のモデルなど）は、そのまま引き継がれる。
 
    ```powershell
    gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(status.traffic)"
@@ -358,9 +358,13 @@ PowerShell で行う。
 
 8. 戻し方（問題があったとき）。何を戻したいかで、手順が分かれる。どの場合も、「P1 の最初のリビジョン」より前のリビジョンには戻さない。そこへ戻すと、パスワードを確かめる処理が無く、誰でも開ける状態になるためである。
 
-   - **アプリもパスワードも、前のリビジョンのときに戻す。** トラフィックを前のリビジョンに移す。前のリビジョンは、作ったときの版のパスワードで動く。リビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION --project=$PROJECT_ID` で分かる。
+   - **アプリもパスワードも、前のリビジョンのときに戻す。** トラフィックを前のリビジョンに移す。前のリビジョンは、作ったときの版のパスワードで動く。ただし、その版が有効なときに限る。無効にした版を参照するリビジョンは、新しいインスタンスを起動できないためである。先に、前のリビジョンが参照する版を見て、その版の状態が `ENABLED` であることを確かめる。漏れたために無効にした版は、戻すために有効に戻さない。その場合は、次の「アプリだけを前に戻す」を使う。リビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION --project=$PROJECT_ID` で分かる。
 
      ```powershell
+     gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="yaml(spec.containers[0].env)"
+     # 表示された APP_PASSWORD の key(版の番号)について
+     gcloud secrets versions describe <版の番号> --secret=app-password --project=$PROJECT_ID --format="value(state)"
+     # ENABLED なら
      gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-revisions=<前のリビジョン>=100
      ```
 
@@ -373,7 +377,9 @@ PowerShell で行う。
      gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
      ```
 
-   - **P1 の実装そのものに問題があり、パスワード無しに戻すしかないとき。** 「P1 より前の最後のリビジョン」にトラフィックを移すと、誰でも開ける状態になる。そうなることを承知のうえで行い、直した版をすぐにデプロイする。
+   - **P1 の実装そのものに問題があるとき（正しいパスワードでも開けない、など）。** P1 より前のリビジョンには戻さない。「P1 の最初のリビジョン」以後のどれかで動くなら、上の2つのどちらかで戻す。どれでも動かないなら、パスワードを確かめる処理を直した新しいイメージを、いまのパスワードの版で `--no-traffic --tag` を付けてデプロイし、タグ付きの URL で確かめてからトラフィックを移す。直るまでの間は、画面が使えない状態を受け入れる。
+
+   パスワード無しで誰でも開ける状態に戻すことは、この手順には含めない。そうするしかない事情があっても、画面を止めたままにする場合と比べたうえで、ユーザー（本番の責任者）が決める。
 
 ### P2 同意と証跡の運用
 
