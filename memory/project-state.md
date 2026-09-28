@@ -34,6 +34,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
   - AIによるアクセシビリティ生成を、共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離で扱う方針を記載する。
 - `memory/agent-context-relevance-compaction-research.md`
   - 「エージェント履歴を関連度スコアで圧縮する」設計仮説（ユーザーのノート）を、Goal 2 と構造変更1 に照らして検討した結果を記載する。大半は既存の設計と一致し、伸びしろは限定判断の小型分類器と案件内の判断履歴の活用にある。
+- `memory/agent-history-compaction-cost-verification.md`
+  - 同じノートの改訂版（fast-jev-compaction、Jev など）で費用と時間を減らせるかを、一次資料と会話記録の試算で検証した結果を記載する。本番アプリには効かず、開発エージェントでは要約より費用が増える代わりに圧縮の待ち時間が減る。試算の道具は `scripts/research/simulate-history-compaction.js`。
 - `memory/cms-migration-import-failure-patterns.md`
   - CMS の機械取込みが失敗するパターン（ユーザー共有の現場知見）と、課題として起票できる条件の検証を記載する。
 - `memory/llm-provider-alternatives-research.md`
