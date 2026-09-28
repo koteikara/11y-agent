@@ -285,4 +285,4 @@ docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 別のサイトのページから、覚えたパスワードの付いた API の要求を起こさせないためです。
 設計は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) の 3.3 にあります。
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めましたが、パスワードを確かめる処理は入れましたが(P1)、本番のシークレットの作成とデプロイ、証跡の運用はまだ行っていません(P1 の本番への適用、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。パスワードを確かめる処理は入れました(P1)。本番のシークレットの作成とデプロイ、証跡の運用はまだ行っていません(P1 の本番への適用、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
