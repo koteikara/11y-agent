@@ -75,7 +75,7 @@ flowchart LR
 - **本番運用は、Cloud Run を IAP で守り、証跡を共有ドライブに置く**（2026-09-25、ユーザー確定）。作業者は会社の Google Workspace のアカウントでログインする。LLM への送信の同意は営業が案件ごとに取り、記録は持たない。どの提供元に送ったかは証跡の JSON に残す（L3）。証跡は承認者が共有ドライブで見る。保存期間の決まりは無い。段階（手元で動くサーバーの守り、IAP、同意と証跡、L3、Node 24）は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
-- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。認証、永続保存、ログ方針は未決定のまま公開URLで運用している。
+- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（IAP）と証跡の置き場所（共有ドライブ）は2026-09-25に決めたが、どちらも未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
 - 外部検査エンジン（axe-core、A11yc library）を組み込まない判断は、`memory/project-state.md` で未決定として残っている。理由未確認。
 

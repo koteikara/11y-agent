@@ -268,4 +268,4 @@ docker build -t a11y-migration-app .
 docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 ```
 
-本番相当のCloud Runへ進む前に、IAPなどの認証、ログ方針、実案件HTMLの保存方針、LLM/API送信可否を決めます。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めましたが、IAPの設定と証跡の運用はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。

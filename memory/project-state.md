@@ -859,7 +859,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 同じ設計書の L2「評価」を行った（PR #146）。佐賀市 51 ページと遠野市 20 ページから集めた 213 件の要求を、Gemini 2.5 Flash、Gemini 3.5 Flash、さくら（gpt-oss-120b と Qwen3-VL）、さくら（gemma-4）に流した。文字はさくらが機械の目安を満たしたが任意の項目を返さず、画像は Gemini のままとする結果になった。人の判定用の CSV を `memory/llm-eval/` に置いた。詳細は `memory/llm-provider-eval-2026-09.md`。
 - リポジトリを整備した。`goal2-app/README.md` を画面一覧とmiChecker関連の機能に合わせて書き替え、package名を `a11y-migration-app` にした。旧複製 `a11y-agent/`、サーバーのログ、`goal2-app/tmp/` を削除し、GitHub Actionsの CI（一時生成物の混入、KB生成物の一致、`goal2-app` のテスト）を足した。テストが起動するサーバーへLLMの鍵を渡さないようにもした（PR #145。詳細は `CHANGELOG.md` の2026-09-24「リポジトリの整備」）
 - 本番の Cloud Run を、Vertex AI の `gemini-2.5-flash`(2026-10-20 に廃止)から `gemini-3.5-flash` に替えた(2026-09-25 10:27 日本時間、ユーザーが実施)。`CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、タグ `gemini35` で確かめてからトラフィックを移した。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。確認用の API 3件(設定、文字のタスク、画像のタスク)と画面の確認で問題は無かった
-- 本番運用の段階の設計書 `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` を作った。ユーザーの決定(IAP、同意は営業が取り記録しない、証跡は共有ドライブ)を段階 P0〜P4 にまとめた。調べる中で、Windows 版の待ち受けと POST の作りから、同じネットワークの別の機器や、ブラウザーで開いた別のサイトが htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせることを、コードから確かめた(実際に攻撃しての確認はしていない)。P0 として最初に塞ぐ
+- 本番運用の段階の設計書 `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` を作った。ユーザーの決定(IAP、同意は営業が取り記録しない、証跡は共有ドライブ)を段階 P0〜P4 にまとめた。調べる中で、Windows 版の待ち受けと POST の作りから、同じネットワークの別の機器や、ブラウザーで開いた別のサイトが htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせることを、コードから確かめた(実際に攻撃しての確認はしていない)。P0 として最初に塞ぐ。Codex の二次レビュー(要修正5件)を受けて、IAP のサービスエージェントを作る手順を足し、`PROJECT_CONTEXT.md`、`README.md`、`LLM_DATA_POLICY.md`、この文書に残っていた決定前の記述を直した(PR #148)
 - `PROJECT_CONTEXT.md` の `knowledge_mocs` の3つの MOC が ForLLM Vault の `03_MOC` に実在することを、ユーザーが確かめた(2026-09-25)。要確認の注記と未解決事項の項目を消した
 
 ## Decisions
@@ -922,7 +922,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 
 - ~~Cloud Run上のGoal 2実行画面について、Google Cloudプロジェクト、リージョン、ネットワーク制限、認証方式は未決定。~~ → 2026-09-25 決定: 認証は IAP(会社の Google Workspace のアカウント)。実施は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1 で、未実施。
 - Cloud Run PoCの具体的なGoogle Cloud構成、DB は未決定。証跡の保存先は 2026-09-25 に共有ドライブと決めた(置き場所と名前の決まりは同じ設計書の 3.5)。
-- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約、実案件データポリシー、認証、永続保存は未実装。
+- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(IAP)は決定済みで未設定、証跡の共有ドライブでの運用は決定済みで未開始(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
 - CMS入力欄で許可されるHTMLタグ・属性・入力欄制約は未確認。
 - 一括処理方式とページ単位方式を組み合わせるハイブリッド案は未整理。
 - `gemini-a11y-agent` から引き継ぐ品質監査項目を `done-definition.md` へ正式反映する作業は未完了。

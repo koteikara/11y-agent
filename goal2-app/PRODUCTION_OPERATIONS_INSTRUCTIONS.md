@@ -24,7 +24,7 @@ Cloud Run の本番と Windows 版を、実案件で使える状態にするた�
 
 次の2点は確かめていない。
 
-- 外部の協力会社の人も Cloud Run を使うか。使うなら、その人のアカウントを個別に足す（4章 P1 の6）。
+- 外部の協力会社の人も Cloud Run を使うか。使うなら、その人のアカウントを個別に足す（4章 P1 の7）。
 - 同意が得られない案件があり得るか。あり得るなら、その案件で AI を使わない方法を決める（4章 P2 の2）。
 
 ## 2. 現状の事実（2026-09-25、main `836853a`）
@@ -95,7 +95,9 @@ P4 はいつ行ってもよいが、P0 と同じ PR には入れない。
 1. **待ち受けの口を絞る。** 待ち受けのアドレスを環境変数 `HOST` で決める。`HOST` が無いときは、Cloud Run（環境変数 `K_SERVICE` がある）では `0.0.0.0`、それ以外では `127.0.0.1` にする。`Dockerfile` には `ENV HOST=0.0.0.0` を明記する。同じネットワークの別の機器からは届かなくなる。
 2. **`Host` ヘッダーを確かめる。** `127.0.0.1` で待ち受けるときは、`Host` が `localhost:<port>`、`127.0.0.1:<port>`、`[::1]:<port>` のどれかでなければ 403 を返す。GET も含むすべての要求で確かめる。外部のドメインの名前を `127.0.0.1` に向ける攻撃（DNS リバインディング）では `Host` が外部のドメインになるので、ここで止まる。
 3. **POST の送り元を確かめる。** すべての POST で、`Content-Type` のメディアタイプが `application/json` でなければ 415 を返す（`; charset=utf-8` などの付加は許す）。`Origin` ヘッダーがあるときは、そのホストが `Host` ヘッダーと一致しなければ 403 を返す。`Content-Type: application/json` の要求は、別のサイトからはブラウザーの事前確認を経ないと送れず、サーバーは事前確認に許可を返さないので、ブラウザーが送らない。画面の POST はすべて `application/json` で送っているので、画面の動きは変わらない。この確認は Cloud Run でも行う。
-4. **htmlchecker.exe のパスを確かめる。** パスは、ドライブ文字から始まる絶対パスで、UNC パスでなく、ファイル名が `htmlchecker.exe`（大文字と小文字を区別しない）のときだけ受け付ける。`POST /api/local-settings` で保存するときと、`runHtmlCheckerLocalCompare()` で実行する直前の両方で確かめる。環境変数 `MICHECKER_HTMLCHECKER_EXE` は利用者が自分の PC で設定するものなので、実行の直前の確認だけを当てる。あわせて、Windows 以外では `/api/local-settings` の GET と POST に 404 を返す。
+4. **htmlchecker.exe のパスを確かめる。** パスは、ドライブ文字から始まる絶対パスで、UNC パスでなく、ファイル名が `htmlchecker.exe`（大文字と小文字を区別しない）のときだけ受け付ける。`POST /api/local-settings` で保存するときと、`runHtmlCheckerLocalCompare()` で実行する直前の両方で確かめる。環境変数 `MICHECKER_HTMLCHECKER_EXE` は利用者が自分の PC で設定するものなので、実行の直前の確認だけを当てる。ドライブ文字から始まるパスでも、割り当てたネットワークドライブを指すことはあるので、この確認だけで外部の共有フォルダーを締め出せるわけではない。外からの要求そのものは 1〜3 で止まるので、この確認は、それが破られたときに実行できるものを絞る役目である。
+
+   あわせて、Windows 以外では `POST /api/local-settings` に 404 を返す。GET は、いまの画面が「Windows 以外の環境で動作しています」の説明を出すのに使っているので、200 のまま `isWindows: false` と空のパスを返す。
 
 確かめる処理は、`server.js` から切り出して `lib/` の新しいモジュール（例: `lib/local-guard.js`）に純粋な関数として置く。
 CI は Linux で動くので、Windows のパスの確認は、`server.js` を通さずに関数を直接テストする。
@@ -112,7 +114,7 @@ Windows 版は、変更のマージ後に作り直し、配った担当者に古
 ### 3.3 P1 Cloud Run に IAP を掛ける
 
 IAP（Identity-Aware Proxy）は、Cloud Run の前で Google のログインを求め、許可したアカウントの要求だけを通す Google Cloud の機能である。
-Cloud Run に直接掛けられ、`run.app` の URL を含むすべての入口に効く（Google Cloud の文書「Configure IAP for Cloud Run」）。タグ付きの URL も `run.app` のドメインにあるので同じく守られるはずだが、文書には明記が無いため、4章 P1 の8で確かめる。
+Cloud Run に直接掛けられ、`run.app` の URL を含むすべての入口に効く（Google Cloud の文書「Configure IAP for Cloud Run」）。タグ付きの URL も `run.app` のドメインにあるので同じく守られるはずだが、文書には明記が無いため、4章 P1 の9で確かめる。
 アプリのコードは変えない。
 
 画面と API は同じオリジンなので、ログイン後の `fetch()` はそのまま通る。
@@ -138,7 +140,7 @@ IAP のセッションは Google のログインに結び付いていて、作�
 これは同意の記録ではなく、送った事実の記録である。
 後から「この自治体のページをどこに送ったか」を問われたときに、証跡から答えられる。
 
-`LLM_DATA_POLICY.md` の最低条件5（同意を得る）は、「営業が案件ごとに取る」に書き替える。
+`LLM_DATA_POLICY.md` の最低条件5（同意を得る）は、送信先を Gemini に限らない書き方にし、同意は営業が案件ごとに取ると書き替えた（この設計書と同じ PR）。
 
 同意が得られない案件があり得る場合、作業者がそれを知り、AI を使わずに作業する方法が要る。
 いまの Cloud Run は LLM をサーバーの設定で一括して有効にしており、案件ごとに切れない。
@@ -220,9 +222,9 @@ Cloud Run には、トラフィックを流さないタグ付きのリビジョ�
    - `Content-Type: text/plain` の POST に 415 を返す。
    - `Origin` が別のホストの POST に 403 を返す。`Origin` が同じホストか、無い POST は通る。
    - パスの確認の関数が、`C:\tools\miChecker\htmlchecker.exe` を通し、`\\server\share\htmlchecker.exe`、`C:\Windows\System32\cmd.exe`、`htmlchecker.exe`（相対パス）を拒む。
-   - Linux では `/api/local-settings` が 404 を返す。
+   - Linux では `POST /api/local-settings` が 404 を返し、GET は 200 で `isWindows: false` を返す。
 3. 既存のテストがすべて通ることを確かめる（5章）。テストが起動するサーバーは `127.0.0.1` につなぐので、待ち受けを絞っても通るはずである。
-4. `LOCAL_WINDOWS_APP.md` に、待ち受けが `127.0.0.1` だけになったこと、別の PC からは開けないことを書く。
+4. `LOCAL_WINDOWS_APP.md` に、待ち受けが `127.0.0.1` だけになったこと、別の PC からは開けないことを書く。あわせて、`HOST` を `0.0.0.0` などに変えると同じネットワークの別の機器から届くようになり、1つ目の守りが外れることを書く。`HOST` は、その意味が分かる管理者だけが変える。
 5. PR はドラフトで出し、設計・レビュー担当のレビューと Codex の二次レビューを受ける。
 6. マージ後、ユーザーが Windows 版を作り直して配り直す。
 
@@ -252,13 +254,19 @@ PowerShell で行う。
    gcloud services enable iap.googleapis.com
    ```
 
-3. サービスに IAP を掛ける。操作する人には、プロジェクトの Cloud Run 管理者（`roles/run.admin`）と IAP ポリシー管理者（`roles/iap.admin`）の役割が要る。プロジェクトのオーナーなら持っている。
+3. IAP のサービスエージェント（IAP が Cloud Run を呼ぶときに使う、Google が管理するアカウント）を作る。API を有効にしただけでは作られていないことがあり、その場合は手順5の権限の付与が、アカウントが無いために失敗する。すでにあれば、そのアドレスが表示されるだけなので、何度実行してもよい。2026-09-25 に取得した公式の文書にはこの手順が無いが、以前の版にはあり、害が無いので入れておく。
+
+   ```powershell
+   gcloud beta services identity create --service=iap.googleapis.com --project=$PROJECT_ID
+   ```
+
+4. サービスに IAP を掛ける。操作する人には、プロジェクトの Cloud Run 管理者（`roles/run.admin`）と IAP ポリシー管理者（`roles/iap.admin`）の役割が要る。プロジェクトのオーナーなら持っている。
 
    ```powershell
    gcloud run services update $SERVICE --region $REGION --iap
    ```
 
-4. IAP が Cloud Run を呼べるようにする。
+5. IAP が Cloud Run を呼べるようにする。
 
    ```powershell
    $PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
@@ -267,7 +275,7 @@ PowerShell で行う。
      --role="roles/run.invoker"
    ```
 
-5. 使える人を登録する。グループを使う場合は `group:<グループのアドレス>`、ドメイン全体なら `domain:<会社のドメイン>` にする（3.3）。
+6. 使える人を登録する。グループを使う場合は `group:<グループのアドレス>`、ドメイン全体なら `domain:<会社のドメイン>` にする（3.3）。
 
    ```powershell
    gcloud iap web add-iam-policy-binding `
@@ -276,23 +284,23 @@ PowerShell で行う。
      --region=$REGION --resource-type=cloud-run --service=$SERVICE
    ```
 
-6. 外部の協力会社の人を足す場合は、その人のアカウントを `user:<メールアドレス>` で登録する。会社の組織の外のアカウントを登録するには、先に OAuth の同意画面（対象は「外部」）の設定が要る。コンソールの IAP の画面から「Configure consent screen」で設定する。
+7. 外部の協力会社の人を足す場合は、その人のアカウントを `user:<メールアドレス>` で登録する。会社の組織の外のアカウントを登録するには、先に OAuth の同意画面（対象は「外部」）の設定が要る。コンソールの IAP の画面から「Configure consent screen」で設定する。
 
-7. 誰でも呼べる設定を外す。IAP を誤って外したときに、画面が誰にでも開いてしまわないようにするためである。
+8. 誰でも呼べる設定を外す。IAP を誤って外したときに、画面が誰にでも開いてしまわないようにするためである。
 
    ```powershell
    gcloud run services remove-iam-policy-binding $SERVICE --region $REGION `
      --member="allUsers" --role="roles/run.invoker"
    ```
 
-8. 確かめる。
+9. 確かめる。
    - `gcloud run services describe $SERVICE --region $REGION` の出力に `Iap Enabled: true` がある。
    - ブラウザーのシークレットウィンドウで本番の URL を開くと、Google のログインを求められる。会社のアカウントでログインすると画面が出る。
    - 登録していないアカウント（個人の Gmail など）でログインすると、画面が出ない。
    - タグ付きの URL（例: `gemini35` のタグ）も、同じくログインを求められる。
    - 画面で1ページを処理し、AI の下書きが入る。
 
-9. 戻し方（問題があったとき）。
+10. 戻し方（問題があったとき）。
 
    ```powershell
    gcloud run services update $SERVICE --region $REGION --no-iap
@@ -300,7 +308,7 @@ PowerShell で行う。
      --member="allUsers" --role="roles/run.invoker"
    ```
 
-10. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行から `--allow-unauthenticated` を外し、`--no-allow-unauthenticated --iap` を付ける。IAP を掛けた日と、使える人の単位（グループかドメインか）を記録する。この文書の変更は、実装担当に頼んでもよい。
+11. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行から `--allow-unauthenticated` を外し、`--no-allow-unauthenticated --iap` を付ける。IAP を掛けた日と、使える人の単位（グループかドメインか）を記録する。この文書の変更は、実装担当に頼んでもよい。
 
 ### P2 同意と証跡の運用
 
@@ -308,7 +316,7 @@ PowerShell で行う。
 2. ユーザーが、同意が得られない案件があり得るかを確かめ、あり得るなら 3.4 の案 A か B を選ぶ。
 3. 実装担当が、3.5 の画面の変更の1と2を行う。3 は P1 のあとに行う。
 4. 実装担当が、`WORKER_GUIDE.md` の証跡の節を、置き場所と名前の決まりに合わせて書き替える。
-5. 実装担当が、`LLM_DATA_POLICY.md` の最低条件5と未決定事項を、1章の決定に合わせて書き替える。
+5. `LLM_DATA_POLICY.md` の最低条件5と未決定事項は、この設計書と同じ PR で1章の決定に合わせた。さくらの約款の要点などは、L3 で書き直す（`LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` 4章 L3）。
 
 ### P3 さくらへの切り替え
 
@@ -356,7 +364,7 @@ P0 は、Windows の実機でも次を確かめる。
 
 | 危険 | 対策 |
 |---|---|
-| IAP を掛けた直後に、作業者が画面を開けなくなる | 先に操作する人のアカウントで確かめる。戻し方（4章 P1 の9）で数分で戻せる |
+| IAP を掛けた直後に、作業者が画面を開けなくなる | 先に操作する人のアカウントで確かめる。戻し方（4章 P1 の10）で数分で戻せる |
 | 待ち受けを `127.0.0.1` に絞ると、別の PC から Windows 版を使っていた人が使えなくなる | Windows 版は同じ PC で使う前提で配っている（`LOCAL_WINDOWS_APP.md`）。必要な人は `HOST` を設定して起動できる |
 | `Content-Type` の確認で、画面以外から API を呼ぶ道具が止まる | 画面の POST（8か所）とテストの POST は、すべて `application/json` で送っている。評価の道具（`tools/llm-provider-eval.js`）は画面を通して要求を作る |
 | 証跡の名前の決まりを作業者が守らない | 画面が決まりどおりの名前で保存する（3.5 の画面の変更）。手で名前を付ける場面を減らす |
