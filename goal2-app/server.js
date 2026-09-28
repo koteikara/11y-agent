@@ -13,6 +13,13 @@ const { learnSagaGoldHints } = require("./lib/sagaGoldHints");
 const { listSagaSamples } = require("./lib/sagaSamples");
 const { callLlm, getStatus: getLlmStatus } = require("./lib/llm");
 const { getTaskConfig } = require("./lib/llm-prompts");
+const {
+  resolveListenHost,
+  isLoopbackListenHost,
+  isAllowedLoopbackHostHeader,
+  checkPostRequest,
+  validateHtmlCheckerExePath,
+} = require("./lib/local-guard");
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +37,10 @@ try {
 const rootDir = isSeaBuild ? path.dirname(process.execPath) : __dirname;
 const publicDir = path.join(rootDir, "public");
 const port = Number(process.env.PORT || 8080);
+// 待ち受けのアドレス。Windows 版などの手元では 127.0.0.1、Cloud Run では 0.0.0.0(lib/local-guard.js)。
+const listenHost = resolveListenHost(process.env);
+const checkLoopbackHostHeader = isLoopbackListenHost(listenHost);
+const isWindows = process.platform === "win32";
 
 // パッケージ化した.exe版(SEA)では、htmlchecker.exeのパスを環境変数ではなく
 // この設定ファイルに保存し、画面から入力・変更できるようにする(コマンドライン操作をなくすため)。
@@ -461,7 +472,7 @@ function parseHtmlCheckerListCsv(text) {
 }
 
 async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
-  if (process.platform !== "win32") {
+  if (!isWindows) {
     const error = new Error("この機能はWindows上で動作しているgoal2-appでのみ利用できます(現在の実行環境はWindowsではありません)。");
     error.statusCode = 400;
     error.code = "windows_required";
@@ -472,6 +483,14 @@ async function runHtmlCheckerLocalCompare(beforeHtml, afterHtml) {
     const error = new Error("htmlchecker.exe のパスが設定されていません。設定画面から指定してください。");
     error.statusCode = 400;
     error.code = "htmlchecker_not_configured";
+    throw error;
+  }
+  // 設定ファイルの値も環境変数 MICHECKER_HTMLCHECKER_EXE の値も、実行の直前に形を確かめる。
+  const pathCheck = validateHtmlCheckerExePath(htmlCheckerExePath);
+  if (!pathCheck.ok) {
+    const error = new Error(`${pathCheck.message} (現在の設定: ${htmlCheckerExePath})`);
+    error.statusCode = 400;
+    error.code = "htmlchecker_path_invalid";
     throw error;
   }
   if (!fs.existsSync(htmlCheckerExePath)) {
@@ -549,6 +568,21 @@ const server = http.createServer(async (request, response) => {
     response.writeHead(400);
     response.end("Bad request");
     return;
+  }
+
+  // 手元だけで待ち受けるときは、GET も含むすべての要求で Host ヘッダーを確かめる(DNS リバインディング対策)。
+  if (checkLoopbackHostHeader && !isAllowedLoopbackHostHeader(request.headers.host, port)) {
+    sendJson(response, 403, { ok: false, error: "host_not_allowed", message: "この Host からの要求は受け付けません。" });
+    return;
+  }
+
+  // すべての POST で Content-Type と Origin を確かめる。Cloud Run でも行う。
+  if (request.method === "POST") {
+    const rejection = checkPostRequest(request.headers);
+    if (rejection) {
+      sendJson(response, rejection.statusCode, { ok: false, error: rejection.error, message: rejection.message });
+      return;
+    }
   }
 
   if (request.method === "POST" && url.pathname === "/api/michecker-local-compare") {
@@ -665,25 +699,42 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  // Windows 以外では、画面の説明表示のために GET だけを返す(パスは空、isWindows: false)。
   if (url.pathname === "/api/local-settings" && request.method === "GET") {
     sendJson(response, 200, {
       ok: true,
-      htmlCheckerExePath: getHtmlCheckerExePath(),
-      isWindows: process.platform === "win32",
-      envOverride: Boolean(process.env.MICHECKER_HTMLCHECKER_EXE),
+      htmlCheckerExePath: isWindows ? getHtmlCheckerExePath() : "",
+      isWindows,
+      envOverride: isWindows && Boolean(process.env.MICHECKER_HTMLCHECKER_EXE),
     });
     return;
   }
 
   if (url.pathname === "/api/local-settings" && request.method === "POST") {
+    if (!isWindows) {
+      sendJson(response, 404, {
+        ok: false,
+        error: "not_found",
+        message: "htmlchecker.exe のパスの設定は、Windows 上で動作している goal2-app でのみ保存できます。",
+      });
+      return;
+    }
     try {
       const body = await readJsonBody(request);
       const htmlCheckerExePath = typeof body?.htmlCheckerExePath === "string" ? body.htmlCheckerExePath.trim() : "";
+      // 空のときは設定を消すだけなので通す。値があるときは形を確かめてから保存する。
+      if (htmlCheckerExePath) {
+        const pathCheck = validateHtmlCheckerExePath(htmlCheckerExePath);
+        if (!pathCheck.ok) {
+          sendJson(response, 400, { ok: false, error: "htmlchecker_path_invalid", message: pathCheck.message });
+          return;
+        }
+      }
       writeLocalConfig({ ...readLocalConfig(), htmlCheckerExePath });
       sendJson(response, 200, {
         ok: true,
         htmlCheckerExePath: getHtmlCheckerExePath(),
-        isWindows: process.platform === "win32",
+        isWindows,
         envOverride: Boolean(process.env.MICHECKER_HTMLCHECKER_EXE),
       });
     } catch (error) {
@@ -804,8 +855,8 @@ const server = http.createServer(async (request, response) => {
   sendStatic(url.pathname, response);
 });
 
-server.listen(port, "0.0.0.0", () => {
-  console.log(`a11y-migration-app listening on port ${port}`);
+server.listen(port, listenHost, () => {
+  console.log(`a11y-migration-app listening on ${listenHost}:${port}`);
   // パッケージ化した.exe版(SEA)で起動した場合のみ、ブラウザを自動で開く。
   // 通常のnode server.js実行(開発・Cloud Runデプロイ)では自動起動しない。
   if (isSeaBuild) {

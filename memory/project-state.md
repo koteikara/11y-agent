@@ -862,6 +862,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 本番の Cloud Run を、Vertex AI の `gemini-2.5-flash`(2026-10-20 に廃止)から `gemini-3.5-flash` に替えた(2026-09-25 10:27 日本時間、ユーザーが実施)。`CLOUD_RUN_DEPLOY.md` の案 A のとおり、main の `c8131ee` をビルドし、タグ `gemini35` で確かめてからトラフィックを移した。利用者に届いているのは `goal2-a11y-review-00094-sev`、戻し先は `goal2-a11y-review-00093-7gf`。確認用の API 3件(設定、文字のタスク、画像のタスク)と画面の確認で問題は無かった
 - 本番運用の段階の設計書 `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` を作った。ユーザーの決定(IAP、同意は営業が取り記録しない、証跡は共有ドライブ)を段階 P0〜P4 にまとめた。調べる中で、Windows 版の待ち受けと POST の作りから、同じネットワークの別の機器や、ブラウザーで開いた別のサイトが htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせることを、コードから確かめた(実際に攻撃しての確認はしていない)。P0 として最初に塞ぐ。Codex の二次レビュー(要修正5件)を受けて、IAP のサービスエージェントを作る手順を足し、`PROJECT_CONTEXT.md`、`README.md`、`LLM_DATA_POLICY.md`、この文書に残っていた決定前の記述を直した(PR #148)
 - `PROJECT_CONTEXT.md` の `knowledge_mocs` の3つの MOC が ForLLM Vault の `03_MOC` に実在することを、ユーザーが確かめた(2026-09-25)。要確認の注記と未解決事項の項目を消した
+- `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0「手元で動くサーバーの守り」を実装した(PR #150、2026-09-28)。待ち受けを `HOST`(無ければ Cloud Run では `0.0.0.0`、それ以外では `127.0.0.1`)で決め、手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスを保存と実行の直前に確かめるようにした。Windows 以外では `POST /api/local-settings` を 404 にした。確かめる処理は `lib/local-guard.js`、テストは `test/local-guard/`。設計との差5つは設計書の 4章 P0 に書いた。Windows の実機での確認と、Windows 版の作り直しと配り直しは未実施で、配り直すまでは配った版の穴が残る
 
 ## Decisions
 

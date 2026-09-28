@@ -10,6 +10,8 @@ COPY data ./data
 
 ENV NODE_ENV=production
 ENV PORT=8080
+# Cloud Run ではすべての口で待ち受ける。手元(Windows 版など)の既定は 127.0.0.1(lib/local-guard.js)。
+ENV HOST=0.0.0.0
 
 EXPOSE 8080
 
