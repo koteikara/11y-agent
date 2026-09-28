@@ -19,6 +19,21 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-28: P0 手元で動くサーバーの守り
+
+- 背景・目的: Windows 版（`goal2-app.exe`）は `0.0.0.0` で待ち受け、POST の送り元も htmlchecker.exe のパスの形も確かめていなかった。そのため、同じネットワークの別の機器や、担当者のブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせた。すでに担当者に配っているので、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0 として最初に塞ぐ。
+- 主な変更内容:
+  - 待ち受けのアドレスを環境変数 `HOST` で決める。無ければ Cloud Run（`K_SERVICE` がある）では `0.0.0.0`、それ以外では `127.0.0.1`。`Dockerfile` に `ENV HOST=0.0.0.0` を足した。
+  - 手元だけで待ち受けるときは、GET も含むすべての要求で `Host` ヘッダーが `localhost:<ポート>`、`127.0.0.1:<ポート>`、`[::1]:<ポート>` のどれかでなければ 403 を返す。
+  - すべての POST で、`Content-Type` のメディアタイプが `application/json` でなければ 415、`Origin` のホストが `Host` と一致しなければ 403 を返す。Cloud Run でも行う。
+  - htmlchecker.exe のパスは、ドライブ文字から始まる絶対パスで、UNC パスでなく、ファイル名が `htmlchecker.exe` のときだけ受け付ける。保存するときと実行する直前の両方で確かめ、環境変数 `MICHECKER_HTMLCHECKER_EXE` には実行の直前の確認だけを当てる。
+  - Windows 以外では `POST /api/local-settings` を 404 にした。GET は 200 のまま、`isWindows: false` と空のパスを返す。
+  - 確かめる処理を `goal2-app/lib/local-guard.js` に純粋な関数として置き、`goal2-app/test/local-guard/run-local-guard-tests.js` で関数とサーバーの両方を確かめる。`npm test` から続けて走る。
+  - 設計との差（`HOST` が `::1` と `localhost` のときも `Host` を確かめる、パスの確認で代替データストリームと制御文字も拒む、空のパスの保存は設定を消す操作として通す、など5つ）を設計書の 4章 P0 に書いた。
+- 未確認: Windows の実機での確認（`goal2-app.exe` の起動、htmlchecker.exe のパスの保存と自動比較、別の PC から開けないこと）は行っていない。
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/lib/local-guard.js`、`goal2-app/test/local-guard/run-local-guard-tests.js`、`goal2-app/package.json`、`goal2-app/Dockerfile`、`goal2-app/README.md`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #NNN
+
 ## 2026-09-25: 本番運用の段階の設計書
 
 - 背景・目的: 本番運用の3つの方針(Cloud Run のアクセス制御、送信の同意の記録、証跡の置き場所)をユーザーが決めた。IAP で会社の Google Workspace のアカウントに絞る、同意は営業が案件ごとに取り記録は持たない、証跡は共有ドライブに置き承認者が見る(保存期間の決まりは無い)。これを実施の段階にまとめる。

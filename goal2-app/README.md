@@ -68,6 +68,10 @@ powershell -ExecutionPolicy Bypass -File .\start-server.ps1
 
 Cloud Run互換のため、`PORT` 環境変数にも対応しています。
 
+待ち受けのアドレスは `HOST` 環境変数で決まります。
+無ければ Cloud Run(`K_SERVICE` がある)では `0.0.0.0`、それ以外では `127.0.0.1` で、同じ PC からしか開けません。
+`HOST` を変えると別の機器から届くようになるので、変えるときは `LOCAL_WINDOWS_APP.md` の「待ち受けと守り」を読んでください。
+
 ```powershell
 $env:PORT=9090
 npm start
@@ -81,6 +85,7 @@ npm test
 ```
 
 テストでは、KBルールの読み込み、主要ファイルの存在、`/api/health`、`/api/rules` を確認します。
+続けて、手元で動くサーバーの守り(待ち受け、`Host`、POST の `Content-Type` と `Origin`、htmlchecker.exe のパスの確認)を確認します(`test/local-guard/`、単独では `npm run test:local-guard`)。
 
 ほかのテストは次のとおりです。表の入れ子、出力、miCheckerとの一致の3つはPlaywrightとChromiumを使います(Chromiumの場所は `PLAYWRIGHT_CHROMIUM_PATH` で指定できます)。
 

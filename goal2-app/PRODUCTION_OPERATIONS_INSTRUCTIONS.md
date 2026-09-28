@@ -216,6 +216,18 @@ Cloud Run には、トラフィックを流さないタグ付きのリビジョ�
 
 ### P0 手元で動くサーバーの守り（実装担当）
 
+**実装済み（PR #NNN、2026-09-28）。** 手順の1〜4を行った。5 はレビュー待ち、6 はマージ後にユーザーが行う。
+確かめる処理は `lib/local-guard.js` に置き、テストは `test/local-guard/run-local-guard-tests.js`（`npm test` から続けて走る）に置いた。
+Windows の実機での確認（5章の最後の3項目）は、まだ行っていない。
+
+設計との差は次の5つである。
+
+- `HOST` が `::1` と `localhost` のときも、`127.0.0.1` と同じく手元だけの待ち受けとして扱い、`Host` ヘッダーを確かめる。どちらも同じ PC からしか届かない口なので、確認を外す理由が無い。
+- htmlchecker.exe のパスは、3.2 の条件に加えて、ドライブ文字の後ろのコロン（`C:\tools\htmlchecker.exe:stream` のような代替データストリーム）と制御文字を拒む。`\\?\C:\...` も `\\` で始まるので UNC パスとして拒む。区切りの `/`（`C:/tools/htmlchecker.exe`）は `\` と同じく受け付ける。
+- `POST /api/local-settings` で空のパスを送ったときは、設定を消す操作として通す。いまの画面は、入力欄を空にして「保存」を押すと設定を消せるためである。実行の直前には、空のパスはこれまでどおり「設定されていません」で止まる。
+- Windows 以外の `GET /api/local-settings` は、パスに加えて `envOverride` も `false` で返す。`true` を返すと、画面が「Windows 以外の環境で動作しています」ではなく環境変数の説明を出すためである。
+- `Origin` のホストと `Host` ヘッダーは、ポートを含めた文字列の一致で比べる。`Host` にポートの既定値（`:443` など）を明記する要求は拒まれるが、ブラウザーは既定のポートを書かないので、画面の動きは変わらない。
+
 1. 3.2 の4つの守りを入れる。
 2. テストを足す（`test/run-tests.js` か、新しいテストファイル）。
    - `Host` が外部のドメインの要求に 403 を返す（`127.0.0.1` で待ち受けるとき）。
@@ -337,6 +349,7 @@ cd goal2-app
 node --check server.js
 node test/llm/run-llm-tests.js
 node test/run-tests.js
+node test/local-guard/run-local-guard-tests.js
 node test/goal2-output/run-output-tests.js
 node test/table-nesting/run-table-tests.js
 node test/michecker-parity/run-parity-tests.js
