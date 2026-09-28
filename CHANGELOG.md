@@ -30,7 +30,7 @@
 - 検証: 手元の Node 24.21.0 で、設計書の5章のコマンド（`node --check`、`npm test`、`test:llm`、`test:table-nesting`、`test:goal2-output`、`test:michecker-parity`、`scripts/ci` の2つ）をすべて通した。Linux の Node 24 で SEA の手順を試し、できた実行ファイルが起動することを確かめた。
 - 未確認: Windows で `build-windows-app.bat` を動かし、Node 24 で `goal2-app.exe` を作れること。Cloud Run への反映（タグ付きのリビジョンで確かめてから移す）はマージ後にユーザーが行う。
 - 関連ファイル: `goal2-app/Dockerfile`、`.github/workflows/ci.yml`、`goal2-app/package.json`、`goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
-- 関連PR/コミット: PR #PRNUM
+- 関連PR/コミット: PR #151
 
 ## 2026-09-28: P0 手元で動くサーバーの守り
 
