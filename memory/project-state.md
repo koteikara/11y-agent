@@ -865,6 +865,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 本番運用の P1 を、IAP から全員で共通のパスワードに変えた(2026-09-28、ユーザーの決定)。使える人を選んで登録するのが難しいためである。仕組みは HTTP の Basic 認証で、アプリ自身が確かめる。Cloud Run でパスワードが無いか16文字より短いときは 503 を返して、設定し忘れで誰でも開ける状態を防ぐ。設計書 3.3 と 4章 P1 を書き替え、IAP のアカウントで作業者の欄を埋める変更(3.5 の3)はやめた
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0「手元で動くサーバーの守り」を実装した(PR #150、2026-09-28)。待ち受けを `HOST`(無ければ Cloud Run では `0.0.0.0`、それ以外では `127.0.0.1`)で決め、手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスを保存と実行の直前に確かめるようにした。Windows 以外では `POST /api/local-settings` を 404 にした。確かめる処理は `lib/local-guard.js`、テストは `test/local-guard/`。設計との差5つは設計書の 4章 P0 に書いた。Windows の実機での確認と、Windows 版の作り直しと配り直しは未実施で、配り直すまでは配った版の穴が残る
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P4 で、Node.js を 20 から 24 に上げた(PR #151、2026-09-28)。`Dockerfile`(`node:24-alpine`)、CI の `node-version`、`package.json` の `engines.node`(`>=24`)、Windows 版の作り方の文書と `build-windows-app.bat` の案内を直した。Node 20 のサポートは 2026-04-30 に終わり、Node 22 の保守は 2027-04-30 で終わるため、2028-04-30 まで保守される 24 にした。アプリのコードは変えず、手元の Node 24.21.0 で設計書の5章のテストをすべて通した。Windows で Node 24 から `goal2-app.exe` を作れることと、Cloud Run への反映(マージ後にユーザーが行う)は未確認である
+- `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P2 のうち、3.5 の画面の変更の1と2、4章 P2 の4を実装した(PR #153、2026-09-28)。Goal 2 に「証跡JSONを保存」を足し、証跡の JSON と CSV を `<日時>_<題名>_<ページの識別>_evidence.<拡張子>` で保存する。GOAL1 の書き出し(バッチ JSON、一覧 CSV、証跡 CSV)は先頭に書き出した日時を付けた。名前は `public/evidence-filename.js` で作り、日本時間は UTC に9時間を足して作る。`WORKER_GUIDE.md` に共有ドライブの保存先と手順の節を足した。証跡の中身は変えていない。ページの識別は設計書の10文字ではなく8文字のハッシュであることが分かり、ユーザーの確認を得て設計書の 2.3 と 3.5 の決まりと例を8文字に直した。「作業者」欄はこれまでどおり作業者が書く(3.5)
 
 ## Decisions
 
@@ -926,7 +927,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 
 - ~~Cloud Run上のGoal 2実行画面について、Google Cloudプロジェクト、リージョン、ネットワーク制限、認証方式は未決定。~~ → 2026-09-25 決定: 認証は IAP。2026-09-28 に共通のパスワード(Basic 認証)へ変更。実施は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1 で、未実施。
 - Cloud Run PoCの具体的なGoogle Cloud構成、DB は未決定。証跡の保存先は 2026-09-25 に共有ドライブと決めた(置き場所と名前の決まりは同じ設計書の 3.5)。
-- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(共通のパスワード)は決定済みで未実装、証跡の共有ドライブでの運用は決定済みで未開始(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
+- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(共通のパスワード)は決定済みで未実装、証跡の共有ドライブでの運用は決定済みで、画面が決まりどおりの名前で保存するようにした(PR #153)が、共有ドライブの `移行証跡` フォルダーの用意は未実施(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
 - CMS入力欄で許可されるHTMLタグ・属性・入力欄制約は未確認。
 - 一括処理方式とページ単位方式を組み合わせるハイブリッド案は未整理。
 - `gemini-a11y-agent` から引き継ぐ品質監査項目を `done-definition.md` へ正式反映する作業は未完了。

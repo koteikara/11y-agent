@@ -691,7 +691,7 @@
         ]);
       });
     });
-    downloadCsv(rows, `${state.batch.batchId}-evidence.csv`);
+    downloadCsv(rows, goal1ExportFilename("-evidence", "csv"));
   }
 
   function downloadSummaryCsv() {
@@ -712,7 +712,7 @@
         page.errorMessage || "",
       ]);
     });
-    downloadCsv(rows, `${state.batch.batchId}-summary.csv`);
+    downloadCsv(rows, goal1ExportFilename("-summary", "csv"));
   }
 
   function downloadCsv(rows, filename) {
@@ -730,7 +730,7 @@
   function downloadBatchJson() {
     if (!state.batch) return;
     const blob = new Blob([JSON.stringify(state.batch, null, 2)], { type: "application/json" });
-    triggerDownload(blob, `${state.batch.batchId}.json`);
+    triggerDownload(blob, goal1ExportFilename("", "json"));
   }
 
   async function loadBatchJsonFile(event) {
@@ -754,6 +754,11 @@
     } finally {
       event.target.value = "";
     }
+  }
+
+  // <書き出す日時>_<バッチID><suffix>.<拡張子>(public/evidence-filename.js、設計書 3.5)。
+  function goal1ExportFilename(suffix, extension) {
+    return window.evidenceFilename.goal1Filename({ batchId: state.batch.batchId, suffix, extension });
   }
 
   function triggerDownload(blob, filename) {

@@ -524,6 +524,7 @@
     copyHtmlButton: document.getElementById("copyHtmlButton"),
     copyEvidenceButton: document.getElementById("copyEvidenceButton"),
     downloadCsvButton: document.getElementById("downloadCsvButton"),
+    saveEvidenceJsonButton: document.getElementById("saveEvidenceJsonButton"),
     micheckerEnginePanel: document.getElementById("micheckerEnginePanel"),
     micheckerEngineResultBasis: document.getElementById("micheckerEngineResultBasis"),
     micheckerEngineRecheckButton: document.getElementById("micheckerEngineRecheckButton"),
@@ -614,6 +615,7 @@
     els.previewFrameExpanded?.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrameExpanded));
     els.copyHtmlButton.addEventListener("click", () => copyText(els.finalHtml.value));
     els.copyEvidenceButton.addEventListener("click", () => copyText(els.evidenceOutput.value));
+    els.saveEvidenceJsonButton?.addEventListener("click", saveEvidenceJson);
     els.downloadCsvButton.addEventListener("click", downloadEvidenceCsv);
   }
 
@@ -8809,6 +8811,7 @@
     if (workflow.currentStep === "output") {
       actions.push({ action: "copy-final-html", label: "最終HTMLコピー", disabled: !els.finalHtml.value.trim() });
       actions.push({ action: "copy-evidence-json", label: "証跡JSONコピー", disabled: !els.evidenceOutput.value.trim() });
+      actions.push({ action: "save-evidence-json", label: "証跡JSONを保存", disabled: !els.evidenceOutput.value.trim() });
     } else if (candidate) {
       actions.push({ action: "open-output", label: "出力欄へ", disabled: false });
     }
@@ -8849,6 +8852,9 @@
     } else if (action === "copy-evidence-json") {
       copyText(els.evidenceOutput.value);
       focusOutputControl(els.copyEvidenceButton);
+    } else if (action === "save-evidence-json") {
+      saveEvidenceJson();
+      focusOutputControl(els.saveEvidenceJsonButton);
     } else if (action === "focus-accept") {
       focusDecisionButton(els.acceptButton);
     } else if (action === "focus-edit-accept") {
@@ -10187,6 +10193,9 @@
     els.finalHtml.value = finalHtml;
     renderNoticeOutput();
     els.evidenceOutput.value = JSON.stringify(buildEvidence(finalHtml), null, 2);
+    if (els.saveEvidenceJsonButton) {
+      els.saveEvidenceJsonButton.disabled = !els.evidenceOutput.value.trim();
+    }
     if (isProcessingComplete()) {
       els.outputDrawer.open = true;
     }
@@ -10469,10 +10478,38 @@
     ];
     const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, evidenceFilenameFor(evidence, "csv"));
+  }
+
+  // 出力欄の証跡JSONを、共有ドライブの決まり(3.5)の名前で保存する。中身はコピーと同じ。
+  function saveEvidenceJson() {
+    const text = els.evidenceOutput.value;
+    if (!text.trim()) return;
+    let evidence = {};
+    try {
+      evidence = JSON.parse(text);
+    } catch {
+      evidence = {};
+    }
+    downloadBlob(new Blob([text], { type: "application/json;charset=utf-8" }), evidenceFilenameFor(evidence, "json"));
+  }
+
+  // <日時>_<題名>_<ページの識別>_evidence.<拡張子>(public/evidence-filename.js)。
+  function evidenceFilenameFor(evidence, extension) {
+    return window.evidenceFilename.goal2Filename({
+      generatedAt: evidence.generated_at,
+      pageTitle: evidence.page_title,
+      pageSessionId: evidence.page_session_id || currentSessionId(),
+      kind: "evidence",
+      extension,
+    });
+  }
+
+  function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${currentSessionId()}-evidence.csv`;
+    anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
   }
