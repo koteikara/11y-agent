@@ -32,7 +32,7 @@
 - 変えていないもの: 画面(`public/`)、Cloud Run の `--allow-unauthenticated`、P0 の守り(`lib/local-guard.js`)の動き。
 - 未実施: 本番のシークレットの作成とデプロイ(設計書 4章 P1 の「本番への適用」)は、マージ後にユーザーが行う。
 - 関連ファイル: `goal2-app/lib/app-auth.js`、`goal2-app/server.js`、`goal2-app/test/app-auth/run-app-auth-tests.js`、`goal2-app/test/server-env.js`、`goal2-app/test/local-guard/run-local-guard-tests.js`、`goal2-app/package.json`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/README.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
-- 関連PR/コミット: PR #PRNUM
+- 関連PR/コミット: PR #154
 
 ## 2026-09-28: 本番のアクセス制御を IAP から共通のパスワードに変える(設計)
 
