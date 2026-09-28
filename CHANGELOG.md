@@ -34,6 +34,19 @@
 - 関連ファイル: `goal2-app/public/evidence-filename.js`、`goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/goal1.js`、`goal2-app/public/goal1.html`、`goal2-app/test/evidence-filename/run-evidence-filename-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/package.json`、`goal2-app/WORKER_GUIDE.md`、`goal2-app/README.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: PR #153
 
+## 2026-09-28: P4 Node.js を 24 に上げる
+
+- 背景・目的: `goal2-app/Dockerfile`（`node:20-alpine`）と CI は Node 20 で動かしていたが、Node 20 のサポートは 2026-04-30 に終わった。Node 22 の保守は 2027-04-30 までで1年も残らないので、2028-04-30 まで保守される Node 24 に上げる（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P4）。
+- 主な変更内容:
+  - `Dockerfile` を `node:24-alpine` に、CI の2つのジョブの `node-version` を `"24"` に、`package.json` の `engines.node` を `">=24"` にした。
+  - `build-windows-app.bat` の Node.js が無いときの案内と、`LOCAL_WINDOWS_APP.md` の前提条件と `node -v` の例を 24 にした。`goal2-app.exe` には作る PC の Node.js が入るので、作る PC の版が利用者の版になることを書き、古い Node.js が入っている PC では入れ直すよう案内を替えた。
+  - `PROJECT_CONTEXT.md` の技術構成、CI、Windows 版の Node の版を 24 にし、未解決事項から Node 20 の項目を消した。
+  - アプリのコード（`server.js`、`lib/`、`public/`）と依存は変えていない。アプリの依存は0件である。
+- 検証: 手元の Node 24.21.0 で、設計書の5章のコマンド（`node --check`、`npm test`、`test:llm`、`test:table-nesting`、`test:goal2-output`、`test:michecker-parity`、`scripts/ci` の2つ）をすべて通した。Linux の Node 24 で SEA の手順を試し、できた実行ファイルが起動することを確かめた。
+- 未確認: Windows で `build-windows-app.bat` を動かし、Node 24 で `goal2-app.exe` を作れること。Cloud Run への反映（タグ付きのリビジョンで確かめてから移す）はマージ後にユーザーが行う。
+- 関連ファイル: `goal2-app/Dockerfile`、`.github/workflows/ci.yml`、`goal2-app/package.json`、`goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #151
+
 ## 2026-09-28: P0 手元で動くサーバーの守り
 
 - 背景・目的: Windows 版（`goal2-app.exe`）は `0.0.0.0` で待ち受け、POST の送り元も htmlchecker.exe のパスの形も確かめていなかった。そのため、同じネットワークの別の機器や、担当者のブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせた。すでに担当者に配っているので、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0 として最初に塞ぐ。
