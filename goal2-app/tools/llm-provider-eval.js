@@ -6,8 +6,10 @@
 //   capture  Start server.js with LLM_RECORD_DIR and no provider configured, drive the Goal 2
 //            screen with Playwright (paste body HTML -> 候補生成) for each page, and write the
 //            deduplicated requests to <dir>/requests.jsonl (+ images/, image-urls.json).
-//   run      Replay requests.jsonl through lib/llm.js callLlm() for one configuration (A-D) or
+//   run      Replay requests.jsonl through lib/llm.js callLlm() for one configuration (A-D, C2) or
 //            all of them, one request at a time. Writes <dir>/results-<config>.jsonl.
+//            --kind text|vision replays only that kind. --app-root <goal2-app of another
+//            checkout> loads that checkout's lib/llm.js, e.g. to rerun C before the L1 fix.
 //   report   Aggregate the results: JSON validity, latency, cost, agreement with A, machine
 //            pass/fail, and the CSVs for human judgement of generated wording.
 //
@@ -46,6 +48,17 @@ const CONFIGS = {
   },
   C: {
     label: "さくら gpt-oss-120b / preview/Qwen3-VL-30B-A3B-Instruct",
+    env: {
+      LLM_TEXT_PROVIDER: "sakura",
+      LLM_VISION_PROVIDER: "sakura",
+      SAKURA_AI_TEXT_MODEL: "gpt-oss-120b",
+      SAKURA_AI_VISION_MODEL: "preview/Qwen3-VL-30B-A3B-Instruct",
+    },
+  },
+  // C after the L1 fix (every property required, "" for an optional string). Same models and
+  // prices as C; run it with --kind text (and --kind vision for the optional-field check).
+  C2: {
+    label: "C と同じ（L1 修正後のスキーマ）",
     env: {
       LLM_TEXT_PROVIDER: "sakura",
       LLM_VISION_PROVIDER: "sakura",
@@ -305,9 +318,13 @@ function rawContent(body) {
 async function runConfig(args, config) {
   const dir = path.resolve(args.dir);
   applyConfigEnv(config);
-  const llm = require(path.join(appRoot, "lib", "llm.js"));
+  const llmRoot = args["app-root"] ? path.resolve(args["app-root"]) : appRoot;
+  const llm = require(path.join(llmRoot, "lib", "llm.js"));
   const status = llm.getStatus();
-  const requests = readJsonl(path.join(dir, "requests.jsonl")).filter((record) => !CONFIGS[config].visionOnly || record.kind === "vision");
+  const kind = typeof args.kind === "string" ? args.kind : "";
+  const requests = readJsonl(path.join(dir, "requests.jsonl"))
+    .filter((record) => !CONFIGS[config].visionOnly || record.kind === "vision")
+    .filter((record) => !kind || record.kind === kind);
   const outFile = path.join(dir, `results-${config}.jsonl`);
   const done = new Set(readJsonl(outFile).map((row) => row.key));
   const gapMs = Number(args["gap-ms"] || 1500);
@@ -330,7 +347,9 @@ async function runConfig(args, config) {
     },
   });
 
-  console.log(`config ${config}: ${CONFIGS[config].label} status=${JSON.stringify(status)} todo=${requests.length - done.size}`);
+  console.log(
+    `config ${config}: ${CONFIGS[config].label} lib=${path.relative(process.cwd(), llmRoot) || "."} status=${JSON.stringify(status)} todo=${requests.filter((record) => !done.has(record.key)).length}`
+  );
   let processed = 0;
   for (const record of requests) {
     if (done.has(record.key)) continue;
@@ -420,6 +439,25 @@ const REFERENCE_FIELDS = {
   "heading-review": ["vague_block_ids", "missing_before_block_ids", "level_fix_block_ids"],
 };
 const BOOLEAN_FIELDS = new Set(["is_foreign", "is_issue", "is_ascii_art", "is_individual_subject_page", "is_decorative", "is_complex", "has_embedded_text"]);
+
+// Optional properties (not in required) and the items where each should carry a value:
+// [task, field, condition label, condition].
+const OPTIONAL_FIELDS = [
+  ["foreign-language", "lang_code", "is_foreign が真", (item) => item.is_foreign === true],
+  ["foreign-language", "language_name_ja", "is_foreign が真", (item) => item.is_foreign === true],
+  ["sensory-characteristics", "explanation", "is_issue が真", (item) => item.is_issue === true],
+  ["link-text", "confidence", "すべて", () => true],
+  ["ascii-art", "kind", "is_ascii_art が真", (item) => item.is_ascii_art === true],
+  ["ascii-art", "matched_text", "is_ascii_art が真", (item) => item.is_ascii_art === true],
+  ["ascii-art", "suggested_text", "is_ascii_art が真", (item) => item.is_ascii_art === true],
+  ["heritage-check", "subject_name", "is_individual_subject_page が真", (item) => item.is_individual_subject_page === true],
+  ["heritage-check", "target_image_id", "is_individual_subject_page が真", (item) => item.is_individual_subject_page === true],
+  ["heritage-check", "reason", "is_individual_subject_page が真", (item) => item.is_individual_subject_page === true],
+  ["image-alt", "is_decorative", "すべて", () => true],
+  ["image-alt", "is_complex", "すべて", () => true],
+  ["image-alt", "complex_detail", "is_complex が真", (item) => item.is_complex === true],
+  ["avoid-text-as-image", "extracted_text", "has_embedded_text が真", (item) => item.has_embedded_text === true],
+];
 
 // Wording fields put side by side for human judgement: [csv name, task, field getter, sample size].
 const WORDING = [
@@ -597,7 +635,7 @@ function report(args) {
     ...Object.entries(REFERENCE_FIELDS).map(([task, fields]) => [task, fields, referenceTotals, "（参考）"]),
   ];
   for (const [task, fields, totals, note] of fieldGroups) {
-    for (const config of ["A2", "B", "C", "D"]) {
+    for (const config of ["A2", "B", "C", "C2", "D"]) {
       if (CONFIGS[config].visionOnly && !["image-alt", "avoid-text-as-image"].includes(task)) continue;
       if (!results[config].size) continue;
       for (const field of fields) {
@@ -635,6 +673,32 @@ function report(args) {
   for (const [config, total] of Object.entries(agreementTotals)) {
     const reference = referenceTotals[config] || { compared: 0, agreed: 0 };
     out.push(`| ${config} | ${total.compared} | ${pct(total.agreed, total.compared)} | ${reference.compared} | ${pct(reference.agreed, reference.compared)} |`);
+  }
+
+  // How often the properties that are optional in lib/llm-prompts.js come back (L2 finding 1).
+  // Each entry counts only the items where the property is expected to carry a value.
+  out.push("");
+  out.push("### 任意の項目が返る割合");
+  out.push("");
+  out.push("| タスク | 項目 | 数える条件 | 構成 | 条件に合う数 | 返った数 | 返った割合 |");
+  out.push("|---|---|---|---|---|---|---|");
+  for (const [task, field, label, when] of OPTIONAL_FIELDS) {
+    for (const config of Object.keys(CONFIGS)) {
+      let eligible = 0;
+      let present = 0;
+      for (const row of results[config].values()) {
+        if (row.task !== task) continue;
+        const items = itemsOf(row);
+        if (!items) continue;
+        for (const item of items.values()) {
+          if (!when(item)) continue;
+          eligible += 1;
+          if (item[field] !== undefined && item[field] !== null && item[field] !== "") present += 1;
+        }
+      }
+      if (!eligible) continue;
+      out.push(`| ${task} | ${field} | ${label} | ${config} | ${eligible} | ${present} | ${pct(present, eligible)} |`);
+    }
   }
 
   // Machine-checkable pass/fail (4章 L2 合格の目安).
