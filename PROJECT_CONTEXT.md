@@ -142,6 +142,6 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 
 - lockファイルが無い。npm依存が0件のため現状は問題にならないが、ビルド時に `npx esbuild` と `npx postject` を未固定バージョンで取得している。
 - Cloud Run の IAP と、証跡の置き場所と名前の決まりは、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。
-- Windows 版の待ち受けの守り（同じ設計書の P0）は、コードに入れたが、Windows の実機では確かめておらず、配り直しも済んでいない（PR #NNN）。すでに配った `goal2-app.exe` は、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせる作りのままである。マージ後にユーザーが作り直して配り直し、担当者に古い版を消してもらう。
+- Windows 版の待ち受けの守り（同じ設計書の P0）は、コードに入れたが、Windows の実機では確かめておらず、配り直しも済んでいない（PR #150）。すでに配った `goal2-app.exe` は、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせる作りのままである。マージ後にユーザーが作り直して配り直し、担当者に古い版を消してもらう。
 - CMS入力欄で許可されるHTMLタグと属性の制約は未確認で、最終HTML出力に反映されていない。
 - `goal2-app/Dockerfile`（`node:20-alpine`）とCIはNode 20で動かしているが、Node 20は2026-04-30にサポートが終わっている。Node 24 へ上げる（同じ設計書の P4）。

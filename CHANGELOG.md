@@ -32,7 +32,7 @@
   - 設計との差（`HOST` が `::1` と `localhost` のときも `Host` を確かめる、パスの確認で代替データストリームと制御文字も拒む、空のパスの保存は設定を消す操作として通す、など5つ）を設計書の 4章 P0 に書いた。
 - 未確認: Windows の実機での確認（`goal2-app.exe` の起動、htmlchecker.exe のパスの保存と自動比較、別の PC から開けないこと）は行っていない。
 - 関連ファイル: `goal2-app/server.js`、`goal2-app/lib/local-guard.js`、`goal2-app/test/local-guard/run-local-guard-tests.js`、`goal2-app/package.json`、`goal2-app/Dockerfile`、`goal2-app/README.md`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
-- 関連PR/コミット: PR #NNN
+- 関連PR/コミット: PR #150
 
 ## 2026-09-25: 本番運用の段階の設計書
 
