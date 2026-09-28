@@ -19,6 +19,21 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-28: P2 証跡の保存名を共有ドライブの決まりに合わせる
+
+- 背景・目的: 証跡は共有ドライブに置き、承認者が移行管理シートの行(旧ページの題名と URL)から探すことに決まった(2026-09-25)。これまで Goal 2 の証跡 JSON はコピーだけで、CSV と GOAL1 の書き出しの名前にも決まりが無かった。`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P2 のうち、3.5 の画面の変更の1と2、4章 P2 の4を行う。
+- 主な変更内容:
+  - Goal 2 に「証跡JSONを保存」を足した。出力欄の「JSONコピー」の隣と、案内パネルの出力の段に置く。中身は出力欄の証跡 JSON と同じで、出力欄が空なら押せない。
+  - Goal 2 の証跡の JSON と CSV を `<日時>_<題名>_<ページの識別>_evidence.<拡張子>` で保存する。日時は `generated_at` を日本時間にした `YYYYMMDD-HHMM`(無ければ保存した時刻)、題名は使えない文字と制御文字を `_` に替えて先頭30文字(文字単位)、末尾の `.` と空白を除き、空なら「無題」。
+  - GOAL1 のバッチ JSON、一覧 CSV、証跡 CSV の名前の先頭に、書き出した日時を付けた。
+  - 名前を作る処理を `goal2-app/public/evidence-filename.js` にまとめた。ブラウザーでも Node でも読める。日本時間は UTC に9時間を足して作り、PC の時刻帯に左右されない。
+  - `goal2-app/WORKER_GUIDE.md` に「証跡を共有ドライブに保存する」の節を足した(保存先 `<共有ドライブ>/移行証跡/<自治体名>/<サイト区分>/`、名前を変えずに置く、作り直したら古いファイルを消さずに足す)。
+  - 証跡の JSON と CSV の中身、「作業者」欄は変えていない。
+  - テスト: 名前の関数の単体テスト(`test/evidence-filename/`、`npm test` から続けて走る。日付をまたぐ例、TZ を変えた子プロセス、サロゲートペアを含む題名などを含む)と、画面のテスト(`test/goal2-output/` の 22。ダウンロードの名前を `suggestedFilename()` で確かめる)を足した。
+  - 設計との差5つ(ページの識別が8文字のハッシュ、制御文字も置き換える、など)を設計書の 3.5 に書いた。
+- 関連ファイル: `goal2-app/public/evidence-filename.js`、`goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/goal1.js`、`goal2-app/public/goal1.html`、`goal2-app/test/evidence-filename/run-evidence-filename-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/package.json`、`goal2-app/WORKER_GUIDE.md`、`goal2-app/README.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #__PR__
+
 ## 2026-09-28: P0 手元で動くサーバーの守り
 
 - 背景・目的: Windows 版（`goal2-app.exe`）は `0.0.0.0` で待ち受け、POST の送り元も htmlchecker.exe のパスの形も確かめていなかった。そのため、同じネットワークの別の機器や、担当者のブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせた。すでに担当者に配っているので、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0 として最初に塞ぐ。

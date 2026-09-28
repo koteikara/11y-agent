@@ -204,6 +204,9 @@ async function main() {
     await waitForHealth();
     browser = await chromium.launch({
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium",
+      // Linux の Chromium は UTF-8 のロケールが無いと、日本語を含むダウンロードの名前を「download」に
+      // 置き換える。証跡の保存名(22)を確かめるため、UTF-8 で起動する。
+      env: { ...process.env, LC_ALL: "C.UTF-8" },
     });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
@@ -3100,6 +3103,158 @@ async function main() {
         ]),
       goal1Header
     );
+
+    // ======================================================================
+    // 22. P2: 証跡の保存名(PRODUCTION_OPERATIONS_INSTRUCTIONS.md の 3.5)
+    // ======================================================================
+    // 期待する名前は、public/evidence-filename.js を使わずにここで組み立てる。
+    const expectedStamp = (iso) => {
+      const jst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
+      const p2 = (n) => String(n).padStart(2, "0");
+      return `${jst.getUTCFullYear()}${p2(jst.getUTCMonth() + 1)}${p2(jst.getUTCDate())}-${p2(jst.getUTCHours())}${p2(jst.getUTCMinutes())}`;
+    };
+    const readDownload = async (download) => {
+      const stream = await download.createReadStream();
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      return Buffer.concat(chunks).toString("utf8");
+    };
+
+    const savePage = await browser.newPage();
+    await savePage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
+    await savePage.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });
+    // 画面は開いた時点で出力欄を描くので、空の証跡は最初の HTML の状態と、押したときの確認で確かめる。
+    const indexHtml = await (await savePage.request.get(`http://127.0.0.1:${PORT}/`)).text();
+    const emptyClickDownloads = await savePage.evaluate(() => {
+      const output = document.getElementById("evidenceOutput");
+      const saved = output.value;
+      const originalCreate = URL.createObjectURL;
+      let created = 0;
+      URL.createObjectURL = (blob) => {
+        created += 1;
+        return originalCreate.call(URL, blob);
+      };
+      output.value = "";
+      try {
+        const button = document.getElementById("saveEvidenceJsonButton");
+        const wasDisabled = button.disabled;
+        button.disabled = false;
+        button.click();
+        button.disabled = wasDisabled;
+      } finally {
+        URL.createObjectURL = originalCreate;
+        output.value = saved;
+      }
+      return created;
+    });
+    check(
+      "22a. 証跡が空のときは「証跡JSONを保存」を押せない(最初は押せず、空なら保存しない)",
+      /<button type="button" id="saveEvidenceJsonButton" disabled>証跡JSONを保存<\/button>/.test(indexHtml) &&
+        emptyClickDownloads === 0,
+      JSON.stringify({ emptyClickDownloads })
+    );
+
+    // 使えない文字・改行・絵文字を含み、30文字を超える題名
+    const saveTitle = ' 市民課/窓口:案内*"よくある質問"? <抜粋>|🎉🎉🎉 お知らせのページです。';
+    for (let attempt = 0; attempt < 4 && !(await savePage.isVisible("#htmlInput")); attempt += 1) {
+      await savePage.evaluate(() => document.getElementById("toggleInputButton")?.click());
+      await savePage.waitForTimeout(400);
+    }
+    await savePage.fill("#pageTitleInput", saveTitle);
+    await savePage.fill("#htmlInput", '<p><img src="/photos/matsuri.jpg" width="640" height="480"></p>');
+    await savePage.click("#analyzeButton");
+    await savePage.waitForFunction(
+      () => {
+        const text = document.getElementById("evidenceOutput").value;
+        try {
+          return Boolean(JSON.parse(text).generated_at);
+        } catch {
+          return false;
+        }
+      },
+      null,
+      { timeout: 15000 }
+    );
+    await savePage.evaluate(() => {
+      document.querySelector(".output-drawer").open = true;
+    });
+    const savedEvidenceText = await savePage.inputValue("#evidenceOutput");
+    const savedEvidence = JSON.parse(savedEvidenceText);
+    // 前の空白を除いて30文字(🎉 は1文字)。30文字目は「お」。
+    const expectedTitle = "市民課_窓口_案内__よくある質問__ _抜粋__🎉🎉🎉 お";
+    const expectedBase = `${expectedStamp(savedEvidence.generated_at)}_${expectedTitle}_${savedEvidence.page_session_id}_evidence`;
+
+    check(
+      "22b. 証跡が入ると「証跡JSONを保存」を押せる",
+      (await savePage.getAttribute("#saveEvidenceJsonButton", "disabled")) === null
+    );
+    const [jsonDownload] = await Promise.all([
+      savePage.waitForEvent("download"),
+      savePage.click("#saveEvidenceJsonButton"),
+    ]);
+    check(
+      "22c. 「証跡JSONを保存」は <日時>_<題名>_<ページの識別>_evidence.json で保存する",
+      jsonDownload.suggestedFilename() === `${expectedBase}.json` && /^goal2_[0-9a-f]+$/.test(savedEvidence.page_session_id),
+      JSON.stringify({ got: jsonDownload.suggestedFilename(), want: `${expectedBase}.json` })
+    );
+    check(
+      "22d. 保存した JSON の中身は出力欄の証跡 JSON と同じ",
+      (await readDownload(jsonDownload)) === savedEvidenceText
+    );
+
+    const [csvDownload] = await Promise.all([savePage.waitForEvent("download"), savePage.click("#downloadCsvButton")]);
+    const csvText = await readDownload(csvDownload);
+    check(
+      "22e. 証跡CSVは <日時>_<題名>_<ページの識別>_evidence.csv で保存する",
+      csvDownload.suggestedFilename() === `${expectedBase}.csv`,
+      JSON.stringify({ got: csvDownload.suggestedFilename(), want: `${expectedBase}.csv` })
+    );
+    check(
+      "22f. 証跡CSVの見出しは変わらない(28列、先頭は page_session_id)",
+      csvText.startsWith('"page_session_id","candidate_id",') && parseCsv(csvText)[0].length === 28,
+      csvText.split("\r\n")[0]
+    );
+    await savePage.close();
+
+    // GOAL1: バッチJSONを読み込み、3つの書き出しの名前を確かめる。
+    const goal1Page = await browser.newPage();
+    await goal1Page.goto(`http://127.0.0.1:${PORT}/goal1.html`, { waitUntil: "load" });
+    await goal1Page.waitForFunction(() => Boolean(window.evidenceFilename), null, { timeout: 15000 });
+    const goal1Batch = {
+      batchId: "batch_1758778200000",
+      createdAt: "2026-09-25T05:30:00.000Z",
+      settings: {},
+      pages: [
+        {
+          id: "M-001",
+          pageTitle: "固定資産評価審査委員会",
+          url: "https://example.lg.jp/a.html",
+          category: "本体サイト",
+          status: "done",
+          evidence: { candidates: [] },
+        },
+      ],
+    };
+    await goal1Page.setInputFiles("#loadBatchJsonInput", {
+      name: "batch.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(goal1Batch)),
+    });
+    await goal1Page.waitForFunction(() => !document.getElementById("downloadBatchJsonButton").disabled, null, { timeout: 5000 });
+    const goal1Names = [];
+    for (const buttonId of ["downloadBatchJsonButton", "downloadSummaryCsvButton", "downloadEvidenceCsvButton"]) {
+      const before = Date.now();
+      const [download] = await Promise.all([goal1Page.waitForEvent("download"), goal1Page.click(`#${buttonId}`)]);
+      const after = Date.now();
+      goal1Names.push({ name: download.suggestedFilename(), stamps: [expectedStamp(before), expectedStamp(after)] });
+    }
+    const goal1Ok = (entry, rest) => entry.stamps.some((stamp) => entry.name === `${stamp}_batch_1758778200000${rest}`);
+    check(
+      "22g. GOAL1 の書き出しは <書き出す日時>_<バッチID> で始まる(JSON・一覧CSV・証跡CSV)",
+      goal1Ok(goal1Names[0], ".json") && goal1Ok(goal1Names[1], "-summary.csv") && goal1Ok(goal1Names[2], "-evidence.csv"),
+      JSON.stringify(goal1Names)
+    );
+    await goal1Page.close();
 
   } finally {
     if (browser) await browser.close();

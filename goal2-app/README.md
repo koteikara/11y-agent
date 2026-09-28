@@ -31,7 +31,7 @@
 - 候補ごとの判断状態
 - 注意項目の出力欄表示と証跡JSONへの記録
 - CMS貼り付け用の最終HTML出力
-- JSON/CSVの証跡出力
+- JSON/CSVの証跡出力(共有ドライブに置くための決まった名前で保存する。名前の決まりと保存先は [WORKER_GUIDE.md](WORKER_GUIDE.md) の「証跡を共有ドライブに保存する」)
 - 佐賀市 old/gold fixture に対するローカル比較試験
 - goldとの差分から、候補の `採用` / `編集して採用` / `却下` / `要確認` の推奨判断を学習・提示するローカルレポート
 - 複数ページの一括処理と、安全な候補の自動採用(Goal 1)
@@ -273,4 +273,4 @@ docker build -t a11y-migration-app .
 docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 ```
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めましたが、IAPの設定と証跡の運用はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #__PR__)、IAPの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。

@@ -863,6 +863,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 本番運用の段階の設計書 `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` を作った。ユーザーの決定(IAP、同意は営業が取り記録しない、証跡は共有ドライブ)を段階 P0〜P4 にまとめた。調べる中で、Windows 版の待ち受けと POST の作りから、同じネットワークの別の機器や、ブラウザーで開いた別のサイトが htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせることを、コードから確かめた(実際に攻撃しての確認はしていない)。P0 として最初に塞ぐ。Codex の二次レビュー(要修正5件)を受けて、IAP のサービスエージェントを作る手順を足し、`PROJECT_CONTEXT.md`、`README.md`、`LLM_DATA_POLICY.md`、この文書に残っていた決定前の記述を直した(PR #148)
 - `PROJECT_CONTEXT.md` の `knowledge_mocs` の3つの MOC が ForLLM Vault の `03_MOC` に実在することを、ユーザーが確かめた(2026-09-25)。要確認の注記と未解決事項の項目を消した
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0「手元で動くサーバーの守り」を実装した(PR #150、2026-09-28)。待ち受けを `HOST`(無ければ Cloud Run では `0.0.0.0`、それ以外では `127.0.0.1`)で決め、手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスを保存と実行の直前に確かめるようにした。Windows 以外では `POST /api/local-settings` を 404 にした。確かめる処理は `lib/local-guard.js`、テストは `test/local-guard/`。設計との差5つは設計書の 4章 P0 に書いた。Windows の実機での確認と、Windows 版の作り直しと配り直しは未実施で、配り直すまでは配った版の穴が残る
+- `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P2 のうち、3.5 の画面の変更の1と2、4章 P2 の4を実装した(PR #__PR__、2026-09-28)。Goal 2 に「証跡JSONを保存」を足し、証跡の JSON と CSV を `<日時>_<題名>_<ページの識別>_evidence.<拡張子>` で保存する。GOAL1 の書き出し(バッチ JSON、一覧 CSV、証跡 CSV)は先頭に書き出した日時を付けた。名前は `public/evidence-filename.js` で作り、日本時間は UTC に9時間を足して作る。`WORKER_GUIDE.md` に共有ドライブの保存先と手順の節を足した。証跡の中身は変えていない。ページの識別は設計書の10文字ではなく8文字のハッシュであることが分かり、設計との差として記録した。「作業者」欄を IAP のアカウントで埋める変更(3.5 の3)は P1 のあとに行う
 
 ## Decisions
 
@@ -924,7 +925,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 
 - ~~Cloud Run上のGoal 2実行画面について、Google Cloudプロジェクト、リージョン、ネットワーク制限、認証方式は未決定。~~ → 2026-09-25 決定: 認証は IAP(会社の Google Workspace のアカウント)。実施は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1 で、未実施。
 - Cloud Run PoCの具体的なGoogle Cloud構成、DB は未決定。証跡の保存先は 2026-09-25 に共有ドライブと決めた(置き場所と名前の決まりは同じ設計書の 3.5)。
-- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(IAP)は決定済みで未設定、証跡の共有ドライブでの運用は決定済みで未開始(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
+- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(IAP)は決定済みで未設定、証跡の共有ドライブでの運用は決定済みで、画面が決まりどおりの名前で保存するようにした(PR #__PR__)が、共有ドライブの `移行証跡` フォルダーの用意は未実施(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
 - CMS入力欄で許可されるHTMLタグ・属性・入力欄制約は未確認。
 - 一括処理方式とページ単位方式を組み合わせるハイブリッド案は未整理。
 - `gemini-a11y-agent` から引き継ぐ品質監査項目を `done-definition.md` へ正式反映する作業は未完了。
