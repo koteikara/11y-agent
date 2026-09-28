@@ -120,24 +120,31 @@ Cloud Run の本番を、全員で共通の1つのパスワードで守る。
 
 決まりは次のとおりである。
 
-1. **パスワードの渡し方。** 環境変数 `APP_PASSWORD` で渡す。Cloud Run では Secret Manager のシークレットから渡し、`--set-env-vars` に平文で書かない。値の前後の空白と改行は除いて使う。PowerShell からシークレットを作ると、末尾に改行が付くためである。
-2. **確かめる範囲。** `APP_PASSWORD` があるときは、`GET /api/health` を除くすべての要求で確かめる。ユーザー名は確かめない（空でも何でもよい）。合わなければ 401 と `WWW-Authenticate: Basic realm="a11y-migration-app", charset="UTF-8"` を返す。
+1. **パスワードの渡し方。** 環境変数 `APP_PASSWORD` で渡す。Cloud Run では Secret Manager のシークレットから渡し、`--set-env-vars` に平文で書かない。値の前後の空白と改行は除いて使う。PowerShell からシークレットを作ると、末尾に改行が付くためである。そのため、前後の空白はパスワードの一部にできない（パスワードは無作為に作るので困らない）。
+2. **確かめる範囲。** `APP_PASSWORD` があるときは、`GET /api/health` を除くすべての要求で確かめる。除くのは、メソッドが GET でパスがちょうど `/api/health` のときだけで、`POST /api/health` や `/api/healthz` などは除かない。ユーザー名は確かめない（空でも何でもよい）。合わなければ 401 と `WWW-Authenticate: Basic realm="a11y-migration-app", charset="UTF-8"` を返す。`Authorization` ヘッダーの形が崩れているとき（`Basic` で始まらない、Base64 として読めない、コロンが無い）も、例外を出さずに 401 を返す。
 3. **比べ方。** 送られたパスワードと `APP_PASSWORD` を、それぞれ SHA-256 にしてから `crypto.timingSafeEqual()` で比べる。比べるのにかかる時間から、中身を推し量られないようにするためである。
 4. **設定し忘れの守り。** Cloud Run（`K_SERVICE` がある）で `APP_PASSWORD` が無いか16文字より短いときは、`GET /api/health` を除くすべての要求に 503 を返し、起動時にエラーを1行出す。設定し忘れて誰でも開ける状態にならないようにするためと、短いパスワードで総当たりされないようにするためである。
 5. **手元では求めない。** Cloud Run 以外（Windows 版、開発、テスト）では、`APP_PASSWORD` が無ければパスワードを求めない。P0 の守りで、同じ PC からしか届かないためである。
-6. **記録に残さない。** パスワードと `Authorization` ヘッダーを、ログにも応答にも出さない。
+6. **記録に残さない。** パスワードと `Authorization` ヘッダーを、ログにも応答にも出さない。ヘッダーを読み損ねたときの例外の内容も、ログに出さない。
+7. **別のサイトから起こされた API の要求を止める。** `/api/` で始まる要求（`GET /api/health` を除く）で、`Sec-Fetch-Site` ヘッダーがあり、その値が `same-origin` と `none` のどちらでもなければ 403 を返す。ブラウザーは覚えたパスワードを、別のサイトの画像や iframe が起こした要求にも付けることがある。そのとき、外部のページを取りに行く GET（`/api/fetch-html`、`/api/link-title`）が動いてしまうためである。`Sec-Fetch-Site` は、いまの主なブラウザーがすべての要求に付けるヘッダーで、画面自身の `fetch()` は `same-origin`、アドレス欄に直接打ったときは `none` になる。`same-site` も止める。`run.app` は公開サフィックスなので、ほかの人の Cloud Run のサービスが `same-site` になりうるためである。ヘッダーが無い要求（ブラウザー以外の道具やテスト）は通すが、パスワードは要る。この確認は、パスワードの有無にかかわらず、手元の Windows 版でも行う。
 
 Cloud Run の設定（誰でも呼べる `allUsers` の権限と `--allow-unauthenticated`）は変えない。
 アプリの前に Google の仕組みを置かず、アプリ自身が確かめるためである。
 
-P0 の POST の確認（`Content-Type` と `Origin`）は、そのまま効く。
-ブラウザーは覚えたパスワードを、別のサイトから送らされた要求にも付けることがあるが、別のサイトからの POST は P0 の確認で止まる。
+ブラウザーは覚えたパスワードを、別のサイトから送らされた要求にも付けることがある。
+別のサイトからの POST は P0 の確認（`Content-Type` と `Origin`）で止まり、API の GET は 7 の確認で止まる。
 
 パスワードは全員で共通なので、アプリからは誰が使ったかが分からない。
 証跡の作業者の欄は、これまでどおり作業者が書く（3.5）。
 
 パスワードを変えるのは、移行チームから人が抜けたときと、漏れたおそれがあるときである。
-シークレットに新しい版を足し、Cloud Run を更新すると、新しいリビジョンで新しいパスワードが効く。
+シークレットに新しい版を足し、その版の番号を指定した新しいリビジョンを作る。
+シークレットは `latest` ではなく、版の番号で指定する。
+リビジョンごとにパスワードの版が決まるので、どのリビジョンがどのパスワードで動くかがはっきりし、前のリビジョンに戻したときの結果も読める（4章 P1 の8）。
+
+P1 より前のリビジョンには、パスワードを確かめる処理が無い。
+そこへトラフィックを戻すと、誰でも開ける状態に戻る。
+そのため、P1 を適用したときの最初のリビジョンの名前を控え、それより前には戻さない（4章 P1 の3、5、8）。
 
 手順は 4章 P1 にある。
 
@@ -269,33 +276,46 @@ Windows の実機での確認（5章の最後の3項目）は、まだ行って�
    - Cloud Run で `APP_PASSWORD` が無いときと16文字より短いときは、`GET /api/health` 以外に 503 を返す。
    - Cloud Run 以外で `APP_PASSWORD` が無いときは、これまでどおり求めない。
    - 401 と 503 の応答とログに、パスワードが出ない。
-4. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行に `--update-secrets="APP_PASSWORD=app-password:latest"` を足し、パスワードの作り方と変え方の節を足す（下の「本番への適用」の1、2、7）。`README.md` の環境変数の一覧に `APP_PASSWORD` を足す。
+   - `Authorization` の形が崩れている要求（`Basic` で始まらない、Base64 として読めない、コロンが無い）に、例外を出さずに 401 を返す。
+   - `POST /api/health` と `/api/healthz` は、パスワードを求める側に入る。
+   - `Sec-Fetch-Site` が `cross-site` と `same-site` の `GET /api/fetch-html` と `GET /api/link-title` に 403 を返す。パスワードが合っていても 403 にする。`same-origin`、`none`、ヘッダー無しは通る。`GET /api/health` は `cross-site` でも通る。
+   - Cloud Run 以外（`APP_PASSWORD` 無し）でも、`Sec-Fetch-Site: cross-site` の `/api/` の要求に 403 を返す。
+4. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行に `--update-secrets="APP_PASSWORD=app-password:<版の番号>"` を足し（`latest` は使わない）、パスワードの作り方、変え方、戻し方の節を足す（下の「本番への適用」の1、2、7、8）。`README.md` の環境変数の一覧に `APP_PASSWORD` を足す。
 5. PR はドラフトで出し、設計・レビュー担当のレビューと Codex の二次レビューを受ける。
 
 #### 本番への適用（ユーザー、実装のマージ後）
 
 PowerShell で行う。
-`$SERVICE`、`$REGION`、`$IMAGE` は `CLOUD_RUN_DEPLOY.md` と同じものを使う。
+`$REGION`、`$SERVICE`、`$IMAGE` は `CLOUD_RUN_DEPLOY.md` と同じものを使う。
+プロジェクトを取り違えないよう、最初に `$PROJECT_ID = gcloud config get-value project` を実行し、表示されたプロジェクトが本番のものであることを確かめる。
 
-1. パスワードを作り、シークレットに入れる（初回のみ）。無作為の 24 文字を作り、画面に出さずにそのまま入れる。
+1. パスワードを作り、シークレットに入れる（初回のみ）。無作為の 24 文字を作り、画面に出さずにそのまま入れる。入れた版の番号を `$PW_VERSION` に控える（初回は `1`）。
 
    ```powershell
    $bytes = New-Object byte[] 18
    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-   [Convert]::ToBase64String($bytes) | gcloud secrets create app-password --data-file=-
+   [Convert]::ToBase64String($bytes) | gcloud secrets create app-password --data-file=- --project=$PROJECT_ID
+   $PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+   $PW_VERSION
    ```
 
-2. Cloud Run がシークレットを読めるようにする（初回のみ）。サービスアカウントが空で表示されるときは、既定の `<プロジェクト番号>-compute@developer.gserviceaccount.com` を使う。
+2. Cloud Run がシークレットを読めるようにする（初回のみ）。サービスアカウントが設定されていないサービスは、既定の Compute Engine のサービスアカウントで動くので、そのときはそれを組み立てる。
 
    ```powershell
-   $SERVICE_ACCOUNT = gcloud run services describe $SERVICE --region $REGION --format="value(spec.template.spec.serviceAccountName)"
-   gcloud secrets add-iam-policy-binding app-password --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/secretmanager.secretAccessor"
+   $SERVICE_ACCOUNT = gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(spec.template.spec.serviceAccountName)"
+   if (-not $SERVICE_ACCOUNT) {
+     $PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
+     $SERVICE_ACCOUNT = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+   }
+   $SERVICE_ACCOUNT
+   gcloud secrets add-iam-policy-binding app-password --project=$PROJECT_ID --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/secretmanager.secretAccessor"
    ```
 
-3. 実装をマージしたあとの main でイメージを作り（`CLOUD_RUN_DEPLOY.md` の手順）、パスワードを付けて、トラフィックを流さずにデプロイする。いまの環境変数（Gemini のモデルなど）はそのまま引き継がれる。
+3. いまトラフィックを受けているリビジョンの名前を、「P1 より前の最後のリビジョン」として控える。そのうえで、実装をマージしたあとの main でイメージを作り（`CLOUD_RUN_DEPLOY.md` の手順）、パスワードの版を付けて、トラフィックを流さずにデプロイする。いまの環境変数（Gemini のモデルなど）は、そのまま引き継がれる。
 
    ```powershell
-   gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:latest" --no-traffic --tag pw
+   gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(status.traffic)"
+   gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag pw
    ```
 
 4. 表示されたタグ付きの URL で確かめる。
@@ -304,32 +324,56 @@ PowerShell で行う。
    - 正しいパスワードで画面が出て、1ページを処理すると AI の下書きが入る。
    - `<タグ付きの URL>/api/health` は、パスワード無しで開ける。
 
-5. 問題が無ければ、トラフィックを移す。
+5. 問題が無ければ、トラフィックを移す。移したあと、いまトラフィックを受けているリビジョンの名前を、「P1 の最初のリビジョン」として控える。これより前のリビジョンには戻さない。
 
    ```powershell
-   gcloud run services update-traffic $SERVICE --region $REGION --to-latest
+   gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+   gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(status.traffic)"
    ```
 
 6. 作業者にパスワードを渡す。パスワードは次のコマンドで表示できる。社内で決まった安全な方法で渡し、チャットや共有の文書に平文で残さない。
 
    ```powershell
-   gcloud secrets versions access latest --secret=app-password
+   gcloud secrets versions access $PW_VERSION --secret=app-password --project=$PROJECT_ID
    ```
 
-7. パスワードを変えるとき（人が抜けたとき、漏れたおそれがあるとき）は、新しい版を足してサービスを更新し、新しいパスワードを配り直す。更新のあと、トラフィックが新しいリビジョンに移ったことを確かめる。
+7. パスワードを変えるとき（人が抜けたとき、漏れたおそれがあるとき）は、新しい版を足し、その版を指定した新しいリビジョンを、トラフィックを流さずに作る。タグ付きの URL で、新しいパスワードで開けて古いパスワードでは開けないことを確かめてから、トラフィックを移し、新しいパスワードを配り直す。
 
    ```powershell
+   $OLD_PW_VERSION = $PW_VERSION
    $bytes = New-Object byte[] 18
    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-   [Convert]::ToBase64String($bytes) | gcloud secrets versions add app-password --data-file=-
-   gcloud run services update $SERVICE --region $REGION --update-secrets="APP_PASSWORD=app-password:latest"
+   [Convert]::ToBase64String($bytes) | gcloud secrets versions add app-password --data-file=- --project=$PROJECT_ID
+   $PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+   gcloud run services update $SERVICE --region $REGION --project=$PROJECT_ID --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag "pw$PW_VERSION"
+   # タグ付きの URL で確かめてから
+   gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
    ```
 
-8. 戻し方（問題があったとき）。トラフィックを前のリビジョンに戻す。前のリビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION` で分かる。
+   漏れたおそれがあるときは、トラフィックを移したあとに古い版を無効にする。古い版で動くリビジョンは起動できなくなり、誤ってそこへ戻すこともできなくなる。
 
    ```powershell
-   gcloud run services update-traffic $SERVICE --region $REGION --to-revisions=<前のリビジョン>=100
+   gcloud secrets versions disable $OLD_PW_VERSION --secret=app-password --project=$PROJECT_ID
    ```
+
+8. 戻し方（問題があったとき）。何を戻したいかで、手順が分かれる。どの場合も、「P1 の最初のリビジョン」より前のリビジョンには戻さない。そこへ戻すと、パスワードを確かめる処理が無く、誰でも開ける状態になるためである。
+
+   - **アプリもパスワードも、前のリビジョンのときに戻す。** トラフィックを前のリビジョンに移す。前のリビジョンは、作ったときの版のパスワードで動く。リビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION --project=$PROJECT_ID` で分かる。
+
+     ```powershell
+     gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-revisions=<前のリビジョン>=100
+     ```
+
+   - **パスワードはいまのままで、アプリだけを前に戻す。** 前のリビジョンのイメージを、いまのパスワードの版で、トラフィックを流さずにデプロイし直す。タグ付きの URL で確かめてから、トラフィックを移す。
+
+     ```powershell
+     $OLD_IMAGE = gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="value(spec.containers[0].image)"
+     gcloud run deploy $SERVICE --image "$OLD_IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag back
+     # タグ付きの URL で確かめてから
+     gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+     ```
+
+   - **P1 の実装そのものに問題があり、パスワード無しに戻すしかないとき。** 「P1 より前の最後のリビジョン」にトラフィックを移すと、誰でも開ける状態になる。そうなることを承知のうえで行い、直した版をすぐにデプロイする。
 
 ### P2 同意と証跡の運用
 
@@ -388,6 +432,8 @@ P0 は、Windows の実機でも次を確かめる。
 | パスワードを付けずに新しいイメージをデプロイすると、画面が開けなくなる（503） | タグ付きの URL で先に確かめてから、トラフィックを移す（4章 P1 の3〜5）。戻し方（同じく8）で数分で戻せる |
 | パスワードが漏れる、または抜けた人が知っている | 新しいパスワードに変えて配り直す（4章 P1 の7）。変えるまでの間、URL とパスワードを知る人は使える |
 | 総当たりでパスワードを当てられる | 無作為の 24 文字を使う（4章 P1 の1）。16文字より短いと、サーバーが受け付けない（3.3 の4） |
+| P1 より前のリビジョンに戻すと、誰でも開ける状態に戻る | 「P1 の最初のリビジョン」の名前を控え、それより前には戻さない（3.3、4章 P1 の3、5、8） |
+| ブラウザーが覚えたパスワードが、別のサイトから起こされた要求に付く | POST は P0 の確認で、API の GET は `Sec-Fetch-Site` の確認で止める（3.3 の7） |
 | 誰が使ったかがアプリから分からない | パスワードは共通なので、証跡の作業者の欄は作業者が書く。必要になったら、IAP など人ごとに確かめる方式に変える |
 | 待ち受けを `127.0.0.1` に絞ると、別の PC から Windows 版を使っていた人が使えなくなる | Windows 版は同じ PC で使う前提で配っている（`LOCAL_WINDOWS_APP.md`）。必要な人は `HOST` を設定して起動できる |
 | `Content-Type` の確認で、画面以外から API を呼ぶ道具が止まる | 画面の POST（8か所）とテストの POST は、すべて `application/json` で送っている。評価の道具（`tools/llm-provider-eval.js`）は画面を通して要求を作る |

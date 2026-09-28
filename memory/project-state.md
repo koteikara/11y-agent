@@ -886,7 +886,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - Goal 2初期PoCでは、`a11y-migration-kb/build/rules.jsonl` のコピーを `goal2-app/data/rules.jsonl` に配置し、OneDriveの暗号化・オンライン専用属性に依存しない形で読み込む。
 - Cloud Runデプロイ手順では、既存Cloud Runサービスと同じ `asia-northeast1` を初期リージョンとする。
 - 実案件HTMLを扱う前に、認証、ログ、データ送信ポリシー、証跡保存先、CMS入力欄制約を決める。
-- Cloud Runで実案件HTMLを扱う段階では、無認証公開せず、社内認証、IAP、IAM、VPN、または既存SSO連携などでアクセス制限する。
+- Cloud Runで実案件HTMLを扱う段階では、無認証公開しない。Cloud Run の呼び出し権限は `allUsers` のままとし、アプリ内の共通パスワード(HTTP の Basic 認証)でアクセスを制限する(2026-09-28 決定。`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 3.3)。利用者ごとの識別が必要になったら、IAP、IAM、VPN、SSO などへ移る。
 - miCheckerはGoal 2初期Cloud Run構成へ直接組み込まず、CMS登録後プレビューの手動確認ゲートとして扱い、結果を証跡化する。
 - `koteikara/gemini-a11y-agent` は参考にするが、そのまま踏襲しない。
 - 再開発では、`a11y-migration-kb/` を正とし、参考リポジトリの独自ルールや実装は必要に応じて考え方だけを取り込む。
