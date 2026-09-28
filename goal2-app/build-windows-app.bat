@@ -6,7 +6,7 @@ echo.
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Error: Node.js was not found. Please install Node.js 20 or later first.
+  echo Error: Node.js was not found. Please install Node.js 24 or later first.
   exit /b 1
 )
 
