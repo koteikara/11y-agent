@@ -3,7 +3,7 @@
 // ブラウザーでは <script> で読み、window.evidenceFilename から使う。Node からは require() で読める(テスト用)。
 //
 // Goal 2: <日時>_<題名>_<ページの識別>_<種類>.<拡張子>
-//   例: 20260925-1430_固定資産評価審査委員会_goal2_3f9a1c07b2_evidence.json
+//   例: 20260925-1430_固定資産評価審査委員会_goal2_3f9a1c07_evidence.json
 // GOAL1:  <日時>_<バッチID><後ろに付ける文字>.<拡張子>
 //   例: 20260925-1430_batch_1758778200000-summary.csv
 (function (root, factory) {

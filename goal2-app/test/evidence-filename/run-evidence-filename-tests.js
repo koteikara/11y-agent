@@ -61,10 +61,10 @@ function testGoal2Filename() {
     goal2Filename({
       generatedAt: "2026-09-25T05:30:00.000Z",
       pageTitle: "固定資産評価審査委員会",
-      pageSessionId: "goal2_3f9a1c07b2",
+      pageSessionId: "goal2_3f9a1c07",
       extension: "json",
     }),
-    "20260925-1430_固定資産評価審査委員会_goal2_3f9a1c07b2_evidence.json",
+    "20260925-1430_固定資産評価審査委員会_goal2_3f9a1c07_evidence.json",
     "設計書 3.5 の例"
   );
   assert.equal(

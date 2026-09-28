@@ -30,7 +30,7 @@
   - `goal2-app/WORKER_GUIDE.md` に「証跡を共有ドライブに保存する」の節を足した(保存先 `<共有ドライブ>/移行証跡/<自治体名>/<サイト区分>/`、名前を変えずに置く、作り直したら古いファイルを消さずに足す)。
   - 証跡の JSON と CSV の中身、「作業者」欄は変えていない。
   - テスト: 名前の関数の単体テスト(`test/evidence-filename/`、`npm test` から続けて走る。日付をまたぐ例、TZ を変えた子プロセス、サロゲートペアを含む題名などを含む)と、画面のテスト(`test/goal2-output/` の 22。ダウンロードの名前を `suggestedFilename()` で確かめる)を足した。
-  - 設計との差5つ(ページの識別が8文字のハッシュ、制御文字も置き換える、など)を設計書の 3.5 に書いた。
+  - 設計との差4つ(制御文字も置き換える、など)を設計書の 3.5 に書いた。ページの識別は実際には8文字のハッシュなので、ユーザーの確認を得て、設計書の 2.3 と 3.5 の決まりと例を10文字から8文字に直した。
 - 関連ファイル: `goal2-app/public/evidence-filename.js`、`goal2-app/public/app.js`、`goal2-app/public/index.html`、`goal2-app/public/goal1.js`、`goal2-app/public/goal1.html`、`goal2-app/test/evidence-filename/run-evidence-filename-tests.js`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/package.json`、`goal2-app/WORKER_GUIDE.md`、`goal2-app/README.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: PR #153
 
