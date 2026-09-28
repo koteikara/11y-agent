@@ -19,6 +19,13 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-28: 本番のアクセス制御を IAP から共通のパスワードに変える(設計)
+
+- 背景・目的: ユーザーが、Cloud Run のアクセス制御を IAP から全員で共通のパスワードに変えた。IAP では使える人(グループかドメイン)を選んで登録する必要があり、それが難しいためである。
+- 内容: `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 1章、3.1、3.3、3.5、4章 P1、6章、7章、8章を書き替えた。P1 はアプリの変更になり、HTTP の Basic 認証で `APP_PASSWORD`(Secret Manager から渡す)と比べる。ユーザー名は確かめず、`GET /api/health` は通す。Cloud Run でパスワードが無いか16文字より短いときは 503 を返す。IAP のアカウントで作業者の欄を埋める変更(3.5 の3)はやめた。`PROJECT_CONTEXT.md`、`goal2-app/LLM_DATA_POLICY.md`、`goal2-app/README.md`、`memory/project-state.md` の IAP の記述を直した。
+- 関連ファイル: `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`goal2-app/LLM_DATA_POLICY.md`、`goal2-app/README.md`、`memory/project-state.md`
+- 関連PR/コミット: このブランチの PR
+
 ## 2026-09-28: P0 手元で動くサーバーの守り
 
 - 背景・目的: Windows 版（`goal2-app.exe`）は `0.0.0.0` で待ち受け、POST の送り元も htmlchecker.exe のパスの形も確かめていなかった。そのため、同じネットワークの別の機器や、担当者のブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせた。すでに担当者に配っているので、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0 として最初に塞ぐ。
