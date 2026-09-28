@@ -76,7 +76,7 @@ flowchart LR
 - **手元で動くサーバーは同じ PC からの要求だけを受け付ける**（2026-09-28、P0）。待ち受けは環境変数 `HOST` で決め、無ければ Cloud Run（`K_SERVICE` がある）では `0.0.0.0`、それ以外では `127.0.0.1` にする。手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスは保存と実行の直前に形を確かめる。Windows 版が、同じネットワークの別の機器や別のサイトから任意の実行ファイルを動かせる作りだったためである。確かめる処理は `goal2-app/lib/local-guard.js`、設計は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 3.2 にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
-- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（共通のパスワード、2026-09-28 に IAP から変更）はアプリに入れたが、本番のシークレットの作成とデプロイはまだで、証跡の置き場所（共有ドライブ）は決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
+- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（共通のパスワード、2026-09-28 に IAP から変更）と証跡の置き場所（共有ドライブ）は決めた。パスワードを確かめる処理（P1、PR #154）と、証跡を決まった名前で保存する画面の変更（P2、PR #153。名前は `goal2-app/public/evidence-filename.js` で作る）は入れたが、本番のシークレットの作成とデプロイ、共有ドライブのフォルダーの用意は未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
 - 外部検査エンジン（axe-core、A11yc library）を組み込まない判断は、`memory/project-state.md` で未決定として残っている。理由未確認。
 
@@ -141,6 +141,6 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 ## 未解決事項
 
 - lockファイルが無い。npm依存が0件のため現状は問題にならないが、ビルド時に `npx esbuild` と `npx postject` を未固定バージョンで取得している。
-- Cloud Run のパスワードは、確かめる処理を入れたが（PR #154）、本番のシークレットの作成とデプロイはマージ後にユーザーが行う。それまでは、URL を知っていれば誰でも画面と API を使える。証跡の置き場所と名前の決まりは、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。
+- Cloud Run のパスワードは、確かめる処理を入れたが（PR #154）、本番のシークレットの作成とデプロイはマージ後にユーザーが行う。それまでは、URL を知っていれば誰でも画面と API を使える。共有ドライブの証跡のフォルダーの用意は、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。証跡の保存名は画面が決まりどおりに付ける（PR #153）。
 - Windows 版の待ち受けの守り（同じ設計書の P0）は、コードに入れたが、Windows の実機では確かめておらず、配り直しも済んでいない（PR #150）。すでに配った `goal2-app.exe` は、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせる作りのままである。マージ後にユーザーが作り直して配り直し、担当者に古い版を消してもらう。
 - CMS入力欄で許可されるHTMLタグと属性の制約は未確認で、最終HTML出力に反映されていない。

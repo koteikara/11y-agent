@@ -31,7 +31,7 @@
 - 候補ごとの判断状態
 - 注意項目の出力欄表示と証跡JSONへの記録
 - CMS貼り付け用の最終HTML出力
-- JSON/CSVの証跡出力
+- JSON/CSVの証跡出力(共有ドライブに置くための決まった名前で保存する。名前の決まりと保存先は [WORKER_GUIDE.md](WORKER_GUIDE.md) の「証跡を共有ドライブに保存する」)
 - 佐賀市 old/gold fixture に対するローカル比較試験
 - goldとの差分から、候補の `採用` / `編集して採用` / `却下` / `要確認` の推奨判断を学習・提示するローカルレポート
 - 複数ページの一括処理と、安全な候補の自動採用(Goal 1)
@@ -86,7 +86,8 @@ npm test
 
 テストでは、KBルールの読み込み、主要ファイルの存在、`/api/health`、`/api/rules` を確認します。
 続けて、手元で動くサーバーの守り(待ち受け、`Host`、POST の `Content-Type` と `Origin`、htmlchecker.exe のパスの確認)を確認します(`test/local-guard/`、単独では `npm run test:local-guard`)。
-最後に、共通のパスワードと `Sec-Fetch-Site` の確認を確認します(`test/app-auth/`、単独では `npm run test:app-auth`)。
+続けて、共通のパスワードと `Sec-Fetch-Site` の確認を確認します(`test/app-auth/`、単独では `npm run test:app-auth`)。
+最後に、証跡の保存名を作る処理を確認します(`test/evidence-filename/`)。
 
 ほかのテストは次のとおりです。表の入れ子、出力、miCheckerとの一致の3つはPlaywrightとChromiumを使います(Chromiumの場所は `PLAYWRIGHT_CHROMIUM_PATH` で指定できます)。
 
@@ -285,4 +286,4 @@ docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 別のサイトのページから、覚えたパスワードの付いた API の要求を起こさせないためです。
 設計は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) の 3.3 にあります。
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。パスワードを確かめる処理は入れました(P1)。本番のシークレットの作成とデプロイ、証跡の運用はまだ行っていません(P1 の本番への適用、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。パスワードを確かめる処理(P1)と、証跡を決まった名前で保存する画面の変更(P2、PR #153)は入れました。本番のシークレットの作成とデプロイ、共有ドライブのフォルダーの用意はまだ行っていません(P1 の本番への適用、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
