@@ -864,6 +864,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `PROJECT_CONTEXT.md` の `knowledge_mocs` の3つの MOC が ForLLM Vault の `03_MOC` に実在することを、ユーザーが確かめた(2026-09-25)。要確認の注記と未解決事項の項目を消した
 - 本番運用の P1 を、IAP から全員で共通のパスワードに変えた(2026-09-28、ユーザーの決定)。使える人を選んで登録するのが難しいためである。仕組みは HTTP の Basic 認証で、アプリ自身が確かめる。Cloud Run でパスワードが無いか16文字より短いときは 503 を返して、設定し忘れで誰でも開ける状態を防ぐ。設計書 3.3 と 4章 P1 を書き替え、IAP のアカウントで作業者の欄を埋める変更(3.5 の3)はやめた
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P0「手元で動くサーバーの守り」を実装した(PR #150、2026-09-28)。待ち受けを `HOST`(無ければ Cloud Run では `0.0.0.0`、それ以外では `127.0.0.1`)で決め、手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスを保存と実行の直前に確かめるようにした。Windows 以外では `POST /api/local-settings` を 404 にした。確かめる処理は `lib/local-guard.js`、テストは `test/local-guard/`。設計との差5つは設計書の 4章 P0 に書いた。Windows の実機での確認と、Windows 版の作り直しと配り直しは未実施で、配り直すまでは配った版の穴が残る
+- `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P4 で、Node.js を 20 から 24 に上げた(PR #151、2026-09-28)。`Dockerfile`(`node:24-alpine`)、CI の `node-version`、`package.json` の `engines.node`(`>=24`)、Windows 版の作り方の文書と `build-windows-app.bat` の案内を直した。Node 20 のサポートは 2026-04-30 に終わり、Node 22 の保守は 2027-04-30 で終わるため、2028-04-30 まで保守される 24 にした。アプリのコードは変えず、手元の Node 24.21.0 で設計書の5章のテストをすべて通した。Windows で Node 24 から `goal2-app.exe` を作れることと、Cloud Run への反映(マージ後にユーザーが行う)は未確認である
 
 ## Decisions
 

@@ -389,6 +389,15 @@ PowerShell で行う。
 
 ### P4 Node.js を 24 に上げる（実装担当）
 
+**実装済み（PR #151、2026-09-28）。** 手順の1と2を行った。3 はマージ後にユーザーが行う。
+手元の Node 24.21.0 で 5章のコマンドをすべて通した。アプリのコードは変えていない。
+Linux の Node 24.21.0 で、`build-windows-app.bat` と同じ SEA の手順（esbuild でまとめ、SEA の blob を作り、postject で入れる）を試し、できた実行ファイルが起動して画面を返すことを確かめた。Windows で `build-windows-app.bat` を動かしての確認は、まだ行っていない。
+
+設計との差は次の2つである。3.7 の一覧に無いが、版を書いている箇所なので合わせて直した。
+
+- `package.json` の `engines.node` を `">=24"` にし、`build-windows-app.bat` の Node.js が無いときの案内を「Node.js 24 or later」にした。CI の「Dockerfile と同じ版で動かす」のコメントも `node:24-alpine` にした。
+- `LOCAL_WINDOWS_APP.md` の「すでに他のソフトで Node.js を使っている場合も、通常はそのままで問題ない」を、「`node -v` で版を確かめ、24 より古ければ LTS の版を入れ直す」に替えた。`build-windows-app.bat` は Node.js の有無だけを確かめ、版は確かめないので、古い Node.js のまま作ると古い版の `goal2-app.exe` ができるためである。
+
 1. 3.7 の変更を入れる。
 2. 手元の Node 24 で 5章のコマンドを通す。CI でも通ることを確かめる。
 3. マージ後、ユーザーが `CLOUD_RUN_DEPLOY.md` の手順で、タグ付きのリビジョンを作って確かめてからトラフィックを移す。

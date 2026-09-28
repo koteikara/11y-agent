@@ -22,6 +22,6 @@
     "agents:bootstrap": "npm run agents:dataset && npm run agents:local-eval && npm run agents:analyze && npm run agents:analyze:tables && npm run agents:analyze:headings"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }
