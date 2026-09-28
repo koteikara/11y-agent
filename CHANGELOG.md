@@ -26,9 +26,10 @@
   - `goal2-app/lib/llm.js`: `toOpenAiResponseSchema()` で、入れ子を含むすべての `object` の `required` を全項目にした。型は変えず、`null` も許さない。openai-compatible アダプターの応答は、取り出したあとに、元のスキーマで任意の `string` の項目が `""` なら捨てる（`dropEmptyOptionalStrings()`）。Gemini に送る本文、プロンプト、画面は変えていない。
   - `goal2-app/test/llm/run-llm-tests.js`: 全タスクで `required` が全項目になること（任意の 14 項目）、任意の `string` の `""` を捨て、値と任意の `boolean` は残すこと、必須の `""` と Gemini の応答には手を加えないことのテストを足した。
   - `goal2-app/tools/llm-provider-eval.js`: 構成 C2、`--kind`（文字か画像だけを流す）、`--app-root`（別の作業ツリーの `lib/llm.js` を使う）、集計の「任意の項目が返る割合」を足した。
-  - 再評価: 要求を集め直し、A（文字だけ）、修正前の C、C2 を同じ要求で流した。任意の項目は C2 ですべて返るようになり、文字のタスクの JSON の妥当性、分類の一致（C と同じ 9 件の食い違い）、応答時間、費用は変わらなかった。画像のタスクでは、`extracted_text` の繰り返しと `is_complex` の偏りが新しく出た。人の判定用の CSV は作り直していない。
+  - 再評価: 要求を集め直し、A（文字だけ）、修正前の C、C2 を同じ要求で流した。任意の項目は C2 ですべて返るようになった。文字のタスクは、分類の食い違いが C と同じ 9 件で、費用は 8.30 円から 8.38 円だった。失敗は 154 件中 1 件（180 秒で応答なし、再現せず）で、見出しの見直しを除く p95 は 2.8 秒から 4.0 秒に延びた。画像のタスクでは、`extracted_text` の繰り返しと `is_complex` の偏りが新しく出た。人の判定用の CSV は作り直していない。
   - 評価の報告書の 17 行（佐賀市の画像 82 種類の内訳が 81 件しかなかった点）を、数え直した結果で直した。
-- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/tools/llm-provider-eval.js`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（3.3、L1 の差異）、`memory/llm-provider-eval-2026-09.md`（L1 修正後の再評価）、`memory/project-state.md`
+  - Codex の二次レビューを受けて、再評価の「まとめ」の「修正前と変わらなかった」を、表の数字（妥当率 99.1%、p95 の延び）に合わせて書き直し、人の判定用の CSV（`sensory-characteristics_explanation_c2.csv`、`disagreements_c2.csv`）を足した。
+- 関連ファイル: `goal2-app/lib/llm.js`、`goal2-app/test/llm/run-llm-tests.js`、`goal2-app/tools/llm-provider-eval.js`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`（3.3、L1 の差異）、`memory/llm-provider-eval-2026-09.md`（L1 修正後の再評価）、`memory/project-state.md`、`memory/llm-eval/sensory-characteristics_explanation_c2.csv`（新規）、`memory/llm-eval/disagreements_c2.csv`（新規）
 - 関連PR/コミット: PR #149
 
 ## 2026-09-25: 履歴の関連度圧縮で費用と時間を減らせるかの検証
