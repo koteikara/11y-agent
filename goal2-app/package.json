@@ -6,8 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/run-tests.js && node test/local-guard/run-local-guard-tests.js && node test/evidence-filename/run-evidence-filename-tests.js",
+    "test": "node test/run-tests.js && node test/local-guard/run-local-guard-tests.js && node test/app-auth/run-app-auth-tests.js && node test/evidence-filename/run-evidence-filename-tests.js",
     "test:local-guard": "node test/local-guard/run-local-guard-tests.js",
+    "test:app-auth": "node test/app-auth/run-app-auth-tests.js",
     "test:michecker-parity": "node test/michecker-parity/run-parity-tests.js",
     "test:table-nesting": "node test/table-nesting/run-table-tests.js",
     "test:goal2-output": "node test/goal2-output/run-output-tests.js",

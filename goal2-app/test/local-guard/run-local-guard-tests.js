@@ -241,9 +241,12 @@ async function testLoopbackServer() {
 
 async function testCloudRunServer() {
   // HOST が無く K_SERVICE があるときは 0.0.0.0 で待ち受け、Host は確かめない。POST の確認は行う。
+  // Cloud Run では APP_PASSWORD が要るので渡し、要求には合うパスワードを付ける(P1、lib/app-auth.js)。
   const port = 9132;
   const host = "a11y-migration-app-xxxx.a.run.app";
-  const child = await startServer(port, { HOST: undefined, K_SERVICE: "a11y-migration-app" });
+  const password = "local-guard-test-password-0123";
+  const auth = { authorization: `Basic ${Buffer.from(`:${password}`).toString("base64")}` };
+  const child = await startServer(port, { HOST: undefined, K_SERVICE: "a11y-migration-app", APP_PASSWORD: password });
   try {
     const health = await request(port, { pathname: "/api/health", headers: { host } });
     assert.equal(health.statusCode, 200, "Cloud Run では Host が外部のドメインでも通る");
@@ -251,7 +254,7 @@ async function testCloudRunServer() {
     const textPlain = await request(port, {
       method: "POST",
       pathname: "/api/llm/enrich",
-      headers: { host, "content-type": "text/plain" },
+      headers: { host, ...auth, "content-type": "text/plain" },
       body: UNKNOWN_TASK_BODY,
     });
     assert.equal(textPlain.statusCode, 415, "Cloud Run でも Content-Type: text/plain の POST は 415");
@@ -259,7 +262,7 @@ async function testCloudRunServer() {
     const crossOrigin = await request(port, {
       method: "POST",
       pathname: "/api/llm/enrich",
-      headers: { host, origin: "https://evil.example.com", ...JSON_HEADERS },
+      headers: { host, ...auth, origin: "https://evil.example.com", ...JSON_HEADERS },
       body: UNKNOWN_TASK_BODY,
     });
     assert.equal(crossOrigin.statusCode, 403, "Cloud Run でも Origin が別のホストの POST は 403");
@@ -267,7 +270,7 @@ async function testCloudRunServer() {
     const sameOrigin = await request(port, {
       method: "POST",
       pathname: "/api/llm/enrich",
-      headers: { host, origin: `https://${host}`, ...JSON_HEADERS },
+      headers: { host, ...auth, origin: `https://${host}`, ...JSON_HEADERS },
       body: UNKNOWN_TASK_BODY,
     });
     assert.equal(sameOrigin.statusCode, 400, "Cloud Run で同じホストの Origin の POST は通る");

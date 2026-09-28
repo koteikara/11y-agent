@@ -19,6 +19,21 @@
 - 関連PR/コミット
 ```
 
+## 2026-09-28: P1 Cloud Run に共通のパスワードを掛ける
+
+- 背景・目的: Cloud Run の本番は `--allow-unauthenticated` で、URL を知っていれば誰でも画面と API を使え、Vertex AI の費用も第三者の呼び出しでかかる。設計書 `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 3.3 と 4章 P1 に従い、全員で共通の1つのパスワードで守る。
+- 主な変更内容:
+  - `goal2-app/lib/app-auth.js` を新しく作った。`APP_PASSWORD`(前後の空白と改行を除く)があるときは、`GET /api/health` を除くすべての要求で HTTP の Basic 認証を求める。ユーザー名は確かめない。両方を SHA-256 にしてから `crypto.timingSafeEqual()` で比べる。形の崩れた `Authorization` は例外を出さずに 401 にする。Cloud Run(`K_SERVICE` がある)で `APP_PASSWORD` が無いか16文字より短いときは 503 を返す。`/api/` の要求(`GET /api/health` を除く)は、`Sec-Fetch-Site` が `same-origin` か `none` でなければ、パスワードの有無にかかわらず 403 にする。
+  - `goal2-app/server.js` から、`Host`(P0)、`Sec-Fetch-Site`、パスワード、POST の送り元(P0)の順に呼ぶ。Cloud Run で設定が足りないときは、起動時にエラーを1行出す。パスワードと `Authorization` はログにも応答にも出さない。
+  - `goal2-app/test/server-env.js` で、テストのサーバーに `APP_PASSWORD` と `K_SERVICE` を渡さないようにした。`test/local-guard/` の Cloud Run の場合のテストには `APP_PASSWORD` を渡し、要求にパスワードを付けた。
+  - `goal2-app/test/app-auth/run-app-auth-tests.js` を足し、`npm test` から続けて走らせる(単独では `npm run test:app-auth`)。
+  - `goal2-app/CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行に `--update-secrets="APP_PASSWORD=app-password:$PW_VERSION"` を足し、「共通のパスワード」の節(作り方、読めるようにする権限、変え方、戻し方)と、503 になるときの確かめ方を足した。`goal2-app/README.md` にアクセス制御の環境変数の表とテストの説明を足した。
+  - 設計書の 4章 P1 に実装済みの印、確かめる順とその理由、設計との差4つを書き、5章の検証に新しいテストを足した。`PROJECT_CONTEXT.md` と `memory/project-state.md` の P1 の状態を直した。
+- 変えていないもの: 画面(`public/`)、Cloud Run の `--allow-unauthenticated`、P0 の守り(`lib/local-guard.js`)の動き。
+- 未実施: 本番のシークレットの作成とデプロイ(設計書 4章 P1 の「本番への適用」)は、マージ後にユーザーが行う。
+- 関連ファイル: `goal2-app/lib/app-auth.js`、`goal2-app/server.js`、`goal2-app/test/app-auth/run-app-auth-tests.js`、`goal2-app/test/server-env.js`、`goal2-app/test/local-guard/run-local-guard-tests.js`、`goal2-app/package.json`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/README.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: PR #154
+
 ## 2026-09-28: P2 証跡の保存名を共有ドライブの決まりに合わせる
 
 - 背景・目的: 証跡は共有ドライブに置き、承認者が移行管理シートの行(旧ページの題名と URL)から探すことに決まった(2026-09-25)。これまで Goal 2 の証跡 JSON はコピーだけで、CSV と GOAL1 の書き出しの名前にも決まりが無かった。`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P2 のうち、3.5 の画面の変更の1と2、4章 P2 の4を行う。

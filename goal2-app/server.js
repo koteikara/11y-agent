@@ -20,6 +20,7 @@ const {
   checkPostRequest,
   validateHtmlCheckerExePath,
 } = require("./lib/local-guard");
+const { resolveAppAuth, checkAppPassword, checkFetchSite, MIN_APP_PASSWORD_LENGTH } = require("./lib/app-auth");
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +42,8 @@ const port = Number(process.env.PORT || 8080);
 const listenHost = resolveListenHost(process.env);
 const checkLoopbackHostHeader = isLoopbackListenHost(listenHost);
 const isWindows = process.platform === "win32";
+// 共通のパスワード(lib/app-auth.js)。値はログに出さない。
+const appAuth = resolveAppAuth(process.env);
 
 // パッケージ化した.exe版(SEA)では、htmlchecker.exeのパスを環境変数ではなく
 // この設定ファイルに保存し、画面から入力・変更できるようにする(コマンドライン操作をなくすため)。
@@ -89,8 +92,9 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
+    ...extraHeaders,
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
   });
@@ -576,6 +580,32 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  // 確かめる順は、Host(上)、Sec-Fetch-Site、パスワード、POST の送り元とする。
+  // Host を最初にするのは、DNS リバインディングで届いた要求を、ほかの確認の結果を見せずに止めるためである。
+  // Sec-Fetch-Site をパスワードより先にするのは、別のサイトから起こされた要求に WWW-Authenticate を返さず、
+  // 別のサイトの iframe などでブラウザーがパスワードの入力画面を出さないようにするためである。
+  // パスワードを POST の送り元より先にするのは、パスワードを知らない要求には、どこで止まったかを見せず一律に 401 を返すためである。
+  const requestInfo = { method: request.method, pathname: url.pathname, headers: request.headers };
+  const fetchSiteRejection = checkFetchSite(requestInfo);
+  if (fetchSiteRejection) {
+    sendJson(response, fetchSiteRejection.statusCode, {
+      ok: false,
+      error: fetchSiteRejection.error,
+      message: fetchSiteRejection.message,
+    });
+    return;
+  }
+  const authRejection = checkAppPassword(appAuth, requestInfo);
+  if (authRejection) {
+    sendJson(
+      response,
+      authRejection.statusCode,
+      { ok: false, error: authRejection.error, message: authRejection.message },
+      authRejection.headers
+    );
+    return;
+  }
+
   // すべての POST で Content-Type と Origin を確かめる。Cloud Run でも行う。
   if (request.method === "POST") {
     const rejection = checkPostRequest(request.headers);
@@ -857,6 +887,11 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, listenHost, () => {
   console.log(`a11y-migration-app listening on ${listenHost}:${port}`);
+  if (appAuth.mode === "misconfigured") {
+    console.error(
+      `ERROR: APP_PASSWORD が設定されていないか、${MIN_APP_PASSWORD_LENGTH}文字より短いため、GET /api/health 以外の要求に 503 を返します。`
+    );
+  }
   // パッケージ化した.exe版(SEA)で起動した場合のみ、ブラウザを自動で開く。
   // 通常のnode server.js実行(開発・Cloud Runデプロイ)では自動起動しない。
   if (isSeaBuild) {

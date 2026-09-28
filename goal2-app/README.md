@@ -86,6 +86,8 @@ npm test
 
 テストでは、KBルールの読み込み、主要ファイルの存在、`/api/health`、`/api/rules` を確認します。
 続けて、手元で動くサーバーの守り(待ち受け、`Host`、POST の `Content-Type` と `Origin`、htmlchecker.exe のパスの確認)を確認します(`test/local-guard/`、単独では `npm run test:local-guard`)。
+続けて、共通のパスワードと `Sec-Fetch-Site` の確認を確認します(`test/app-auth/`、単独では `npm run test:app-auth`)。
+最後に、証跡の保存名を作る処理を確認します(`test/evidence-filename/`)。
 
 ほかのテストは次のとおりです。表の入れ子、出力、miCheckerとの一致の3つはPlaywrightとChromiumを使います(Chromiumの場所は `PLAYWRIGHT_CHROMIUM_PATH` で指定できます)。
 
@@ -97,6 +99,7 @@ npm run test:michecker-parity
 ```
 
 テストで起動するサーバーには、LLM関係の環境変数(`GEMINI_*`、`LLM_*`、`SAKURA_AI_*`、`USD_JPY_RATE`)を渡しません(`test/server-env.js`)。手元に鍵があっても、テストが実際のAPIを呼ぶことはありません。
+`APP_PASSWORD` と `K_SERVICE` も渡しません。手元にあっても、テストのサーバーがパスワードを求めたり 503 を返したりしないようにするためです。これらを確かめるテストは、値を明示して渡します。
 
 pull requestとmainへのpushでは、GitHub Actions(`../.github/workflows/ci.yml`)が上の5つと、リポジトリの検査(一時生成物の混入、KB生成物とアプリ内のコピーの一致)を動かします。`npm run test:saga-gold` は、佐賀市fixtureが非公開のリポジトリにあるため、CIでは動かしません。
 
@@ -273,4 +276,14 @@ docker build -t a11y-migration-app .
 docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 ```
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #153)、パスワードの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+### アクセス制御の環境変数
+
+| 環境変数 | 既定値 | 説明 |
+|---|---|---|
+| `APP_PASSWORD` | (未設定) | 全員で共通のパスワード。設定すると、`GET /api/health` を除くすべての要求で HTTP の Basic 認証を求める(ユーザー名は確かめない)。前後の空白と改行は除いて使う。Cloud Run(`K_SERVICE` がある)では必須で、無いか16文字より短いと `GET /api/health` 以外に 503 を返す。Cloud Run では Secret Manager から版の番号を指定して渡し、`--set-env-vars` に平文で書かない(作り方と変え方は [CLOUD_RUN_DEPLOY.md](CLOUD_RUN_DEPLOY.md#共通のパスワード))。Cloud Run 以外で未設定なら、パスワードを求めない。 |
+
+`APP_PASSWORD` の有無にかかわらず、`/api/` で始まる要求(`GET /api/health` を除く)は、`Sec-Fetch-Site` ヘッダーが `same-origin` か `none` でなければ 403 を返します。
+別のサイトのページから、覚えたパスワードの付いた API の要求を起こさせないためです。
+設計は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) の 3.3 にあります。
+
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。パスワードを確かめる処理(P1)と、証跡を決まった名前で保存する画面の変更(P2、PR #153)は入れました。本番のシークレットの作成とデプロイ、共有ドライブのフォルダーの用意はまだ行っていません(P1 の本番への適用、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
