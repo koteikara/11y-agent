@@ -267,6 +267,22 @@ Windows の実機での確認（5章の最後の3項目）は、まだ行って�
 
 #### 実装（実装担当）
 
+**実装済み（PR #PRNUM、2026-09-28）。** 手順の1〜4を行った。5 はレビュー待ちで、「本番への適用」はマージ後にユーザーが行う。
+確かめる処理は `lib/app-auth.js` に置き、テストは `test/app-auth/run-app-auth-tests.js`（`npm test` から続けて走る。単独では `npm run test:app-auth`）に置いた。
+
+確かめる順は、`Host`（P0）、`Sec-Fetch-Site`、パスワード、POST の `Content-Type` と `Origin`（P0）とした。理由は次のとおりである。
+
+- `Host` を最初にするのは、DNS リバインディングで届いた要求を、ほかの確認の結果を見せずに止めるためである。
+- `Sec-Fetch-Site` をパスワードより先にするのは、別のサイトから起こされた要求に `WWW-Authenticate` を返さず、別のサイトの iframe などでブラウザーがパスワードの入力画面を出さないようにするためである。パスワードが合っていても 403 にする決まりとも合う。
+- パスワードを POST の確認より先にするのは、パスワードを知らない要求には、どこで止まったかを見せず一律に 401 を返すためである。
+
+設計との差は次の4つである。
+
+- `Authorization` の `Basic` は、大文字と小文字を区別しない（`basic` も受け付ける）。HTTP の決まり（RFC 7617）で、認証の方式の名前は大文字と小文字を区別しないためである。Base64 は、標準の文字（`A-Z`、`a-z`、`0-9`、`+`、`/`）で、`=` を含めて長さが4の倍数のときだけ読めるものとする。URL 向けの Base64（`-` と `_`）や、`=` を省いた形は、形が崩れているとして 401 にする。ブラウザーは標準の形で送る。
+- `Sec-Fetch-Site` の値は、前後の空白を除き、大文字と小文字を区別せずに比べる。値が空のヘッダーは、ヘッダーが無いものとは扱わず 403 にする。
+- Cloud Run 以外で `APP_PASSWORD` があるときは、16文字より短くてもそのパスワードを求める。16文字の下限は、3.3 の4のとおり Cloud Run だけに当てる。
+- `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行には、`--update-secrets` に加えて `--project=$PROJECT_ID` も付けた。4章 P1 の「本番への適用」と同じく、プロジェクトの取り違えを防ぐためである。あわせて、「よくあるつまずき」にすべての画面が 503 になるときの確かめ方を足した。
+
 1. 3.3 の決まりを入れる。確かめる処理は、`lib/` の新しいモジュール（例: `lib/app-auth.js`）に純粋な関数として置く。
 2. `test/server-env.js` で、テストのサーバーに `APP_PASSWORD` と `K_SERVICE` を渡さないようにする。`test/local-guard/` の Cloud Run の場合のテストは、`K_SERVICE` を渡すので、`APP_PASSWORD` も渡すように直す。
 3. テストを足す。
@@ -418,6 +434,7 @@ node --check server.js
 node test/llm/run-llm-tests.js
 node test/run-tests.js
 node test/local-guard/run-local-guard-tests.js
+node test/app-auth/run-app-auth-tests.js
 node test/goal2-output/run-output-tests.js
 node test/table-nesting/run-table-tests.js
 node test/michecker-parity/run-parity-tests.js

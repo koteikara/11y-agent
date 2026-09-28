@@ -62,9 +62,17 @@ $IMAGE = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${TAG}"
   deployedAt  = (Get-Date).ToString("o")
 } | ConvertTo-Json | Set-Content -Path "public/build-info.json" -Encoding utf8
 
+# 共通のパスワードの版の番号。いまのリビジョンが使っている版を指定する(latest は使わない)。
+# いまの版は、次の表示の APP_PASSWORD の key で分かる。
+# gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(spec.template.spec.containers[0].env)"
+$PW_VERSION = "<版の番号>"
+
 gcloud builds submit --tag "$IMAGE" .
-gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated
+gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION"
 ```
+
+`APP_PASSWORD` が無いイメージを Cloud Run で動かすと、画面も API も 503 になります(`GET /api/health` だけは開けます)。
+シークレット `app-password` をまだ作っていないときは、先に下の「共通のパスワード」の1と2を行います。
 
 デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。ローカル開発環境(`node server.js`)では `public/build-info.json` が存在しないため、この表示自体が出ません(表示が無い=ローカル、という目印にもなります)。
 
@@ -79,6 +87,8 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/
 https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 ```
 
+開くとブラウザーがパスワードを求めます。ユーザー名は空のままでよく、パスワードに共通のパスワードを入れます。
+
 画面右下の `build:` 表示のコミットIDが、GitHubの `main` ブランチの最新コミット([コミット履歴](https://github.com/koteikara/11y-agent/commits/main))と一致しているかを確認すると、目的の変更が反映されているか一目で分かります。
 
 反映されないときは次を確認します。
@@ -88,6 +98,127 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 - ブラウザのキャッシュが残っていないか
 - Cloud Run の最新リビジョンに 100% のトラフィックがあるか
 - 画面右下の `build:` 表示のコミットIDが古いままでないか(古い場合はデプロイ手順そのものが最新の`main`を取得できていない可能性がある)
+
+## 共通のパスワード
+
+Cloud Run の画面と API は、全員で共通の1つのパスワードで守っています(HTTP の Basic 認証)。
+パスワードは Secret Manager のシークレット `app-password` に入れ、環境変数 `APP_PASSWORD` としてリビジョンに渡します。
+`--set-env-vars` に平文で書かず、シークレットは `latest` ではなく版の番号で指定します。
+リビジョンごとにパスワードの版が決まるので、どのリビジョンがどのパスワードで動くかがはっきりし、前のリビジョンに戻したときの結果も読めるためです。
+
+アプリは次のとおりに動きます。設計は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) の 3.3 にあります。
+
+- `GET /api/health` を除くすべての要求でパスワードを確かめ、合わなければ 401 を返してブラウザーにパスワードを求めさせる。ユーザー名は確かめない。
+- `APP_PASSWORD` の前後の空白と改行は除いて使う。PowerShell からシークレットを作ると、末尾に改行が付くためである。
+- Cloud Run で `APP_PASSWORD` が無いか16文字より短いときは、`GET /api/health` 以外に 503 を返し、起動時にログへエラーを1行出す。
+
+**P1 を適用したときの最初のリビジョン(「P1 の最初のリビジョン」)より前のリビジョンには、トラフィックを戻しません。**
+そこにはパスワードを確かめる処理が無く、戻すと誰でも開ける状態になるためです。
+適用のときに控えたリビジョンの名前は `memory/project-state.md` に記録します。
+
+以下は PowerShell で行います。
+`$REGION`、`$SERVICE`、`$IMAGE` は上の「更新デプロイ」と同じものを使います。
+プロジェクトを取り違えないよう、最初に `$PROJECT_ID = gcloud config get-value project` を実行し、表示されたプロジェクトが本番のものであることを確かめます。
+初めて適用するときの全体の流れ(トラフィックを流さないリビジョンで確かめてから移す手順)は、設計書の 4章 P1 の「本番への適用」にあります。
+
+### パスワードを作る(初回のみ)
+
+無作為の 24 文字を作り、画面に出さずにそのままシークレットに入れます。
+入れた版の番号を `$PW_VERSION` に控えます(初回は `1`)。
+
+```powershell
+$bytes = New-Object byte[] 18
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes) | gcloud secrets create app-password --data-file=- --project=$PROJECT_ID
+$PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+$PW_VERSION
+```
+
+### Cloud Run がシークレットを読めるようにする(初回のみ)
+
+サービスアカウントが設定されていないサービスは、既定の Compute Engine のサービスアカウントで動くので、そのときはそれを組み立てます。
+
+```powershell
+$SERVICE_ACCOUNT = gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(spec.template.spec.serviceAccountName)"
+if (-not $SERVICE_ACCOUNT) {
+  $PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
+  $SERVICE_ACCOUNT = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+}
+$SERVICE_ACCOUNT
+gcloud secrets add-iam-policy-binding app-password --project=$PROJECT_ID --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/secretmanager.secretAccessor"
+```
+
+### パスワードを変える
+
+移行チームから人が抜けたときと、漏れたおそれがあるときに変えます。
+新しい版を足し、その版を指定した新しいリビジョンを、トラフィックを流さずに作ります。
+タグ付きの URL で、新しいパスワードで開けて古いパスワードでは開けないことを確かめてから、トラフィックを移し、新しいパスワードを配り直します。
+
+```powershell
+$OLD_PW_VERSION = $PW_VERSION
+$bytes = New-Object byte[] 18
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes) | gcloud secrets versions add app-password --data-file=- --project=$PROJECT_ID
+$PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+gcloud run services update $SERVICE --region $REGION --project=$PROJECT_ID --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag "pw$PW_VERSION"
+# タグ付きの URL で確かめてから
+gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+```
+
+漏れたおそれがあるときは、トラフィックを移したあとに古い版を無効にします。
+古い版で動くリビジョンは起動できなくなり、誤ってそこへ戻すこともできなくなります。
+
+```powershell
+gcloud secrets versions disable $OLD_PW_VERSION --secret=app-password --project=$PROJECT_ID
+```
+
+パスワードは次のコマンドで表示できます。
+社内で決まった安全な方法で作業者に渡し、チャットや共有の文書に平文で残しません。
+
+```powershell
+gcloud secrets versions access $PW_VERSION --secret=app-password --project=$PROJECT_ID
+```
+
+### 戻す
+
+何を戻したいかで、手順が分かれます。
+どの場合も、「P1 の最初のリビジョン」より前のリビジョンには戻しません。
+
+**アプリもパスワードも、前のリビジョンのときに戻す。**
+トラフィックを前のリビジョンに移します。
+前のリビジョンは、作ったときの版のパスワードで動きます。
+ただし、その版が有効なときに限ります。無効にした版を参照するリビジョンは、新しいインスタンスを起動できないためです。
+先に、前のリビジョンが参照する版を見て、その版の状態が `ENABLED` であることを確かめます。
+漏れたために無効にした版は、戻すために有効に戻しません。その場合は、次の「アプリだけを前に戻す」を使います。
+リビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION --project=$PROJECT_ID` で分かります。
+
+```powershell
+gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="yaml(spec.containers[0].env)"
+# 表示された APP_PASSWORD の key(版の番号)について
+gcloud secrets versions describe <版の番号> --secret=app-password --project=$PROJECT_ID --format="value(state)"
+# ENABLED なら
+gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-revisions=<前のリビジョン>=100
+```
+
+**パスワードはいまのままで、アプリだけを前に戻す。**
+前のリビジョンのイメージを、いまのパスワードの版で、トラフィックを流さずにデプロイし直します。
+タグ付きの URL で確かめてから、トラフィックを移します。
+
+```powershell
+$OLD_IMAGE = gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="value(spec.containers[0].image)"
+gcloud run deploy $SERVICE --image "$OLD_IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag back
+# タグ付きの URL で確かめてから
+gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+```
+
+**パスワードを確かめる処理そのものに問題があるとき(正しいパスワードでも開けない、など)。**
+P1 より前のリビジョンには戻しません。
+「P1 の最初のリビジョン」以後のどれかで動くなら、上の2つのどちらかで戻します。
+どれでも動かないなら、処理を直した新しいイメージを、いまのパスワードの版で `--no-traffic --tag` を付けてデプロイし、タグ付きの URL で確かめてからトラフィックを移します。
+直るまでの間は、画面が使えない状態を受け入れます。
+
+パスワード無しで誰でも開ける状態に戻すことは、この手順に含めません。
+そうするしかない事情があっても、画面を止めたままにする場合と比べたうえで、本番の責任者が決めます。
 
 ## LLM (Gemini) 連携を有効にする場合
 
@@ -220,6 +351,12 @@ $IMAGE = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${TAG}"
 ### `--tag` が `pkg.dev` 形式でない
 
 `gcloud builds submit --tag` には、`asia-northeast1-docker.pkg.dev/...` のような `pkg.dev` 形式を使います。
+
+### すべての画面が 503 になる
+
+`APP_PASSWORD` が渡っていないか、16文字より短いときに起きます。
+Cloud Run のログに `ERROR: APP_PASSWORD が設定されていないか` で始まる行が出ています。
+`gcloud run deploy` に `--update-secrets="APP_PASSWORD=app-password:<版の番号>"` を付けたか、その版が有効(`ENABLED`)かを確かめます。
 
 ### 更新後に見た目が変わらない
 
