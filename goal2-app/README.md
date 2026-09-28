@@ -43,7 +43,7 @@
 - CMS管理画面への直接登録
 - Cloud Runのホスト版でのmiChecker(`htmlchecker.exe`)の自動実行。自動実行はWindows上でローカルに動かしたとき(主に `.exe` 版)に限る
 - A11yc libraryやaxe-coreの組み込み
-- 認証、IAP、Secret Managerの実設定
+- 認証とSecret Managerの実設定(共通のパスワードで守る設計は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) のP1)
 
 LLM連携は実装済みだが、提供元の設定(Geminiは `GEMINI_API_KEY` か `GEMINI_AUTH_MODE=adc`、さくらのAI Engineは `LLM_TEXT_PROVIDER`/`LLM_VISION_PROVIDER` と `SAKURA_AI_API_KEY`)が無い既定の状態では一切呼び出されない。実案件HTML・画像を外部LLMへ送る同意は、営業が自治体(案件)ごとに取る(2026-09-25決定。本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md))。詳細は [LLM (Gemini) 連携](#llm-gemini-連携) と [LLM_DATA_POLICY.md](LLM_DATA_POLICY.md)(Googleのデータ利用規約の調査結果・実案件投入前の最低条件たたき台)を参照。
 
@@ -273,4 +273,4 @@ docker build -t a11y-migration-app .
 docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 ```
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #153)、IAPの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(共通のパスワード。2026-09-28にIAPから変更)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #153)、パスワードの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。

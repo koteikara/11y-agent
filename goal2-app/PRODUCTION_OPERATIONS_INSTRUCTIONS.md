@@ -16,15 +16,14 @@ Cloud Run の本番と Windows 版を、実案件で使える状態にするた�
 - `goal2-app/LOCAL_WINDOWS_APP.md`（Windows 版の作り方と配り方）
 - `goal2-app/server.js` の `server.listen()`、`readJsonBody()`、`/api/local-settings`、`runHtmlCheckerLocalCompare()`
 
-## 1. 前提（ユーザー確定、2026-09-25）
+## 1. 前提（ユーザー確定、2026-09-25。アクセス制御は 2026-09-28 に変更）
 
-- **Cloud Run は IAP で守る。** 開くと Google のログインを求め、許可したアカウントだけが使える。作業者は会社の Google Workspace のアカウントを持っている。
+- **Cloud Run は、全員で共通の1つのパスワードで守る。** 開くとブラウザーがパスワードを求め、知っている人だけが使える。当初は IAP（Google のログインで、許可したアカウントだけを通す）としたが、使える人を選んで登録するのが難しいため、2026-09-28 にユーザーがパスワード制に変えた。
 - **送信の同意は、自治体（案件）ごとに営業が取る。記録は持たない。** アプリは同意の有無を確かめない。
 - **証跡は共有ドライブに置き、承認者が見る。** 保存期間の決まりは無い。
 
-次の2点は確かめていない。
+次の1点は確かめていない。
 
-- 外部の協力会社の人も Cloud Run を使うか。使うなら、その人のアカウントを個別に足す（4章 P1 の7）。
 - 同意が得られない案件があり得るか。あり得るなら、その案件で AI を使わない方法を決める（4章 P2 の2）。
 
 ## 2. 現状の事実（2026-09-25、main `836853a`）
@@ -77,13 +76,13 @@ P0 は本番の段階と関係なく、いま配っている Windows 版の穴�
 | 段階 | 内容 | 変えるもの | 担当 |
 |---|---|---|---|
 | P0 | 手元で動くサーバーの守り | `server.js` と新しい `lib/`、テスト、Windows 版の配り直し | 実装担当、配り直しはユーザー |
-| P1 | Cloud Run に IAP を掛ける | GCP の設定、`CLOUD_RUN_DEPLOY.md` | ユーザー（gcloud の操作） |
+| P1 | Cloud Run に共通のパスワードを掛ける | `server.js` と新しい `lib/`、テスト、`CLOUD_RUN_DEPLOY.md`、Secret Manager | 実装担当、シークレットとデプロイはユーザー |
 | P2 | 同意と証跡の運用 | 運用の決まり、画面の小さな変更 | 決まりはユーザー、画面は実装担当 |
 | P3 | さくらへの切り替え（L3） | 本番の設定、画面と証跡の表示 | L3 の設計どおり |
 | P4 | Node.js を 24 に上げる | `Dockerfile`、CI、文書 | 実装担当 |
 
 P3 は P1 のあとに行う。
-さくらの API キーで費用がかかる呼び出しを、許可した人だけに絞ってから載せるためである。
+さくらの API キーで費用がかかる呼び出しを、パスワードを知っている人だけに絞ってから載せるためである。
 P4 はいつ行ってもよいが、P0 と同じ PR には入れない。
 問題が出たときに、どちらの変更が原因かを分けられるようにするためである。
 
@@ -111,23 +110,41 @@ CI は Linux で動くので、Windows のパスの確認は、`server.js` を�
 Windows 版は、変更のマージ後に作り直し、配った担当者に古い `goal2-app.exe` を消して置き換えてもらう。
 配った相手の一覧が無ければ、作るときに配り先を記録する。
 
-### 3.3 P1 Cloud Run に IAP を掛ける
+### 3.3 P1 Cloud Run に共通のパスワードを掛ける
 
-IAP（Identity-Aware Proxy）は、Cloud Run の前で Google のログインを求め、許可したアカウントの要求だけを通す Google Cloud の機能である。
-Cloud Run に直接掛けられ、`run.app` の URL を含むすべての入口に効く（Google Cloud の文書「Configure IAP for Cloud Run」）。タグ付きの URL も `run.app` のドメインにあるので同じく守られるはずだが、文書には明記が無いため、4章 P1 の9で確かめる。
-アプリのコードは変えない。
+Cloud Run の本番を、全員で共通の1つのパスワードで守る。
+仕組みは HTTP の Basic 認証とする。
+サーバーがパスワードを求めると、ブラウザーが標準の入力画面を出し、入力した値を以後の要求に自動で付ける。
+画面（`public/`）の `fetch()` は同じオリジンなので、ブラウザーが覚えたパスワードがそのまま付き、画面の変更は要らない。
+ブラウザーを閉じると、多くの場合もう一度求められる。
 
-画面と API は同じオリジンなので、ログイン後の `fetch()` はそのまま通る。
-IAP のセッションは Google のログインに結び付いていて、作業者が Google からログアウトしない限り続く（同じく「Managing IAP sessions」）。
-初めて開くときだけ、Google のログインと、身元を渡すことへの同意の画面が出る。
+決まりは次のとおりである。
 
-使える人の単位は2つある。
+1. **パスワードの渡し方。** 環境変数 `APP_PASSWORD` で渡す。Cloud Run では Secret Manager のシークレットから渡し、`--set-env-vars` に平文で書かない。値の前後の空白と改行は除いて使う。PowerShell からシークレットを作ると、末尾に改行が付くためである。そのため、前後の空白はパスワードの一部にできない（パスワードは無作為に作るので困らない）。
+2. **確かめる範囲。** `APP_PASSWORD` があるときは、`GET /api/health` を除くすべての要求で確かめる。除くのは、メソッドが GET でパスがちょうど `/api/health` のときだけで、`POST /api/health` や `/api/healthz` などは除かない。ユーザー名は確かめない（空でも何でもよい）。合わなければ 401 と `WWW-Authenticate: Basic realm="a11y-migration-app", charset="UTF-8"` を返す。`Authorization` ヘッダーの形が崩れているとき（`Basic` で始まらない、Base64 として読めない、コロンが無い）も、例外を出さずに 401 を返す。
+3. **比べ方。** 送られたパスワードと `APP_PASSWORD` を、それぞれ SHA-256 にしてから `crypto.timingSafeEqual()` で比べる。比べるのにかかる時間から、中身を推し量られないようにするためである。
+4. **設定し忘れの守り。** Cloud Run（`K_SERVICE` がある）で `APP_PASSWORD` が無いか16文字より短いときは、`GET /api/health` を除くすべての要求に 503 を返し、起動時にエラーを1行出す。設定し忘れて誰でも開ける状態にならないようにするためと、短いパスワードで総当たりされないようにするためである。
+5. **手元では求めない。** Cloud Run 以外（Windows 版、開発、テスト）では、`APP_PASSWORD` が無ければパスワードを求めない。P0 の守りで、同じ PC からしか届かないためである。
+6. **記録に残さない。** パスワードと `Authorization` ヘッダーを、ログにも応答にも出さない。ヘッダーを読み損ねたときの例外の内容も、ログに出さない。
+7. **別のサイトから起こされた API の要求を止める。** `/api/` で始まる要求（`GET /api/health` を除く）で、`Sec-Fetch-Site` ヘッダーがあり、その値が `same-origin` と `none` のどちらでもなければ 403 を返す。ブラウザーは覚えたパスワードを、別のサイトの画像や iframe が起こした要求にも付けることがある。そのとき、外部のページを取りに行く GET（`/api/fetch-html`、`/api/link-title`）が動いてしまうためである。`Sec-Fetch-Site` は、いまの主なブラウザーがすべての要求に付けるヘッダーで、画面自身の `fetch()` は `same-origin`、アドレス欄に直接打ったときは `none` になる。`same-site` も止める。この API は、同じサイトではなく同じオリジンの画面からだけ使う設計で、同じサイトの別のオリジンから呼ばせる用途が無いためである。あとから同じサイトに別のオリジン（独自ドメインや前段のプロキシなど）が加わっても、パスワードの付いた API を起こさせないようにする。ヘッダーが無い要求（ブラウザー以外の道具やテスト）は通すが、パスワードは要る。この確認は、パスワードの有無にかかわらず、手元の Windows 版でも行う。
 
-- **ドメイン**（`domain:<会社のドメイン>`）：会社の Workspace の全員が使える。設定が1回で済む。
-- **グループ**（`group:<グループのアドレス>`）：移行チームのグループに入っている人だけが使える。人の出入りをグループで管理できる。
+Cloud Run の設定（誰でも呼べる `allUsers` の権限と `--allow-unauthenticated`）は変えない。
+アプリの前に Google の仕組みを置かず、アプリ自身が確かめるためである。
 
-移行チームのグループがあれば、グループを勧める。
-画面に案件の HTML を貼る人を、移行に関わる人に絞れるためである。
+ブラウザーは覚えたパスワードを、別のサイトから送らされた要求にも付けることがある。
+別のサイトからの POST は P0 の確認（`Content-Type` と `Origin`）で止まり、API の GET は 7 の確認で止まる。
+
+パスワードは全員で共通なので、アプリからは誰が使ったかが分からない。
+証跡の作業者の欄は、これまでどおり作業者が書く（3.5）。
+
+パスワードを変えるのは、移行チームから人が抜けたときと、漏れたおそれがあるときである。
+シークレットに新しい版を足し、その版の番号を指定した新しいリビジョンを作る。
+シークレットは `latest` ではなく、版の番号で指定する。
+リビジョンごとにパスワードの版が決まるので、どのリビジョンがどのパスワードで動くかがはっきりし、前のリビジョンに戻したときの結果も読める（4章 P1 の8）。
+
+P1 より前のリビジョンには、パスワードを確かめる処理が無い。
+そこへトラフィックを戻すと、誰でも開ける状態に戻る。
+そのため、P1 を適用したときの最初のリビジョンの名前を控え、それより前には戻さない（4章 P1 の3、5、8）。
 
 手順は 4章 P1 にある。
 
@@ -171,16 +188,16 @@ IAP のセッションは Google のログインに結び付いていて、作�
 
 GOAL1 のバッチは、`<日時>_<バッチID>.json` と `<日時>_<バッチID>-summary.csv` にする。
 
-画面の変更は次の3つで、どれも小さい。
-1と2は実装した（下の「実装の記録」）。3 は P1 のあとに行う。
+画面の変更は次の2つで、どれも小さい。
+2つとも実装した（下の「実装の記録」）。
 
 1. Goal 2 に「証跡JSONを保存」ボタンを足す。いまはコピーだけで、作業者が自分でファイルを作っている。
 2. Goal 2 の証跡の CSV と、GOAL1 の書き出しのファイル名を、上の決まりに合わせる。
-3. P1 のあと、「作業者」欄の既定値を、ログインしたアカウントのメールアドレスにする。サーバーに `GET /api/whoami` を足し、IAP が付ける `X-Goog-Authenticated-User-Email` ヘッダー（値は `accounts.google.com:<メールアドレス>`）からメールアドレスを返す。この値は欄の既定値にだけ使い、権限の判断には使わない。IAP の文書は、身元を権限の判断に使うなら署名付きの `x-goog-iap-jwt-assertion` ヘッダーを検証するよう求めている。作業者は欄を書き替えられる。ヘッダーが無いとき（Windows 版、IAP の無い環境）は、いまの `worker-001` のままにする。
 
 保存期間の決まりは無いので、当面は削除しない。
 共有ドライブのメンバーは、移行チームと承認者に絞る。
-証跡には、旧ページの HTML の断片と作業者の名前（3 のあとはメールアドレス）が入るためである。
+証跡には、旧ページの HTML の断片と作業者の名前が入るためである。
+作業者の欄は、これまでどおり作業者が書く。パスワードは全員で共通なので、アプリからは誰が使ったかが分からないためである（3.3）。
 
 **実装の記録（PR #153、2026-09-28）。** 画面の変更の1と2を行った。
 名前を作る処理は `public/evidence-filename.js` に1つの関数群としてまとめ、Goal 2（`public/app.js`）と GOAL1（`public/goal1.js`）の両方から使う。
@@ -266,87 +283,129 @@ Windows の実機での確認（5章の最後の3項目）は、まだ行って�
 - 起動したときに Windows のファイアウォールが許可を求めたら、許可しない。許可しなくても、同じ PC のブラウザーからは使える。すでに許可した人は、「Windows セキュリティ」の「ファイアウォールとネットワーク保護」の「ファイアウォールによるアプリケーションの許可」から `goal2-app` の許可を外す。
 - 起動している間は、作業に関係の無いサイトをできるだけ開かない。
 
-### P1 Cloud Run に IAP を掛ける（ユーザー）
+### P1 Cloud Run に共通のパスワードを掛ける
+
+#### 実装（実装担当）
+
+1. 3.3 の決まりを入れる。確かめる処理は、`lib/` の新しいモジュール（例: `lib/app-auth.js`）に純粋な関数として置く。
+2. `test/server-env.js` で、テストのサーバーに `APP_PASSWORD` と `K_SERVICE` を渡さないようにする。`test/local-guard/` の Cloud Run の場合のテストは、`K_SERVICE` を渡すので、`APP_PASSWORD` も渡すように直す。
+3. テストを足す。
+   - `APP_PASSWORD` があるとき、パスワードが無い要求と違う要求に、401 と `WWW-Authenticate` を返す。合う要求は通る。ユーザー名が空でも何でも通る。
+   - `GET /api/health` は、パスワードが無くても通る。
+   - `APP_PASSWORD` の前後の空白と改行を除いて比べる。
+   - Cloud Run で `APP_PASSWORD` が無いときと16文字より短いときは、`GET /api/health` 以外に 503 を返す。
+   - Cloud Run 以外で `APP_PASSWORD` が無いときは、これまでどおり求めない。
+   - 401 と 503 の応答とログに、パスワードが出ない。
+   - `Authorization` の形が崩れている要求（`Basic` で始まらない、Base64 として読めない、コロンが無い）に、例外を出さずに 401 を返す。
+   - `POST /api/health` と `/api/healthz` は、パスワードを求める側に入る。
+   - `Sec-Fetch-Site` が `cross-site` と `same-site` の `GET /api/fetch-html` と `GET /api/link-title` に 403 を返す。パスワードが合っていても 403 にする。`same-origin`、`none`、ヘッダー無しは通る。`GET /api/health` は `cross-site` でも通る。
+   - Cloud Run 以外（`APP_PASSWORD` 無し）でも、`Sec-Fetch-Site: cross-site` の `/api/` の要求に 403 を返す。
+4. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行に `--update-secrets="APP_PASSWORD=app-password:<版の番号>"` を足し（`latest` は使わない）、パスワードの作り方、変え方、戻し方の節を足す（下の「本番への適用」の1、2、7、8）。`README.md` の環境変数の一覧に `APP_PASSWORD` を足す。
+5. PR はドラフトで出し、設計・レビュー担当のレビューと Codex の二次レビューを受ける。
+
+#### 本番への適用（ユーザー、実装のマージ後）
 
 PowerShell で行う。
-`$SERVICE`、`$REGION`、`$PROJECT_ID` は `CLOUD_RUN_DEPLOY.md` と同じものを使う。
+`$REGION`、`$SERVICE`、`$IMAGE` は `CLOUD_RUN_DEPLOY.md` と同じものを使う。
+プロジェクトを取り違えないよう、最初に `$PROJECT_ID = gcloud config get-value project` を実行し、表示されたプロジェクトが本番のものであることを確かめる。
 
-1. プロジェクトが会社の組織に属しているかを確かめる。
-
-   ```powershell
-   gcloud projects describe $PROJECT_ID --format="value(parent.type,parent.id)"
-   ```
-
-   `organization` か `folder` と表示されれば、組織の中の手順で進められる。
-   何も表示されなければ、プロジェクトは組織に属していない。その場合は、IAP を初めて有効にする操作を Google Cloud コンソールで行う（Cloud Run のサービスの「セキュリティ」タブで「認証が必要」と「Identity-Aware Proxy (IAP)」を選ぶ）。コンソールから行うと、必要な OAuth の設定が自動で作られる。
-
-2. IAP の API を有効にする。
+1. パスワードを作り、シークレットに入れる（初回のみ）。無作為の 24 文字を作り、画面に出さずにそのまま入れる。入れた版の番号を `$PW_VERSION` に控える（初回は `1`）。
 
    ```powershell
-   gcloud services enable iap.googleapis.com
+   $bytes = New-Object byte[] 18
+   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+   [Convert]::ToBase64String($bytes) | gcloud secrets create app-password --data-file=- --project=$PROJECT_ID
+   $PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+   $PW_VERSION
    ```
 
-3. IAP のサービスエージェント（IAP が Cloud Run を呼ぶときに使う、Google が管理するアカウント）を作る。API を有効にしただけでは作られていないことがあり、その場合は手順5の権限の付与が、アカウントが無いために失敗する。すでにあれば、そのアドレスが表示されるだけなので、何度実行してもよい。2026-09-25 に取得した公式の文書にはこの手順が無いが、以前の版にはあり、害が無いので入れておく。
+2. Cloud Run がシークレットを読めるようにする（初回のみ）。サービスアカウントが設定されていないサービスは、既定の Compute Engine のサービスアカウントで動くので、そのときはそれを組み立てる。
 
    ```powershell
-   gcloud beta services identity create --service=iap.googleapis.com --project=$PROJECT_ID
+   $SERVICE_ACCOUNT = gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(spec.template.spec.serviceAccountName)"
+   if (-not $SERVICE_ACCOUNT) {
+     $PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
+     $SERVICE_ACCOUNT = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+   }
+   $SERVICE_ACCOUNT
+   gcloud secrets add-iam-policy-binding app-password --project=$PROJECT_ID --member="serviceAccount:$SERVICE_ACCOUNT" --role="roles/secretmanager.secretAccessor"
    ```
 
-4. サービスに IAP を掛ける。操作する人には、プロジェクトの Cloud Run 管理者（`roles/run.admin`）と IAP ポリシー管理者（`roles/iap.admin`）の役割が要る。プロジェクトのオーナーなら持っている。
+3. いまトラフィックを受けているリビジョンの名前を、「P1 より前の最後のリビジョン」として控える。このリビジョンとそれより前には、あとで戻さない（8）。そのうえで、実装をマージしたあとの main でイメージを作り（`CLOUD_RUN_DEPLOY.md` の手順）、パスワードの版を付けて、トラフィックを流さずにデプロイする。いまの環境変数（Gemini のモデルなど）は、そのまま引き継がれる。
 
    ```powershell
-   gcloud run services update $SERVICE --region $REGION --iap
+   gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(status.traffic)"
+   gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag pw
    ```
 
-5. IAP が Cloud Run を呼べるようにする。
+4. 表示されたタグ付きの URL で確かめる。
+   - 開くとパスワードの入力画面が出る。ユーザー名は空でよい。
+   - 違うパスワードでは、もう一度求められる。
+   - 正しいパスワードで画面が出て、1ページを処理すると AI の下書きが入る。
+   - `<タグ付きの URL>/api/health` は、パスワード無しで開ける。
+
+5. 問題が無ければ、トラフィックを移す。移したあと、いまトラフィックを受けているリビジョンの名前を、「P1 の最初のリビジョン」として控える。これより前のリビジョンには戻さない。
 
    ```powershell
-   $PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
-   gcloud run services add-iam-policy-binding $SERVICE --region $REGION `
-     --member="serviceAccount:service-$PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com" `
-     --role="roles/run.invoker"
+   gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+   gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="yaml(status.traffic)"
    ```
 
-6. 使える人を登録する。グループを使う場合は `group:<グループのアドレス>`、ドメイン全体なら `domain:<会社のドメイン>` にする（3.3）。
+6. 作業者にパスワードを渡す。パスワードは次のコマンドで表示できる。社内で決まった安全な方法で渡し、チャットや共有の文書に平文で残さない。
 
    ```powershell
-   gcloud iap web add-iam-policy-binding `
-     --member="group:<グループのアドレス>" `
-     --role="roles/iap.httpsResourceAccessor" `
-     --region=$REGION --resource-type=cloud-run --service=$SERVICE
+   gcloud secrets versions access $PW_VERSION --secret=app-password --project=$PROJECT_ID
    ```
 
-7. 外部の協力会社の人を足す場合は、その人のアカウントを `user:<メールアドレス>` で登録する。会社の組織の外のアカウントを登録するには、先に OAuth の同意画面（対象は「外部」）の設定が要る。コンソールの IAP の画面から「Configure consent screen」で設定する。
-
-8. 誰でも呼べる設定を外す。IAP を誤って外したときに、画面が誰にでも開いてしまわないようにするためである。
+7. パスワードを変えるとき（人が抜けたとき、漏れたおそれがあるとき）は、新しい版を足し、その版を指定した新しいリビジョンを、トラフィックを流さずに作る。タグ付きの URL で、新しいパスワードで開けて古いパスワードでは開けないことを確かめてから、トラフィックを移し、新しいパスワードを配り直す。
 
    ```powershell
-   gcloud run services remove-iam-policy-binding $SERVICE --region $REGION `
-     --member="allUsers" --role="roles/run.invoker"
+   $OLD_PW_VERSION = $PW_VERSION
+   $bytes = New-Object byte[] 18
+   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+   [Convert]::ToBase64String($bytes) | gcloud secrets versions add app-password --data-file=- --project=$PROJECT_ID
+   $PW_VERSION = gcloud secrets versions list app-password --project=$PROJECT_ID --sort-by="~createTime" --limit=1 --format="value(name.basename())"
+   gcloud run services update $SERVICE --region $REGION --project=$PROJECT_ID --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag "pw$PW_VERSION"
+   # タグ付きの URL で確かめてから
+   gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
    ```
 
-9. 確かめる。
-   - `gcloud run services describe $SERVICE --region $REGION` の出力に `Iap Enabled: true` がある。
-   - ブラウザーのシークレットウィンドウで本番の URL を開くと、Google のログインを求められる。会社のアカウントでログインすると画面が出る。
-   - 登録していないアカウント（個人の Gmail など）でログインすると、画面が出ない。
-   - タグ付きの URL（例: `gemini35` のタグ）も、同じくログインを求められる。
-   - 画面で1ページを処理し、AI の下書きが入る。
-
-10. 戻し方（問題があったとき）。
+   漏れたおそれがあるときは、トラフィックを移したあとに古い版を無効にする。古い版で動くリビジョンは起動できなくなり、誤ってそこへ戻すこともできなくなる。
 
    ```powershell
-   gcloud run services update $SERVICE --region $REGION --no-iap
-   gcloud run services add-iam-policy-binding $SERVICE --region $REGION `
-     --member="allUsers" --role="roles/run.invoker"
+   gcloud secrets versions disable $OLD_PW_VERSION --secret=app-password --project=$PROJECT_ID
    ```
 
-11. `CLOUD_RUN_DEPLOY.md` の `gcloud run deploy` の行から `--allow-unauthenticated` を外し、`--no-allow-unauthenticated --iap` を付ける。IAP を掛けた日と、使える人の単位（グループかドメインか）を記録する。この文書の変更は、実装担当に頼んでもよい。
+8. 戻し方（問題があったとき）。何を戻したいかで、手順が分かれる。どの場合も、「P1 の最初のリビジョン」より前のリビジョンには戻さない。そこへ戻すと、パスワードを確かめる処理が無く、誰でも開ける状態になるためである。
+
+   - **アプリもパスワードも、前のリビジョンのときに戻す。** トラフィックを前のリビジョンに移す。前のリビジョンは、作ったときの版のパスワードで動く。ただし、その版が有効なときに限る。無効にした版を参照するリビジョンは、新しいインスタンスを起動できないためである。先に、前のリビジョンが参照する版を見て、その版の状態が `ENABLED` であることを確かめる。漏れたために無効にした版は、戻すために有効に戻さない。その場合は、次の「アプリだけを前に戻す」を使う。リビジョンの名前は `gcloud run revisions list --service $SERVICE --region $REGION --project=$PROJECT_ID` で分かる。
+
+     ```powershell
+     gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="yaml(spec.containers[0].env)"
+     # 表示された APP_PASSWORD の key(版の番号)について
+     gcloud secrets versions describe <版の番号> --secret=app-password --project=$PROJECT_ID --format="value(state)"
+     # ENABLED なら
+     gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-revisions=<前のリビジョン>=100
+     ```
+
+   - **パスワードはいまのままで、アプリだけを前に戻す。** 前のリビジョンのイメージを、いまのパスワードの版で、トラフィックを流さずにデプロイし直す。タグ付きの URL で確かめてから、トラフィックを移す。
+
+     ```powershell
+     $OLD_IMAGE = gcloud run revisions describe <前のリビジョン> --region $REGION --project=$PROJECT_ID --format="value(spec.containers[0].image)"
+     gcloud run deploy $SERVICE --image "$OLD_IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION" --no-traffic --tag back
+     # タグ付きの URL で確かめてから
+     gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest
+     ```
+
+   - **P1 の実装そのものに問題があるとき（正しいパスワードでも開けない、など）。** P1 より前のリビジョンには戻さない。「P1 の最初のリビジョン」以後のどれかで動くなら、上の2つのどちらかで戻す。どれでも動かないなら、パスワードを確かめる処理を直した新しいイメージを、いまのパスワードの版で `--no-traffic --tag` を付けてデプロイし、タグ付きの URL で確かめてからトラフィックを移す。直るまでの間は、画面が使えない状態を受け入れる。
+
+   パスワード無しで誰でも開ける状態に戻すことは、この手順には含めない。そうするしかない事情があっても、画面を止めたままにする場合と比べたうえで、ユーザー（本番の責任者）が決める。
 
 ### P2 同意と証跡の運用
 
 1. ユーザーが、共有ドライブの `移行証跡` フォルダーを作り、メンバーを移行チームと承認者に絞る。
 2. ユーザーが、同意が得られない案件があり得るかを確かめ、あり得るなら 3.4 の案 A か B を選ぶ。
-3. 実装担当が、3.5 の画面の変更の1と2を行う。3 は P1 のあとに行う。**実装済み（PR #153、2026-09-28）。** 設計との差は 3.5 の「実装の記録」に書いた。
+3. 実装担当が、3.5 の画面の変更の1と2を行う。**実装済み（PR #153、2026-09-28）。** 設計との差は 3.5 の「実装の記録」に書いた。
 4. 実装担当が、`WORKER_GUIDE.md` の証跡の節を、置き場所と名前の決まりに合わせて書き替える。**実装済み（PR #153、2026-09-28）。** ステップ④に「証跡を共有ドライブに保存する」の節を足した。
 5. `LLM_DATA_POLICY.md` の最低条件5と未決定事項は、この設計書と同じ PR で1章の決定に合わせた。さくらの約款の要点などは、L3 で書き直す（`LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` 4章 L3）。
 
@@ -371,7 +430,7 @@ Linux の Node 24.21.0 で、`build-windows-app.bat` と同じ SEA の手順（e
 
 ## 5. 検証
 
-P0 と P4 では、次を通す。
+P0、P1、P4 では、次を通す。
 
 ```
 cd goal2-app
@@ -397,8 +456,7 @@ P0 は、Windows の実機でも次を確かめる。
 
 ## 6. 決めてほしいこと
 
-- IAP で使える人の単位（移行チームのグループか、会社のドメイン全体か）。グループがあればグループを勧める（3.3）。
-- 外部の協力会社の人も使うか（1章）。
+- パスワードを管理する人（作り方、配り方、変える時期を受け持つ人）を1人決める（3.3、4章 P1 の6と7）。
 - 同意が得られない案件があり得るか。あり得るなら、3.4 の案 A か B。
 - 共有ドライブのフォルダーの形（3.5）で、サイト区分の段を入れるか。案件によってサイトが1つだけなら、段を省いてよい。
 
@@ -406,7 +464,12 @@ P0 は、Windows の実機でも次を確かめる。
 
 | 危険 | 対策 |
 |---|---|
-| IAP を掛けた直後に、作業者が画面を開けなくなる | 先に操作する人のアカウントで確かめる。戻し方（4章 P1 の10）で数分で戻せる |
+| パスワードを付けずに新しいイメージをデプロイすると、画面が開けなくなる（503） | タグ付きの URL で先に確かめてから、トラフィックを移す（4章 P1 の3〜5）。戻し方（同じく8）で数分で戻せる |
+| パスワードが漏れる、または抜けた人が知っている | 新しいパスワードに変えて配り直す（4章 P1 の7）。変えるまでの間、URL とパスワードを知る人は使える |
+| 総当たりでパスワードを当てられる | 無作為の 24 文字を使う（4章 P1 の1）。16文字より短いと、サーバーが受け付けない（3.3 の4） |
+| P1 より前のリビジョンに戻すと、誰でも開ける状態に戻る | 「P1 の最初のリビジョン」の名前を控え、それより前には戻さない（3.3、4章 P1 の3、5、8） |
+| ブラウザーが覚えたパスワードが、別のサイトから起こされた要求に付く | POST は P0 の確認で、API の GET は `Sec-Fetch-Site` の確認で止める（3.3 の7） |
+| 誰が使ったかがアプリから分からない | パスワードは共通なので、証跡の作業者の欄は作業者が書く。必要になったら、IAP など人ごとに確かめる方式に変える |
 | 待ち受けを `127.0.0.1` に絞ると、別の PC から Windows 版を使っていた人が使えなくなる | Windows 版は同じ PC で使う前提で配っている（`LOCAL_WINDOWS_APP.md`）。必要な人は `HOST` を設定して起動できる |
 | `Content-Type` の確認で、画面以外から API を呼ぶ道具が止まる | 画面の POST（8か所）とテストの POST は、すべて `application/json` で送っている。評価の道具（`tools/llm-provider-eval.js`）は画面を通して要求を作る |
 | 証跡の名前の決まりを作業者が守らない | 画面が決まりどおりの名前で保存する（3.5 の画面の変更）。手で名前を付ける場面を減らす |
@@ -415,7 +478,8 @@ P0 は、Windows の実機でも次を確かめる。
 
 ## 8. 用語
 
-- **IAP**：Identity-Aware Proxy。Google Cloud のサービスの前で Google のログインを求め、許可したアカウントだけを通す機能。
+- **Basic 認証**：HTTP の標準のパスワードの仕組み。サーバーが求めると、ブラウザーがユーザー名とパスワードの入力画面を出し、入力した値を以後の要求に自動で付ける。
+- **IAP**：Identity-Aware Proxy。Google Cloud のサービスの前で Google のログインを求め、許可したアカウントだけを通す機能。当初の P1 で使う予定だったが、2026-09-28 にパスワード制に変えた。
 - **タグ付きの URL**：Cloud Run で、トラフィックを流さないリビジョンに付けた名前から作られる URL。切り替え前の確認に使う。
 - **待ち受けのアドレス**：サーバーが要求を受け付けるネットワークの口。`127.0.0.1` は同じ PC からの要求だけ、`0.0.0.0` はすべての口からの要求を受け付ける。
 - **DNS リバインディング**：外部のドメインの名前を、あとから `127.0.0.1` などに向け直し、ブラウザーに手元のサーバーへ要求を送らせる攻撃。
