@@ -273,4 +273,4 @@ docker build -t a11y-migration-app .
 docker run --rm -p 8080:8080 -e PORT=8080 a11y-migration-app
 ```
 
-実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #__PR__)、IAPの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
+実案件で使う前の本番運用の段階は [PRODUCTION_OPERATIONS_INSTRUCTIONS.md](PRODUCTION_OPERATIONS_INSTRUCTIONS.md) にあります。認証(IAP)、LLMへの送信の同意(営業が案件ごとに取る)、証跡の置き場所(共有ドライブ)は2026-09-25に決めました。証跡を決まった名前で保存する画面の変更は入れましたが(P2、PR #153)、IAPの設定と共有ドライブのフォルダーの用意はまだ行っていません(P1、P2)。ログ方針と、実案件HTMLをアプリ側で保存するかどうかは未決定です。
