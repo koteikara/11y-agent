@@ -72,11 +72,11 @@ flowchart LR
 - **miCheckerを主基準ではなく品質ゲート候補**として扱う。KB全ルールを既定とし、miChecker指摘のみへ絞るモードは案件の検収条件を確認したうえで使う（`AGENTS.md`）。
 - **LLM連携は既定で無効**。実案件HTMLと画像を外部LLMへ送る合意が未確定のため、提供元の設定（`GEMINI_API_KEY`、`GEMINI_AUTH_MODE=adc`、`SAKURA_AI_API_KEY` など）を運用判断に委ねている（`goal2-app/LLM_DATA_POLICY.md`）。
 - **LLM の提供元はさくらの AI Engine に寄せる**（2026-09-24、ユーザー確定）。切り替えの仕組み（L1、`lib/llm.js` の `callLlm()` とアダプター）は入ったが、本番はまだ Gemini のままである。他のプロジェクトで使っていて契約が済んでいるためで、Gemini は受け皿とつなぎとして残す。ISMAP は、公開済みページで機密性が低いため、いまは求めない。段階と検証は `goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、比較は `memory/llm-provider-alternatives-research.md` にある。
-- **本番運用は、Cloud Run を IAP で守り、証跡を共有ドライブに置く**（2026-09-25、ユーザー確定）。作業者は会社の Google Workspace のアカウントでログインする。LLM への送信の同意は営業が案件ごとに取り、記録は持たない。どの提供元に送ったかは証跡の JSON に残す（L3）。証跡は承認者が共有ドライブで見る。保存期間の決まりは無い。段階（手元で動くサーバーの守り、IAP、同意と証跡、L3、Node 24）は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` にある。
+- **本番運用は、Cloud Run を共通のパスワードで守り、証跡を共有ドライブに置く**（2026-09-25、ユーザー確定。アクセス制御は 2026-09-28 に IAP からパスワードに変更）。パスワードは HTTP の Basic 認証でアプリ自身が確かめ、Secret Manager から環境変数 `APP_PASSWORD` で渡す。使える人を選んで登録するのが難しいため、IAP をやめた。LLM への送信の同意は営業が案件ごとに取り、記録は持たない。どの提供元に送ったかは証跡の JSON に残す（L3）。証跡は承認者が共有ドライブで見る。保存期間の決まりは無い。段階（手元で動くサーバーの守り、パスワード、同意と証跡、L3、Node 24）は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` にある。
 - **手元で動くサーバーは同じ PC からの要求だけを受け付ける**（2026-09-28、P0）。待ち受けは環境変数 `HOST` で決め、無ければ Cloud Run（`K_SERVICE` がある）では `0.0.0.0`、それ以外では `127.0.0.1` にする。手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスは保存と実行の直前に形を確かめる。Windows 版が、同じネットワークの別の機器や別のサイトから任意の実行ファイルを動かせる作りだったためである。確かめる処理は `goal2-app/lib/local-guard.js`、設計は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 3.2 にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
-- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（IAP）と証跡の置き場所（共有ドライブ）は2026-09-25に決めたが、どちらも未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
+- **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（共通のパスワード、2026-09-28 に IAP から変更）と証跡の置き場所（共有ドライブ）は決めたが、どちらも未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
 - 外部検査エンジン（axe-core、A11yc library）を組み込まない判断は、`memory/project-state.md` で未決定として残っている。理由未確認。
 
@@ -141,6 +141,6 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 ## 未解決事項
 
 - lockファイルが無い。npm依存が0件のため現状は問題にならないが、ビルド時に `npx esbuild` と `npx postject` を未固定バージョンで取得している。
-- Cloud Run の IAP と、証跡の置き場所と名前の決まりは、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。
+- Cloud Run のパスワードと、証跡の置き場所と名前の決まりは、決めたが未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。
 - Windows 版の待ち受けの守り（同じ設計書の P0）は、コードに入れたが、Windows の実機では確かめておらず、配り直しも済んでいない（PR #150）。すでに配った `goal2-app.exe` は、同じネットワークの別の機器や、ブラウザーで開いた別のサイトから、htmlchecker.exe のパスを書き替えて任意の実行ファイルを動かせる作りのままである。マージ後にユーザーが作り直して配り直し、担当者に古い版を消してもらう。
 - CMS入力欄で許可されるHTMLタグと属性の制約は未確認で、最終HTML出力に反映されていない。
