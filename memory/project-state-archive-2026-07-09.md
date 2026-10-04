@@ -1,0 +1,872 @@
+# project-state のアーカイブ（2026-07 〜 2026-09 中旬）
+
+`memory/project-state.md` が大きくなり、毎回読める大きさを超えたため、2026-10-04 に古い部分をこのファイルへそのまま移した。
+中身は書き替えていない。
+日付ごとの変更は `CHANGELOG.md` にも残っている。
+
+## Current Progress（遠野市フィードバック対応の 4.1〜4.3 より前）
+
+- `AGENTS.md` を作成済み。
+  - 公共団体向けCMSへの移行作業という事業前提を記載した。
+  - 移行作業とアクセシビリティ修正作業の定義を記載した。
+  - 現状の手作業フローを記載した。
+  - 既存ナレッジ `a11y-migration-kb/` の位置づけを記載した。
+- `workstream.md` を作成済み。
+  - Goal 1: CMS登録前にAGENTでHTMLを一括アクセシビリティ最適化する方式を記載した。
+  - Goal 2: CMS登録時に作業者が1ページずつAGENT支援を受けながら進める方式を記載した。
+  - Goal 3: 旧ページ全体HTMLからCMS登録対象のコンテンツ部分を抽出し、Goal 2へ引き継ぐ方式を記載した(実装 `goal2-app/public/goal3.html`/`goal3.js` に対して、後追いでドキュメントを整備した)。
+  - 各方式の期待効果、リスク、共通成功条件、比較観点を記載した。
+- `memory/project-state.md` を作成済み。
+  - 現在の進捗と未完了事項を追跡する場所として定義した。
+- `done-definition.md` を作成済み。
+  - Codexが自分で検証できる完了基準を定義した。
+- `memory/gemini-a11y-agent-review.md` を作成済み。
+  - 参考リポジトリ `koteikara/gemini-a11y-agent` を確認した。
+  - そのまま踏襲せず、失敗モード、検証観点、候補提示UIの考え方を引き継ぐ方針を整理した。
+  - 一括処理方式とページ単位支援方式に引き継げる要素を分けて記載した。
+- `memory/github-a11y-projects-research.md` を作成済み。
+  - `accessibility`、`a11y`、`WCAG`、`accessibility remediation` などの観点でGitHubリポジトリを調査した。
+  - 既存OSSは検査、ルール標準化、レポート、AI候補提示に強い一方、旧サイトHTMLからCMS登録用HTMLへ移行し、確認フローと証跡管理まで含めるものは見つからなかった。
+  - `axe-core`、`pa11y`、`HTML_CodeSniffer`、`Siteimprove/Alfa`、`ACT Rules`、`awslabs/content-accessibility-utility-on-aws`、`HaTeMiLe`、AI/agent系リポジトリの引き継ぎ候補を整理した。
+- `memory/non-github-a11y-resources-research.md` を作成済み。
+  - W3C/WAI、WAIC、デジタル庁、GOV.UK、Section508.gov、WAVE、ARC Toolkit、IBM Equal Access、LLM関連研究を調査した。
+  - GitHub外の資料は、直接HTMLを自動修正する材料というより、`a11y-migration-kb/` の根拠、作業者説明、承認者確認、証跡設計を補強する材料として有用だと整理した。
+  - 特に、W3C Tutorials、WAIC、GOV.UK Content Guidanceは、表、画像、リンク、見出しなどのコンテンツ部分の判断に近い参照先として整理した。
+- `memory/michecker-research.md` を作成済み。
+  - 総務省とEclipse ACTFの公開情報を確認し、miCheckerを公共団体案件における重要な受け入れシグナルとして整理した。
+  - miCheckerはJIS X 8341-3:2016対応を支援するが、全てを自動判定するものではなく、人間の判断支援を含むツールだと整理した。
+  - miChecker結果はページ全体検査になりやすいため、本文起因とテンプレート起因を分類する必要があると整理した。
+- `memory/a11yc-resources-research.md` を作成済み。
+  - 駒瑠市は、架空の地方自治体サイトにアクセシビリティ上の問題を仕込んだ教材サイトであり、PoC用サンプルとして有用だと整理した。
+  - A11yc ACSは、URL検査とHTML Source検査ができ、日本語のError / Notice / 達成基準番号 / snippetを返すことを確認した。
+  - A11yc libraryは、PHPライブラリとして `analyzeHtml()`、`analyzeUrl()`、`is_partial`、正規化された `issues` 形式を提供しており、本文HTML断片検査の技術候補になると整理した。
+- A11yc ACSを、Goal 2の実行画面におけるHTML入力、問題箇所明示、根拠表示、最終HTML出力の参考UIとして位置づけた。
+  - GitHubのコンフリクト解消に近い、レンダリングHTML上で修正候補を採用、編集して採用、却下、要確認に分類する操作モデルをGoal 2の参考として整理した。
+- `memory/goal2-hosting-candidates.md` を作成済み。
+  - Goal 2の初期開発はCloud Run上の独立Webアプリを第一候補として進める方針を整理した。
+  - Cloud Run採用時の初期アーキテクチャ、セキュリティ、miCheckerの扱い、PoCスコープ、未決定事項を整理した。
+- `memory/goal2-development-requirements.md` を作成済み。
+  - `a11y-migration-kb/build/rules.jsonl` には43件の移行ルールがあり、text 15、link 9、table 9、image 6、file 2、html-structure 2に分類されることを確認した。
+  - 処理分類は、mechanical 12、ai 11、hybrid 16、escalation 4であることを確認した。
+  - Goal 2の最小開発スコープを、HTML入力、DOM解析、候補生成、候補レビュー、最終HTML出力、証跡出力の縦切りPoCとして整理した。
+- `goal2-app/` を作成済み。
+  - 外部パッケージなしのNode.js標準HTTPサーバーとして実装した。
+  - `/api/health` と `/api/rules` を提供し、`rules.jsonl` の43件ルールを読み込む。
+  - 画面では、本文HTML入力、sandbox付きレンダリングプレビュー、候補一覧、候補詳細、`採用`、`編集して採用`、`却下`、`要確認`、最終HTML出力、証跡JSON/CSV出力を実装した。
+  - 画面では、HTML修正として処理する `修正候補` と、CMS登録時に確認する `注意` を分離し、注意は候補一覧ではなく出力欄と証跡JSONに出すようにした。
+  - 初期候補生成は、画像alt、キャプション重複、見出し階層、リンクテキスト、ファイル表示テキスト、表caption、レイアウト表疑い、セル結合疑いを対象にした。
+  - 入力サンプルを選択式にし、総合、画像、表、リンク・本文表記、iframe・フォームの複数パターンを投入できるようにした。
+  - サンプル画像は `goal2-app/public/images/` の生成PNGを参照し、プレビューで実際に表示できるようにした。
+  - 画像alt候補では、PoCサンプル画像に対するAI画像名候補を、`写真`、`案内図` などの画像種別を含む表現で生成し、確認・編集してから修正後HTMLへ投入し、候補詳細・証跡へ出力するようにした。
+  - iframeとフォームはKB未整備領域として、自動反映なし・人間確認前提の候補を出す最小検出を追加した。
+  - Cloud Run用の `Dockerfile`、Windows起動用の `start-server.ps1`、`node test/run-tests.js` によるテストを追加した。
+- `goal2-app/CLOUD_RUN_DEPLOY.md` を作成済み。
+  - 添付画像のCloud Run概要画面から、Cloud Shellを開き、ZIPアップロード、API有効化、Artifact Registry作成、Cloud Build、Cloud Runデプロイ、動作確認、再デプロイ、よくあるエラーまでを手順化した。
+  - ダミーデータ検証向けの `--allow-unauthenticated` と、認証必須の `--no-allow-unauthenticated` の違いを明記した。
+- `goal2-app/server.js` の `/api/fetch-html`・`/api/link-title` について、SSRF対策を強化した。
+  - ホスト名がIPリテラルでない場合にDNS解決結果の全アドレスを検証するようにし、DNSリバインディングによる内部アドレス到達を防いだ。
+  - IPv4写像IPv6リテラル(`::ffff:127.0.0.1` などドット表記・16進表記の両方)を検出してブロック対象に含めた。
+  - `redirect: "follow"` をやめ、リダイレクトを自前で追跡してホップごとに許可判定を行うようにし、外部URLが内部アドレスへリダイレクトするケースを防いだ。
+- Goal 2・Goal 3のUI/デザイン評価(2026-07-05、実機確認済み)で見つかった課題を、ペルソナ「佐藤美咲」(全盲・NVDA・キーボードのみ操作)による再検証を経て修正した。
+  - Goal 3の「抽出位置の確認」プレビューで、ハイライトされる「抽出対象」範囲の内容を、実際の抽出後HTML(`candidate.html`)と同一になるよう修正した(`goal2-app/public/goal3.js`)。パンくず・h1・署名ブロックなどの除外済み要素がハイライト内に混入しなくなった。
+  - Goal 3のスコアリングで、クリーニング後の最終テキストが同一の候補が複数生成された場合、DOM要素数が最も少ない(最も狭い)候補のみを残すタイブレークを追加した(`dedupeCandidates`/`candidateFootprint`)。同一内容で`body`が`main`/`section`より広く推奨される問題を解消した。
+  - Goal 2の「次にやること」フローティングパネル(`page-agent-panel`)に、キーボードで実行可能な閉じるボタンと、矢印キーで移動できるドラッグハンドルボタンを追加した(`goal2-app/public/app.js`、`styles.css`)。
+  - Goal 2のパネル内ボタンをキーボードで実行すると、パネルの再描画でフォーカスが`<body>`へ消失していた不具合を修正し、再描画後も同じアクションのボタンへフォーカスを復元するようにした。パネルを閉じた際は、ページ見出し(`#pageHeading`、`tabindex="-1"`を追加)へフォーカスを移すようにした。
+- Goal 2・Goal 3のビジュアルデザインを刷新した(`goal2-app/public/styles.css`・`index.html`・`goal3.html`・`app.js`)。
+  - Material 3のデフォルト配色をやめ、単一ブランドアクセント(ティール)+意味用途限定のsuccess/warning/dangerに整理し、未使用トークン(`--cyan`/`--sun`/`--coral`等)を削除した。見出し深度タグ(`--tag-h1〜h4`)とリンク色(`--link`)を独立させた。
+  - タイプスケール(`--text-micro`〜`--text-display`)を新設し、サイドバーのeyebrowがh1より大きいという階層逆転を解消した。
+  - ボタンを`primary`/`secondary`/既定(tertiary)/`icon-button`の4階層に整理し、決定ボタン(採用/文言調整/却下/要確認)を候補一覧と同じ意味色にした。
+  - サイドバー幅を176pxに拡幅し、余白に製品名フッターを追加した。入れ子カードを`--surface-2`背景にして階層を明確化し、数値表示に`tabular-nums`を適用した。
+  - コントラスト比を計算で確認(全ボタンでWCAG AA基準を満たす)し、`node test/run-tests.js`が全件成功することを確認した。
+  - 「次にやること」パネルのドラッグアイコンが閉じるボタンと同じ見た目で紛らわしい点、ラベルがボタン風だった点を修正し、あわせて閉じる/ドラッグボタンが基本のbuttonルール(padding・min-height)を上書きしておらずアイコンが中心からずれていたバグも発見・修正した。
+- Goal 2の表候補生成ロジック(`buildDataTableSemanticsHtml`)に、入札案件一覧のような表への対応を追加した。
+  - 行見出しセルに埋め込まれた`※`始まりの注記を検出・除去し、表の直後に「注意事項」リストとして分離出力するようにした(`cell-merge-note.md`対応)。
+  - データセル内のリンク文言が「PDF」「Excel」等のファイル種別のみの場合、対応する列見出しのテキストに置き換えるようにした(`file-display-text.md`対応、案件名は含めず列見出し名のみ)。
+  - 行のセル数が見出し列数より少ない場合、不足分を空の`<td>`で補うようにした。
+  - 実際の入札案件表(14行)で候補生成結果を確認し、既存の全サンプルでページエラーが発生しないことを確認した。
+- Goal 2で、同じ箇所への複数修正候補(代替手段)が候補一覧・修正パネルの両方で明示されるようにした。
+  - 候補一覧の各項目に「同じ箇所の代替手段 N件中」バッジを追加し、詳細側の「修正方法」パネルにも件数と選択を促す説明文を追加した(`goal2-app/public/app.js`・`styles.css`)。
+  - 既存の`candidatesForSameTarget`の対象範囲(表のセル結合系候補、ファイルリンクとリンクテキストの重複候補など)全体に反映されることを確認した。
+- Goal 2で、colspanを使った案内文+リンクの結合セル(総合評価方式の入札案件など)を、colspanを使わず表の外へ抽出する「案A」パターンに対応した(その後下記の理由で撤回・変更)。
+  - `classifyMergedCellTable`に、結合セルがリンク1件と「ご覧ください/ご確認ください」等の案内文を含むケースの検出を追加し、`table.cell-merge-summary`として分類するようにした(この分類自体は継続利用)。
+  - 元のサンプルで候補採用後の最終HTMLが意図した構造になることを確認し、既存の全サンプルで候補件数・ページエラーに変化がないことを確認した。
+- 上記「案A」について、ユーザーから「見出しだけが残ることに違和感がある」「表で無くなることも避けたい」との指摘を受け、表外抽出をやめ、行を表の中に残したまま`colspan`だけ解除する方式に変更した。
+  - `buildRowExtractedToListHtml`(行削除+`<h3><p><ul>`を表外出力)を削除し、`buildMergedLinkRepeatedAcrossCellsHtml`に差し替えた。行・セル位置はそのまま、結合セルの`colspan`値の数だけ実`<td>`(元が`<th>`なら`<th>`)を生成し、各セルに同一href・同一テキスト(`extractedRowLinkLabel()` + 「の案件詳細ページ」)の`<a>`を設置する。列ごとに異なる説明文を捏造しない。
+  - colspan=6(他セルなし、リンク文言は「この案件」フォールバック)・colspan=5(整理番号セルあり、リンク文言に反映)の2パターンをPlaywrightで確認し、行が表内に残ったまま`colspan`なしの実セルへ分解され、各セルに同一リンクが入ることを確認した。`node --check`・`node test/run-tests.js`はいずれも成功し、既存サンプルへの回帰もないことを確認した。
+- Goal 2の`decomposeLayoutTable`(セル結合①レイアウト用途・セル結合⑤添付ファイルが共用)で、3セル以上の行が単純に各セル独立の段落へ分解され、先頭セルが見出し(ラベル)であり残りが対応する内容であるという関係が失われていた問題を修正した。
+  - 先頭セルが見出し的で残りが単純セルの場合、先頭セルを見出し要素に、残りを「、」区切りの1つの段落にまとめる分岐を追加した。
+  - 「開催日/日付/時間/備考」のような4セル行、`table.cell-merge-file`が使う「参加申込書」行の両方で見出し+内容形式になることを確認し、既存の全サンプルで候補件数・ページエラーに変化がないことを確認した。
+- Goal 2の表キャプション自動生成(`dataTableCaptionText`)で、ユーザー報告の「キャプションが文字化けする」不具合を修正した。
+  - リポジトリ初回コミット時点から同名関数が2つ定義されており(JSの関数巻き上げで後方だけが実際に使われる)、前方の完全なデッドコード(文字化けしたバイト列を含む)を削除した。
+  - 実際に使われていた後方の定義で、見出し行が長い場合のフォールバック文字列が`"?"`の連続になっていたバグを、既存の`\u`エスケープ定数(`genericTableCaption`・`tableDetailSuffix`)を使う形に修正した。
+  - 見出し行の36文字切り詰めが単語(セル)途中で発生していた問題も、`truncateAtWordBoundary`によるセル区切り単位の切り詰めに変更して解消した。
+  - ユーザー報告の表(工事名称〜その他の9列)を再現してPlaywrightで確認し、既存の全サンプルで候補件数・ページエラーに変化がないことを確認した。
+- `memory/ai-accessibility-skills-policy.md` を作成済み。
+  - Mark Fairchildの記事を参照し、AIモデル単体へ依存せず、短い共通基本指示、部品別Skill、生成後レビュー、自動検証と人間確認の分離を組み合わせる方針を整理した。
+  - table、iframe、画像alt、フォーム、見出し構造などの部品別Skill化案、生成後レビュー用チェックリスト、自動検証と人間確認の分離表を記載した。
+- miCheckerを判断基準の一つに加える件について、`memory/michecker-research.md`を更新の上、Goal 2にmiChecker CSV結果の前後比較機能を追加した。
+  - miChecker開発環境準備手順書を確認し、miCheckerがWindows専用のEclipse RCP GUIアプリでCLI/APIを持たないことを確定させた(goal2-appのプログラムへの直接組み込みは不可能)。
+  - 一方、GUIで手動実行した結果はCSVでエクスポート可能であることをユーザーから実際のCSVサンプル(安城市 入札契約結果ページの検査結果、Shift-JIS/CP932、引用符付きマルチラインフィールド、11列、`種別`は問題あり/問題の可能性大/要判断箇所/手動確認の4種)で確認し、この取り込みは実現可能と判断した。
+  - `goal2-app/public/michecker-compare.html`・`michecker-compare.js`を新規追加。移行元/移行後の2つのCSVをブラウザで読み込み(`TextDecoder("shift_jis")`、独自CSVパーサー、サーバー側変更なし)、`(種別, JIS, 達成方法)`をシグネチャとして件数を突き合わせ「新規/未解消/解消」を一覧表示する比較ビューを実装した。
+  - 実CSV(85件)を移行元、`問題あり`3件と`問題の可能性大`1件を除去した加工版を移行後としてPlaywrightで検証し、「解消2件・未解消57件・新規0件」を確認。最小CSVペアで「新規」判定の動作も確認した。`node --check`・`node test/run-tests.js`はいずれも成功。
+- 上記の比較ビューについて、ユーザーから「ページ全体ではなく本文だけをチェックしたい」との指摘を受け、本文/テンプレート分類機能を追加した。
+  - 実CSVで外部CSSファイル参照(共通スタイル起因、13/85件、全件行番号が空欄)を確認し、内容欄に`.css`または「セレクタ=」を含む行は`old-site-template`に自動仮分類する仕組みを追加(`TEMPLATE_STYLE_REFERENCE_PATTERN`)。それ以外は`unknown`のまま、常に人が上書きできるドロップダウンと「本文(content)のみ表示」フィルタを実装。ページHTML再取得+行番号突き合わせによる自動判定(信頼性が低くユーザーも懸念)は今回見送った。
+  - 実CSVで自動タグ2件・フィルタ動作・自動バッジの手動上書きによる消去をPlaywrightで確認し、実際にローカルサーバーを起動してスクリーンショットでも見た目を確認した。
+- ユーザーから共有された「miCheckerのアクセシビリティ評価機能とCMS等との連携手順書」により、miChecker本体(GUI)とは別にCLIツール「HTML Checker」(`htmlchecker.exe`)が公式提供されており、`-f htmllist.txt`でバッチ検査・CSV自動出力ができることが判明した。「miCheckerにはCLI/APIが一切ない」という従来の結論を訂正し、`memory/michecker-research.md`に詳細を追記した。
+  - 専用Windows環境の用意は難しいというユーザーの意向を受け、「Cloud Runホスト版」と「ユーザー自身のWindows PCでのローカル版」の両方をサポートする方針とした。ローカル版でのみ有効な`POST /api/michecker-local-compare`を`goal2-app/server.js`に追加し、`beforeHtml`/`afterHtml`を一時HTMLファイルに書き出して`child_process.execFile`で`htmlchecker.exe -f htmllist.txt`を実行、`result`フォルダの新規CSV2件をShift-JISでデコードして返す。`process.platform !== "win32"`または実行ファイル未設定時は明確なエラーを返すガードを実装。
+  - `michecker-compare.html`/`.js`に「(ローカルWindows限定)htmlchecker.exeで自動比較」セクションを追加し、返却されたCSVを既存の比較ロジック(`parseMicheckerCsv`/`diffMicheckerRecords`/`renderResults`)にそのまま渡すことで手動アップロード版とコードを共通化した。
+  - **未検証事項**: `htmlchecker.exe`はWindows専用のためこの開発環境では実行できず、resultフォルダの出力タイミング・`htmllist.txt`列挙順=結果CSV生成順という前提は未検証。実機で要確認。Linux環境でのWindows判定ガードの動作、既存の手動CSV機能への回帰なしはPlaywright・`node test/run-tests.js`で確認済み。
+- ユーザーが実際にWindows環境で`htmlchecker.exe`をビルド・実行し、実データでの検査結果を共有してくれたため、上記の未検証事項を検証・修正した。
+  - セットアップ時、`.psf`によるTeam Project Setインポートが`git://git.eclipse.org/gitroot/actf/org.eclipse.actf.examples.git`という旧式`git://`プロトコルの接続タイムアウトで失敗することが判明。GitHub本家(`https://github.com/eclipse-actf/org.eclipse.actf.git`)からのGit Clone URIインポートに切り替えて解決した。
+  - `htmllist.txt`は絶対パスを1行1つ、コメント無しの単純な形式であることを実機で確認。
+  - 実際に出力された`[日付]_[時刻]_list.csv`のヘッダーが`Target HTML file,Result CSV file`(英語)で、検査対象パス→結果CSVパスの明確な対応表になっていることを確認。これにより、`goal2-app/server.js`の`findNewResultCsvFiles`(mtime順ソートによる未検証の対応付け)を削除し、`parseHtmlCheckerListCsv`でこの`list.csv`を解析して確実に対応付ける方式に修正した。
+  - htmlchecker.exe(CLI版)の結果CSVは、GUI版でエクスポートしたものと列構成が異なり、`堅ろう（牢）`と`JIS`の間に`WCAG 2.0`列が追加された12列構成であることを実データで確認。`michecker-compare.js`のパーサーは列名ベースのため、コード変更なしで正しく動作することも確認した。
+  - 実際の検査結果CSV(移行元62件・移行後57件)を`michecker-compare.html`に読み込ませ、49シグネチャに集約されて「新規2・未解消42・解消5」という妥当な結果になることを確認した。`memory/michecker-research.md`に実機検証結果として詳細を追記済み。
+- 「コマンドラインに不慣れな一般担当者にも配布したい」という要望を受けて、ローカルWindows版をNode.js単一実行ファイル(SEA)化する仕組みを追加した。ElectronアプリはChromium同梱で数百MBになりゼロ依存方針から外れるため見送り、Node.js標準機能のみで完結するSEA方式を選んだ。
+  - `goal2-app/server.js`に`node:sea`での実行検知(`isSeaBuild`)・起動時のブラウザ自動起動(`openBrowser`、SEA実行時のみ)・`htmlchecker.exe`パスの設定ファイル保存(`%APPDATA%\goal2-app\config.json`、環境変数が優先)・`GET`/`POST /api/local-settings`エンドポイントを追加した。
+  - `michecker-compare.html`/`.js`に、`htmlchecker.exe`のパスを画面から入力・保存できる設定パネルを追加し、環境変数の手動設定の説明を削除した。
+  - `goal2-app/sea-config.json`(SEA設定)・`build-windows-app.bat`(Windows上でのビルド手順を自動化するバッチファイル)・`LOCAL_WINDOWS_APP.md`(ビルド手順・利用者向けドキュメント)を新規追加した。
+  - **未検証事項**: `.exe`のビルド自体はこの開発環境(Linux)では試せておらず、Node.js公式SEAドキュメントに基づく実装。実際にWindows環境でビルド・起動して確認する必要がある。設定の保存・読み込みはPlaywrightで動作確認済み、既存機能への回帰もなし。
+- ユーザーが発見した第三者サイト「miChecker対策テクニック集」(miCheckerの指摘メッセージ・WCAG基準・達成方法を92件一覧化)を`a11y-migration-kb/`と突き合わせ、miCheckerでは指摘されるがKB側では未カバーの項目(40/92件、17/24種のWCAG基準)を特定した。ユーザーの指示「ルールを拡張していきましょう。KBに拘る必要はないので」を受け、KBを拡張する対応を行った。
+  - 新規ルール8件(`html-structure/deprecated-elements.md`・`page-title.md`・`lang-attribute.md`・`duplicate-id-accesskey.md`・`embedded-script-behavior.md`、`text/spaced-characters.md`、新設`form/`カテゴリの`submit-button.md`・`label-position.md`)を追加し、既存2件(`heading-order.md`・`color.md`)の`wcag`タグを拡充した(番号不一致が「タグ漏れ」か「ルール自体の欠如」かを本文まで読んで区別した上で対応)。
+  - `build/rules.jsonl`を再生成(43→53ルール)し`goal2-app/data/rules.jsonl`に同期。`GET /api/rules`で`summary.total=53`・カテゴリ別内訳(`form:2`が新設)を確認、既存サンプル6件のPlaywright回帰確認でも異常なし。
+  - `memory/michecker-research.md`にカタログ概要・カバレッジ分析手法・拡張内容を追記。カタログ経由での逆引きUI自体(各比較結果行→カタログエントリ→KBルールへの対応表示)は今回は未着手。
+- ユーザーが提示した https://github.com/eclipse-actf/org.eclipse.actf が、miChecker/HTML Checkerの評価エンジン本体のソースコード(`checkitem.xml`268項目・50種のWCAG基準、`description_ja.properties`)であることが判明し、前回のaccessibility.jpカタログより完全な一次情報源としてKBカバレッジを再分析した。ユーザーの指示(「拡張します。ただしCMSの本文コンテンツに関係ないものは省きます。さらにKB由来のものとmiChecker由来のものを分別して修正をKB版とmiChecker版で選べるようにします」)に基づき対応した。
+  - `origin`(`kb`/`michecker`)・`michecker_check_ids`フロントマターフィールドを新設(`tools/okf2jsonl.py`・`README.md`対応済み)。28種の未カバーWCAG基準のうち、メディア制作・サイト全体テンプレート・ARIA実装レベルのものは対象外とし、本文コンテンツ編集で対応可能な項目のみ新規ルール8件(`origin: michecker`)を追加、既存3件にタグを追加した(`origin`は`kb`のまま)。
+  - 同一の関心事についてKB独自ルールとmiChecker由来ルールを別ファイルで保持し`related`で相互リンクする設計を、`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`の2ペアで導入した。
+  - `build/rules.jsonl`を再生成(53→61ルール)し同期。`node test/run-tests.js`・既存サンプル6件のPlaywright回帰確認で異常なしを確認。
+  - **未実装**: `origin`/`michecker_check_ids`は現時点ではKBデータ上の区別のみで、goal2-appのUIで「マニュアル版」「miChecker版」を視覚的に区別・選択させる画面機能は未実装。
+- 「KB」という呼称がリポジトリ全体(a11y-migration-kb)と紛らわしいとの指摘を受け、`origin`の値を`kb`→`manual`にリネームした。あわせて、マニュアル版とmiChecker版が対になっている2ペア(`link-text.md`↔`link-purpose-standalone.md`、`heading-order.md`↔`heading-content-quality.md`)について、「別々に確認する選択肢」ではなく「マニュアル版の基準を満たせばmiChecker版の指摘も内包的に解消する」関係であることを明示する`includes`フィールドを新設した。`rules.jsonl`再生成(origin内訳: manual 53 / michecker 8)、テスト・回帰確認とも成功。
+- 当初からの要望だった「miCheckerで指摘される内容の逆引き」を実装した。`a11y-migration-kb/vendor/eclipse-actf/`に公式チェック項目定義(`checkitem.xml`・`description_ja.properties`、EPL-1.0)を配置し、`tools/actf2json.py`(新規)で`build/michecker-checkitems.json`(268件)を生成。`goal2-app`の`michecker-compare.js`で、比較結果行の`内容`テキストをチェック項目テンプレートと照合(静的テキスト190件は完全一致、`{0}`含みテンプレート78件は正規表現化)し、`michecker_check_ids`経由で対応する`a11y-migration-kb`ルール(マニュアル版/miChecker版)を「対応ルール」列に自動表示する機能を追加した。KBルールが無い項目は「KB未対応」+該当WCAG基準として可視化する。
+  - 実際のhtmlchecker.exe由来CSV(220行/212行、59シグネチャ)で検証: テンプレート照合59/59件成功(照合不可0件)、8件がKBルールに一致(うち2件はマニュアル版への内包表示も正しく表示)、51件が「KB未対応」として正しく可視化された。既存サンプル6件のPlaywright回帰確認でも異常なし。
+  - この実装完了後、次はWindows実機での`build-windows-app.bat`(.exeビルド)検証に進む予定。
+- ユーザーから「Windows実機でのビルド検証にあたり、miChecker等の既存インストール済みツールをアンインストールする必要はあるか」との質問があった。`goal2-app.exe`(SEA)のビルド・実行はmiChecker(GUI)・`htmlchecker.exe`(CLI)と完全に独立したプロセスであり、アンインストール不要と回答(`htmlchecker.exe`はむしろローカル自動比較機能に必要なため残す必要がある)。あわせて、Node.js未インストールの担当者向けに`goal2-app/LOCAL_WINDOWS_APP.md`へ「Node.jsのインストール(未インストールの場合)」節(nodejs.orgからのLTS版導入手順)を追加した。
+- ユーザーが実際にWindows実機で`goal2-app.exe`をビルド・起動したところ、「ダブルクリックしても何も起きない、一瞬何かを開こうとしてそこで終わる」という不具合が発生した。原因はNode.js SEAの既知の制約(埋め込みエントリスクリプトの`__dirname`が`.exe`の実際の設置場所を指さない)で、`server.js`が`rootDir = __dirname`を起点に`public/`・`data/`を読み込む設計だったため、SEAビルドでは起動直後にファイル読み込みエラーでクラッシュしていたと診断した。
+  - `server.js`を、SEAビルド時は`rootDir = path.dirname(process.execPath)`(`.exe`自身の場所)を使うよう修正(通常の`node server.js`実行時は従来通り`__dirname`)。
+  - `LOCAL_WINDOWS_APP.md`に、`goal2-app.exe`単体ではなく`public`/`data`を含む`goal2-app`フォルダごと配布・移動する必要がある旨と、ダブルクリックで無反応な場合はコマンドプロンプトから実行してエラー内容を確認する手順を追加。
+  - **未検証**: この修正が実際にWindows実機での不具合を解消するかは、ユーザーによる再ビルド・再起動確認待ち(この開発環境(Linux)ではSEAビルドの起動自体を検証できないため)。
+- ユーザーがrootDir修正版を再ビルドしても依然クラッシュした。この開発環境(Linux)で同じSEAビルド手順を再現して調査した結果、`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: ./lib/rules`で`server.js`冒頭の`require`から即座にクラッシュすることを確認した。rootDirの問題とは別に、Node.js SEAは埋め込みスクリプトからのローカルファイルへの`require()`を実行時に解決できない(単一の自己完結したスクリプトである必要がある)という既知の制約が根本原因だった。
+  - `build-windows-app.bat`に、SEA化の前段で`npx esbuild`により`server.js`と`lib/`以下をひとつの自己完結したファイルにバンドルするステップを追加。`sea-config.json`の`main`をバンドル後のファイルに変更。
+  - Linux環境でesbuildバンドル→SEA化→postject注入→起動という同じ手順を再現し、`/api/health`・`/api/rules`(61件)・`/api/michecker-checkitems`(268件)・両HTMLページがいずれも正しく動作することを確認した(バンドル前は同じ手順で確実に同じエラーが再現することも確認済み)。
+  - `LOCAL_WINDOWS_APP.md`に、バンドルが必要な理由・`ERR_UNKNOWN_BUILTIN_MODULE`が出た場合の対処(古い.exeビルド成果物の削除・再ビルド)・署名なしバイナリがアンチウイルスにブロックされる可能性についての注記を追加。
+  - **未検証**: バンドル・SEA化はLinux上で動作確認したが、Windows実機での最終確認はまだ完了していない。ユーザーの再検証待ち。
+- ユーザーがesbuildバンドル版の`build-windows-app.bat`をWindows実機(PowerShell経由)で実行したところ、`[1/5]`(esbuildバンドル)は正常終了するが、`[2/5]`以降が一切実行されずスクリプトが無言で終了する不具合が発生した。原因はWindowsバッチファイルの既知の落とし穴で、`npx`(実体は`npx.cmd`)を`call`無しで別のバッチファイルから呼び出すと、そこで制御が戻らずスクリプトが終了してしまうというもの。以前の4ステップ構成では`npx postject`が最後のステップだったため問題が表面化しなかった。
+  - `build-windows-app.bat`の`npx esbuild`・`npx postject`呼び出しに`call`を追加して修正。
+- `call`修正後、ビルドは`[1/5]`〜`[5/5]`まで完走し`goal2-app.exe`も生成されたが、実行するとアプリではなくNode.jsの対話モード(REPL)が開いてしまう不具合が発生した。`postject`実行時に`warning: The signature seems corrupted!`という警告が出ており、これが原因と判明した。`node.exe`は署名済みバイナリで、Node.js公式のSEAドキュメントも「署名済みバイナリを改変する場合は事前に署名除去が必要」と明記している。従来`signtool`が無い場合は署名除去を静かにスキップする作りだったため、`signtool`未導入環境ではビルドは完走するが中身が壊れた(SEAフューズが正しく設定されない)`.exe`が生成され、実行時にNode.jsの通常のCLI引数解析にフォールバックしてREPLが起動していた。
+  - `build-windows-app.bat`: `signtool`が見つからない場合はエラー終了し、インストール方法を案内するよう変更(スキップして続行、から必須化に変更)。
+  - `LOCAL_WINDOWS_APP.md`: `signtool`を前提条件に追加し、インストール手順(Windows SDKインストーラーで「Windows SDK Signing Tools for Desktop Apps」のみ導入)を新設。トラブルシューティングにREPLが開く症状の説明を追加。
+  - **未検証**: `signtool`によるバイナリ署名除去・Windows PE形式でのSEA注入はこの開発環境(Linux)では検証できない。ユーザーの実機再検証待ち。
+- signtool必須化の直後、ユーザーが「signtoolはインストール済みなのに見つからないと言われる」と報告した。Windows SDKインストーラーが`signtool.exe`をPATHに自動追加しないこと、および既に開いているシェルにはインストール後のPATH更新が反映されないことが原因と考えられる。`build-windows-app.bat`に、`where`で見つからない場合は`C:\Program Files (x86)\Windows Kits\10\bin\`以下を再帰検索するフォールバックを追加した。`LOCAL_WINDOWS_APP.md`のトラブルシューティングも対応更新。
+- 上記の対応後、`signtool`は正しく検出・署名除去に成功したが、`[5/5]`の`postject`が「Error: Couldn't write executable」で失敗した。プロセスロックまたはアンチウイルスによるブロックが疑われたため、実行中プロセスの終了・再試行を案内したところ、**ユーザーのWindows実機でついにビルド→`goal2-app.exe`の起動→画面表示(KBルール61件の読み込み含む)まで一連の流れが初めて成功した**。
+  - `LOCAL_WINDOWS_APP.md`を実機検証済みの内容として整理: PowerShellでは`.\build-windows-app.bat`が必要な旨を「ビルド手順」本文に明記、「注意」を実機確認済み(2026-07-08)に更新、トラブルシューティングを「ビルド中のエラー」「実行時のエラー」「アンチウイルスによるブロック」の3グループに再構成し`Error: Couldn't write executable`の対処法を追加。
+  - これでSEA(.exe)ビルドの一連の不具合(`__dirname`解決・require()解決・call忘れ・signtool必須化・signtool検出)はすべて実機で解消を確認した。
+- ビルド成功後、ユーザーから「Node.js・signtoolのインストールも含めてパッケージ化できないか、今のままだと敷居が高い」との相談があった。確認したところ、これらのインストールが必要なのはビルドを行う担当者PCのみで、出来上がった`goal2-app.exe`(+`public`+`data`)を受け取って使うだけの人には不要であることを説明した上で、意図は「`goal2-app.exe`単体ではなく3点セットを配る必要がある」という運用の分かりにくさだったと判明したため、配布物を1つのZIPにまとめる自動化で対応した。
+  - `build-windows-app.bat`に`[6/6]`としてPowerShellの`Compress-Archive`で`goal2-app.exe`・`public`・`data`を`goal2-app-windows.zip`にまとめるステップを追加。
+  - `LOCAL_WINDOWS_APP.md`の「ビルド手順」「利用者側の使い方」を、この1つのZIPを配布・展開する前提の内容に書き換え。
+- ユーザーから「miCheckerとの共存について調整していきましょう」との依頼があり、AskUserQuestionで意図を確認したところ「実業務ワークフローの整理を先に行い、その後で逆引きの完成度を上げる」という優先順位だった。`AGENTS.md`/`workstream.md`のmiChecker関連記述が抽象的なまま(このセッションで実装済みの`michecker-compare.html`を反映していない)だったため、具体的な手順として書き直した。
+  - `workstream.md`のGoal 2 Target Flowを、移行前HTML確保→CMS登録→移行後検査→`michecker-compare.html`への読み込み(ローカルWindows版での自動比較/Cloud Runホスト版でのCSV手動アップロードの2経路)→「対応ルール」列(KBルールへの逆引き・KB未対応の可視化)を使った本文起因指摘の絞り込み、という具体的な13ステップに再構成。Goal 1にも同ツールを将来流用できる旨を一文追記。
+  - `AGENTS.md`の「miChecker Quality Signal」節に、`michecker-compare.html`の機能と2つの検査結果取得方法(Cloud Run版/ローカルWindows版)を追記。
+  - 次の作業(ユーザーの優先順位2番目): 逆引き機能自体の完成度向上(現状は`michecker_check_ids`を持つルールのみ逆引きでき、KB未対応となった項目をどうKB拡張にフィードバックするかの運用は未定義)。→ 下記で対応済み。
+- 逆引きの精度向上を実施した(ユーザーの優先順位2番目)。実データで「KB未対応」だった51件を1件ずつ精査し、3方向で対応した。
+  - 既存ルール17件に`michecker_check_ids`を追記(タグ付きルール12→29件、カバーする公式チェック項目77件)。大半の「KB未対応」は、ルール自体は存在するのにタグが未設定という偽のギャップだった。
+  - 実データで「問題あり」レベルだったth要素のscope属性欠如に対応する`rules/table/th-scope.md`を新規作成(62ルール目)。
+  - 本文編集で対応できない54チェック項目を`reference/michecker-out-of-content-scope.json`に理由付きで分類し、比較画面でグレーの「本文スコープ外」バッジとして「KB未対応」(赤、KB拡張の検討対象)と区別表示するようにした。
+  - トリアージ運用(タグ追記/新規ルール/スコープ外分類の3択)を`reference/michecker-triage.md`に文書化。バックログ2件(C_54.0 fieldset・C_79.5 label内容)を記録。
+  - 検証: 同じ実データ(59シグネチャ)でKBルール一致8→32件、KB未対応51→2件(バックログのみ)、本文スコープ外25件、照合不可0件。既存サンプル回帰・テストとも成功。
+- ユーザーの依頼(「KB(miChecker含む)とmiCheckerのみの切り替えを検討」)を受け、両画面に基準切り替えを実装した。
+  - Goal 2修正候補画面: 「修正基準」セレクタ(KB全ルール(既定)/miChecker指摘対応のみ)を追加。miCheckerモードでは`michecker_check_ids`を持つルールの候補だけを生成(擬似ルールID`iframe.title`は`html-structure.iframe-frame-title`に対応づけ、`iframe.cms-review`は除外)。証跡JSONに`rule_scope_mode`を記録。モード変更時は再生成を促すヒントを表示。
+  - miChecker比較画面: 「対応ルールの基準」セレクタ(KB基準(既定)/miChecker基準のみ)を追加。miChecker基準ではマニュアル版・miChecker版の両方に一致する行でmiChecker版のみを表示し、「内包」注記も非表示にする(検収基準がmiChecker通過のみの案件向けの最小修正観点)。
+  - Playwright検証: Goal 2のmiCheckerモードで候補が絞られること(tables 12→10、links-text 20→7、procedure-overview 6→4)、既定モードで既存6サンプルに回帰が無いことを確認。
+- ユーザーから「バックログ2件(C_54.0・C_79.5)はフォームなのでコンテンツに入ってこない。他にも本文コンテンツに入らない可能性のあるものはないか」との指摘を受け、全268チェック項目を棚卸しした。フォーム全般、およびCMSテンプレート側で自動設定されるページtitle・lang属性を、KBの対応ルールごと削除しスコープ外に分類する方針でユーザーと合意した(ユーザーの最終回答: フォーム=ルール削除+スコープ外化、title/lang=当初「titleのみ残す」案を検討したが最終的に両方削除に訂正)。
+  - `rules/form/`配下4ルール+`index.md`、`rules/html-structure/{page-title.md,lang-attribute.md}`を削除し、各索引ファイルから該当行を除去した。
+  - `reference/michecker-out-of-content-scope.json`に、削除で解放された6件を含むフォーム関連約37項目・title/lang関連6項目・frame/head/nav/script/CSS/ARIA/廃止要素/汎用項目など約80項目を理由付きで追加(合計148項目)。
+  - 棚卸しで見つかった高確度なタグ漏れ10件(見出し入れ子、id/accesskey重複、廃止要素のblink/marquee、meta refresh、リスト、th要素headers関連、キャプションsummary、iframe/frame titleの残り変種、複雑画像の詳細説明、テキスト画像化のコントラスト)を既存ルールに追記した。
+  - `reference/michecker-triage.md`のバックログを更新(解決済みのC_54.0・C_79.5を削除、新たに見つかった未対応バックログ11項目を追記)。
+  - `build/rules.jsonl`(56ルール)・`build/michecker-checkitems.json`(268件)を再生成・同期。
+  - 検証: 実データ(59シグネチャ)でKB未対応(赤)2件→0件、本文スコープ外(グレー)25件→33件、ルール一致32件(変化なし、回帰なし)を確認。既存サンプル6件のPlaywright回帰確認・`node test/run-tests.js`成功。
+- ユーザーから「検出・チェックの方法もmiChecker本体と全く同じにしたい(候補生成が上位互換ならそのままでよい)」との依頼を受け、タグ付け済み88チェック項目とapp.js候補生成のギャップ分析を実施した(A: 上位互換14件 / B: 部分カバー32件 / C: 未検出42件)。miChecker本体の検出アルゴリズム(eclipse-actf CheckEngine.javaのitem_NN()メソッド群)はWebFetchで参照可能なことを確認済みで、発火条件の裏取りに使える。
+  - Phase 1として、error型(機械的確定検出)14件のパリティを実装: blink/marquee(C_33.0/34.0)、meta refresh(C_36.0/36.1)、id・accesskey重複(C_422.0/423.0)、frame要素title(C_51.0/51.4、パーサーがframeを破棄するため生HTML再解析で注意として出力)、空リンク(C_57.2)、セル単位scope検査(C_331.0/331.1)、headers属性参照検証(C_332.1/332.2、C_332.0はmiChecker本体でも未発火のため対象外)。
+  - この検証中に、候補詳細「見た目の比較」が候補HTMLを親ページへ直接挿入しているためmeta refreshでアプリごと遷移する実バグを発見し、`sanitizeVisualPreviewHtml()`で修正した。
+  - 検証: 陽性13+陰性6+miCheckerモード1の計21ケース全PASS、既存6サンプルの候補数完全一致、テスト成功。
+  - 残作業: Phase 2(warning/B系32件の検出漏れ補強: 廃止要素の対象拡大・bgcolor属性・レイアウト表の素朴判定・テーブルセル内色指定の設計穴等)、Phase 3(user/info型の確認通知: 見出し内容の質・リスト構造・隣接リンク等、「注意」枠での出力を想定)。summary属性系(C_25.2/C_25.4)はKBの廃止属性方針と衝突するため方針判断待ち(推奨: summaryは実装せずcaption/本文での概要提供を促す通知に読み替え)。
+  - 運用メモ: このセッションからユーザー指示により「Fable 5が司令塔(計画・判断・レビュー)、Sonnet 5が基本作業(実装・調査)」の体制。ギャップ分析とPhase 1実装の大部分はSonnet 5サブエージェントが実施し、Fable 5が検証・バグ修正・フォローアップを行った。
+- Phase 2Aとして、warning/B分類のうちテーブル層・色/コントラスト系の検出漏れを補強した。実装前にmiChecker本体のJavaソース(`CheckEngine.java`・`HtmlEvalUtil.java`)を直接取得して検証したところ、事前のギャップ分析レポートに複数の誤りが判明: C_76.0とC_500.13/14/15/16はmiChecker本体でもコード上コメントアウトされ発火しないデッドコード(未実装)、C_13.0は実は既存ロジックで上位互換済み(B→A訂正、追加実装なし)、C_48.8は実際はimg[longdesc]・table[summary]の2属性のみが対象(align/bgcolor等は対象外と判明)、C_12.0/C_23.0は「レイアウト表の素朴判定」ではなく「表の入れ子」検出だった、C_23.1は健全な表にも無条件発火する仕様のため意図的に未実装(ノイズ回避)。
+  - 実装: C_12.0/12.1/12.2+C_23.0/23.2(表の素朴構造判定、既存の構造化判定に乗らない表のみ対象)、C_75.0(構造化経路をすり抜けるth無しデータ表への確認候補)、C_48.8(longdesc/summary属性の除去候補)、C_500.17/18(テーブルセル内のcolor/background-color検出を妨げていた`closest("table")`早期returnの除去、bgcolor属性の検出・除去追加、表再構築時の色系属性引き継ぎ防止)。
+  - 検証: Fable 5が親セッションで独立に再検証(陽性11+陰性2、C_75.0は初回テストHTMLの選定ミスで一時不一致となったが真のギャップケースで再確認し解消)、既存6サンプル完全一致(回帰なし)、テスト成功。
+  - 残作業: Phase 2B(廃止要素拡大C_48.0/48.2、外国語検出緩和C_19.0/500.6、非テキストコンテンツ確認C_71.0/600.0、曖昧リンク文言拡張C_600.14、複雑画像シグナル拡張C_4.0、コントラスト/拡大確認C_500.11/12、色依存情報確認C_8.0、リンク関連C_57.5/57.6/58.0)、Phase 3(user/info型の確認通知)。
+- Phase 2B(最終フェーズ)として、廃止要素の対象拡大・リンク関連・複雑画像シグナル・配色のみの情報伝達確認を実装した。Phase 2Aの教訓を踏まえ、実装対象全項目についてJavaソースでの裏取りを事前に徹底したところ、C_19.0/500.6(外国語)・C_71.0/600.0(非テキスト代替)・C_600.14(曖昧リンク)・C_500.11/12(コントラスト/拡大)の計6件は、対応する要素条件付きロジックが存在せず`always()`(ページ単位の無条件リマインダー、checkitem.xmlのtype="info"と整合)であることが判明し、ノイズ回避のため意図的に未実装とした。
+  - 実装: C_48.0/48.2(CENTER/BASEFONT/BIG/TT追加、NOBRはロジック不在で対象外と確認)、C_4.0(alt文字列の長さ・語数ベースのキーワード非依存シグナル、item_4()のisNormalImage()相当の小画像除外込み)、C_8.0(style色+背景色併用、またはfont要素のcolor/bgcolorいずれか一方でも確認候補、text.sensory-characteristicsへ対応づけ)、C_57.5(隣接同一href リンクの統合検討)、C_57.6(完全に空のリンク、href="#"は既存link.link-brokenに委ねるため対象外)、C_58.0(同一リンクテキスト・異なるhrefの確認)。
+  - 副次的なバグ修正: `text.decoration-lines`ルールにmichecker_check_idsが未設定だったため、miCheckerモードでU/S/STRIKE/CENTER/BIG/TT候補が本来検出しているmiChecker項目(C_33.1/33.2/48.2等)にもかかわらず一切表示されない既存バグを発見。`MICHECKER_RULE_ALIASES`で解消。
+  - 検証: Fable 5が親セッションで独立に再検証(陽性12全PASS)、既存6サンプルは`links-text`のみ20→21件(C_8.0該当箇所があり意図した増加)、他5サンプル完全一致。C_4.0拡張により丁寧な説明的alt文にも確認候補が出ることを確認したが、confidence: low・patchMode: none・人間確認前提でありmiChecker本体自体の粒度と一致するため意図した挙動と判断。
+  - Phase 1・2A・2Bでmichecker検出パリティの作業は完了。ギャップ分析88項目のうちA(上位互換、訂正後15件)・B(実装対象を絞り込んだ上で対応済み、dead code 6件+意図的ノイズ回避2件を除く)は対応済み、C(未検出42件、Phase 3)は未着手のまま。
+- ユーザーに「現状で判断が必要なものはないか」洗い出しを依頼された。確認したところ、**PR #28が最初のコミットのみでマージ済みで、その後のPhase 1・2A・2Bの3コミットが閉じたPRのブランチに積まれたままどのPRにも属していない**という見落としが判明(標準手順「マージ済みPRの上に積む前にorigin/mainから作り直す」を怠っていた)。ユーザーから5点の指示を受け対応した。
+  - ①**リベース実施**: `origin/main`(PR #28・PR #29マージ済み)に対してrebaseし、CHANGELOG.mdの競合(PR #29のエントリと自分のエントリが同一挿入位置)を日付順に解消。3コミットは正常に載せ替え完了、テスト・6サンプル回帰も再確認予定(次のコミット時)。
+  - ②**summary属性(C_25.2/C_25.4)は「存在すればシステム側で自動削除、内容の追加・改善はしない」方針で確定**。`table/caption.md`から`html-structure/deprecated-elements.md`へ`michecker_check_ids`を付け替え、本文にlongdesc/summary除去方針とケース3を追記。`michecker-triage.md`に決定を記録。
+  - ③**Phase 3(C分類42件、user/info型の確認通知)のノイズ量設計は、着手時にユーザーと協議しながら決める**(自律実装しない)方針を確認。
+  - ④**michecker-triage.mdのバックログ11項目(longdesc/D-link、blockquote/cite、リンク区切り、アスキーアート、heading-content-quality重複可能性、内容の分かりやすさ確認、ふりがな、object alt、リンクaccesskey、area alt、applet alt)は個別に協議しながらKBルール化/スコープ外/保留を判断する**方針を確認(まだ個別協議は未実施)。
+  - ⑤**PR監視(watch)は不要**と確認。
+  - ⑥`reference/michecker-out-of-content-scope.json`の不整合データ`C_5.4`(実在しないチェックID、過去セッションの入力ミスと推測)を削除。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成・同期(56ルール、268チェック項目、本文スコープ外147件)、タグ/スコープ外の二重登録なしを確認。`node test/run-tests.js`成功。
+  - 次のアクション: 新規PRの作成(このコミット後)、michecker-triage.mdのバックログ11項目の個別協議、Phase 3着手判断はユーザーとの協議待ち。
+- ユーザーの希望「Phase 3のノイズ量設計から、個々に選択肢提示してほしい」に応じ、C分類(当初未検出42件、Phase1-2Bで既解決分を除くと実質15グループ)を1グループずつAskUserQuestion障害のためテキストで提示し、協議して決定した。
+  - 実装決定(6グループ): E(見出し内容の質、極端に短い/記号のみ限定)、J(caption品質、汎用語のみ)、G(alt150文字超のみ、C_89.1は見送り)、M(リスト構造3項目とも)、K(th配置パターン)、N(位置依存語彙、代表的複合表現のみ)。
+  - 見送り決定(9グループ): H(テキスト画像化検出)、I(リンクtitle属性)、A(廃止要素の残りタグ)、D(スクリプト依存)、B(動き・閃光の停止手段確認)、F(frame/iframeのtitle品質確認)、O(画像内の色のみ依存)、C(タグ・属性整合性)、L(略語・頭字語abbr化)。理由はいずれも「機械判定が困難で人間レビューに委ねる方が実効的」「出現頻度が低い」「既存の運用で代替可能」のいずれか。
+  - Sonnet 5に実装委任、Fable 5が独立検証(陽性15+陰性6+miCheckerモード2の計17ケース全PASS)。実装中にC_16.2(親のないli要素)がブラウザのHTMLパーサーで自動修復されず検出可能であることをPlaywrightで確認できたため、当初懸念していた「実装不可能」ケースには当たらなかった。
+  - レビューで、サブエージェントが「KBタグは既存で十分」と報告した`image.complex-image-report.md`にC_80.0のタグ付けが実際には漏れていることを発見(app.js側の候補生成には実害なし、michecker-compare.jsの逆引き表示精度のために追記)。サブエージェントの完了報告を鵜呑みにせず必ず独立検証する運用の重要性を再確認。
+  - 既存6サンプルは`iframe`(4→5)・`goal3-hirosaki-news2019`(17→18)がC_83.0の正当な検出で+1、他4サンプル完全一致。
+  - これでmiChecker検出パリティ(Phase 1〜3)が完了。88項目は上位互換15件・実装対応(Phase1-3合計)約40件・意図的未実装約33件に整理された。
+- `reference/michecker-triage.md`に残っていたバックログ11件を、同じく1項目ずつテキストで選択肢提示して協議し全件解消した。
+  - タグ追記4件: `deprecated-elements.md`(C_3.0/3.1、longdescは既存の除去方針で内容確認自体が不要)、`link-text.md`(C_46.0、連続リンクの区切り)、`heading-content-quality.md`(C_67.0、自動検出は追加せず人間確認事項として明記)、`alt-text.md`(C_300.1、画像マップは実務で利用実績ありとの確認)。
+  - 新規ルール2件: `text/quotation.md`(C_17.x/18.x、引用の構造化)、`text/ascii-art.md`(C_6.0/6.1/69.0、顔文字が実務で頻出との確認があり新規ルール化)。両方とも自動検出コードは持たずKBドキュメントのみ。
+  - スコープ外化5件: C_70.0(汎用的すぎ)、C_87.0(判定が主観的)、C_1.1(利用頻度低)、C_40.0(accesskeyは現代の実務で非推奨)、C_300.2(C_0.x系と同様deprecated-elements.mdに吸収)。
+  - レビューで、`image/alt-text.md`にC_80.0が以前から重複タグ付けされていたことを発見(実際の検出はPhase 3で`image/complex-image-report.md`側に実装済み)、`alt-text.md`側から削除して整合を取った。また自分自身の作業ミスで、ユーザーが「スコープ外」と選んだC_300.2を誤って`deprecated-elements.md`へタグ付けしてしまい、直後に気づいて訂正した(ユーザーの選択をタグ付け系の質問と混同したための単純ミス)。
+  - `build/{rules.jsonl,michecker-checkitems.json}`を再生成・同期(58ルール、268チェック項目、本文スコープ外152件)。`node test/run-tests.js`成功、既存6サンプルはコード変更なしのため完全一致。
+  - これでmiChecker関連の逆引き精度向上・検出パリティ・トリアージバックログの一連の取り組みが完了した。
+- Windows実機ビルド前の最終確認中に、ユーザーから「リンク(内部・外部・ファイル)が見出しに設定されている場合は見出しでなくす」修正依頼を受けた。カード型一覧(お知らせ・関連ファイル等)でCMSテンプレートが見た目強調のため見出しタグでリンクをラップしているだけのケースへの対応。既存の見出しルール3件はどれも合致しなかったため、新規ルール`html-structure/heading-link-only.md`(origin: manual、mechanical、見出し=リンク単体1件かつ内部/外部/ファイル/別ページアンカー/トップページの場合のみ対象)を作成し、`goal2-app`に`collectHeadingLinkOnlyCandidates()`を実装(見出しタグをunwrap、高確信度・自動適用可)。開発中に壊れたリンク(`href="#"`)を誤って「実リンク」判定してしまうバグを自己発見・修正した。
+  - 検証: 陽性4+陰性5+実際の候補採用確認の計10ケース全PASS。実サンプル`goal3-hirosaki-news2019`で実際にこのパターン(PDFファイルへのリンクをh6見出しでラップ)を正しく検出(+1件、意図した増加)、他5サンプル完全一致。
+  - この一件は、ユーザー自身がビルド前に実際の画面/データを確認する中で見つけた実運用上の課題であり、miChecker由来ではなく完全にKB独自の追加ルール(origin: manual)である点が今までのmiChecker関連作業と異なる。
+- ユーザーから、オペレーショナル・ダッシュボード調のデザインスペック(レイヤード背景・ニューモーフィズム的な柔らかい影・寒色系ニュートラルパレット・8px基準スペーシング・スローなモーション等)を提示され、「デザインを見直すので採用してほしい」との依頼を受けた。goal2-appの全画面が対象だが、まずindex.htmlのみ適用してレビューする段取りで合意した。既存の単一ブランドアクセント(ティール)を寒色系ブルーグレー+ブルーアクセントへ全面移行した。
+  - `:root`のカラートークン刷新(primary: ティール→ブルー#2f5fdb、primary-strong: 紺#17274d)、新規`--sun`トークン(セカンダリハイライト)追加、見出し深度タグの再配色、角丸5段階再編、8px基準スペーシングトークン、モーショントークン(`prefers-reduced-motion`対応)新設、シャドウの紺系retint。
+  - body背景にレイヤードグラデーション+2つのアンビエント光の玉の90秒ドリフトアニメーションを追加。全ボタンにホバーリフト+ソフトシャドウ、primaryボタンは外側グローを追加。
+  - 新トークンのコントラスト比をWCAG AA基準(4.5:1)で計算検証したところ、`--sun`/`--tag-h2`(白文字コントラスト2.83)と`--faint`(3.53)が未達だったため、それぞれ濃色に調整して基準を満たすようにした(自己発見・自己修正)。
+  - Playwrightでスクリーンショットを撮影し目視確認、`node test/run-tests.js`で機能面への影響が無いことを確認。ユーザーへスクリーンショットを共有し、確認・フィードバック待ちの状態でStop hookにより一旦コミット。
+- ユーザーの指示「他画面（michecker-compare.html・goal3.html）への展開に進みます」を受け、上記デザイン刷新を両画面へ展開した。両画面とも`index.html`と同一の`styles.css`を共有しているため`:root`トークンは自動反映。ページ固有のハードコード色として`.goal3-source-preview`の背景(旧ミント系`#f8fbfa`→新パレット`#f6f9fc`)のみ修正が必要だった(`michecker-compare.html`側は元々中立トーンで修正不要)。
+  - 展開の実データ検証中(CSV 59行の比較結果を`michecker-compare.html`に読み込んでフルページスクリーンショット取得)に、本題とは無関係の既存バグを偶然発見: `document.body.scrollHeight`が9923pxまで異常肥大化し、フルページ表示が大きく崩れる現象。調査の結果、`.app-shell`(`display: grid; height: 100vh; overflow: auto;`)自体は`clientHeight: 1000`で正しく制約されており内部スクロールも機能していた(`scrollTop`を`scrollHeight`まで動かせることを確認)が、containment未指定のため子要素(実データで高さ約8676pxの結果テーブル)のスクロール可能領域が祖先`document.body`(`overflow: hidden`)のscrollHeight計算に漏れ出していた。`HEAD~1`時点の`styles.css`と`.app-shell`/`.michecker-shell`定義を比較し、今回のデザイン変更が原因ではない(既存の潜在バグ)ことを確認した上でユーザーに報告し、「デザイン展開+overflowバグも今回まとめて修正」の指示を受けた。
+  - 修正: `.michecker-shell`・`.goal3-shell`(`.app-shell`と同一要素に付与される追加クラス)に`contain: layout;`を追加。`.app-shell`単体(index.html用)には適用しなかった — `index.html`は`.app-shell`直下に`position: fixed`の「次にやること」パネル(`.page-agent-panel`)を持ち、`contain: layout`を付けるとfixedの基準がビューポートから`.app-shell`に変わり、パネルがビューポート右下に固定されなくなる回帰が生じるため、対象を`.app-shell`内に`position: fixed`要素を持たない2画面に限定した。
+  - 検証: 修正前後で`document.body.scrollHeight`を計測し9923px→1000px(ビューポート高と一致)を確認。`.app-shell`の内部スクロール自体は修正後も機能(`scrollHeight: 10120`のまま)。`index.html`の`.page-agent-panel`が修正後も`position: fixed`でビューポート右下に留まることを別途確認(影響なし)。`node --check`・`node test/run-tests.js`成功(機能面の変更なし)。
+  - コミット確認の質問に対し、ユーザーから追加フィードバック「濃色のボタンにホバーした時の視認性が悪いので修正して」を受けた。調査したところ、全ページ共通の`button.primary:hover`ルールが背景色を`var(--primary-strong)`(#17274d、ほぼ黒に近い紺)へ変更しており、Playwrightで実際にホバー状態をスクリーンショットして確認したところ、元のブルーの色味が失われ、外側グロー(6px・透過82%)も控えめすぎて、ボタンが押せそうに見えない(視覚的な手がかりが弱い)状態だった。コントラスト比自体は問題なかった(白文字に対し14.6:1、AA基準4.5:1を大幅にクリア)。修正として、背景色を`color-mix(in srgb, var(--primary), black 15%)`(ブルーの色味を保った濃紺)に変更し、外側グローも`4px・透過68%`へ強化。修正後のホバー状態を再度Playwrightでスクリーンショット確認し、視認性の改善を確認した。この修正は`button.primary`を使う全CTAボタン(比較する・候補抽出・GOAL2へ渡す等)に共通適用されるため3画面すべてに影響する。
+  - PR #31は既にマージ済みだったため、ブランチ運用ルールに従いブランチを最新の`origin/main`から`git checkout -B`で建て直した(local HEADとPR #31マージコミットのツリーが完全一致していることを確認済み)。上記の未コミット変更(CHANGELOG.md/styles.css/project-state.md)を`git stash`で退避してから建て直し、`stash pop`で復元。
+  - コミット・プッシュ後、PR #32として作成・送信済み。
+- ユーザーから「外国語の言語属性でURLを外国語として扱ってしまっているので除外しましょう」との指摘を受けた。`collectForeignLanguageCandidate()`(`text.foreign-language`)の外国語判定正規表現(`[A-Za-z]{3,}(?:[ ,.'"-]+[A-Za-z]{2,}){2,}`、英字トークンが区切り文字を挟んで2回以上繰り返すパターン)は意味を見ておらず、`https://www.city.example.jp/...`のようなURLも「www」「example」「jp」等がピリオド区切りで並ぶだけでこのパターンに合致し、誤って外国語候補として検出していた。
+  - 修正: `URL_OR_EMAIL_PATTERN`(`https?://`・`www.`始まりのURL、および`xxx@yyy.zzz`形式のメールアドレスにマッチ)を新設し、外国語判定の正規表現を適用する前にこのパターンでURL・メールアドレスをテキストから除去してから判定するよう変更。実際に候補として提示するHTML(`buildForeignLanguageHtml`)自体は変更せず、判定用の一時コピーのみに適用。
+  - 実データ検証(既存6サンプルへの回帰確認)で、URLに加えて`<a href="mailto:hoken@example-city.jp">hoken@example-city.jp</a>`のようなメールアドレス表示も同じ理由(ドメイン部分が英字・ピリオド・ハイフンで区切られている)で誤検出していることを発見。ユーザーに確認の上、メールアドレスも合わせて除外対象に含めた。
+  - 検証: `node --check`・`node test/run-tests.js`成功。`links-text`サンプルで、修正前は`text.foreign-language`が2件(誤検出のメールアドレス表示1件+正規の英語文1件)検出されていたが、修正後は誤検出の1件が除外され正規の英語文のみ残ることを確認(全体件数25→24件、意図した減少)。他5サンプルは完全一致。単体でURL・メールアドレス・通常の英文パターンの真偽判定もNode.jsスクリプトで個別確認済み。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(PR #32への追加コミット、または新規PR)。
+- 上記の確認質問に回答する前に、ユーザーから関連の追加質問「関連でもうひとつテストしてほしいけど『外国語』として認識するのはどういうロジック？英語だけではダメでフランス語、ポルトガル語、ロシア語、タガログ語、タイ語、ベトナム語、簡体字、繁体字とか多岐に渡るので。」を受けた。実際にNode.jsで単体テストしたところ、既存ロジックは事実上ASCII英字のみ対応で、フランス語/ポルトガル語/スペイン語はアクセント記号で単語境界が崩れて多くの場合未検出、ロシア語(キリル文字)・タイ語(タイ文字)・簡体字/繁体字中国語(漢字)・韓国語(ハングル)は完全に検出対象外であることが判明。KBルール`text/foreign-language.md`が明記する5言語(英・中・韓・西・葡)のうち中・韓・西・葡が実質未対応という状態だった。この分析結果をユーザーに提示し、対応範囲の選択肢(Unicodeスクリプト判別で広く対応/KB仕様の5言語限定/修正せず制限を文書化のみ)を提示したところ、「Unicodeスクリプト判別で広く対応」を選択された。
+  - 実装: `LATIN_FOREIGN_PATTERN`をLatin-1 Supplement・Latin Extended-A/B・Latin Extended Additional(ベトナム語声調記号含む)まで拡張。`HANGUL_SCRIPT_PATTERN`・`THAI_SCRIPT_PATTERN`・`CYRILLIC_SCRIPT_PATTERN`をUnicodeスクリプトプロパティ(`\p{Script=...}`)で新設。
+  - 中国語検出は当初「かなを含まない漢字の並び」を条件に実装したが、実データ検証で「受付窓口」「中央公園会場案内図」「対象者一覧」等、かなを含まない日本語の見出し・ラベルを大量に誤検出する重大な回帰が発生(procedure-overview 7→9件、tables 14→20件等、自己発見)。日本語の漢字だけの語句と中国語を「かなの有無」だけで区別するのは不可能と判断し、`CHINESE_MARKER_PATTERN`(我们/你们/他们/不是/没有/可以/因为/所以/但是/如果/虽然等、日本語では使われない中国語特有の代名詞・助詞・熟語を簡体字・繁体字両方収録)を新設。「漢字を含み、かつ中国語特有語を含む」場合のみ中国語候補とするよう設計変更し、実データ6サンプルで誤検出が解消されベースラインと完全一致することを確認した(自己発見・自己修正)。
+  - `inferLanguageCode()`をハングル→ko、タイ文字→th、キリル文字→ru、漢字+中国語特有語→zh、ベトナム語声調記号→vi、ñ含む→es、ã/õ/ç含む→pt、それ以外のラテン文字→en(既存フォールバック)の優先順位に拡張。フランス語のようにこれらの特徴的な文字を含まない場合は`en`扱いのまま残る制約があるが、KBルールの5言語+実務上有用な追加言語をカバーする範囲として許容とした。
+  - `test/run-tests.js`にURL/メールアドレス除外・多言語スクリプト検出・中国語マーカー要件のアサーションを追加。
+  - 検証: `node --check`・`node test/run-tests.js`成功。単体テストで英・仏・葡・西・露・タガログ・タイ・越・簡体字/繁体字中国語・韓国語の検出/言語コード推定を確認(タガログ語は他のASCIIのみの言語と区別不能なため`en`扱いのまま、という既知の限界も確認)。実データ6サンプルでURL/メールアドレス修正後のベースラインと完全一致(回帰なし)を確認。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(PR #32への追加コミット、または新規PR)。コミット・プッシュ後、PR #33として作成・送信済み。
+- ユーザーから「外国語判定して修正欄でlang属性が付与されたことが明示できるようにならないかな？すくなくともどの言語として判定しているかは見えたほうがいい。」との要望を受けた。従来は候補選択時の問題/理由欄が「外国語の文章または語句が含まれている可能性があります。」という汎用文言のみで、判定言語や実際に付与される`lang`値が画面から読み取れなかった。またこのルールは`lang`属性の追加のみでレンダリング結果が変わらないため「見た目の比較」カードでは変更が視覚的に分からない、という構造的な制約もあった。
+  - 実装: `LANGUAGE_LABELS`/`languageLabel()`(en/zh/ko/es/pt/ru/th/viの8言語コード→日本語ラベル)を新設。`collectForeignLanguageCandidate()`の`message`/`reason`を判定言語名+lang値を含む具体的な文言に変更。`buildChangeSummary()`に`text.foreign-language`専用分岐を追加し「この候補で変わること」欄に`lang="en"（英語）を付与します。`のように明記。`quickEditConfig()`に`lang`属性編集の分岐を追加し、既存のalt/title編集と同じ汎用の属性編集モードを流用して「文言を調整」パネルで自動判定結果を見ながらlangコードを直接修正できるようにした。
+  - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプルの検出件数に変化なし(表示のみの変更)。Playwrightで`links-text`サンプルの候補を実際に選択し、問題欄・この候補で変わること欄・文言調整パネルの3か所すべてに判定言語(英語)とlangコード(en)が正しく表示されることを確認。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ。コミット・プッシュ後、PR #33に追加コミットとして反映済み(Stop hookにより確認未了のままコミットされた旨をユーザーへ明示)。
+- ユーザーからスクリーンショット(手描きの赤枠マークアップ付き)で「同じ箇所の代替手段●件と出ていますが、どれとどれが同じ箇所なのかわかりにくいのでグループとして括って明示できませんか？」との要望を受けた。従来は候補リストの各ボタン内に`同じ箇所の代替手段 N件中`というバッジが個別表示されるだけで、どのボタン同士が同じ対象(`target.node_id`)を指すのかがリスト上で視覚的にひとまとまりになっていなかった。
+  - 実装: `renderCandidates()`を、`state.candidates`を先頭から走査して同じ`target.node_id`が連続する区間(候補生成コードは同一対象の代替手段を必ず連続してpushするため常に連続区間になる、と確認した上で採用)を検出しグループ化するよう変更。各ボタン生成処理を`buildCandidateRow()`として関数分離。2件以上のグループは`role="group"` + `aria-label`付きのコンテナ(`.candidate-group`)でラップし、視覚ラベル「同じ箇所の候補・N件」も表示(枠線という視覚情報だけに頼らずスクリーンリーダーにも伝わるようにした)。`styles.css`に青系の枠線・角丸・淡い背景のグループスタイルを追加。
+  - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプルすべてでPlaywrightによりグループ数を確認(procedure-overview 2、tables 4、links-text 3、goal3-hirosaki-news2019 3、images/iframeは代替手段なしのため0)。スクリーンショットでユーザー提示のイメージ通りの枠囲み表示になっていることを確認。
+  - 次のアクション: ユーザーへ最終確認の上、コミット・プッシュ(PR #33への追加コミット)。→ コミット`f9dbaef`としてPR #33へ反映済み。
+- ユーザーから「今のプログラムはLLMをAPIで利用していますか？」と問われ調査したところ、`processing_class: ai`/`hybrid`タグ付きの36ルール(KB定義では「LLM判断」を意味する)が実際には全て正規表現・DOM解析・一部はハードコード対応表で実装されており、実LLM APIは一切呼び出されていないことが判明した。「AI画像名生成」表示も4種類の決め打ちPoCサンプル画像ファイル名への固定文言のみだった。
+  - Explore agentで36ルール全数を調査し、偽AI2件(`image.alt-text`: `generateImageNameDraft`が4種類の決め打ちファイル名限定、`html-structure.heading-required`: `collectContextualHeadingCandidates`がPoC文書の内容にべた書きで一致させているだけ)、素朴なヒューリスティックで穴あり9実装対象/約14ルールID(link.link-text/mail-link/toppage-link、table.caption/cell-merge-*/th-scope、text.foreign-language/sensory-characteristics、html-structure.heading-content-quality)、既に妥当17件、未実装5件、に分類した。
+  - ユーザーは「偽AI2件+素朴なヒューリスティック12件」を対象、プロバイダはGoogle Gemini(既存Cloud Run/GCP運用との親和性・コスト)、APIキーはserver.js経由のプロキシで保持、と方針決定。サーバーサイド知識がほぼ無いとのことで、APIキー方式とADC/Vertex AI方式の違いを平易に説明し、「まずAPIキーのみで実装し、動作確認後にADC方式を追加検討する」2段階方針で合意。ページごとのLLM利用コスト概算表示も追加要望として受けた。
+  - 実装前にplanモードへ入り、Explore agentでコード構造を調査した結果、`generateCandidates(fragment)`(全ルール収集の唯一のオーケストレーター)が完全に同期処理で、対象ルールは2〜7階層下にネストしていることが判明。一方`analyze()`には既に`enrichLinkTitleCandidates`という「同期生成→事後の非同期enrichmentパスで上書き、失敗時は既存ヒューリスティックへフォールバック」パターンが確立されていたため、これを踏襲する設計とし、`generateCandidates()`本体には一切手を入れない方針を確定した。
+  - ユーザーがGemini APIキー(利用量上限付きのテスト用)をチャットで提供。会話ログへの残留を懸念し、環境変数設定(Claude Code on the web)やファイル添付の方法も検討したが、いずれも今動いているセッションを継続したまま完全に痕跡を残さずに渡す方法は無いと判断し、最終的にチャット貼り付け方式で提供を受けた。受け取ったキーはリポジトリ外のスクラッチパッド領域にのみ保存し、動作確認後に削除、リポジトリには一切含めていない。
+  - ステージ1(実装順序4段階のうち1段階目)を実装: `goal2-app/lib/llm.js`(`callGemini()`、キャッシュ、`LLM_MAX_CALLS_PER_MINUTE`予算ガード、`usageMetadata`からのコスト概算)、`goal2-app/lib/llm-prompts.js`(タスク別プロンプト、`foreign-language`のみ実装)、`server.js`の`POST /api/llm/enrich`、`app.js`の`enrichWithLlm()`(`text.foreign-language`に接続)、候補一覧サマリーへのコスト表示。
+  - 検証: `node --check`・`node test/run-tests.js`(`GEMINI_API_KEY`未設定)成功、既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。ユーザー提供の実キーで実際にGemini呼び出しまで確認し、(1)正規表現版のフォールバック(`inferLanguageCode`)では検出不能だったフランス語("Bienvenue à la mairie...")をLLMが正しく`lang="fr"`と判定できることを実証、(2)予算ガードが3件目で429を返すこと、(3)UIの「問題」「この候補で変わること」欄に`(AI判定)`表示、コスト概算(例: 1ページ$0.0001程度)が正しく反映されることをPlaywrightで確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ(PR #33への追加コミット、またはstage単位の別PR)。その後、残り3ステージ(テキスト系8ルール→image.alt-text→heading-required)を計画(`/root/.claude/plans/melodic-purring-karp.md`)に沿って進める。→ コミット`f2f0105`としてPR #34を作成・マージ済み。
+  - ユーザーから「承認したのでステージ２へ」との指示を受け、ステージ2(残り8ルールへのenrichment接続)に着手した。
+  - 実装前に各ルールの実装コードを詳細に読み、`before_html`/`target.snippet`だけでは足りないコンテキスト(リンク周辺のテキスト・直前見出し、対象thを含む表全体)が必要なルール(`link.link-text`・`link.mail-link`・`table.th-scope`)を特定し、`makeCandidate()`に`options.llmContext`(UIには出さない内部専用フィールド、`candidate.proposal.llm_context`として保存)を追加してから各コレクター呼び出し箇所に渡すよう実装した。
+  - `table.cell-merge-*`は構造再構成(`buildMergedCellProposal`)のロジックが複雑なDOM変換のため、LLMに構造自体を生成させるのは安全性の観点でリスクが高いと判断し、分類(ruleId)・patch・after_htmlは変更せず、実際の表内容に即した理由文(`reason`)のみをLLMで差し替える設計にした(安全側に倒した判断)。
+  - `html-structure.heading-content-quality`は、既存ヒューリスティックが「見出しが2文字以下または記号のみ」という狭いケースしか候補化しない構造上、LLMで本当に価値を出すには「既存候補の上書き」ではなく「全見出しをLLMが走査して新規候補を提案する」パスが必要と判断。これは`html-structure.heading-required`(ステージ4)と同じ「新規候補提案」パターンのため、ステージ4にまとめる方針にスコープ変更した(ユーザーには変更内容と理由をCHANGELOGで明示)。
+  - `enrichWithLlm()`を、共通バッチ処理ヘルパー`runLlmBatch(task, targets, buildItem, applyResult)`を軸にリファクタリングし、8タスク(foreign-language/sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)を統一的なパターンで接続。50件超過時は自動チャンク分割。
+  - 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がステージ1と完全に同じベースラインと一致(回帰なし)。追加した7タスク全てが`/api/llm/enrich`で正しく認識される(`unknown_task`にならない)ことを確認。今回はテスト用APIキーの再提供が無かったため、ステージ1のような実際のGemini呼び出しまでのライブ検証は未実施(技術的な仕組み自体はステージ1で実証済みのため、未検証でも「AI改善が発生しないだけ」で既存動作は壊れない設計)。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。→ Stop hookによりコミット`bce8c7f`としてプッシュ済み(ユーザー確認は未了のままだった)。
+- ユーザーから「さっきのキーをそのまま使用して」との依頼。私が保持していないキーを再提供いただけるか確認したところ、ユーザーが同じキーを再度貼り付けてくれたため、ステージ2の7タスクを実際のGemini呼び出しまで含めてライブ検証した。
+  - 単体テスト(sensory-characteristics/link-text/mail-link/toppage-link/table-caption/cell-merge/th-scope)で全タスクが期待通りの高品質な出力を返すことを確認(具体例はCHANGELOG参照)。
+  - UI経由の実データ検証で、`table.caption`のenrichment対象条件が狭すぎて最も一般的な「データテーブルとして構造的に保持する」経路(`planTableTreatment`の`kind: "structural"`)のキャプション生成に接続されていないバグを自己発見。原因を調査し、`table.caption`候補には実は3つの発生経路(単純patch/構造的書き換え/既存キャプションの確認専用フラグ)があることを突き止め、対象条件を拡大しつつ、確認専用フラグ候補(表全体ではなくcaption要素自体が対象)は誤って巻き込まないよう`before_html`が`<table`で始まるかで明確に除外する修正を行った(自己発見・自己修正)。
+  - 検証: `node --check`・`node test/run-tests.js`成功。既存6サンプル全てで実際にGeminiを呼び出した状態のまま回帰確認を行い、候補・注意の総件数がベースラインと完全一致することを確認。1ページあたりの実測コストは概算$0.0002〜$0.0011程度(6サンプル合計で1セント未満)、コスト懸念に対する具体的なデータを得られた。動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後ステージ3(image.alt-text)・ステージ4(heading-required + heading-content-quality)へ進む。→ コミット`33a6710`としてPR #35を作成・送信済み。
+- ユーザーから「コストは円換算も併記しましょう」との要望を受けた。`lib/llm.js`に`USD_JPY_RATE`環境変数(既定値155、プレースホルダである旨を明記)を追加し`estimateCostJpy()`を新設、`usage`に`estimatedCostJpy`を含めるようにした。`app.js`の`state.llmUsage`・`llmUsageSummaryText()`を円換算併記に対応。検証時点でテスト用APIキーが手元になかったため、計算ロジック単体テスト(`USD_JPY_RATE`上書きも含む)と`GEMINI_API_KEY`未設定環境での既存6サンプル回帰確認(完全一致)のみ実施し、UIでの実ライブ確認は未実施。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ Stop hookによりコミット`9fb87ee`としてPR #35へプッシュ・マージ済み。ブランチをorigin/mainから建て直し。
+- ユーザーから「承認したので進めましょう」との指示を受け、ステージ3(`image.alt-text`)に着手した。
+  - `server.js`に`fetchImageAsBase64()`を新設し、既存のSSRF対策済み`fetchWithSafeRedirects`/`assertFetchUrlAllowed`を再利用(新しいセキュリティロジックを書かず、実証済みの仕組みを流用する方針)。`POST /api/llm/image-alt`エンドポイントを新設。画像1件=1リクエストのため、テキスト系タスクの`runLlmBatch`とは別に`enrichImageAltWithLlm()`(同時実行数4に制限したワーカープール)を新設。`image.alt-text`と`image.complex-image-report`は同じ`<img>`を対象にすることがあるため、`target.node_id`でグルーピングして1回のGemini呼び出しで両方を更新する設計にした。
+  - 移行元ページURL(「旧ページURL」入力欄)に対して`img[src]`を絶対URL解決する必要があるため、`makeCandidate()`の`llmContext`機構(ステージ2で追加済み)を再利用してキャプション文脈を保存。絶対URL解決できない場合(相対パスかつ旧ページURL未入力等)は既存ヒューリスティックのまま。
+  - 検証中、組織のプロキシポリシーで`www.google.com`等への到達がブロックされていることが判明(`recentRelayFailures`で確認、環境側の既知の制約であり自分のコードの問題ではないと判断)。到達可能な`raw.githubusercontent.com`を使って、画像取得・content-type判定・Gemini呼び出し直前までの経路(契約レベル)が正常に動作することを確認した。
+  - `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし)。
+  - 実際のGemini vision呼び出しまでのライブ検証のため、ユーザーへテスト用APIキーの再提供を依頼したが、回答を待っている間にStop hookが発火しコミットを強制されたため、ユーザー確認・ライブ検証未了のままコミットした。
+  - 次のアクション: ユーザーからのAPIキー提供を待ってライブ検証(または未検証のままコミット・プッシュの承認を得る)。→ Stop hookによりコミット`3c75731`としてプッシュ済み(ユーザー確認は未了のままだった)。
+- ユーザーがテスト用APIキーを再度提供。ステージ3を実際のGemini vision呼び出しまで含めてライブ検証した。
+  - `/api/llm/image-alt`を実在する画像(JavaScriptロゴ)で直接呼び出し、`alt_text: "JSのロゴ"`という正確な結果を確認。
+  - 組み込みサンプルの画像は全て架空ドメインを指しており実際には取得できないため、実在する絶対URLを持つカスタムHTMLをUIに貼り付けてPlaywrightでエンドツーエンド検証し、`alt=""`が実際に`alt="JSのロゴ"`へ書き換わることを確認。
+  - 既存6サンプルで実際にGeminiが稼働している状態のまま件数がベースラインと完全一致することを確認(`images`サンプルは架空ドメインのため画像取得に失敗し、既存ヒューリスティックへ正しくフォールバックすることも確認)。
+  - 動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ(検証結果のみのコミット、コード変更なし)。その後ステージ4(heading-required + heading-content-quality)へ進む。→ コミット`67c2e79`としてPR #36を作成・マージ済み。ブランチをorigin/mainから建て直し。
+- ユーザーから「承認したので進めましょう」との指示を受け、ステージ4(`heading-required` + `heading-content-quality`)に着手した。4ステージの中で唯一「既存候補の上書き」ではなく「新規候補の提案」パターンが必要な箇所。
+  - `heading-review`タスクは、他のテキスト系タスクと違い独立項目の配列ではなく文書全体のアウトラインを扱う必要があったため、`{id: "outline", blocks: [...]}`という合成1アイテムとして既存の`/api/llm/enrich`(1件配列・1件レスポンスの規約)にそのまま乗せる設計にし、新規のサーバーエンドポイントを追加せずに済ませた(既存基盤の再利用を優先)。
+  - `buildHeadingReviewOutline()`は`parseFragment()`が既に全要素に付与している`data-goal2-node-id`をそのままblock_idとして使い、見出し・段落を出現順に最大80件抽出。`applyHeadingReviewResult()`はLLMが返すblock_idが実際に送信したアウトラインに存在するかを毎回検証(存在しないIDは無視)し、`heading-required`は既存候補との重複(同じtarget.node_id)を避け、新規候補は既存の`procedureParentHeadingProposal`等と同じ「見出しを前に挿入する」afterHtmlパターンを踏襲した。
+  - 検証: `node --check`・`node test/run-tests.js`成功。`GEMINI_API_KEY`未設定環境で既存6サンプルの検出件数がベースラインと完全一致(回帰なし、新規候補提案パスはLLM成功時のみ候補を追加する設計のため無設定時は増加しない)。`heading-review`タスクが`/api/llm/enrich`で正しく認識されることを確認。
+  - 次のアクション: ユーザーへテスト用APIキーの再提供を依頼し、実際のGemini呼び出しまでのライブ検証を行う予定。→ Stop hookによりコミット`ed8ce82`としてプッシュ済み(ユーザー確認は未了のままだった)。
+- ユーザーがテスト用APIキーを再度提供。ステージ4を実際のGemini呼び出しまで含めてライブ検証し、検証中に2つの問題を自己発見・修正した。
+  - 問題1: `before_block_id`の解釈にズレがあり、LLMが提案した見出し文言(例:「収集日と注意事項」)が、実際に挿入される段落(直前の段落)ではなく別の段落(その次の、収集日について書かれた段落)の内容と対応してしまうケースを2回連続で確認。プロンプトに「見出し文言が要約している内容そのものを持つ段落のblock_idを指定すること、1つ前の段落を指定しないこと」を明記して修正し、再検証で正しい段落に挿入されることを確認。
+  - 問題2: `links-text`サンプル(短い断片的な段落の集合、意図的に多様なルールをテストするための人工データ)で、ほぼ全ての段落(8/8件)に見出し追加が提案される過剰生成を発見。実務上、短い一文ごとに見出しを付けるのは望ましくないと判断し、プロンプトに「1文だけの短い段落や断片的な段落には見出しを追加しない」「本当に構造が読み取りにくい箇所のみを対象にする」という制約を追加。再検証で3件まで抑制され、残った3件もより内容のある段落・箇条書きへの提案になったことを確認。
+  - 実データサンプル`goal3-hirosaki-news2019`では見出し提案が9件生成された。内容を確認したところ、日時・場所・定員・参加料等、ラベルの無いイベント詳細の各項目にそれぞれ見出しを提案するものだった。`<dl>`化との判断が分かれる可能性はあるが、明確な誤りではなく、confidence: low + 要人間確認の設計により最終判断は人間に委ねられる旨をユーザーに報告する方針とした。
+  - 既存6サンプル全てで実際にGeminiが稼働している状態のまま最終確認: procedure-overview(7、変化なし)・images(10、変化なし)・tables(14、変化なし)・links-text(24→27)・iframe(5、変化なし)・goal3-hirosaki-news2019(17→26)。ステージ1〜3は既存候補の上書きのみのため件数不変が正しい回帰確認基準だったが、ステージ4は新規候補提案が目的のため件数増加は意図した挙動である旨を明確に区別して記録。
+  - 大きなページでは複数のLLM呼び出しが並行し処理に数十秒かかることがあると判明(検証スクリプトのタイムアウトを20秒→45秒に緩和して確認、機能上のバグではない)。
+  - 動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。これで4ステージ全ての実装・ライブ検証が完了する見込み。→ Stop hookによりコミット`35c6727`としてプッシュ済み(ユーザー確認は未了のままだった)。
+- ユーザーから「呼び出しから返答までに時間がかかったようですが処理中を示す表現がないと何度もボタンを押してしまいそうです」との指摘を受けた。LLM enrichment部分(最大数十秒)がヒューリスティック生成(1秒未満)と同じ「生成中」表示のままで区別がつかないUXの問題。
+  - `setAnalyzeStatus()`に`"enriching"`状態を追加し、LLM enrichment開始時にボタン文言を「AIで確認中」、サマリーを「AIによる内容確認を行っています。数十秒かかる場合があります。」に変更。
+  - 実装中に、既存の`setAnalyzeStatus()`が`"running"`以外の状態値に対して無条件でボタンを再有効化するフォールスルー構造だったため、新状態を単純に追加すると処理中でもボタンが押せてしまう(ユーザーが懸念した「何度も押してしまう」を実際に引き起こしかねない)潜在的な不具合を発見。`"running"`と同じ早期return分岐を追加して正しく実装した。
+  - 検証: `node --check`・`node test/run-tests.js`成功、既存6サンプルの回帰なし。Playwrightで`/api/llm/enrich`のレスポンスを2秒遅延させ、遅延中ボタンが無効化・「AIで確認中」表示のまま維持されることを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+- PR #37マージ承認後、ユーザーから「今後の予定を立て直しましょう」との指示を受け、4候補を提示したところ「2と4を片付けてしまう」(table.layout-table系画像へのvision enrichment拡張 + Windows `.exe`ビルド確認)を選択。
+  - オプション4(Windows`.exe`ビルド確認)から着手。`build-windows-app.bat`はesbuildで`server.js`をバンドルする際、新規追加した`lib/llm.js`/`lib/llm-prompts.js`を含む全`require()`を自動的に解決するため、ビルドスクリプト自体は無変更で済むことを確認。Linuxサンドボックスから検証できる範囲(esbuildバンドル成功・新規LLMコードがバンドルに含まれること・バンドル済みサーバーの起動と`/api/health`/`/api/llm/enrich`の応答)は全て確認できたが、SEA blob注入(`postject`)・署名除去(`signtool`)・実機での`.exe`起動はWindows実機が必要なため確認できず、その旨をユーザーに報告した。
+  - 続けてオプション2(table.layout-table系画像へのvision enrichment拡張)に着手。`decomposeLayoutTable()`(表をレイアウト用途とみなして解体・再構成する処理)が`prepareLayoutTableImage()`で画像altを旧ヒューリスティックのみで直接`after_html`に焼き込んでおり、独立候補(`image.alt-text`)を作らないためステージ3の`enrichImageAltWithLlm`から漏れていた問題を修正。`decomposeLayoutTable`/`tableCellDraft`/`normalizeLayoutTableImages`/`prepareLayoutTableImage`に任意の`imageContexts`収集引数を追加し(既存呼び出しは無変更)、`table.layout-table`/`table.cell-merge-layout`/`table.cell-merge-file`/`table.cell-merge-mark`の各候補に`llm_context.images`として付与、新規`enrichLayoutTableImagesWithLlm()`が事後的に`after_html`内の対応する`<img>`のaltのみを書き換える設計とした。
+  - 実装中、同一画像が独立`image.alt-text`候補としても存在する場合(実際に「表」サンプルで再現)、2回の重複vision呼び出しが発生することを自己発見。`enrichLayoutTableImagesWithLlm`を`enrichImageAltWithLlm`完了後に実行する順序に変更し、`findExistingAltForImageUrl()`で既存の確定済みalt文言を再利用することで重複呼び出しをゼロにした(コストを強く懸念するユーザーの方針に沿った自己修正)。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致することを確認(回帰なし)。「表」サンプルの`table.layout-table`候補で新設フィールドが正しく機能し、`/api/llm/image-alt`への重複呼び出しが2回→1回に削減されることをネットワークインターセプトで確認。ライブAPIキー検証は、Stage3で同一エンドポイント・同一適用ロジックが実機検証済みであることから、ユーザーに確認した上でスキップする判断を得た。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。
+- PR #38マージ後、ユーザーへ残課題を洗い出して提示したところ、「4(未実装5ルール)・6(PR#38のライブ検証)・7(heading-review提案の実務妥当性レビュー)」を選択。
+  - 項目4に着手する前に5ルール(`text.ascii-art`・`text.quotation`・`image.avoid-text-as-image`・`image.heritage-image`・`image.showcase-section`)を精読したところ、`ascii-art`・`quotation`は`michecker-triage.md`(2026-07-08付)で既に「自動検出コードを持たない、AI/人間判断でのレビュー時に参照するKB文書」と意図的にスコープ外化されていること、`heritage-image`・`showcase-section`は他ルールのbefore/afterパターンと異なり「ページ種別の判断基準」を記した文書(検出対象ではなく他ルールへのコンテキスト供給用)であることを発見。当初想定と異なる調査結果をユーザーに報告し、「新規実装は`image.avoid-text-as-image`のみ、他4件は既存トリアージ判断を尊重してスコープ外のまま」で合意を得た。
+  - `image.avoid-text-as-image`を実装。`lib/llm-prompts.js`に単一画像visionタスク`avoid-text-as-image`(`image-alt`と同型)を追加、`server.js`の`POST /api/llm/image-alt`を汎用化して任意の`task`フィールド(既定`image-alt`、後方互換)を受け付けるようにし、既存の`fetchImageAsBase64`(SSRF対策込み)をそのまま再利用。`app.js`に新規`enrichAvoidTextAsImageWithLlm()`/`enrichOneAvoidTextAsImage()`を追加。他の画像enrichmentと異なり「既存候補の上書き」ではなく「新規候補提案」パターン(heading-reviewと同型)とし、旧ページURL未入力時は即returnで候補・呼び出しともに0件を維持。極小アイコンの誤検出・無駄なコストを避けるため既存の`isNormalSizedImageForComplexCheck()`を再利用してフィルタした。
+  - ユーザーがテスト用APIキーを再提供。ライブ検証中、ローカルにCanvas生成したテスト用バナー画像(「7月10日は休館日です」という文字を描画)を用意したが、SSRF対策(既存の`assertFetchUrlAllowed`)がループバックアドレス宛のリクエストを正しくブロックすることを確認(設計通りの安全な挙動であり、自分のテスト手法側の制約と判断)。そのため画像取得を伴わず`callGemini()`を直接呼び出す形でプロンプト・スキーマの正しさを検証し、`has_embedded_text: true`・`extracted_text: "7月10日は休館日です"`という完全一致する結果を確認。続けて実在する外部到達可能画像(GitHubのJSロゴ)で、ブラウザ経由のクライアント側配線(`task: "avoid-text-as-image"`の送信、候補生成ロジック)を検証し、ロゴには文字情報が無いため`has_embedded_text: false`・候補0件(誤検出なし)を確認。`task`未指定の既存呼び出しが引き続き`image-alt`として動作すること(後方互換)も確認。
+  - 同じライブ検証セッションで、項目6(PR #38のライブ検証)も実施。組み込みサンプルは架空ドメインの画像を参照するため実際の検証にならないと判断し、実在する外部画像を使った独自HTML(レイアウト表内に汎用alt画像を配置)を用意して検証したところ、表候補の`after_html`内の画像altが`alt="写真"`→`alt="JSのロゴ"`へ実際に書き換わること、同じ画像を対象とする独立`image.alt-text`候補も同一のalt文言になっている(重複呼び出し回避ロジックが機能している)ことを確認。
+  - 項目7(heading-review提案の実務妥当性レビュー)のためのデータも同時に取得。`goal3-hirosaki-news2019`サンプルで実際にGeminiを稼働させたところ、以前の記録と同じ9件の見出し提案(イベント概要・開催日時・開催場所・イベント内容・定員・参加料・申込方法・展覧会概要・開催日時)が再現され、日時・場所・定員等のラベル無し項目にそれぞれ見出しを提案する内容であることを確認。この9件の一覧をユーザーに提示し、実務上の妥当性(`<dl>`化との判断が分かれる可能性等)の判断を仰ぐ予定。
+  - 検証後、テスト用APIキー・ローカル生成したテスト画像・起動していたサーバープロセスはすべて削除済み。`node --check`成功、`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル7/10/14/24/5/17が完全一致)も実施済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ コミット`78eb181`としてPR #39を作成・送信済み。
+  - 項目7について、9件の見出し提案(h4)一覧をユーザーに提示したところ、「見出しで実務上問題ありません。dl化は自治体職員が運用するのが難しい」との回答を得た。プロンプトを`<dl>`化提案に変更する改修は行わず、現状のh4見出し提案方式を維持する方針で確定。理由は`Decisions`に追記。
+- PR #39マージ後、残バックログ(1: 運用ドキュメント整備、2: ADC/Vertex AI認証、3: 料金プレースホルダ実値化、10: データ送信ポリシー)を提示し、ユーザーが「2から1へ」(ADC実装を先に、その後運用ドキュメント整備)を選択。
+  - 項目2着手前に、実機検証(Cloud Run上でメタデータサーバーが実際に機能するか)はこのLinuxサンドボックスでは原理的に不可能であることをユーザーに明示し、「Cloud Runへデプロイして確認します」との回答を得てから実装に進んだ。
+  - `lib/llm.js`にADC/Vertex AI認証モードを実装。新規`GEMINI_AUTH_MODE`環境変数(既定`api-key`、明示的に`adc`指定時のみ有効化)で、既定動作(未設定)を完全に無変更のまま維持。ADCモード時はCloud Runのメタデータサーバーからアクセストークン・プロジェクトIDを取得し、Vertex AI経由でGeminiを呼び出す。Vertex AIとDeveloper APIのリクエスト/レスポンス形式がほぼ同一(`contents`/`generationConfig`/`usageMetadata`共通)と判明したため、既存の`callGemini()`のボディ構築・レスポンス解析・キャッシュ・予算ガードは一切変更せず、認証ヘッダーとURL構築のみを分岐させる最小差分の実装とした。
+  - 実装中、`lib/llm.js`の`buildCacheKey()`内の区切り文字(本来半角スペース)が3箇所ともヌルバイト(`\x00`)としてファイルに保存されていることを自己発見(`file`コマンドで`data`型と判定される非テキストファイルになっていた)。原因は不明(過去セッションでの編集時のエンコーディング事故と推測)。機能上の実害は無かった(ハッシュキーが変わるだけで一貫性は保たれる)が、不健全なソースファイル状態だったため半角スペースへ修正した。
+  - 検証: `node --check`成功。`GEMINI_AUTH_MODE`未設定(既定)でPlaywrightにより既存6サンプルの検出件数(7/10/14/24/5/17)がベースラインと完全一致(回帰なし)。`GEMINI_AUTH_MODE=adc`を設定した状態で直接`callGemini()`を呼び出し、`isConfigured()`が`true`を返すこと、メタデータサーバーに到達できないこの環境では`llm_adc_token_failed`という明確なエラーで(クラッシュせず)失敗することを確認。Cloud Run上での実際の成功動作は、原理的にこの環境では検証できないため、ユーザーが実際にデプロイして確認する。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後、項目1(環境変数の運用ドキュメント整備、`GEMINI_AUTH_MODE`/`GEMINI_VERTEX_PROJECT`/`GEMINI_VERTEX_LOCATION`を含む)へ進む。→ コミット`7c21a9c`としてPR #40を作成、マージ済み。
+  - 項目1(環境変数の運用ドキュメント整備)に着手。`goal2-app/README.md`の「Scope」節に残っていた「実案件HTMLの外部LLM送信」「実案件画像の外部AI送信」を「まだ扱わないもの」とする記述(LLM統合完了により事実と異なっていた)を修正し、実装済みだが既定で無効・データポリシー未確定である旨に書き換え。新規「LLM (Gemini) 連携」節で全環境変数を表形式にまとめ、2つの認証方式(APIキー/ADC)の使い分けを説明。`CLOUD_RUN_DEPLOY.md`には「LLM (Gemini) 連携を有効にする場合」節を追加し、APIキーをSecret Manager経由で安全に注入する手順、ADCモード有効化に必要なVertex AI API有効化・IAM権限付与・デプロイ時の環境変数設定を、実行可能な`gcloud`コマンド例とともに記載。
+  - ドキュメントのみの変更のためコード検証は不要。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ コミット`418ebc7`としてPR #41を作成、マージ済み。
+- ユーザーが実際にCloud Runへデプロイし、`GEMINI_AUTH_MODE=adc`(ADC/Vertex AI方式)を設定して動作確認。画面に「LLM利用: 概算$0.0005(約0.07円、呼び出し2回、トークン計1072)」が表示され、ADC/Vertex AI認証がCloud Run実機で実際に成功することを確認した。実装時点では「メタデータサーバーに到達できないサンドボックス環境では検証不可能」としていた部分が、ユーザーによる実機検証で解消された。項目2(ADC/Vertex AI認証)は実装・ドキュメント・実機検証まですべて完了。
+- ユーザーから「項目3・項目10について、進めます」との指示を受け、項目3(料金プレースホルダの実値化)に着手。
+  - WebSearchでGemini公式料金ページおよび複数の独立集計サイトを確認した結果、既定モデル`gemini-2.5-flash`の料金は2026-07-02の改定後、$0.30/$2.50(入力/出力、per 1Mトークン)であることが判明。これは実装当初からの既存プレースホルダ値と偶然一致していたため据え置いた。為替レートはBank of Japan/市場データで確認したところ約161.7円/USDであり、既存の既定値155(2026年初頭の想定水準)から乖離していたため162へ更新した。
+  - `lib/llm.js`の各定数コメントに、確認日(2026-07-10)・確認元・モデル変更時や時間経過後の再確認要否を明記。`README.md`の環境変数表にも確認日を反映。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル完全一致)、`estimateCostUsd`/`estimateCostJpy`の直接呼び出しで新しい既定値が正しく反映されることを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。その後、項目10(データ送信ポリシー策定)へ進む。→ コミット`1212046`としてPR #43を作成、監視開始。
+  - 項目10(データ送信ポリシー策定)に着手。WebSearchでGoogleのデータ利用規約を調査した結果、**無料枠(Google AI Studio無料利用枠)は送信内容をモデル学習・製品改善に利用する場合があり人間レビュアーが閲覧することがある**一方、**有料枠(Gemini API有料利用・Vertex AI)は学習に利用しない**(不正利用検出目的で最大55日間ログ保持のみ)という重大な違いを発見。この事実は実案件データを送信してよいかどうかを左右する最重要事項と判断し、ユーザーへ明示的に報告した上でポリシー文書を作成した。
+  - 新規`goal2-app/LLM_DATA_POLICY.md`を作成。Googleの規約調査結果(出典URL付き)、本アプリ側の既存データ取り扱い(レスポンスキャッシュはプロセス内メモリのみで永続化なし)、実案件投入前の最低条件たたき台(有料枠/Vertex AI限定、個人情報保護条例との照合、自治体への事前説明・同意取得等)、未決定事項を整理。`README.md`から本文書へのリンクを追加。
+  - この文書は最終決定ではなくたたき台であり、実際の運用可否は発注元・自治体との合意が必要である旨を明記した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ コミット`2e53d14`としてPR #44を作成、マージ済み。
+- ユーザーから「修正候補のUIの変更をしよう。処理選択中のcurrentと処理完了のもの、処理未完了のものを明示的に違いをつけよう(今はカードの左側のラインだけの違い)」との依頼。処理選択中/処理完了(採用・編集済・却下・要確認)/同じ箇所で自動的に処理完了(conflicted)/処理未処理の4状態を、カード背景色で明示する改修に着手。
+  - 配色案はコントラスト比を計算した上でユーザーへ提示・承認を得た: 処理選択中=青`--primary-container`(既存トークン再利用)、処理完了=濃いグレー新規`--status-done-bg`(#ccd3dc)、自動解決(conflicted)=薄いグレー`--surface-2`(既存トークン再利用)、未処理=白(現状維持)。いずれもWCAG AA(4.5:1)を満たすことを確認済み。
+  - `goal2-app/public/styles.css`のみ変更。border-left色分け(採用/編集=緑、却下=赤、要確認=橙)は維持したまま、背景色を独立した軸として重ねる設計にした。CSS適用順序を「状態別背景→選択状態」に並べ替え、既に決定済みの候補を選択して見返す場合でも選択中の青が常に最優先で表示されるようにした。
+  - 検証: Playwrightで「表」サンプルを使い、採用・却下・選択のみ・自動解決(表の構造変換候補を採用してtable関連の兄弟候補を自動解決させて再現)の4状態を実際に発生させ、`getComputedStyle`で背景色が設計通りの4色になっていることを確認。`node test/run-tests.js`成功(CSSのみの変更のため回帰リスクは低いが念のため実行)。Goal 3(`goal3.js`)は別クラス体系(`selected`/`unresolved`)を使っており、今回変更したセレクタと重複しないため無影響であることをコード確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ ユーザー承認を得てローカルコミット`737ae4c`。この時点でGitHub MCPサーバーが未認証(セッション切断)となり、プッシュ・PR作成は保留中(GitHub連携自体は接続済みとユーザーから報告があったが、このセッションのMCPツール一覧には反映されず、新しいセッションが必要な可能性がある)。
+- ユーザーから「GOAL2を作業者向けの説明書を作成しましょうか」との提案を受け、実際に画面を操作する作業者向けの操作マニュアル作成に着手。
+  - `index.html`/`app.js`のUI実装(ボタンラベル・パネル文言・ワークフロー分岐関数`pageAgentWorkflowState`/`pageAgentNextTask`/`acceptDisabledReason`等)を直接確認し、実際の画面表示と一致する内容で新規`goal2-app/WORKER_GUIDE.md`を作成。全体の流れ(入力→候補生成→候補レビュー→出力)、直近実装した「AIで確認中」状態や候補カード4色分けの意味も反映。`README.md`冒頭に本マニュアルへのリンクを追加。
+  - GitHub MCP未認証のためこの変更もプッシュ・PR作成は保留、ユーザー確認後にローカルコミットの上で待機する方針。→ GitHub MCPがセッション中に復旧し、これまでの2件(候補カード背景色変更・作業者向けマニュアル)をまとめてPR #45として作成・マージ済み。
+- ユーザーからGOAL2画面のUI/UXに関する7件のフィードバックを受けた。「弘前市にある」は既存の`goal3-hirosaki-news2019`サンプル(実データベース)に実在するパターンを指す背景情報と判明。AskUserQuestionで曖昧な点(AA区切り行の実装要否、画像alt反映の何が分かりにくいか、オーバーレイ/ツールチップの仕様)を確認した上で5件を実装。
+  1. コスト概算の注記文言削除(`llmUsageSummaryText()`)。
+  2. AI確認中の全画面オーバーレイ(`#analyzeOverlay`、`<main id="appMain">`に`inert`付与で他操作もブロック、`prefers-reduced-motion`対応)。
+  3. 見た目が変わらない候補(alt/lang/scope/headers/title属性のみの変更)へのホバーツールチップ(`invisibleChangeNote()`、`title`属性のネイティブツールチップ+常時表示の補助ヒント文)。
+  4. AI画像名候補パネルの可視化改善: 折りたたまれた「詳細を見る」内に隠れていたことが根本原因と判明し、常に見える`decisionPanel`内・判断ボタンより前へ移動、primaryボタンスタイルへ変更。CSS flexの`order`が意図せず適用されていた点(`.decision-panel > .ai-image-name-panel`のorder:2)も修正(order:-2で最優先表示に)。
+  5. ラベル+生URLのリンク化検出を新規実装(`buildRawUrlLinkTextProposal()`)。「申し込みフォーム　`<a>URL</a>`」のようにリンクテキストがURLそのものになっているパターンを検出し、直前の短いラベルをリンクテキストへ畳み込む。既存の`isGenericLinkText`(こちら/ここ等)ではURL丸出しパターンは未検出だったギャップを埋めた。
+  - AA区切り行の自動検出は、ユーザーの明示的な選択(「実装しない」)により見送り、既存KBトリアージ判断を維持。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywrightにより5サンプル(procedure-overview/images/tables/links-text/iframe)がベースライン完全一致、`goal3-hirosaki-news2019`のみ実データ中の2件のラベル+生URLパターンが新規検出され17→19件に増加(想定通り)。実際の変換結果、オーバーレイのinert動作、AI画像名候補パネルの常時可視化と投入→採用フローの継続動作をPlaywrightで個別に確認。`WORKER_GUIDE.md`もこの変更に合わせて更新。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ。→ PR #46として作成・マージ済み。
+- ユーザーから「そもそもAAと顔文字は自動検出できないか」との再検討依頼。既存のKBトリアージ判断(text.ascii-artは正規表現単体では信頼性が低いため自動検出対象外)を尊重しつつ、「正規表現で緩く候補を拾い、Gemini APIで最終判定させる」設計(`text.foreign-language`等で既に実績あり)を提案し合意を得た。
+  - 「そもそもAIで最終判定できるものか」との質問に、顔文字は言語理解タスクとして信頼度が高い一方、複数行AAはテキストのみからの推論のため罫線表等との誤判定リスクがあると誠実に回答。`confidence: low`・`requires_human_review: true`・ライブ検証という既存の安全策で吸収する前提で実装に着手。
+  - miChecker(Eclipse ACTF)の実際のCheckEngine.javaソースを確認しようとしたが、GitHub Code Search認証・このセッションのGitHubスコープ制限(koteikara/11y-agent限定)・WebFetchでの動的ファイルツリー取得不可により入手できなかった。代わりにベンダリング済みcheckitem.xmlの記述パターン(`{0}`のような動的差し込みが無い定型文、`is_static: true`)から、miChecker自体にも確立された自動判定アルゴリズムは無い可能性が高いと推測し、その旨をユーザーに正直に共有した。
+  - `lib/llm-prompts.js`に新規タスク`ascii-art`を追加(simple=顔文字/complex=複数行AAを判定、`matched_text`で原文の該当箇所を返させ正確な文字列置換を可能にする設計)。`app.js`に`collectAsciiArtPrefilterTargets()`(正規表現プレフィルタ: 同一記号10連続、顔文字特有記号を含む括弧書き、`<pre>`内の複数行記号密度)・`enrichAsciiArtWithLlm()`(既存`runLlmBatch()`ヘルパーを再利用)・`applyAsciiArtLlmResult()`(新規候補提案パターン、heading-review型)を実装。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。陽性・陰性合わせて41種類のテストケース(顔文字15件・AA区切り線6件・誤検出しやすい日本語括弧書き等の陰性例20件)を用意し、ライブ検証用スクリプトも準備済み。
+  - ユーザーへテスト用APIキーの再提供を依頼し、回答待ちの状態でStop hookが発火したため、既存パターンに従いライブ検証未了のままコミットしプッシュした(PR未作成)。
+  - ユーザーがテスト用APIキーを再度提供。41件のテストケースでライブ検証したところ、顔文字15/15・陰性20/20は完璧だったが、区切り線パターン(まさにユーザーが最初に指摘した実例、＊が80個連続する行)5/5件全てが未検出という自己発見。原因は自分が書いたプロンプトの「単なる装飾目的の区切り線は対象外」という除外指示自体だった(KBの顔文字/複数行AAの2分類に引きずられ、ユーザーの本来の要望である「区切り線」を誤って除外していた)。
+  - プロンプトを修正: 区切り線を独立したkind(`separator`)として明示的に対象へ含め、「読み上げソフトが記号を1つずつ読み上げてしまう」という一次利用者観点の理由づけと、hr要素化・読み上げ除外等の対応方針提案を追加。`app.js`の`applyAsciiArtLlmResult()`にも`separator`分岐を追加。
+  - 再検証の結果、**41/41件(100%)** の精度を達成。実際の弘前市サンプル(＊80個の区切り行)とKB例そのままの顔文字言い換え(`(・∇・)`→`（笑顔で）`)の両方をUI経由のPlaywrightでエンドツーエンド確認。`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル完全一致)も再実施。動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「3ペイン構成のうちレンダリング欄が狭いためか印象が薄い」とのUI/UXフィードバック。幅調整のみ(小)/拡大表示ボタン追加(中)/大規模レイアウト再構成(大)の3案を提示し、ユーザーは中規模の「拡大表示ボタンを追加」を選択。
+  - `index.html`にプレビュー欄見出しの「拡大」ボタンと、`#analyzeOverlay`(PR#46)と同じbody直下兄弟パターンの全画面ダイアログ`#previewExpandOverlay`(タイトル・閉じるボタン・拡大用iframe`#previewFrameExpanded`)を追加。`styles.css`で`.workspace-grid`のプレビュー列幅を拡大しつつ、ダイアログのスタイルを`.analyze-overlay`と統一感のある暗幕+中央配置で新設。
+  - `app.js`の`renderPreview()`のsrcdoc生成を`buildPreviewHtml()`として切り出し通常/拡大の両iframeで共有、`scrollPreviewToSelectedCandidate()`を対象iframe引数で一般化、`openPreviewExpanded()`/`closePreviewExpanded()`で`inert`によるフォーカストラップとフォーカス管理(開:閉じるボタンへ、閉:トリガーボタンへ)を実装。閉じる操作は閉じるボタン・背景クリック・Escキーの3通りに対応。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。拡大ボタンクリック→オーバーレイ表示・`appMain.inert=true`・拡大用iframeへの選択候補ハイライト反映、3通りの閉じ方をPlaywrightで個別確認。スクリーンショットで見た目を目視確認。`WORKER_GUIDE.md`も更新。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「作業者がこの修正はどんな意味かと気になった際に確認して学習する仕組みがあると良い」との要望。KBのルールMarkdownには元々必須ルール全文(`rule`)と修正前後の実例(`examples`)が含まれ`data/rules.jsonl`/`/api/rules`経由でサーバーからは返っていたが、クライアント側`makeCandidate()`が`title`/`source`/`description`しか`candidate.rule`へ転記しておらず、画面上どこにも表示されていなかったことが判明。既存データを活かす形で実装に着手。
+  - 当初は「この候補で変わること」カード内に既定で閉じた`<details>`折りたたみとして実装したが、ユーザーから「折りたたみではなくモーダル表示にしましょう。集中しやすいので」とのフィードバックを受け、既存の`#analyzeOverlay`/`#previewExpandOverlay`と同じ`inert`+フォーカス管理パターンのモーダルダイアログ(`#ruleLearnMoreOverlay`)に作り直した。トリガーボタン(`.rule-learn-more-trigger`)のクリックで、ルールタイトル・重複除去したWCAG/JIS番号・概要・ルール全文・実例(最大3件、修正前後の比較付き)・出典をモーダルへ描画。「閉じる」ボタン・背景クリック・Escキーのいずれでも閉じられ、閉じた後は元のトリガーボタンへフォーカスを戻す。`WORKER_GUIDE.md`にも説明を追記。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。Playwrightでモーダルの開閉(トリガー/閉じるボタン/Esc/背景クリック)、`appMain.inert`の切り替え、閉じた後のフォーカス復帰、`image.alt-text`候補の実例がKBのMarkdown内容と一致することを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから、弘前市サンプルで`<p>【とき】</p>`の直前にheading-review(LLM見出し提案)が`<h4>開催日時</h4>`を挿入し、内容が重複した修正になってしまうとの指摘。「【とき】」のようなカッコ書きラベル段落は既に見出し相当の役割を果たしているため、直前への新規見出し挿入は意味の重複になると判断。`app.js`に`SHORT_BRACKET_LABEL_PATTERN`を追加し、`applyHeadingReviewResult()`のmissing_headings処理でLLMの提案先段落がこのパターンに一致する場合は候補生成を機械的にスキップするガードを実装(LLM側の振る舞いに依存しない安全策)。`lib/llm-prompts.js`のheading-reviewプロンプトにも同様の指示を追加し、根本原因側でも抑制するようにした。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。`/api/llm/enrich`をPlaywrightでモックし、「【とき】」段落への重複見出し提案が実際に0件になること、通常の長文段落への正当な見出し提案は従来通り機能すること(過剰抑制になっていないこと)の両方を確認。ユーザーから「ライブでのGemini検証を先にしたい」との要望を受け、テスト用APIキーで実際に弘前市サンプルを解析し、カッコ書きラベルへの重複提案が0件・正当な見出し提案(「イベント概要」「展覧会概要」)は引き続き機能することをライブ確認。動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。→ コミット済み(2e08bf0)、プッシュ済み、ライブ検証も完了。PR#49として作成・マージ済み。
+- 上記のマージ後、ユーザーから「`<h4>開催日時</h4><p>【とき】</p>`であれば`<h4>とき</h4>`と修正させてほしいんだ」との追加要望。前回の修正は「候補を出さない」抑制だったが、ユーザーの意図は「ラベル段落自身を、カッコを外した見出し要素へ昇格させる」変換だったと判明。
+  - `SHORT_BRACKET_LABEL_PATTERN`を開き括弧・閉じ括弧が対応する形(`【...】`/`[...]`/`［...］`/`(...)`/`（...）`)のキャプチャ付き正規表現に書き直し、`extractBracketLabelText()`でラベル文言(カッコ抜き)を取り出せるようにした。`applyHeadingReviewResult()`のmissing_headings処理で、ブラケットラベル段落を検出した場合は候補生成をスキップする代わりに、そのラベル段落自体を`<h${level}>${ラベル文言}</h${level}>`へ丸ごと置き換える候補を生成するよう変更(元の`<p>`要素は残らない)。`lib/llm-prompts.js`のプロンプトも「対象外にする」指示から「ラベル段落自身をbefore_block_idに指定し、suggested_textにはカッコを外したラベル文言を入れる」指示へ変更。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/19が完全一致、回帰なし)。`/api/llm/enrich`をPlaywrightでモックし、`【とき】`段落への提案が実際に`<h4>とき</h4>`(元の`<p>`を含まない)へ変換されること、通常の長文段落への正当な見出し提案(見出し+元の段落を維持する従来の挙動)は引き続き機能することを確認。
+  - ユーザーがテスト用APIキーを再度提供。実際に弘前市サンプルを解析したところ、8件全てのカッコ書きラベル段落(【とき】×2/【ところ】/【内容】×2/【定員】/【参加料】/【申込み方法】)がそれぞれ`<h4>とき</h4>`等(カッコを外しただけの見出し、元の`<p>`は残らない)へ正しく変換され、重複候補は0件だった。通常の長文段落への正当な見出し提案(「イベント概要」「展覧会概要」)も引き続き機能。動作確認後、テスト用APIキーは削除済み。`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル完全一致)も再実施。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「弘前市で単独の文頭の「・」、※が修正対象に入っていません」との指摘。調査の結果2つの独立した原因が判明。
+  1. `buildPseudoListHtml()`(中黒による擬似的な箇条書き検出)は2件以上の「・」始まり行が無いと箇条書き化せず、単独の`<p>・上映終了後...</p>`(前後に同様の段落が無い)は候補が一切生成されていなかった。`bulletParts.length === 1 && parts.length === 1`の分岐を追加し、単独の場合も単一項目の`<ul><li>...</li></ul>`へ変換するようにした。
+  2. `text.note-symbol`は`noticeRuleIds`+`isNoticeItem()`の特別扱いにより、統合・構造化できるパターンは修正候補になる一方、対応先が見つからない単発の「※」(例:`<p>※受付は午後１時から</p>`)は機械的に「注意」欄(決定を記録しない一覧)へ格下げされていた。`noticeRuleIds`から`"text.note-symbol"`を削除し(専用の特別扱いも不要になったため削除)、全パターンを一律「修正候補」として明示的な決定(採用/文言調整/却下/要確認)を残せるようにした。
+  - 検証: `node --check`成功。Playwright回帰確認の結果procedure-overview/images/tables/links-text/iframeは変化なし(7/10/14/24/5)。**goal3-hirosaki-news2019のみ19→20に増加**(新規の単独「・」箇条書き化1件が加わった分。「※」2件は候補⇔注意間の再分類のみで合計には影響しない)。以降の回帰ベースラインはgoal3-hirosaki-news2019=20として扱う。実際の変換結果(`<ul><li>上映終了後...</li></ul>`)と、「※受付は午後１時から」が通常の候補カード(採用/文言調整/却下/要確認ボタン付き)として表示されることをPlaywrightのスクリーンショットで目視確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「「写真と言葉の展覧会　～或る日の大鰐線で～」の部分は見出しレベル２になるべきです。文脈で見出しの順序を判断できますか？」との指摘・質問。既存の機械的検出`collectHeadingCandidates()`は「直前の見出しより2階層以上深くならないか」という単調性チェックのみで、GOAL3抽出データのように複数の独立した記事が連結された文書では、後続記事のタイトル見出しが直前記事内の無関係な小見出しの階層に引きずられて機械的には検出されないと判明(実際、hirosakiサンプルの見出し系列h4→h3→h6→h4のうち2つ目のh4は機械的候補が一切生成されていなかった)。文書全体の内容理解が必要な判定のため、既存の`heading-review`LLMタスクを拡張する方針とした。
+  - `lib/llm-prompts.js`のheading-reviewプロンプトに(3)見出しレベルの妥当性判定を追加、`responseSchema`に`heading_level_fixes`(block_id・修正後レベル・理由)を追加。`app.js`の`applyHeadingReviewResult()`に処理を追加: 対象block_idに既存の`html-structure.heading-order`候補があれば上書き(既存候補の更新パターン)、無ければ新規候補として追加(新規候補提案パターン)。
+  - 実装中に自己発見・修正したバグ: 上書きパスで`renameElement()`の出力(内部属性`data-goal2-node-id`付き)をそのまま`existing.proposal.after_html`へ直接代入しており、ユーザー向けafter_htmlに内部属性が漏れていた。新規候補パスは`makeCandidate()`が内部で`cleanHtml()`するため無事だったが、上書きパスは直接代入のため素通りしていた。既存の同様箇所と同じく`cleanHtml()`でラップして修正。
+  - 検証: `node --check`成功。`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/20が完全一致、回帰なし)。`/api/llm/enrich`をPlaywrightでモックし、(1)「写真と言葉の展覧会」への新規レベル修正提案(`<h4>`→`<h2>`)、(2)既存の機械的候補への上書き時に候補が重複せず正しく更新されること、(3)上書き後のafter_htmlに内部属性が含まれないこと、の3点を確認。
+  - ユーザーがテスト用APIキーを再度提供。実際に弘前市サンプル(36ブロックの見出し・段落アウトライン)全体でheading-reviewを呼び出したところ`"Gemini request failed: This operation was aborted"`で失敗する自己発見バグに遭遇。原因は`lib/llm.js`の`REQUEST_TIMEOUT_MS`(20秒)を、今回のプロンプト拡張(判定項目が2→3に増え、レスポンススキーマも拡張)による生成トークン数増加で応答時間が超過したこと。`enrichHeadingReviewWithLlm`は他タスクと異なり文書全体を1リクエストで送る設計(文書横断の比較推論が必要なためバッチ分割不可)のため、この種の大きい文書で顕在化しやすい。実測で36ブロックのフルリクエストが約29.5秒かかったため、`REQUEST_TIMEOUT_MS`を20000→45000に引き上げて対応(全Geminiリクエスト共通の上限を伸ばすだけで、他の短いリクエストの挙動には影響しない)。
+  - 修正後に再検証したところ、`n0034`(「写真と言葉の展覧会」)に対して`{"level":"2","reason":"...他のイベント記事のタイトル（n0001）と並列に扱うべきであるため、より上位のレベル（h2）が適切です。"}`という正しい判定が返り、UI経由でも`<h4>写真と言葉の展覧会　～或る日の大鰐線で～</h4>` → `<h2>写真と言葉の展覧会　～或る日の大鰐線で～</h2>`の新規候補として生成されることを確認。既存2件の機械的候補(1つ目の記事タイトル・チラシダウンロードリンク)も維持されていた。`GEMINI_API_KEY`未設定でのPlaywright回帰確認(既存6サンプル完全一致)も再実施。動作確認後、テスト用APIキーは削除済み。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- マージ後、ユーザーから改めて「写真と言葉の展覧会 ～或る日の大鰐線で～ はレベル２になっていません。これ作業者が自分で修正できるようにできないですか？見出しに限らないですが」との指摘。前回実装した見出しレベルAI判定はあくまで「AIが提案する候補」であり、AIの判定が実態と違う場合やGEMINI_API_KEY未設定でAI候補が出ない場合に、作業者が自分で直す手段が無かったことが根本原因と判明。3案(見出しレベル選択機能/修正後HTMLの自由編集/手動での新規候補追加)を提示し、「見出しレベル選択機能(推奨)」が選ばれた。
+  - `quickEditConfig()`の見出し系分岐を`mode: "element-text"`(文言のみ)から`mode: "heading"`(レベル+文言)へ変更。`firstElementTagName()`ヘルパーを新設。`renderQuickEditPanel()`に見出しレベル用`<select id="quickEditLevel">`を追加、`buildQuickEditedAfterHtml()`に選択レベルへのリネーム処理を追加。既存の`quickEditConfig()`の仕組みに乗せているため、対象箇所にすでに何らかの見出し候補(機械的またはAI提案)が存在する場合にのみ使える制約は合意済み。
+  - 検証: `node --check`成功、`GEMINI_API_KEY`未設定でPlaywright回帰確認(既存6サンプル7/10/14/24/5/20が完全一致、回帰なし)。機械的候補(デフォルト提案h4)を選択し、レベルをh5へ上書きして採用した結果、実際に`<h5>...</h5>`として採用されることを確認(デフォルト値の素通りではなく、作業者の上書きが機能することを確認)。`WORKER_GUIDE.md`も更新。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+- ユーザーから「サンプルをもう少し充実させましょうか。今の系統はよいのでその内容を充実させていきましょう」との依頼。既存6サンプルを実際に解析し、KB全59ルールのうち一度も候補化されていないものを調査したところ20ルール判明。うち5件(`image.heritage-image`/`image.showcase-section`/`text.abbreviation`/`text.quotation`/`text.spaced-characters`)は検出コード自体が未実装(別タスク、サンプル追加では埋められない)。ユーザーはこの後、GOAL3実データを増やす方向も選択(安城市・浦添市・弘前市・福山市・豊橋市のURLリストを提供、次のアクションとして着手予定)。
+  - まず既存3サンプル(procedure-overview/links-text/tables)へ、検出コードはあるがサンプルに該当パターンが無いだけの15ルールを自然な内容として追加。procedure-overviewにmeta refresh・id重複・「担当課」パターン・内部リンクを、links-textにmarquee・記号のみ見出し・ページ内外アンカー・重複リンクテキストを、tablesにth要素のscope欠落・書式付きテーブル・結合見出しセルのパターンをそれぞれ追加。
+  - 実装検証中に2件の既存バグを自己発見・修正(サンプル追加とは独立した、以前から存在していた不具合)。
+    1. `table.cell-merge-heading`/`table.cell-merge-summary`の重複候補バグ: `shouldPreserveAsDataTable(table)`がfalseの結合セル表について、`collectTableCandidates()`の直接プッシュと`planTableTreatment()`末尾のcatch-allが全く同一の候補を二重生成していた。後者を`return {kind:"data"}`に単純化して解消(既存のnote/summary等preserveAsDataTable=trueなケースは無関係、回帰なし)。
+    2. テーブル関連候補7箇所のメッセージ・理由に英語テキストが混入(`table.format-clear`、無キャプション表への簡易追加候補、データ表リビルド案内、`table.layout-table`判定、cell-merge系の補足文)。うち1箇所は実際に挿入される`<caption>`要素の中身自体が英語"Table details"になっていた(既存の`genericTableCaption`定数[="表の詳細"]を使うよう修正)。全て日本語へ修正。
+  - 検証: `node --check`成功。Playwright回帰確認の結果procedure-overview 7→11、tables 14→23、links-text 24→29に増加(いずれも新規追加分)、images/iframe/goal3-hirosaki-news2019は変化なし。ルールカバレッジは41/59→53/59に向上。各追加テーブルパターンが意図通りのルールを発火し重複候補が発生しないことを個別確認、修正後メッセージが全て日本語表示されることをスクリーンショットで確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。その後、ユーザー提供のURLリスト(安城市/浦添市/弘前市/福山市/豊橋市)から新規GOAL3実データサンプルを追加する作業に着手。→ PR #54としてマージ済み。
+  - GOAL3新規サンプル追加に着手し、提供されたURL(安城市・弘前市・豊橋市で試行)をWebFetch・curl両方で取得しようとしたが、この環境のプロキシが一般Webサイトへのアクセスをポリシーでブロックしており(youtube.com/google.comも同様に拒否される、許可リストはパッケージレジストリ+anthropic.comのみ)、全て403で取得不可と判明。ユーザーに状況を報告し、「ページのHTMLを貼り付けてもらう」方式で進めることに合意。ユーザーからのHTML貼り付け待ちの状態。
+- ユーザーから「修正候補のcurrentの色合いが差別化できていないので明確にいま選択していることがわかるように調整しましょう」との指摘。スクリーンショットで実際に確認したところ、既存の選択中スタイル(背景を`var(--primary-container)`に変えるだけ)は、「同じ箇所の候補」グループコンテナ自体が同系統の淡い青背景を持つ場合や、未処理カードの白背景との対比が弱い場合に、選択中カードが一覧の中で目立ちにくいことを確認。
+  - `goal2-app/public/styles.css`の`.candidate-item[aria-selected="true"]`に`box-shadow`によるインセットリング+外側グローを追加(`border-width`は変えないためレイアウトが動かない)。最初は背景の深色化をごく僅か(4%)に留めてスクリーンショットで確認・提示したところ、ユーザーから「もっと目立つ色にしたい」との追加フィードバックを受け、背景を濃い青(50%)へ強化。
+  - 実装中に自己発見・解決した検証上の落とし穴: この段階のスクリーンショットで「色がほとんど変わっていない」ように見えたのはCSSの不具合ではなく、`page.click()`後にマウスカーソルが要素上に残ったまま撮影しており`button:hover`ルールが選択中スタイルを覆い隠していた検証スクリプト側の問題と判明。`page.mouse.move(0, 0)`でカーソル退避後に再検証し、正しく濃い青が適用されていることを確認。
+  - 濃い青版をユーザーへ再度確認したところ「反対色など青とは別の色にしましょう」との追加指摘。青(`--primary`)はこのUI内でリンク・フォーカスリング・グループコンテナ枠など既に随所で使われており、選択中カードをどれだけ濃くしても既存の青系ノイズに埋もれるという根本課題を認識し、色相自体を変更する方針へ転換。マゼンタ/バイオレット系(`#9c1f8a`)へ変更して提示したが、ユーザーから「毒々しいので別の色相にしましょう。色相環を参考にして色の候補を上げて」と再指摘。
+  - ユーザーが「対照色相配色」(基準色から120°〜150°ずらす配色技法)の図を共有。これを踏まえ`--primary`の色相(約223°)から約120°・約135°離したくすみベリー(赤紫寄り)・くすみモス(黄緑寄り)の2案をコントラスト計算込みで作成・提示。この途中でユーザーから別途、参考パレット(`--color-primary: #2f5fdb`/`--color-secondary: #552fdb`/`--color-accent: #dbab2f`等)が提示され「この中から選ぶなら」と質問を受けた。分析の結果、primaryは既存`--primary`そのもの、secondaryは既存の見出しh4タグ色(`#6a5aa8`、色相差約1°)とほぼ同一色相で青系からも十分離れておらず(`--primary`との色相差約30°)、いずれも「青系から離す」目的には合わないと判断。accentの`#dbab2f`(ゴールド)が最も妥当と回答したが、既存の`--warning`(琥珀、要確認バッジの色)と色相差約4°で近すぎることも判明したため、色相を`--warning`から約15.9°離しつつ明度・彩度を上げた調整版`#938915`を提案し、ユーザーが選択。
+  - 最終実装: `:root`に選択専用の新規トークン`--selected`(`#938915`、ゴールド系)・`--selected-container`(`#f7f4d4`)・`--on-selected-container`(`#4e490e`)を追加。`.candidate-item[aria-selected="true"]`をこれらのトークンへ切り替え(背景`color-mix(--selected-container, --selected 50%)`、リング/グローも`--selected`基準)、`.candidate-meta`は選択中のみ`--on-selected-container`へ。Pythonスクリプトでコントラスト比を再確認(本文`--text`約9.1:1、補足テキスト約4.8:1、いずれもAA基準4.5:1を上回る)。
+  - 検証: `node --check`成功(CSSのみのためサンプル回帰確認は対象外)。Playwrightのスクリーンショット(マウスカーソル退避済み、3本の検証スクリプトを更新)で、通常の未処理カードとの対比・「同じ箇所の候補」グループ内での対比・採用済み(グレー背景)カードが選択された場合の優先順位、の3パターンを再確認し、いずれも選択中カードのゴールドが既存の要確認バッジ色とも十分に区別できる形で一見して明確に識別できることを確認。
+  - ユーザーが「進める(推奨)」を選択したため、コミット・プッシュ・PR #55作成・`subscribe_pr_activity`購読・60分後チェックイン予約まで完了。
+- ユーザーから続けて「修正候補のラベルで特にセル結合がわかりにくいのでここも整理しましょう」との依頼。調査したところ、`table.cell-merge-*`系6ルールの候補一覧タイトルは、KBの元となる公式マニュアル(V2.01)のページ内番号に合わせた「セル結合①レイアウト用途」のような丸数字付きタイトル(`candidate.rule.title`)をそのまま使っており、番号自体には意味がないため作業者には何が起きるか一見して伝わらないことを確認。
+  - `goal2-app/public/app.js`に新規ヘルパー`candidateDisplayTitle(candidate)`を追加。`table.cell-merge-*`ルールに限り、候補生成時点で状況ごとに書き分けられている`candidate.issue.message`(例:「先頭の結合セルが見出し用途に見えます」)を末尾の句点を除いて表示タイトルとして使うよう変更。候補一覧のカードタイトル・チェックボックスaria-label・カード本体aria-label・詳細画面の「修正方法」カードタイトルの4箇所に適用。KBブラウザやエクスポート用の`rule.title`自体はマニュアルとの対応関係を壊さないため変更していない。
+  - 検証: `node --check`成功。表示専用の変更のため、Playwrightで既存6サンプルの検出件数(11/10/23/29/5/20)が完全一致することを確認(回帰なし)。`tables`サンプルの実画面で、5件のセル結合候補すべてが丸数字なしの状況説明文で表示されること、詳細画面の「修正方法」カードでも同様であることをスクリーンショットで確認。
+  - コミット・プッシュ・PR #56作成、マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから、`tables`サンプルの「申込書類」表(文書冒頭近くにある表)で見出しレベルが不正に修正されている、他の候補でも表のヘッダーだけが残っているような箇所があっておかしい、とのスクリーンショット付き報告。全candidateのbefore/after HTMLをダンプして調査し、独立した2件のバグを特定。
+  - バグ1: `decomposeLayoutTable()`(`table.cell-merge-file`等が使う表分解ロジック)が、3列以上の行で先頭セルが短文の場合に先頭セルを独立見出しへ昇格させていたため、「参加申込書｜PDFリンク｜提出期限」という通常の3列レコード行が「参加申込書」という見出しに化け、直前の表見出し「申込書類」(同じくh3)と重複していた。2セル行を`<strong>ラベル</strong> 値`の1段落にまとめる既存ロジックを3セル以上に一般化し、「先頭セル=見出し」の別解釈分岐を削除。
+  - バグ2: `buildDataTableSemanticsHtml()`(`table.caption`の構造再構築ロジック)の行パディングが`colspan`を無視してDOM上の子要素数だけで列数不足を判定していたため、`colspan="3"`で全列を占める行にも無意味な空`<td>`が2個追加されていた。`colspan`を合算して実際の占有列数を数えるよう修正。
+  - 検証: `node --check`成功。既存6サンプルの検出件数(11/10/23/29/5/20)が完全一致(回帰なし)。ユーザー報告の該当表で見出し重複が解消されたこと、他の類似ケース3件でも空セルが解消されたことをスクリーンショット・HTMLダンプで確認。
+  - 調査中に発見した別課題を報告したところ、ユーザーから「あわせて修正しましょう」との指示。
+  - バグ3: `dataTableProfile()`の`firstRowHeaderLike`が先頭行の「短い平文かどうか」だけで見出しらしさを判定しており、rowspanで複数行にまたがる行グループラベル(「対象区分」)を含む行も見出し行と誤認し、本来はデータ値の「乳幼児の保護者」「午前」「●」が実在しない列見出しとして`<thead>`に昇格しデータが失われていた。先頭行にrowspanセルがあれば見出し行候補から除外するよう修正し、`buildDataTableSemanticsHtml()`のtbody構築でrowspan付き行見出しセルには`scope="rowgroup"`を付与するよう修正。列見出しがない場合は既存の汎用見出し(「項目」「内容1」…)へフォールバック(他の表と同じ既存パターン)。
+  - 検証: `node --check`成功。既存6サンプルの検出件数(11/10/23/29/5/20)が完全一致(回帰なし)。`対象者一覧`表でデータ消失が解消されたことをスクリーンショットで確認。
+  - 既知の残課題(意図的に未対応): rowspan行の2列目だけ`<td>`のまま(2・3行目の同じ列は`<th scope="row">`)という軽微な非対称が残る。完全に直すには表全体のグリッド展開による列位置再計算が必要なため、データ消失という重大な不具合の解消を優先し許容した。
+  - ユーザーから「そもそも表として成立していないので修正前の表をもう少し現実的にしよう」との指摘。元の`対象者一覧`表は、rowspanラベル「対象区分」と各行の実際の対象("乳幼児の保護者"等)が意味的に重複しており不自然だった。`tables`サンプルを、rowspanの自然な実務用途(同じ曜日に複数講座が開催される日程表、`<caption>講座の実施日程</caption>`で火曜日の3講座をrowspanでまとめる形)に差し替え。修正後も候補件数(23件)は変わらず、`table.cell-merge-layout`・`table.caption`の両方の修正方法が新しい内容でも正しく動作することをスクリーンショットで確認。
+  - コミット・プッシュ・PR #57作成、マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- 「残課題を教えて」と聞かれ、上記の軽微な非対称(rowspan行の2列目だけ`<th scope="row">`にならない)と、GOAL3実データサンプル追加(HTML貼り付け待ちで停止中)の2件を報告。ユーザーから「２を修正しましょう」との指示を受け、非対称の解消に着手。
+  - 原因: `buildDataTableSemanticsHtml()`のtbody構築処理が、各行のDOM上0番目のセルを機械的に行見出し(`scope="row"`)としていたため、rowspanの行グループ見出しセル(「火曜日」)がその行の0番目を占めている行だけ、本来の行見出し(「親子で学ぶ防災講座」、DOM上1番目)が見出し扱いされていなかった。
+  - 修正: 行をまたいで「rowspanが後何行分残っているか」を追跡する`rowSpanCarry`カウンタを導入し、rowspanを開始する行だけ行見出しの位置を1番目にずらすよう`buildDataTableSemanticsHtml()`を変更。rowspanの影響を受けない表は`rowSpanCarry`が常に0のままなので無影響。
+  - 検証: `node --check`成功。既存6サンプルの検出件数(11/10/23/29/5/20)が完全一致(回帰なし)。`講座の実施日程`表で3行すべての講座名が`<th scope="row">`になり非対称が解消されたこと、他の全テーブル候補の出力が変化していないことをHTMLダンプ・スクリーンショットで確認。
+  - ユーザー確認の上、PR #58として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「GOAL1に取り掛かりたいのでまずは設計を」との依頼(構築着手はしない指示)。既存コードの結合度を調査した上で設計案を提示: (1)バッチ処理はブラウザ側で実行(エンジンがDOM全面依存・依存追加禁止方針のため)、(2)app.js/goal3.jsのエンジンをヘッドレス関数として公開する小リファクタを先行(els依存はpageTitle/oldUrl読み取り4〜5箇所のみと確認済み)、(3)自動採用は既存`canBulkAcceptCandidate`基準を単一ソースとして再利用、(4)バッチ状態はIndexedDB保存(Cloud Run揮発性のためサーバー保存は不採用)、(5)GOAL2引き継ぎは`goal3.toGoal2`拡張。
+  - ユーザー回答: 自動採用範囲は「機械的・確信度十分・人間確認不要のみ」で承認。入力はURL一覧+ローカルHTMLファイル複数アップロード+**ユーザー提供の移行管理CSV**(安城市50行の実物で形式確認: CP932、22列、キー列=移行管理ID/ページタイトル/テンプレートNo/移行元URL/移行先カテゴリ/ステータス、同一URLの重複行が実在)の3系統。
+  - 実装は別AGENT(Sonnet)が担当するため、`goal2-app/GOAL1_BUILD_INSTRUCTIONS.md`として構築指示書を作成。確定済み設計判断、既存コード構造の必要事実、CSV仕様、PR-A〜Dのステージングと合格条件、回帰チェック手順(基準値+スクリプト全文)、環境制約(外部URL取得不可→HTMLファイル経路でE2E)、リポジトリ運用ルールを収録。PR #59としてマージ済み。
+- ユーザーから指示書URLを参照して実装を進めるよう指示があり、このセッションでGOAL1実装を開始。PR-A(エンジンのヘッドレス化、挙動変更なし)を実施。
+  - goal3.js/app.js両方のUI初期化を要素存在チェックでゲートし、goal3.jsに`window.goal3Engine.extract()`、app.jsに`window.goal2Engine`(init/analyze/autoAcceptSafe/buildFinalHtml/buildEvidence/sessionIdFor)を公開。解析コンテキスト(`analysisContext`+ヘルパー)導入で入力欄直読み5箇所+`currentSessionId()`を置換。`analyze()`の中核を`runAnalysis()`として抽出。`rebuildWorkingHtml`/`isProcessingComplete`/`buildEvidence`をパラメータ化版へ委譲する形に整理。
+  - ライブ検証でヘッドレス時の唯一のクラッシュ箇所(`loadRules()`内の`els.ruleStatus`書き込み)を発見しnullガード。
+  - 検証: 変更前(git stash)と変更後の回帰JSON(全サンプル×ルール別内訳)をdiffし完全一致。UI要素なしページでの全経路ヘッドレス実行、goal2/goal3両画面のスモークともpageerrorゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-B(goal1.html骨格)へ。
+  - ユーザー確認の上、PR #60として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- PR-B(goal1.html骨格+バッチ実行+IndexedDB)に着手。
+  - `goal1.html`/`goal1.js`新設。CSV(CP932/UTF-8自動判定、簡易CSVパーサ自前実装、移行管理CSVの列名解決+フォールバック形式)・URL一覧・HTMLファイル複数の3入力からページキューを構築し、同一URL重複は警告バッジで表示。バッチは直列実行(fetch→goal3Engine.extract→goal2Engine.analyze→autoAcceptSafe→最終HTML/証跡)、1ページ失敗でも継続。IndexedDB(db=goal1)へページごと保存(元HTMLは保存しない)、リロード時に最新バッチを自動復元。証跡CSV一括・ページサマリーCSV(UTF-8 BOM付き)・バッチJSON DL/読み込みも同PRで実装(指示書ではPR-C相当だがバッチオブジェクト設計と密結合のため前倒し)。
+  - `server.js`に`GET /api/llm/status`を新設(既存`lib/llm.js`の`isConfigured()`をそのまま利用、呼び出し発生なし)。
+  - `app.js`: GOAL1→GOAL2引き継ぎに`autoAcceptSafe`フラグを追加。フラグ付きの場合、作業者の「候補生成」完了直後に1回だけ、既存の一括採用と同じ`applyCandidateDecision`経路(競合解決含む)で自動採用相当を適用する`applyPendingAutoAcceptSafe()`を追加(ヘッドレス版の単純な決定状態コピーではなく画面の通常経路を再実行)。
+  - 検証中に2件のバグを自己発見・修正: (1) `.michecker-shell`と同じ`margin: 0 auto`パターンを最初`.goal1-shell`にも適用したところ、固定左サイドバー`.app-header`とビューポート幅によって重なりクリックを奪う潜在バグを発見。`.goal3-shell`と同じ「margin上書きなし」パターンに変更して回避(この潜在バグ自体はmichecker-compare.html側にも存在する可能性があるが、今回はスコープ外として触れていない)。(2) ヘッダーの`engineStatus`表示要素をHTMLに用意したもののJS側で一度も更新しておらず「エンジン読み込み中」のまま固定される表示バグをスクリーンショット確認中に発見、準備完了/実行中/実行完了の各状態で更新するよう修正。
+  - 検証: `node --check`全ファイル成功。goal2既存回帰(全6サンプル×ルール別内訳)は変更前後で完全一致(1回だけ無関係な原因でタイムアウトし差分が出たが、再実行で完全一致を再現確認、既知のサーバー負荷起因の一過性フレークと判断)。ローカルHTMLファイル+実データ形式CSV+重複URL入りURL一覧の混在入力でE2E(キュー構築・バッチ完走・エラー継続・CSV/JSON出力・IndexedDB復元・GOAL2引き継ぎ+autoAcceptSafe適用)を一通り確認、JSエラーゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-C(残り: GOAL2引き継ぎ以外の出力系は完了済みのため、PR-Cの残タスクを確認の上着手)へ。
+  - ユーザー確認の上、PR #61として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- PR-Cの残タスクを確認したところ、証跡CSV一括・バッチJSON・GOAL2引き継ぎは全てPR-Bで前倒し実装済みと判明。PR-Cとしては指示書記載の合格条件「GOAL2引き継ぎ後の要確認残数がgoal1一覧の値と一致する」を明示的に検証する回として実施。
+  - 検証中に、GOAL1作業一覧の「自動採用」「要確認残数」列が値`0`のとき`page.xxx || ""`という書き方のせいで空欄表示になる(0が偽値扱いされる)表示バグを発見。`page.evidence`の有無で判定し、解析完了後は`0`も明示表示するよう修正。
+  - 検証: `node --check`成功。goal2既存回帰は完全一致。ページ1件をGOAL1でバッチ処理→GOAL2で開く→候補生成、という流れでGOAL1一覧の要確認残数(0)とGOAL2側のevidence.completion.unresolved(0)が一致することを確認(修正前は空欄vs"0"で不一致)。PR-Bの全E2Eシナリオも再実行し変化なしを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-D(分類・ルール別サマリー・本番検証)へ。
+  - ユーザー確認の上、PR #62として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- PR-D(分類・ルール別サマリー・本番検証)に着手。指示書の3項目のうち、クライアント側で完結する前半2項目(グルーピング表示・ルール別サマリー)を実施。
+  - 作業一覧に「グループ化」セレクト(なし/カテゴリ別/テンプレートNo別)を追加。値が空のページは「(未分類)」として常に末尾にソート。新規セクション「ルール別集計」でバッチ全体のrule_id別候補数・自動採用数・要確認数を候補数降順表示。
+  - 検証: `node --check`成功、goal2既存回帰完全一致、PR-Bの全E2E再実行で影響なし。カテゴリ違いの新規シナリオで、グループ見出しの件数・順序、グループ解除で行が消えること、ルール別集計の候補数合計と作業一覧の合計が一致することを確認。
+  - 残る3項目目(LLM有効環境での実地検証)は有効なGemini APIキーが必要なため未実施。ユーザーへの確認事項として保留。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。あわせてLLM実地検証の要否・テスト用キー提供をユーザーに確認。
+  - ユーザー確認の上、PR #63として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+  - ユーザーからテスト用Gemini APIキーの提供があり(`AQ.Ab8...`)、確立済みの厳格な取り扱い(スクラッチパッドのみ`chmod 600`保存、リポジトリ管理下ファイルには一切書き込まない)で保存。`GEMINI_API_KEY`を設定した状態でサーバーを起動し、GOAL1画面から実際にGeminiを呼び出すバッチ処理を検証(PR-D項目3)。
+    - LLM利用バッジが「有効(コストが発生します)」に正しく切り替わることを確認。
+    - LLM enrichmentが実際に候補を追加すること(`html-structure.heading-required`が新規追加)、LLM由来候補(`processing_class: "ai"`、`requires_human_review: true`)は`autoAcceptSafe`で自動採用されず正しく「要確認」に残ること、機械的候補(`table.caption`)は従来どおり自動採用されることを確認。
+    - ページごとのLLM概算コストが実測値として作業一覧・証跡CSVの両方に正しく反映されることを確認。
+    - バグは発見されず、コード変更不要と判断。検証完了後、テスト用キーを`rm -f`で削除し削除済みを確認。これでGOAL1_BUILD_INSTRUCTIONS.mdのPR-D全項目が完了。
+  - 次のアクション: ユーザー確認の上、ドキュメントのみのコミット・プッシュ・PR作成。GOAL1のPR-A〜Dが全て完了。
+  - ユーザー確認の上、PR #64として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「URLなにになるの？」と質問があり、`server.js`の静的配信ロジック(`publicDir = rootDir/public`)とDockerfile(`COPY public ./public`)を確認して回答。ユーザーが`.../goal2-app/public/goal1.html`ではないかと再確認してきたが、Dockerビルド時に`goal2-app`というフォルダ名は失われコンテナ内には残らないこと、URLパスはリクエストパスをそのまま`publicDir`にマッピングするだけであることを示し、正しいURLは`.../goal1.html`(`/goal2-app/public/`を含まない)であると訂正して回答。
+- ユーザーから、実在の自治体ページ(蓮の花の生育記録)のHTMLを貼り付け、「表の崩しかたがむちゃくちゃ」との報告。写真キャプション+ダウンロードリンクだけの単純な2×2表が、`table.caption`候補で「山門北側。クリック！（JPG：629KB）の詳細」という不自然なキャプションと、実在しない列見出し・行見出しを持つ構造に再構築されていた。
+  - 原因を特定: (1) `isHeaderLikeTableCell()`の文末記号除外パターンが閉じ括弧類(）等)を含んでおらず、「クリック！（JPG：629KB）」のようなファイル情報付きリンクだけのセルが見出しと誤判定されていた。(2) `isTableDataValueText()`が単純な数字有無判定のため、ファイルサイズ注記中の数字(629KB等)も表データとして扱われ、rowspan/colspanもヘッダーもキャプションも無い単純な写真キャプション表まで「データ表として温存すべき」と誤判定されていた。
+  - 修正: `isHeaderLikeTableCell()`の文末記号除外に閉じ括弧類を追加。`isTableDataValueText()`はファイルサイズパターン(数字+KB/MB/GB)を数字判定前に除去するよう変更。
+  - 検証: `node --check`成功。既存6サンプルの検出件数がルール別内訳含め完全一致(回帰なし)。ユーザー報告の表を単体再現し、修正前後の差(不自然な捏造見出し構造→シンプルな段落分解)を確認。ユーザー提供ページの該当4表すべてで、一貫して適切な段落分解になることを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #65として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「GOAL2やGOAL1それぞれを行き来できるようにしましょう」との依頼。4画面(index.html=GOAL2、goal3.html=GOAL3、michecker-compare.html=miChecker比較、goal1.html=GOAL1)が互いへのリンクを一切持たず、URL直接入力でしか移動できなかったため、共通の左サイドバー(`.app-header`)内に4画面共通のナビゲーション(`<nav class="app-nav">`)を追加。各画面で自分自身のリンクにのみ`aria-current="page"`を付与する。
+  - 検証: 4画面それぞれでナビリンクのhref/aria-currentが正しいことを確認。実際にリンククリックで画面遷移することを確認。既存6サンプルの回帰は完全一致。GOAL1/GOAL2/GOAL3の既存E2Eシナリオを再実行しJSエラーゼロで影響なしを確認。
+  - 初回実装は現在地リンクを白背景・角丸ボックス(既存の`.header-status`ステータス表示と同じ見た目)で表現し、スクリーンショットを共有してユーザー確認を依頼したところ、ユーザーから「ボタンと差別がない」との指摘。現在地表示が押せるボタンのように見え、実際のボタン類との見分けがつかないという趣旨と判断し、塗りつぶしボックスをやめて左ボーダー付きのプレーンテキストリスト(非現在地はグレー文字・枠無し、現在地のみ白文字+太い左ボーダー、ホバー時は下線と左ボーダーの明るさ変化のみ)に再設計。
+  - 再検証: 再設計後も4画面のhref/aria-currentは変更なく正しいことを確認。既存6サンプルの回帰・GOAL1/GOAL2/GOAL3のE2Eシナリオは影響なし(CSSのみの変更)。再設計後のスクリーンショット(現在地表示と`.header-status`が明確に見分けられること、ホバー時の下線)をユーザーに確認依頼。
+  - ユーザーは再設計への回答の代わりに「GOAL1とかの名称はあくまでこのプロジェクトのGOALを示したものなので機能名だけにしましょう。サービス全体で使用していないかチェックして。URLは除く。」と指摘。「GOAL1」「GOAL2」「GOAL3」という表記自体が、プロジェクト内部の目標管理番号であり、ユーザー(自治体職員等の実務利用者)向けの画面には本来不要な内部用語だという趣旨と理解。
+  - 対応: `goal2-app/public`配下を全文検索し、ユーザーに見える文字列(`<title>`、`eyebrow`ラベル、`app-header-footer`、ナビゲーションのリンク文言、ボタンラベル、説明文中の言及、サンプルデータの表示ラベル)から「GOAL1/GOAL2/GOAL3」表記を除去し、機能名(一括最適化/候補レビュー/本文抽出/miChecker結果比較)のみに統一。具体的には: 4画面の`<title>`・`eyebrow`・`app-header-footer`・ナビゲーション4リンクの文言、`goal3.html`の「候補レビューへ渡す」ボタン(旧「GOAL2へ渡す」)、`goal1.js`の「候補レビューで開く」ボタン(旧「GOAL2で開く」)、`goal1.html`の一括採用基準説明文中の「GOAL2画面」→「候補レビュー画面」、`app.js`のサンプルデータの`label`/`cmsTarget`表示文言(旧「GOAL3抽出...」)。
+  - ユーザーの指示通り、URL(`/goal1.html`等のパス)は対象外とした。あわせて、要素ID(`sendGoal2Button`等)・localStorageキー(`goal3.toGoal2`)・JS関数名(`openInGoal2`)・コード内コメント(`// GOAL1 batch mode runs...`等)はユーザーに表示されない実装上の識別子のため、こちらも変更対象外と判断(過剰な作業範囲拡大を避けるため)。
+  - 検証: `node --check`成功。既存6サンプルの回帰は完全一致(11/10/23/29/5/20)。GOAL2/GOAL3の既存E2Eスモークシナリオを再実行しJSエラーゼロ。名称変更後のナビゲーション表示(GOAL番号を含まない機能名のみ)をスクリーンショットで確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #66として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「miCheckerと同じチェックはこのブラウザ上で可能か？公開情報も含めて回答して」と質問。miCheckerの公式位置づけ(総務省提供・JIS X 8341-3:2016検証支援・Windows専用GUI)と、本アプリでできること(公式基準に近い独自判定/実CSV取り込み比較/ローカルWindows限定のhtmlchecker.exe連携)・できないこと(公式スコア・GUI本体の自動実行)を整理して回答した。
+  - 続けて「公式基準に近い判定とは真にイコールでない根拠は?」と問われ、(1)32/59件という数字は逆引き整理であって検出一致の検証ではない、(2)判定エンジンが別物(タグはメタデータの人手対応付け)、(3)CSS描画依存項目は原理的に再現不可、(4)検証サンプルが1ページのみ、(5)重大度分類体系が別物、(6)ソース鮮度リスク、の6点を根拠として提示した。
+  - さらに「判定ロジックは公式ソースに記載されていないのか?」と問われ、vendor/の2ファイル(checkitem.xml/description_ja.properties)はメタデータのみだが、取得元の`eclipse-actf/org.eclipse.actf`リポジトリ自体には判定ロジックのJavaソース一式(EPL-1.0)が含まれることを説明。実際にスクラッチパッドへクローンして`CheckEngine.java`(4,909行)の実在と、th-scope判定(C_331系)が純DOM解析で移植可能なレベルであることを実コードで確認した。
+- ユーザーから「本文編集で対応可能な項目のみから着手。まずは移植実行計画をFable 5が建てて、Sonnetが実装する。計画のところまでをまずお願いします」との指示(このタイミングで/modelによりclaude-fable-5へ切り替え)。
+  - 事前分析: 268項目−スコープ外152件=対象116件(error 24/warning 18/info 30/user 44)。CheckEngine.java全体を解析し、`addCheckerProblem`呼び出しを約90メソッドへマッピング。CSSOM依存9件(テキスト解析経路で部分移植可)、本体未発火2件(C_16.0/C_332.0)、`always()`無条件リマインダー約24件、TextChecker(433行・純文字列処理)依存のalt品質系、という構造を確定。
+  - 計画書`goal2-app/MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`を作成。骨子: (1)EPL-1.0の二次的著作物として`michecker-engine.js`1ファイルにライセンス隔離(EPLヘッダー+NOTICE追記)、(2)CheckEngine.javaと1:1対応の忠実移植(改変禁止、Javaのバグに見えても報告のみ)、(3)既存ヒューリスティックは不変更・別レイヤー追加・マージしない(v1)、(4)miCheckerモード時のみ実行し「miChecker相当チェック結果」表+「手動確認チェックリスト」として独立表示、(5)PR-M0(インベントリ+骨格)→M1(error 24)→M2(warning 18)→M3(info/user 74)→M4(GOAL2統合UI)→M5(ユーザーWindows環境のhtmlchecker.exe出力をゴールデンとするチェックID件数の実機パリティ検証)、(6)PR-M5完了まで「同一」と表記しない、(7)行番号は再現しない(セレクタパス代替)等。
+  - 次のアクション: ユーザー確認の上、計画書のみをコミット・プッシュ・PR作成(GOAL1指示書のときと同じ計画先行PR方式)。実装(PR-M0以降)はSonnetが本指示書を参照して実施。
+  - ユーザー確認の上、PR #67として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーが`/model claude-sonnet-5`でSonnetへ切り替え、「PR-M0を実装して」と指示。`MICHECKER_ENGINE_PORT_INSTRUCTIONS.md`を参照してSonnetが実装した。
+  - インベントリ生成: `a11y-migration-kb/tools/gen_michecker_inventory.py`(新規)で、`michecker-checkitems.json`・`michecker-out-of-content-scope.json`・`rules.jsonl`と実際のCheckEngine.javaソース(スクラッチパッドにクローン済みのものを再利用)を突き合わせ、対象116件それぞれのCheckEngine.java担当メソッド・行番号・移植可否分類・対応KBルールを機械的に算出し`goal2-app/MICHECKER_PORT_INVENTORY.md`として出力。分類内訳はpure-DOM 79/手動確認(always)24/テキストCSS解析9/TextChecker依存2/本体未発火2で計116件(C_16.0・C_332.0を「対象外」と明記)。当初リポジトリルート直下に`tools/`を作ってしまったが、既存の`a11y-migration-kb/tools/`(actf2json.py等)と場所を揃えるため移動し、スクリプトも`Path(__file__)`基準の絶対パス解決に修正(どのディレクトリから実行しても同一出力になることを確認済み)。
+  - エンジン骨格: `goal2-app/public/michecker-engine.js`(新規)。EPL-1.0ヘッダー、`window.micheckerEngine.run(document, options)`API、`addCheckerProblem`相当の収集器、`desc_ja`の`{0}`置換、CSSセレクタパス生成(行番号の代替)。`TextChecker.java`(alt品質判定)は、そのソースだけでは完結せず、外部リソース`altText.properties`(NGワード一覧)に依存していることが判明したため、スクラッチパッドのクローンから該当ファイルを探して発見し、NGワード全件(inappropriateAlt 25件・possible_inappAlt 25件)込みで完全移植した。移植中に、Java側の`isSeparatedJapaneseChars`が使う`\b`(ASCII単語境界、UnicodeフラグでもJava/JS共に非Unicode対応)は、前後にASCII英数字が直接隣接しない限り純粋な日本語テキストでは実質的に発火しないという原典の癖を発見。「改善したくなっても改変しない」という計画書の原則どおり、修正せずそのまま移植し、コード内コメント+パリティテストの両方に明記した(はじめ自分のテストケースが誤っていて偽の失敗を出したが、Javaの`\b`セマンティクスを手で追って原因を特定し、テスト側を正しい期待値に修正した)。
+  - テスト: `npm test`(既存`test/run-tests.js`)はゼロ依存方針のためPlaywrightを使わない静的検査のみで、DOMを要する`michecker-engine.js`は実行できない。この方針を踏襲しつつ、既存のPR検証で毎回使っているPlaywright(このセッション全体でのDOM検証手段そのもの、リポジトリの依存ではなく環境提供)を使う独立ランナー`goal2-app/test/michecker-parity/run-parity-tests.js`(`npm run test:michecker-parity`)を新設。about:blankページに`michecker-engine.js`を注入し、収集器・メッセージ整形・セレクタ生成・TextChecker移植の17ケースを検証、全PASS。
+  - 副次的な発見: `npm test`を実行したところ、`test/run-tests.js`の`goal3Html.includes("Goal 3")`というアサーションが失敗した。原因を調べると、直前のPR #66(GOAL番号表記の除去)で`goal3.html`から「Goal 3」という文字列自体を消していたため、このテストは今回の変更と無関係にPR #66の時点で既に壊れていた(当時は`npm test`を実行せず、独自の回帰スクリプト・Playwrightスモークのみで検証していたため見落とされていた)。miChecker移植のスコープ外だが、`npm test`が壊れたままなのは望ましくないため、アサーションを現在の表記(`"本文抽出"`)に合わせて修正し、`npm test`を再び通るようにした。
+  - 検証: `node --check`成功。`npm test`成功(副次修正込み)。`npm run test:michecker-parity` 17/17 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`はまだどの画面からも読み込まれていないため(GOAL2統合はPR-M4)、既存機能への影響は原理的にゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M1(error型24件の移植)へ進む。
+  - ユーザー確認の上、PR #68として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M1(error型23件の移植)に着手。インベントリからtype=error 24件(C_332.0は本体未発火のため対象外)を抽出し、`CheckEngine.java`の該当23メソッド(item_3/6/14/18/33/34/36/51/57/331/332/422/423、mediaCheck)をスクラッチパッドのソースから1件ずつ実際に読み、`michecker-engine.js`へ移植した。
+  - ページ単位の共有コンテキスト`buildPageContext`(img/a[href]配列/frame/iframe/見出し/データテーブル一覧を1回だけ計算)を新設し、Java側のHtmlEvalUtilコンストラクタの事前計算パターンを踏襲。`HtmlTagUtil`/`HtmlEvalUtil`の主要ヘルパー(`getTextAltDescendant`/`getTextDescendant`/`hasTextDescendant`/`getNoScriptText`/`getNameByAria`/`getWordCount`/データテーブル判定一式/`isHTML5`)も移植。
+  - 実装中に、当初の下書きでは把握しきれていなかった重大な癖を複数発見し、都度Javaソースを読み直して修正した。最も影響が大きかったのは`item_331`(th要素のscope検査、C_331.0/331.1)で、テーブル分類ロジックが`tr.getFirstChild()`(tr要素の**生の最初の子ノード**、pretty-printされたHTMLでは空白テキストノードのことが多い)と`tr.getChildNodes().getLength()`(**生の子ノード数**、colspan計算後のセル数ではない)に依存していることが分かった。当初はセル配列ベース(`cellList[0]`・`cellList.length`)で実装しており、これは一見同等に見えるが実際には異なる挙動になる箇所だったため、Javaソースを再度全文読み直して書き直した。同様に`isTHwoRowspan`のrowspan属性パース失敗時(属性なし・非数値)にJavaの`catch`節が何もせず直前の値を保持する(=trueのまま)という挙動も、当初の実装では誤って`false`にリセットしてしまっていたため修正した。`item_332`(C_332.1/332.2)がデータテーブル1件ごとに文書全体のth/td再走査を繰り返す(=同一の不正参照がテーブル数だけ重複報告される)という原典の非効率な設計も発見し、「修正せず忠実に移植」の原則どおりそのまま実装した上でコメントと専用テストケースで明記した。`item_423`(C_423.0、id重複検査)がXPath`//body/*[@id]`により**bodyの直接の子要素のみ**を対象としており、ネストした要素同士の重複idは検出しないという意図的なスコープの狭さも確認し、そのまま移植した。
+  - テスト: `test/michecker-parity/run-parity-tests.js`に23件それぞれの陽性・陰性ケース(46件)+`item_332`の重複報告癖を示す専用ケース1件を追加(既存17件と合わせ計64件、全PASS)。`<frame>`要素はHTML5パーサーの仕様で`<frameset>`外だと解析時に破棄されてしまうため、Playwrightで実際に検証してこの挙動を確認した上でC_51.0/C_51.4のfixtureのみ`<frameset>`で囲む対応が必要だった。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 64/64 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M2(warning型18件の移植)へ進む。
+  - ユーザー確認の上、PR #69として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M2(warning型18件の移植)に着手。インベントリからtype=warning 18件全てを抽出し、`CheckEngine.java`の該当メソッド(item_6/13/23/33/38/46/48/80/89/300/331)を読み、`michecker-engine.js`へ移植した。
+  - `buildPageContext`を拡張し、`layoutTableList`(1行1列テーブル・非データテーブル・入れ子テーブルの合算、Java側の`layoutTableList.addAll(parent/1row1col/notdata)`と同じ組み立て)、マウスイベントハンドラ要素(`getEventMouseButtonElements`/`getEventOnMouseElements`相当)、`<style>`要素本文マップを追加した。
+  - `item_331`の共通テーブル分類ロジックを`analyzeScopeTable()`という1関数へ切り出し、PR-M1で実装済みのC_331.0と、本PR新規のC_331.2が同一ロジックを共有するようリファクタリング。同様に`item_89`のbody走査も`accumulateBodyText()`として切り出し、C_89.0(M1)とC_89.2(本PR)で共有した。ロジックの重複コピーによる将来的な乖離リスクを避ける狙い。
+  - C_48.7(acronym)・C_48.8(longdesc/summary属性)がJavaの`isHTML5`分岐内でのみ発火する箇所であることを確認し、本エンジンのフラグメント解析(`DOMParser`が`<!DOCTYPE>`の無い断片を解析するため`document.doctype`が常にnull)では`isHTML5`が常にfalseとなり、これら2件は**通常のGOAL2利用では構造的に到達不能**であることを突き止めた。それでも将来完全な文書を解析する可能性に備え、忠実に実装(テストは`<!DOCTYPE html>`付きの完全な文書fixtureを使い、実際に発火することを個別に確認)。
+  - C_300.1(area要素のalt品質、TextChecker依存)は、1つのareaが複数画像の`usemap`から参照されている場合に画像ごとに重複報告するという原典の挙動も保持。
+  - 副次的な発見: PR-M0で追加したハーネス健全性テストが、PR-M1/M2で実チェックが登録されたことにより既存fixture(1行テーブルを含む汎用HTML)に対してC_23.2を誤って検出し、意図しない失敗を起こしていた。`run()`呼び出しに明示的に`checkIds: []`を渡す形に修正し、登録済みチェック数の変化に依存しない安定したテストにした。
+  - テスト: `run-parity-tests.js`に18件分の陽性・陰性ケース(36件)を追加し、既存64件と合わせ計100件、全PASS。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 100/100 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M3(info/user型74件の移植)へ進む。
+  - ユーザー確認の上、PR #70として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M3(info/user型の移植、移植フェーズの最終PR)に着手。インベントリのtype=info/user 74件(C_16.0は対象外)のうち73件が対象。まず「always」分類24件の実際のソース(`always()`メソッド全文)を読んだところ、**5件(C_500.4/13/14/15/16)がコメントアウトされたコードで実際には発火しない**ことを発見した。これは、`MICHECKER_PORT_INVENTORY.md`生成スクリプトが`"C_x.y"`という文字列リテラルを正規表現でマッチさせているだけで、コメント行とライブコードを区別していなかったという盲点によるもの。同様の手法で`item_76`のC_76.0も全体がコメントアウトされていることを発見した。この6件は、PR-M0/M1で確認済みのC_16.0/C_332.0(本体未発火)と同じ「実装せず理由を明記」の扱いとした。結果、73件から6件を除いた**67件**が実際の移植対象になった(19の「always」+48の個別チェック、ただし実装完了後の集計でC_52.0/C_52.1の実装漏れが発覚し追加、最終的に67件全て完了)。
+  - `buildPageContext`をさらに拡張し、`parentTableElements`/`bottom1Row1ColTables`/`bottomNotDataTables`(テーブル分類の個別カテゴリ、PR-M2までは統合された`layoutTableList`のみ保持していた)、`objectElements`/`embedElements`を追加。
+  - 特に複雑だった実装: `item_58`(同一リンクテキスト・異なる遷移先ペアの検出)は、テキスト長バケット(0-3/4-6/7-9/10-19/20+文字)ごとにO(n²)でペアマッチングする独自アルゴリズムで、Javaの`String.hashCode()`比較をそのまま移植する代わりに直接の文字列完全一致に置き換えた(ハッシュ衝突リスクは実務上無視できるため、意図の忠実な再現と判断)。`item_57`の残り5分岐(C_57.0/57.1/57.4/57.5/57.6)は、PR-M1のC_57.2/57.3と同じ複雑な制御フロー(語数・文字数・タイトル有無・アンカーリンク除外・隣接同一href判定)を、報告するチェックIDだけ変えて再現する形で実装した。
+  - テスト実行で2つの重要なバグを発見・修正した。(1) `C_500.19`(`<style>`要素内の固定単位font-size)と`C_500.20`(`style`属性内の同じパターン)が、概念上は同じ内容にもかかわらずJava側では**別々のチェックIDで報告される**という非対称設計を、当初は同一IDとして誤実装していたことが、専用テストの失敗から発覚し修正した。(2) `COLOR_ATTR`正規表現がJavaでは`Matcher#matches()`(文字列全体が一致する必要がある)で使われているのに対し、類似の`BGCOLOR_ATTR`等は`find()`(部分一致)を使うという非対称性を見落とし、JS版でアンカー(`^...$`)を付けずに実装した結果、`background-color: red`が誤って`color`宣言としても検出されてしまうテスト失敗が発生。原因を特定してアンカー付きに修正した。副次的に、日本語の説明的なテキストを使った陰性テストが、句読点・空白のない日本語文字列では`getWordCount`が常に1と数えられてしまうため20文字未満だと短文判定に該当してしまうという、PR-M1でも一度遭遇した同種の罠に再度引っかかり、テスト文字列を20文字以上に修正した。
+  - `C_500.17`/`C_500.18`/`C_500.19`/`C_500.21`(`<style>`要素・外部スタイルシートの色/固定サイズ判定)は、Javaの完全なCSSセレクタブロック解析(`findStyles`/`StyleSelectorSets`)を実装する代わりに、簡略化した正規表現の全文テストで実装した(要素単位の発火/不発火自体は正確に再現、メッセージ中の該当セレクタ一覧は省略)。`C_8.0`も`item_8`の`<font>`属性パスのみ実装し、`styleCheck()`側の「同一要素にcolor+bgcolor両方」検出経路は簡略化のため対象外とした。両方ともコード内コメントで明記。
+  - テスト: `run-parity-tests.js`に67件分のケース(陽性・陰性ペア約110件+dead-code確認6件)を追加。既存223件と合わせ計223件、全PASS。スクリプトで全108件の登録済みチェックIDにテストカバレッジがあることも確認した。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。`michecker-engine.js`は未統合(GOAL2統合はPR-M4)のため既存機能への影響はゼロ。
+  - これでPR-M1(error 23件)+PR-M2(warning 18件)+PR-M3(info/user 67件)の合計108件、対象116件のうち本体未発火8件(C_16.0/C_332.0/C_500.4/C_500.13/C_500.14/C_500.15/C_500.16/C_76.0)を除く全件の移植が完了した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、続けてPR-M4(GOAL2統合+UI)へ進む。
+  - ユーザー確認の上、PR #71として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーの「yes」を受けPR-M4(GOAL2統合+UI、計画書§4.3/§5)に着手。PR-M0〜M3で完成した`michecker-engine.js`(108件)を、初めて実際のGOAL2画面・GOAL1バッチパイプラインへ接続した。エンジン自体のロジックは一切変更していない(呼び出し配線のみ)。
+  - まず既存コードを調査し、`runAnalysis()`(app.js)が既存候補生成に使う`parseFragment()`は`<template>`要素の`DocumentFragment`(body/doctypeなし)を返すことを確認した。`michecker-engine.js`はC_69.0/C_89.x/C_80.0/C_23.0等`page.bodyElements`に依存するチェックを複数含み、完全な`Document`を前提とするため、既存フラグメントをそのまま渡すと該当チェックが常に空振りするサイレントな不具合になることが分かった。このため、エンジン呼び出し用に`new DOMParser().parseFromString(html, "text/html")`で独立に再パースする設計にした(`goal3Engine.extract()`やパリティテストと同じ手法)。
+  - `runAnalysis()`に`runMicheckerEngine(html)`を追加し、`ruleScopeMode === "michecker"`のときだけ`window.micheckerEngine.run(doc, { checkitems: state.micheckerCheckitems })`を呼ぶようにした。返り値は`{ candidates, notices, micheckerEngineResult }`に拡張し、`analyze()`(画面側)と`window.goal2Engine.analyze()`(GOAL1ヘッドレス側)の両方に穴埋めした。
+  - `/api/michecker-checkitems`を新たにfetchする`loadMicheckerCheckitems()`を追加し(既存の`loadRules()`と同じパターン)、`init()`と`goal2Engine.init()`の両方から呼ぶようにした。「対応KBルール」列表示用に、`state.rules`の`michecker_check_ids`から`checkId → rule[]`の逆引きMapを作る`buildRuleByCheckIdIndex()`も追加した(`michecker-compare.js`の`buildLookupIndexes`とは異なり、エンジンが正確なチェックIDを返すためテキストマッチング機構は不要と判断し、簡略化した)。
+  - UIは既存候補一覧とマージ・重複排除せず独立表示する設計にした(計画書§4.3の明記どおり)。`index.html`の`workspace-grid`と`output-drawer`の間に新セクション`#micheckerEnginePanel`(KB全ルールモードでは常に`hidden`)を追加。表(種別/チェックID/該当箇所セレクタ/公式メッセージ/対応KBルール)、折りたたみ「手動確認チェックリスト」(`checklist`配列、「always」型チェックの出力先)、「既存ヒューリスティック候補との突き合わせサマリー」の1行(`buildMicheckerCompareSummaryText()`、チェックID単位の集合演算で両方検出/エンジンのみ/ヒューリスティックのみの件数を出す簡易版、要素単位の厳密マッチングはmiChecker比較画面の役割としてスコープ外とした)。
+  - 証跡JSON(`buildEvidenceFor`)には、`context.ruleScopeMode === "michecker"`かつ結果が存在するときのみ`michecker_engine: { problems, checklist, engine_version }`を追加した(スプレッド構文での条件付きキー追加)。
+  - GOAL1側は`goal1.html`に`<script src="/michecker-engine.js">`を追加し(`goal3.js`と`app.js`の間、engine定義がapp.jsのグローバル参照より先に読み込まれるように配置)、`goal1.js`の`processPage()`が`analysis.micheckerEngineResult`を`buildEvidence`のcontextへ渡すよう変更、ページ一覧テーブルに「miChecker検出」列を1本追加した(`page.micheckerEngineCount`、KBモードや未実行時は空欄表示。計画書の「UI集計は最小限、凝った集計はスコープ外」という明示的な指示どおり、件数を1列足すだけに留めた)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため当然の結果)。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwright E2Eで、(1) KB全ルールモードでは解析前後ともパネル非表示・証跡に`michecker_engine`フィールドなしを確認、(2) miCheckerモードに切り替えて解析すると、パネルが表示され表とチェックリストが描画され、証跡に`michecker_engine`が実データ付きで含まれることを確認、(3) 再度KBモードへ切り替えると非表示・証跡フィールドも消えることを確認(モード切替の可逆性を確認)、(4) GOAL1側は`window.goal2Engine.analyze()`をブラウザ内で直接呼び出し、KBモードでは`micheckerEngineResult: null`、miCheckerモードでは実データが返り証跡へ正しく反映されること、ページ一覧のヘッダーが新規列を含む10列になることを確認。
+  - これでPR-M0〜M4の全てが完了し、miChecker公式判定エンジン移植プロジェクトの実装フェーズが完了した。残るPR-M5(実機ゴールデン検証)はユーザー自身のWindows環境での`htmlchecker.exe`実行と証跡CSV提供が必要なため、別途ユーザーへ依頼する。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #72として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーがCloud Runへの本番デプロイを実施し、PR-M4の新機能(miCheckerモードでのパネル表示、GOAL1のエンジン検出列)が正しく反映されていることを確認。そのうえで「修正後のHTMLにmiChecker相当チェックを当てることは可能か」という質問を受けた。調査の結果、`state.micheckerEngineResult`は`analyze()`実行時(候補生成時点の元HTML)にのみ計算され、候補を採用・編集した後の最終HTML(`state.workingHtml`)に対しては再実行されない設計だったことを確認し、その旨を回答した。
+  - ユーザーに実装方式を選んでもらったところ「ボタンで手動再実行」を選択(候補一覧操作のたびに自動再実行するコストを避け、いつの時点の結果かを明示する方を優先)。
+  - `index.html`のmiCheckerエンジンパネルに「最終HTMLで再実行」ボタン(`#micheckerEngineRecheckButton`)と結果の基準を示すラベル(`#micheckerEngineResultBasis`、「元のHTML」/「最終HTML」)を追加。`state.micheckerEngineResultBasis`(`"source"`/`"final"`/`null`)を新設し、`analyze()`実行時は常に`"source"`にリセットされる。
+  - `recheckMicheckerEngineAgainstFinalHtml()`(app.js)を新設。出力ドロワーの「最終HTML」と同じ組み立て方(`stripInternalFromHtml(state.workingHtml || state.sourceHtml)`)でHTMLを作り、`runMicheckerEngine()`で再実行して`state.micheckerEngineResult`を上書き、パネルと出力(証跡JSON含む)を再描画する。証跡はボタン押下後に表示されている内容がそのままエクスポートされる設計にした(押した時点の結果=証跡、という単純な一貫性を優先)。
+  - 「既存ヒューリスティック候補との突き合わせサマリー」は再実行後も元の候補生成時点のヒューリスティック検出セットと比較する簡易版のまま(採用済み候補を除いた差分比較などへの拡張は行っていない、スコープ外として明記)。
+  - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、miCheckerモードで解析→ラベルが「元のHTML」→再実行ボタン押下→ラベルが「最終HTML」に切り替わり証跡にも反映されること、KBモードへ切り替えるとパネルが再び非表示に戻り既存挙動へ影響がないことを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #73として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから「miChecker相当チェック結果の種別はどの種類がありどの内容を示すような仕様ですか」と質問された。`MICHECKER_ENGINE_TYPE_LABEL`(error→エラー/warning→警告/info→情報/user→要確認)の内容で回答した。続けて「この表示の文言はmiChecker公式と同一ですか」と問われ、`michecker-compare.js`の`TYPE_SEVERITY`マップ(実CSVから読み取った公式表示文言: 問題あり/問題の可能性大/要判断箇所/手動確認)と照らし合わせたところ、独自の直訳的な文言(エラー/警告/情報/要確認)を使っており、公式文言とは異なることが判明した。
+  - 対応関係を確定させるため、スクラッチパッドの`actf-src`クローンでeclipse-actf公式ソースを調査した。`IEvaluationItem.java`で`checkitem.xml`の`type`属性文字列(`SEV_ERROR_STR`="error"等)がビットフラグ`SEV_ERROR`(1)/`SEV_WARNING`(2)/`SEV_USER`(4)/`SEV_INFO`(8)に対応し、`IProblemConst.java`でこれらが`ESSENTIAL`/`WARNING`/`USER_CHECK`/`INFO`という定数(それぞれ`messages_ja.properties`の`ProblemConst_Essential_2`="問題あり"/`ProblemConst_Warning`="問題の可能性大"/`ProblemConst_User_Check_5`="要判断箇所"/`ProblemConst_Info`="手動確認")に対応することを確認。決定打として`ReportMessageDialog.java`の`switch (curItem.getSeverity())`(問題詳細ダイアログのタイトル決定ロジック)を発見し、`SEV_INFO`→`IProblemConst.INFO`(手動確認)、`SEV_USER`→`IProblemConst.USER_CHECK`(要判断箇所)という対応を最終確認した。
+  - **重要な訂正**: 当初「info→要判断箇所、user→手動確認」だろうと推測で回答したが、実際は逆(**info→手動確認、user→要判断箇所**)だった。この訂正は、PR-M3で発見していた「常に発火する手動確認事項(always型)が全て`type=\"info\"`だった」という既知の事実とも整合する(infoが手動確認に対応するなら当然の結果であり、独立した裏付けになった)。
+  - `app.js`の`MICHECKER_ENGINE_TYPE_LABEL`を`{ error: "問題あり", warning: "問題の可能性大", info: "手動確認", user: "要判断箇所" }`に修正。
+  - 検証: `node --check`成功。`npm test`成功。既存6サンプル回帰完全一致(11/10/23/29/5/20、なお検証中に一度`tables=0`という異常値が出たが、これは`pkill`でサーバーを停止する処理と検証スクリプトの実行を同じコマンドチェーンに入れてしまいレースコンディションが起きた一時的なもので、サーバーを再起動して単独で再実行したところ`tables=23`で正しく一致することを確認済み)。Playwrightで、実際に解析した際の表示種別が「問題あり」「要判断箇所」「手動確認」という公式文言になっていることを確認。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #74として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから3件の改善要望を一度に受けた: (1)「miChecker相当チェック結果」の該当箇所がセレクタ文字列のままでは作業者に分からないのでビジュアル化、(2)「KB」という表記が開発者目線すぎるので「移行ルール」に置き換え、(3)元のHTMLのid/class属性は移行に不要なので候補生成時に一括削除。
+  - (1)(3)にはリスクがあるため、実装前に`AskUserQuestion`で方式を確認した。(1)は「プレビューでのハイライト+表のセレクタ列自体をHTML抜粋表示に差し替え」の両方を採用。(2)は画面上の表示文言全体を対象とし、内部の変数名・APIエンドポイント名は変更しないことを確認。(3)は2つのリスク(`table.className`をレイアウト表判定の信号に使う既存ヒューリスティックが候補生成前の削除で壊れる、`id`がページ内アンカーのリンク先として参照されている場合に先に消すとリンクが壊れる)を提示し、「最終HTMLの構築段階でのみ削除、参照されているidは残す」方針で合意した。
+  - **(1) ビジュアル化**: `buildMicheckerLocationCell`/`truncateHtmlSnippet`を新設し、「該当箇所」セルをCSSセレクタ文字列から実際の要素のHTML抜粋(短縮・エスケープ済み)表示に変更。表に「操作」列を追加し「プレビューで確認」ボタンを設置、押すとプレビューペインで該当要素をハイライト・スクロールする(`highlightMicheckerProblemInFragment`、既存候補選択時と同じ`.goal2-highlight`クラス・スクロール機構`scrollPreviewToSelectedCandidate`を共用するため`hasActivePreviewHighlightTarget`/`currentPreviewHighlightId`という汎用ヘルパーへリファクタリングした)。miChecker側のセレクタは`DOMParser`が補う`html > body > ...`から始まるのに対し、プレビュー側の`<template>`フラグメントにはhtml/body要素自体が無いため一致しない問題があり、`stripMicheckerSelectorPrefix`でプレフィックスを除去してから照合するようにした。
+  - **(2) KB→移行ルール**: `grep`で画面上の全「KB」表示文言(ステータス表示・修正基準セレクトの選択肢・プレースホルダ・テーブル見出し・詳細パネルのdt・miChecker比較画面のバッジ「KB未対応」等)を洗い出し、内部識別子(`value="kb"`・`state.ruleScopeMode`・`/api/rules`等)とキロバイト単位の"KB"(サンプルHTML内のファイルサイズ表記、無関係)を除外した上で全て「移行ルール」に置き換えた。
+  - **(3) id/class一括削除**: `stripMigrationUnneededAttributes`/`stripMigrationUnneededAttributesFromHtml`を新設し、`renderOutputs()`のfinalHtml計算とGOAL1の`window.goal2Engine.buildFinalHtml()`という「最終HTML構築の最終段階」にのみ適用(候補生成・検出ロジックには一切適用しない)。class属性は無条件削除。id属性は`collectReferencedIds`でページ内アンカー(`href="#foo"`)・ARIA関連付け属性(`aria-describedby`等7種)・`label[for]`から実際に参照されているものを収集し、それ以外だけ削除する設計にした。実装中に、GOAL1の`window.goal2Engine.buildFinalHtml()`がこれまで`rebuildWorkingHtmlFor()`の生の出力(内部管理用の`data-goal2-node-id`属性が残ったまま)を返す既存の抜け漏れに気づき、同じ経路で`stripInternalFromHtml`も通すよう修正して併せて解消した(今回のid/class削除機能をGOAL1側にも正しく適用するために必要な修正であり、範囲内の対応と判断)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS(エンジン内部は無変更のため影響なし)。既存6サンプル回帰完全一致(11/10/23/29/5/20、id/class削除は検出後にのみ適用されるため件数に影響なし)。Playwrightで、該当箇所セルにHTML抜粋の`<code>`要素が表示されること、「プレビューで確認」ボタン押下で行に`is-selected`が付きプレビュー内に`.goal2-highlight`が現れること、画面上の「KB」表記が「移行ルール」に統一されていること、最終HTMLに`class`/`id`属性が含まれないことを確認。別途、`window.goal2Engine`を直接呼び出す専用テストで、`href="#target"`で参照されるidは最終HTMLに残り、未参照のidと全classは削除されること、GOAL1の`buildFinalHtml()`から`data-goal2-node-id`の漏れが無くなったことを確認した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #75として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーからGOAL1の一括最適化が特定ページ(「「市民の声」の公表(令和4年1月〜6月分)」、大きな表を含む自治体公開ページ)で数時間ハングしたままになっているとスクリーンショット付きで報告された。他のページは正常に完了・一部は「処理失敗」として正しくエラー処理されている一方、それ以降の全ページが「処理待ち」のまま進んでいなかった。
+  - まずコードを精査し、サーバー側の外部通信(`/api/fetch-html`のページ取得、Gemini API呼び出し、画像取得)は全て`AbortController`ベースのタイムアウト(8〜45秒)で保護済みであることを確認。ユーザーへの追加ヒアリング(数時間経過・止まったページ名・コンソールエラー不明・バックグラウンド化は記憶にない)を踏まえ、ネットワーク起因ではなくブラウザ内の同期処理起因である可能性が高いと判断した。
+  - `Explore`エージェントに`generateCandidates()`とその下流関数全体のO(n²)以上のループ・破局的バックトラッキングの恐れがある正規表現・無限ループの可能性を精査させたところ、`buildExpandedTableGrid()`(テーブルセルのcolspan/rowspan展開処理、`collectTableCandidates`系の共通経路)が、セルのcolspan/rowspan属性値を下限クランプ(`Math.max(1, ...)`)のみで上限クランプ無しにネストループの反復回数として直接使っていることが判明した。Excel等からの貼り付けで生じがちな壊れたcolspan値(例: 数億単位の数値)が1セルでもあると、このループが事実上終わらなくなる。「市民の声」のような大きな表を含むページでまさに起こりうる不具合であり、根本原因として高い確度で特定できた。
+  - `buildExpandedTableGrid()`のrowspan/colspan計算に上限クランプ(`MAX_TABLE_SPAN = 1000`、WHATWG HTML仕様のcolspan上限と同じ値をrowspanにも適用)を追加。下限クランプは維持。
+  - 精査の副産物として、サーバー側`assertFetchUrlAllowed()`内の`dns.promises.lookup()`にタイムアウトが一切設定されておらず、`fetch()`用の`AbortController`の効果も及ばない(DNS解決とfetch本体は別物のため)ことも発見し、`dnsLookupWithTimeout()`(3秒)でラップして併せて修正した。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。既存6サンプル回帰完全一致(11/10/23/29/5/20)。Playwrightで、`colspan="999999999"`という壊れたセルを含むテーブルを`window.goal2Engine.analyze()`で解析させ、修正前なら極めて長時間かかっていたはずの処理が40msで完了し正しく候補が生成されることを確認した。DNSタイムアウト側は正常ドメイン・ブロック対象ホスト・存在しないドメインで既存の応答が変わらないことを確認(実際のDNSハング再現はサンドボックス環境の制約上未検証)。
+  - ユーザーには、IndexedDBへページ単位で保存する既存の永続化設計により、ハング中のページより前に完了済みの分はブラウザタブの再読み込みで失われないはずである旨を案内した。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+  - ユーザー確認の上、PR #76として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+- ユーザーから、実際の自治体ページ(安城市の避難場所一覧、185行の表を含む)で候補生成結果が「おかしい」と、元HTML全文と生成後HTML全文の両方を提示された。表示された生成後HTMLを精査したところ、3件の重大な不具合を発見した。いずれも「セル結合(colspan/rowspan)の分解・再構成」ロジック(`table.cell-merge-*`、`classifyMergedCellTable`/`buildMergedCellProposal`/`splitMergedRowsIntoTablesHtml`/`isLeadingTitleRowDataTableProfile`まわり)の過剰発火・誤判定が原因だった。
+  - **バグ1(最も深刻)**: `classifyMergedCellTable`は表のどこかに`colspan`/`rowspan`が1つでもあれば無条件に呼ばれる設計だった。「使用できる災害種別」のように複数の真偽値列を1つの見出しでグループ化するだけの正当なヘッダーcolspanを持つ185行のデータ表が、他のどのパターン(見出し/注記/添付ファイル/概要/案内リンク)にも一致せず汎用の`table.cell-merge-layout`に分類され、`canSplitMergedRowsIntoTables`が(データ行に結合が無いため)falseを返してレイアウト専用の`decomposeLayoutTable`にフォールバックした結果、表全体が構造の無い1800個以上の`<p>`タグの羅列に変換されていた。
+  - **バグ2**: `splitMergedRowsIntoTablesHtml`が、`buildExpandedTableGrid`が結合セルを同一参照で複数グリッド枠に埋める実装のせいで、colspanヘッダー(例: `colspan="2"`の「連絡先」)のラベルをそのセルが占める列数ぶん単純に複製していた。結果、施設のサブ名称を表す列にまで誤って「連絡先」という見出しが付いていた。
+  - **バグ3**: `isLeadingTitleRowDataTableProfile`(「先頭行はタイトルバナーで実際のヘッダーは2行目」パターンの検出)が、複数セルの合計colspanが表の列数とたまたま一致するだけの、ごく普通のヘッダー行(colspanで複数列をグループ化しただけ)まで誤って「タイトル行」と判定し、本来のヘッダー行を捨てて次の行(実際には最初のデータ行)をヘッダーとして扱ってしまっていた。
+  - `classifyMergedCellTable`に、結合セルが表の最初の行に限られ、かつ`shouldPreserveAsDataTable`が既にこの表を正当なデータ表と判定している場合は候補を出さないガードを追加(この場合`planTableTreatment`経由の安全な`table.caption`候補が既にカバーするため)。`splitMergedRowsIntoTablesHtml`のヘッダーラベル抽出を、結合セルが占める連続グリッド枠を1単位として検出し2列以上にまたがる場合はラベルを複製しないよう修正。`isLeadingTitleRowDataTableProfile`を単一セルで完結するタイトルバナーの場合のみに限定するよう厳格化(未使用になった`tableRowColspanCount`/`tableCellSpanValue`は削除)。
+  - 検証: `node --check`成功。`npm test`成功。`npm run test:michecker-parity` 223/223 PASS。ユーザー提供の実データ3表をPlaywrightで`window.goal2Engine.analyze()`に通し、いずれも構造を保持したまま正しい候補が生成されることを確認。既存6サンプルの固定回帰基準を procedure-overview 11→10 / images 10 / tables 23→22 / links-text 29 / iframe 5 / goal3-hirosaki-news2019 20 に更新。両方の-1は同一理由(冗長で表構造をより壊す`table.cell-merge-*`候補が抑制され、既に並行生成されていた安全な`table.caption`候補のみが残った)による意図した挙動であることを、procedure-overview/tables両サンプルそれぞれの候補一覧を個別確認して裏付けた。検証中、既存の回帰確認スクリプト自体に無関係な1サンプルが偶発的に0件を返す既知のflakiness(本改修と無関係)があることも確認し、疑わしいサンプルは単独再現確認で裏付けた。
+  - 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。
+
+**2026-07-15(コンテキスト復帰直後) GOAL3新規サンプル: 安城市指定緊急避難場所一覧**
+
+- 背景: 前回セッションでGOAL3本文抽出機能の検証用サンプルを充実させるため、ユーザーから実在する自治体サイトのHTMLを貼り付けてもらうことで合意していた(プロキシが一般Web URLをブロックするため環境上の制約)。
+- ユーザーが安城市防災ページ「指定緊急避難場所のご案内」の完全なHTMLを提供。約180行の避難場所一覧テーブル(特に大規模な一時避難場所185ヶ所リスト)を含む実データ。
+- `goal2-app/public/app.js`の`inputSamples`配列に新規サンプル`anjo-evacuation-shelters`を追加。
+  - `id`: `"anjo-evacuation-shelters"`
+  - `label`: `"本文抽出サンプル: 安城市 指定緊急避難場所一覧"`
+  - `pageTitle`: `"指定緊急避難場所のご案内"`
+  - `oldUrl`: `"https://www.city.anjo.aichi.jp/kurasu/bosaibohan/yakudachi/hinanbasyo/shiyakusho.html"`
+  - `cmsTarget`: `"本文抽出サンプル > 安城市"`
+  - `html`: 避難場所紹介・注意書き・広域避難場所施設情報テーブル(セマンティック: caption, thead, tbody, th with scope属性)を含む。
+- 検証: `node --check`成功。サンプルは構文的に正当で、goal3.html/goal3.jsの抽出エンジン挙動を検証する際に活用可能。
+- コミット・プッシュ完了。プロセス:
+  - コミット: `abfeeee` "Add GOAL3 sample: Anjo City emergency evacuation shelter list"
+  - ブランチ: `claude/goal-overview-rxgrf2`
+  - PR #83として作成。
+- ユーザーからPR#83のレビューで、投入したサンプルHTML中の`align`/`border`/`cellpadding`/`cellspacing`/`summary`/`width`等の非推奨テーブル属性がそのまま残っている(サンプルデータ自体の問題)との指摘。該当2テーブルから該当属性を削除しコミット・プッシュ・PR本文更新(コミット`9c2cd61`)。
+- 続けてユーザーから、GOAL3の候補生成ロジック側で該当属性が実際には除去されず、`data-removed-attrs="align, border, cellpadding, cellspacing, width"`というマーカー属性が付与されるだけの誤った挙動になっているとの指摘(スクリーンショット付き)。調査の結果、既存バグと判明:
+  - 直近のコミット`42a1b53`(「テーブルの非推奨属性(align, border等)削除ルール実装」)で`html-structure.deprecated-elements`ルールに追加されたブロックが、`patch: { type: "set-attribute", name: "data-removed-attrs", value: removedAttrs }`という誤ったパッチを生成していた。`set-attribute`パッチは`applyCandidatePatch`で属性を**追加**するだけの処理のため、候補を「採用」しても非推奨属性は削除されず、無意味なマーカー属性が追加されるだけだった。
+  - さらにこの処理は、同じ属性群(`align`/`valign`/`width`/`height`/`border`/`cellpadding`/`cellspacing`/`bgcolor`、テーブル本体だけでなく子孫要素も含む)をすでに正しく検出・除去している既存の`table.format-clear`ルール(`hasTableFormatting`/`stripFormatting`、`strip-formatting`パッチで正常動作)と完全に重複していた。追加されたブロックの直上のコメント自体が「テーブル書式属性は`stripFormatting()`側で別途、無条件に検出・除去しており対象外」と明記しており、自己矛盾した実装だった。
+  - 修正: 重複・不具合のあるブロック(`collectDeprecatedAttributeCandidates`内の`deprecatedTableAttrs`検出処理、約26行)を削除し、`table.format-clear`ルールへ一本化。
+  - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存サンプルの検出結果に影響なし)。
+  - コミット`3ffc215`「Remove broken duplicate deprecated table attribute detector」。ブランチ`claude/goal-overview-rxgrf2`へプッシュ、PR#83本文を更新。
+- PR #83・#84はユーザーが承認後、マージ済み(#84は`claude/goal-overview-rxgrf2`への差分PR、その後PR #85で`main`へ反映)。マージ確認の過程で、ユーザーへの案内ミス(「Goal3画面で確認して」と伝えたが、非推奨属性検出ロジックは実際には`app.js`(Goal2の候補生成エンジン、`window.goal2Engine`)にあり、`goal3.js`(Goal3の独立した抽出エンジン)には同種のロジックが一切無いことが判明)を訂正。
+- 上記のやり取りから、ユーザーより「Goal3の抽出結果に対しても、TABLEに限らず除去できるものはここで実行してしまうのは理に適っている」との提案。証跡(何を除去したか)を残さずに無条件で処理すると「AGENTの出力は最終成果物ではなく確認対象」という基本方針に反するため、「Goal3抽出直後に機械的・高確信度のクリーンアップを証跡付きで実行する」という折衷案を提示し合意。スコープは「HTML Living Standardに無い属性 + id + class」(ユーザー指定)。
+  - 実装: `goal2-app/public/goal3.js`の`cleanHtml()`(候補HTML生成の最終ステップ、Goal1のバッチ処理からも`window.goal3Engine.extract()`経由で共通利用される)に`stripLegacyAttributes()`を追加。
+    - `OBSOLETE_ATTRS`: `align`/`valign`/`bgcolor`/`background`/`border`/`cellpadding`/`cellspacing`/`char`/`charoff`/`clear`/`compact`/`face`/`hspace`/`vspace`/`noshade`/`nowrap`/`language`/`link`/`vlink`/`alink`/`text`/`marginheight`/`marginwidth`/`scrolling`/`frameborder`/`rules`/`classid`/`codebase`/`codetype`/`declare`/`standby`/`archive`/`profile`/`rev`/`scheme`/`urn`/`axis`/`valuetype`/`nohref`/`longdesc`/`summary`など、要素の種類を問わず安全に除去できるものに限定。`width`/`height`/`border`のように要素によっては現在も有効(img/canvas/iframe等)な属性は対象外とし、テーブル文脈限定の`table.format-clear`(Goal2側、既存)に委ねる設計とした。
+    - `class`は無条件除去。`id`は`collectReferencedFragmentIds()`で同一断片内の`href="#..."`/`usemap`/`for`/`headers`/`aria-describedby`/`aria-labelledby`/`aria-controls`/`aria-owns`/`list`/`form`から参照されているものを検出し、参照されているidのみ保持(ページ内アンカーナビゲーションの破壊を防止。安城市サンプル自体に`<a id="kouiki" name="kouiki">`実例があり、この安全策の必要性を裏付けた)。`<a name="...">`も同様にページ内アンカー名として参照有無で保持/除去を判定。
+    - 除去件数は`legacyCleanup`統計として候補に付与し、Goal3画面の「抽出根拠」カードに「自動除去: 非推奨属性N件、classN件、未参照idN件を除去しました(参照先idN件は保持)」として証跡表示(除去が0件のときは非表示)。
+  - 検証中に、ローカル作業ツリーがPR #84/#85マージ内容を反映していない古い状態(`git reset --hard`実行時点から`git pull`していなかった)だったため、テストが誤って「重複候補が再発している」ように見えるという事故が発生。`git pull --ff-only`で解消し、以後は最新状態で検証した。
+  - Playwrightで実ブラウザ検証: (1)非推奨属性を含む合成テストHTMLで、align/valign/border/cellpadding/cellspacing/summary/class が除去され、width(テーブル)は保持され、href="#kouiki"で参照されたid="kouiki"は保持、未参照id="unused123"は除去されることを確認。(2)安城市サンプル(既に前回の修正で属性クリーン済み)では除去件数0・保持id 2件のみとなることを確認。(3)Goal3で抽出したHTMLをGoal2の`window.goal2Engine.analyze()`に渡し、`table.format-clear`(残ったwidthを検出)は正常に発火し、`html-structure.deprecated-elements`との重複発火が起きないことを確認。
+  - 実装中に発見した表示バグ(`idsPreserved`のみ非ゼロで他が0件のとき「自動除去: を除去しました」という空欄混じりの文言になる)を、条件式から`idsPreserved`単独ケースを除外して修正。
+  - 検証: `node --check`成功。`node test/run-tests.js`全テスト成功(既存6サンプルの検出結果に影響なし)。
+  - コミット`81df529`、PR #86として作成。
+
+**2026-07-21 表修正手段メニュー拡張: 計画策定と実装指示書の作成**
+
+- ユーザーから「表組みの修正方法が現状2件のみの提案に留まっているが、考えうる全ての手段から選択できるようにしたい。まず計画を立て、Sonnetに実行させるための指示書を作成してほしい」との指示(計画担当: Fable、実装担当: Sonnet想定)。
+- 原因調査: 「修正方法」パネルは同一`target.node_id`の兄弟候補集合(`candidatesForSameTarget()`)をラジオカード表示する仕組みだが、構造候補の生成元`planTableTreatment()`(app.js:3054)が早期returnのウォーターフォールで1表につき1件(データ表維持 or 分割 or レイアウト解体)しか返さず、独立生成のセル結合候補と合わせて最大2件になっていた。
+- `goal2-app/TABLE_FIX_METHODS_INSTRUCTIONS.md`を新規作成(GOAL1_BUILD_INSTRUCTIONS.md等と同形式の実装担当AGENT向け指示書)。要点:
+  - 手段=兄弟候補という既存機構を流用し、`planTableTreatments()`(複数返却化)で適用可能な全手段を同一表への候補としてプッシュする方針。選択・採用(`selected_method_id`)・最終HTML反映(`applyCandidatePatch`)・競合自動解決(`resolveSupersededTableCandidates`)は既存のまま機能する。
+  - 手段メニュー6種: M1 データ表維持+セマンティクス整備(既存)/M2 複数表分割(既存)/M3 見出し+段落解体(既存)/M4 結合セル解除フラット化(新規`buildFlattenedTableHtml`、`buildExpandedTableGrid`利用)/M5 箇条書き化(新規)/M6 1行=1項目の見出し+段落化(新規)。`<dl>`化は確定方針(2026-07-10)により含めない。
+  - 全構造手段は`requiresHumanReview: true`で一括採用・GOAL1 autoAcceptSafeの対象外。
+  - 実装はPR-T1(複数化骨格)→T2(フラット化)→T3(リスト化・段落化)→T4(実データ検証+ドキュメント)の4段階。各段階に合格条件・Playwright検証シナリオ・回帰基準の更新手順を定義。
+  - 過去の表関連バグ(colspan無視パディング、colspanヘッダー複製)の教訓を新ビルダーの注意事項として明記。
+- ユーザー確定事項(AskUserQuestionで確認済み): (1)新規手段のrule_idは既存idへ相乗り(M4→`table.cell-merge-layout`、M5/M6→`table.layout-table`)し、表示は`makeCandidate`に追加する`methodLabel`で区別。KB新設・rules.jsonl再生成はしない。(2)候補一覧は従来どおり全兄弟候補を表示(既存の「同じ箇所の代替手段 N件中」バッジのまま。間引きはしない)。
+- 次のアクション: 実装担当AGENT(Sonnet)が指示書に従いPR-T1から着手。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T1(複数手段化の骨格)実装**
+
+- ユーザー(モデルをSonnetへ切り替え)から「TABLE_FIX_METHODS_INSTRUCTIONS.mdに従ってPR-T1から実装して」と指示。
+- 実装前に指示書の内容とコードを突き合わせたところ、指示書自身に安全性上の問題を発見: M3(表をやめて解体)を「常時選択肢に出す」とした記述が、`classifyMergedCellTable()`内のコメント(実データで確認済み: 大規模なrowspan見出し付きデータ表が解体候補で構造の無い段落の羅列に変換された過去の実バグ、2026-07-15のCHANGELOGエントリに詳細記録あり)と矛盾することに気づいた。ユーザーに日本語で状況を説明し確認したところ、「`shouldPreserveAsDataTable`がfalseの場合にのみM3を選択肢に出す」という案が採用された。M1(データ表として維持)は非破壊的なため、この安全策の対象外とし、指示書どおり緩いゲート(`canOfferDataTableSemanticsMethod`、確信度のみpreserve値で調整)のまま実装。
+- 実装内容(`goal2-app/public/app.js`):
+  - `planTableTreatment()`(早期returnのウォーターフォール)を`planTableTreatments()`(適用可能な全手段を配列で返す)に置き換え。M1/M2/M3を推奨順(preserve時: M1→M2、非preserve時: M2→M3→M1)で併記。
+  - `tableNeedsDataTableSemantics()`から共通ゲート判定を`tableSemanticsGapExists()`として抽出し、`shouldPreserveAsDataTable()`を必須にしない緩和版`canOfferDataTableSemanticsMethod()`を新設(M1用)。
+  - `collectTableCandidates()`内で発見した既存の重複候補生成バグを修正: `mergeRule.ruleId === "table.cell-merge-layout"`かつ`canSplitMergedRowsIntoTables()`がtrueの場合、トップレベルの無条件プッシュと旧`planTableTreatment()`の両方が同一内容(`splitMergedRowsIntoTablesHtml()`)を生成していた(GOAL3の`data-removed-attrs`バグ発見時と同種の、独立した既存の重複バグ)。"layout"分類はトップレベルでは候補化せず、M2/M3経由に一本化して解消。file/mark分類は従来どおり単一候補を維持。
+  - 「構造的な解体・再構築が必要」と判断された場合にnaive構造判定・format-clear・キャプション欠落簡易候補をスキップする既存ゲート(`hadStructuralPick`)は、M1/M3で緩めたゲートとは別に、旧来の厳しい条件のまま独立して維持(回帰件数を変えないため)。
+  - `makeCandidate()`に`methodLabel`オプション追加(`candidate.method_label`として保持)。`candidateDisplayTitle()`で最優先表示し、同一rule_id(table.caption/table.cell-merge-layout/table.layout-table)の複数手段カードを区別できるようにした。rule_id新設・KB再生成はユーザー確定事項どおり行わず。
+  - `applyCandidateDecision()`の`decision`と`buildEvidenceFor()`の証跡出力に`selected_method_label`(および従来evidenceに出力されていなかった`selected_method_id`/`selected_method_rule_id`/`selected_method_title`)を追加。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前(`git stash`)/変更後の候補件数を`window.goal2Engine.analyze()`経由で比較。procedure-overview 8/8、images 4/4、tables **20→22**(table.caption +1、table.layout-table +1)、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 0/0(既にクリーン済みのため妥当)。tables以外は完全一致、tablesの増分も想定どおり新規代替手段の追加分のみで説明可能(回帰なし)。
+    - 注記: この件数はnotice系(patchMode: none)を除いた`window.goal2Engine.analyze()`の`candidates.length`(ruleScopeMode既定値)で計測しており、2026-07-15付CHANGELOGに記載の固定基準値(procedure-overview 10等)とは計測方法が異なるため単純比較できない。今回はセッション内で同一手法によるbefore/after比較のみで回帰なしを確認した。
+  - 画面操作(Playwright): サンプル「表: レイアウト・結合・添付」で、同一表に2件・7件の代替手段カードが表示されることを確認。2件のケースで、デフォルト以外の手段(M1)へ切り替え→採用→最終HTMLに選択した手段のafterHtmlが反映されること、未採用の兄弟候補3件が自動的にconflictedへ解決されることを確認。
+- 既知の残課題(次PRで検討): 一部の表で、M1(データ表として維持)と既存の単純なキャプション欠落候補(`hadStructuralPick`がfalseの場合に生成される簡易版)が並んで表示され、内容が一部重複する(いずれを採用しても他方は自動的にconflicted化されるため実害はない)。
+- 次のアクション: ユーザー確認の上コミット・プッシュ。マージ後PR-T2(M4フラット化ビルダー)へ。
+- ユーザー確認の上、PR #87として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T2(M4フラット化ビルダー)実装**
+
+- ユーザーから「続けて」との指示でPR-T2に着手。
+- 実装内容(`goal2-app/public/app.js`):
+  - `buildFlattenedTableHtml(table)`を新設。`buildExpandedTableGrid()`で結合を展開したグリッドから、rowspan/colspanの無い単純な行×列の表を再構築する。結合で複数マスを占めていたセルは、そのマス全てに同じ内容(innerHTML、リンク等の構造を含む。テキストだけの複製ではない)を複製する。1行目が全てthなら`<thead>`+`scope="col"`、各行1列目がthなら`scope="row"`を付与する。
+  - `buildFlattenedCell(item, tagName, scope)`ヘルパーを新設(rowspan/colspan/scope/headers/bgcolor/idを元セルから引き継がない。idは複製先すべてに同じ値を持たせるとHTML上のid重複を生むため必ず除外)。
+  - `planTableTreatments()`にM4を追加: `table.querySelector("[rowspan], [colspan]")`が存在する表であれば、`shouldPreserveAsDataTable()`の値やM1〜M3の適用可否に関わらず末尾に追加する(表を分割・解体しない非破壊的な手段のため)。rule_idは既存の`table.cell-merge-layout`に相乗り(PR-T1で確定済みの方針どおり、新設なし)。
+- **実装中に発見した2件の不具合を修正**:
+  1. Playwright実データ検証中、安城市サンプルの「市内公園施設情報」表(指示書がM4の好例として挙げていた、rowspan=2とcolspan=2が共存する表)で、変換結果の末尾に意味のない空列が1つ余分に生成される問題を発見。調査の結果、元HTML自体に欠陥があった: rowspanで既にカバーされている位置(2行目の面積列)へ、さらに空の`<td></td>`が重複して書かれており、`buildExpandedTableGrid`(ブラウザの表レンダリングと同じロジックで列位置を計算)がこの余剰セルを新しい6列目として展開してしまっていた。「全行にわたって完全に空の末尾列」を切り詰めるトリミング処理(`buildFlattenedTableHtml`冒頭)を追加して解消。修正後は全行が正しく5列に揃い、リンクを含むテキストも一切欠落しないことを確認。
+  2. M4がrule_id `table.cell-merge-layout`に相乗りする設計のため、既存の`fixMethodDescription()`の汎用フォールバック(「結合セルが見出し・注記・レイアウトのどれかを見て、必要な形に直します。」、heading/note/summary/mark/file等の他バリアントと共通の文言)がM4のカードにもそのまま適用され、「フラット化」であることが説明文から伝わらない問題をPlaywright画面確認で発見。`candidate.method_label`で判定する専用の説明文分岐を追加して解消。
+  - この2件はいずれも実装直後のセルフレビューではなくPlaywrightでの実データ・実画面検証によって発見した(コード上は正しく見えても実際に動かすと問題が分かる典型例として記録)。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前後の候補件数を比較: procedure-overview 8→9、images 4/4、tables 22→27、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 0→1。結合セル(rowspan/colspan)を持つ表がある場合のみ+1件(M4追加分)、他は変化なし(回帰なし)。
+  - `tables`サンプルの5件のM4候補全てで、行ごとのセル数が完全に一致し(不整合ゼロ)、rowspan/colspan属性が残っていないことを確認。
+  - 安城市の「市内公園施設情報」表を実際にM4で変換し、全行が同一列数(5列)になり、`<a>`リンクを含むテキストが一切欠落しないことを確認(空列トリミング修正後)。
+  - 画面操作: M4カードの選択→専用説明文の表示→最終HTMLへの反映を確認。
+- 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-T3(M5リスト化/M6見出し段落化ビルダー)へ。
+- ユーザー確認の上、PR #88として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T3(M5リスト化/M6見出し段落化ビルダー)実装**
+
+- ユーザーから「はい」との指示でPR-T3に着手。
+- 実装内容(`goal2-app/public/app.js`):
+  - `computeTableGridShape(table)`を新設し、M4で導入した「グリッド計算+末尾空列トリミング+ヘッダー行判定」ロジックを共通ヘルパーとして抽出。M4自身もこのヘルパーを使うようリファクタ(重複コードの解消、既存挙動は変更なし)。
+  - `canOfferListConversion(table)`(M5): 実質1列、または2列でボディ行の1列目が`isHeaderLikeTableCell()`(既存)判定でラベルらしい表にのみ適用。
+  - `canOfferRowSections(table)`(M6): 1列目が行見出し(th、またはラベルらしいテキスト)を持つ3行以上の表にのみ適用。
+  - `buildTableAsListHtml(table)`(M5)・`buildRowsAsSectionsHtml(table)`(M6)を新設。両方ともセル内のリンク・画像はinnerHTMLごと引き継ぐ。M6は確定方針どおり`<dl>`を使わない。
+  - rule_idは両方とも既存の`table.layout-table`に相乗り(新設なし、PR-T1で確定済みの方針を踏襲)。`fixMethodDescription()`に`method_label`判定の専用分岐を追加。
+- **実装中に発見・修正した不具合**: Playwright実データ検証中、procedure-overviewサンプルの「受付時間」表(`<td colspan="2">受付時間</td>`+2列データ行、project-state.md 2026-07-15付エントリで既知の問題表として記録済み)で、M5の変換結果が「受付時間: 受付時間」という無意味な重複表示になっていることを発見。原因はM4のグリッド展開ロジック(colspanセルを列ごとに複製する、M4自体には正しい仕様)を、M5/M6が「1列目=ラベル、2列目=値」という前提のままそのまま流用していたため、colspanで列0と列1が同一セルを指す行を誤って「ラベル: ラベル」と表示していた。`isSingleMergedCellRow(row, maxColumns)`ヘルパーを新設し、行の全列が同一の元セルを指す場合は分解せず1つの完結した内容として扱うよう、M5・M6の両ビルダーを修正。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで変更前後の候補件数を比較: procedure-overview 9→10、images 4/4、tables 27→31、links-text 24/24、iframe 3/3、goal3-hirosaki-news2019 18/18、anjo-evacuation-shelters 1/1。M5/M6の適用条件を満たす表がある場合のみ増加、他は変化なし(回帰なし)。
+  - 修正後の全M5/M6候補(procedure-overview 1件、tables 4件)で`<dl>`が一切含まれないこと、修正前に見られた「ラベル: ラベル」の重複が解消されたこと、テキスト長がbefore/afterで大きく変わらない(冗長な重複除去分のみわずかに減少)ことを確認。
+  - 画面操作: `tables`サンプルの「講座の実施日程」表(3件のM6対象行)でM6カードを選択→専用説明文の表示→採用→最終HTMLへの反映を確認。
+- 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後PR-T4(実データ検証+ドキュメント整備、指示書における最終ステージ)へ。
+- ユーザー確認の上、PR #89として作成・マージ済み。マージ後、ブランチをorigin/mainから再構築。
+
+**2026-07-22 表修正手段メニュー拡張: PR-T4(実データ検証+ドキュメント整備、最終ステージ)完了**
+
+- ユーザーから「はい」との指示でPR-T4に着手。`TABLE_FIX_METHODS_INSTRUCTIONS.md`の最終ステージ。
+- 実装内容:
+  - `goal2-app/WORKER_GUIDE.md`に「表の直し方が複数あるときの選び方」節を新設。M1〜M6の6手段を、内部用語(rule_id/confidence等)を使わず作業者向けの平易な言葉と目安の表にまとめた。「候補を選んで詳細を確認する」節と「4つの判断ボタン」節の間に配置。
+- 検証:
+  - `node --check`成功。`node test/run-tests.js`全テスト成功。
+  - Playwrightで全7サンプルを対象に、表修正手段(M1〜M6)候補の一括検証を実施: 総件数・空HTML出力件数・`<dl>`混入件数を確認。procedure-overview(1表・3手段)、tables(7表・合計17手段、1表あたり最大5手段)、anjo-evacuation-shelters(1表・1手段)で検出、images/links-text/iframe/goal3-hirosaki-news2019は該当表なし(想定どおり)。空HTML・`<dl>`混入はいずれも0件。
+  - `tables`サンプルの結合セル表(cand_019)で、9件の代替手段(推奨のセル結合再構成案・表解体・データ表維持・結合解除フラット化・箇条書き化・1行ずつ見出し展開・th/scope修正3件)が実際に画面へ表示されることをスクリーンショットで確認し、ユーザーへ送付。
+- これでPR-T1(複数手段化の骨格)→T2(M4フラット化)→T3(M5箇条書き化/M6見出し段落化)→T4(実データ検証+ドキュメント)の全ステージが完了。表の「修正方法」は当初の最大2件から、条件を満たす場合最大6種類の手段(+セル結合分類固有の候補)まで拡張された。
+- 次のアクション: ユーザー確認の上コミット・プッシュ・PR作成。マージ後、表修正手段メニュー拡張プロジェクトは完了扱いとする。
+
+**2026-07-22 ルール解説ポップアップの不一致バグ: PR#91〜93の後も残っていた根本原因を修正**
+
+- 経緯: PR#91(ボタンのスタイル修正)マージ後、ユーザーから「ルールの解説が(見出し・キャプション系の文言)に対してセル結合①レイアウト用途の解説がされていておかしい」と報告。調査したところ`openRuleLearnMore(selectedCandidate())`が、修正方法(M1〜M6)の切り替えに関わらず常にプライマリ候補のルールを表示していたことが判明し、`activeFixMethodCandidate(selectedCandidate())`を渡すよう修正(コミット8c55de4)。ところがこの環境のgit remoteはローカルプロキシ経由でGitHubと非同期になっており、`git push`成功後もPR#91のマージにこのコミットが実際には含まれていない事態が発生(`mcp__github__pull_request_read get_commits`で確認)。プロキシ経由の`git push`は「成功」と報告してもGitHub側に実際に反映されたとは限らないため、以後は`mcp__github__get_commit`でプッシュ後に必ず着地を確認する運用に変更。該当コミットをcherry-pickし直しPR#92で再度マージ。
+- しかしユーザーが「承認しましたが改修されていないように思う」と再報告。Playwrightで4パターン検証したところ、ポップアップ自体はPR#92の修正で正しく追従するようになっていたが、詳細パネルの「この候補で変わること」(`buildChangeSummary()`)が選択中の修正方法ではなく常にプライマリ候補を参照しており、表(table.*)ルールでは単一の汎用文言しか出していなかったことが判明。`renderDetail()`が`chosenMethodCandidate`(選択中の方法)を`buildChangeSummary()`に渡すよう修正し、`buildChangeSummary()`のtable.*分岐を`fixMethodDescription(candidate)`(修正方法カードと同じ、方法ごとに正確な文言を返す関数)の再利用に変更(コミット6d048b3、PR#93)。
+- それでもユーザーから2枚のスクリーンショット(cand_001、rule_id `table.cell-merge-layout`、修正方法1件のみ「結合セルを解除してフラットな表に整える」、ポップアップは「セル結合①レイアウト用途」)とともに「修正されていなさそう」との再々報告。調査の結果、PR#91〜93はいずれも「どの候補オブジェクトを表示するか」というルーティングの修正であり、候補オブジェクト自体が持つ`rule_id`の正確性は対象外だったことが根本原因と判明。`planTableTreatments()`のM2(複数表へ分割)・M4(結合解除フラット化)が、その表の実際の結合分類(`classifyMergedCellTable()`が返す見出し/概要/注記/レイアウト等)を無視し`rule_id: "table.cell-merge-layout"`を常に固定していたため、見出し用途の結合セル表でM4を選んでも「セル結合①レイアウト用途」(画像2枚並びへの置き換えを勧める、無関係な助言)が表示され続けていた。`collectTableCandidates()`から`mergeRule`を`planTableTreatments(table, mergeRule)`に渡し、M2/M4の`ruleId`を`mergeRule?.ruleId || "table.cell-merge-layout"`に変更(分類が取れないときのみ従来のレイアウト用途にフォールバック)。付随して`fixMethodDescription()`/`fixMethodBadge()`のM2判定を`method_label === "意味単位ごとに複数の表へ分割"`という直接判定に置き換え(旧判定はrule_id固定に依存していたため機能しなくなるところだった)。
+- 検証: `node --check`・`node test/run-tests.js`成功(既存サンプルの候補件数は不変)。Playwrightで候補「先頭の結合セルが見出し用途に見えます」(`table.cell-merge-heading`)をM4に切り替え、ポップアップタイトルが「セル結合①レイアウト用途」(誤)から「セル結合②見出し用途」(正)に変わることを確認。
+- 教訓: 「表示位置の配線」を直しても、配線の先にある候補オブジェクトのデータ自体が不正確だと、ユーザーからは同じ症状(内容の食い違い)として見え続ける。表面的な症状の再現に固執せず、関連するデータ生成ロジック(`planTableTreatments()`のようなハードコードされたruleId)まで遡って確認する必要がある。
+- 関連ファイル: `goal2-app/public/app.js`。関連PR: #91、#92、#93、#94(PR#94として上記の`mergeRule`連動修正をマージ)。
+- **PR#94マージ直後、ユーザーが再検証し「まだ修正されていません」と報告** — さらに1段深い問題が判明。cand_001は`classifyMergedCellTable()`が確信度low・分類不明で汎用の「レイアウト用途」を返すケースであり、PR#94の`mergeRule?.ruleId`連動はこのケースに何の変化ももたらしていなかった(mergeRule.ruleIdが元々"table.cell-merge-layout"のまま)。より本質的な問題は、M2(分割)・M4(フラット化)がそもそも「表を維持したまま結合だけ解消する/意味単位に割る」という、公式マニュアルのcell-merge-N系個別ルール(見出し/概要/注記/レイアウト/●印/添付ファイル)のどれとも一致しないこのツール独自の技術的手段だという点にあった。どの用途分類を紐付けても、その用途分類の正式な指示(例: レイアウト用途→表を使わず画像2枚並びで再現する)とM2/M4の実際の動作(表は維持する)が構造的に矛盾する。この設計判断はユーザー確認が必要と判断し、AskUserQuestionで3案(❓ボタン非表示/矛盾を注記として明示/最も近い一般ルールへ差し替え)を提示、「最も近い一般ルールに差し替える」を選択いただいた。M2・M4の`ruleId`をcell-merge-N分類ではなく固定の`"table.th-scope"`に変更(M2/M4はいずれも実際にth要素へscope属性を設定する変換を行っており、内容が技術的に一致するため)。Playwrightで確認し、ポップアップタイトルが「表の見出しセル(th)とscope属性」に変わり、本文とM4の実際の動作(rowspan/colspan解除+scope設定)が矛盾しなくなったことを確認。PR#95として作成。
+- 教訓(追加): 表面的な症状(「ルール解説とやること説明が食い違う」)が同じでも、原因の層は複数あり得る。1回の修正で「直った」と即断せず、直した箇所が実際にユーザーの報告した具体的なケース(今回はcand_001の分類が偶然「不明→レイアウト用途フォールバック」だった)をカバーしているか、ケースごとに再確認する必要がある。
+
+**2026-07-22 上記の続き: ユーザー提案によりtable.th-scope代替からtable.simple-structure新設へ**
+
+- PR#95(M2/M4をtable.th-scopeへ差し替え)の提示に対し、ユーザーがScience Tokyoウェブアクセシビリティサポートブックの該当ページURLを提示し「結合セルはできるだけ単純な構造にする、みたいなものを採用できないですか」と提案。該当URLは本セッションのプロキシポリシーで直接フェッチ不可(`design-system.isct.ac.jp`への接続が403拒否、archive.org経由も不可)だったため、ユーザーに本文の貼り付けを依頼し、原文を受け取った。
+- 原文の要点(表組み利用時の3ポイントのうち1番目): 「表組みはできるだけ単純な構造にする。セルの結合や入れ子は、表が複雑になりスクリーンリーダー等の支援技術での理解を困難にすることがある。セルの結合自体は非推奨ではないが、結合や入れ子を使う場合は読み上げが適切にできるか確認する。」これはM2(分割)・M4(フラット化)の設計意図(表を維持したまま結合を解消・分割して単純化する)と正確に一致しており、th-scope(scope属性という副次的な実装詳細への言及に留まる)よりも直接的で正確な解説になると判断した。
+- `a11y-migration-kb/rules/table/simple-structure.md`を新規作成(`origin: external-guideline`という新しい出自区分を導入。既存は`manual`/`michecker`のみだったが、フロントマター規約上origin値に列挙制限は無く、UI側も`origin`フィールドを参照する分岐が無いことを確認済みのため追加して問題ないと判断)。M2/M4の`ruleId`をこれに変更。KB→JSONLを再生成し`goal2-app/data/rules.jsonl`へ反映。
+- 作業中の事故と教訓: Editツールの`replace_all: true`で`ruleId: "table.th-scope"`という短い文字列を一括置換したところ、意図した2箇所(M2/M4)以外に、既存の独立したth-scope検出ロジック(`collectTableHeaderScopeCandidates`等、6箇所)まで誤って書き換えてしまった。置換後に`grep`で全箇所を確認して発見し、6箇所を`table.th-scope`へ戻して事なきを得た。**同一の短い文字列が複数箇所に存在しうる場合、`replace_all`は使わずピンポイントで個別置換するか、置換直後に必ずgrepで意図しない箇所が変わっていないか確認すること。**
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで(a)M4切り替え時のポップアップが「表組みの単純な構造」に変わり出典URLも表示されること、(b)既存th-scope候補のポップアップが「表の見出しセル(th)とscope属性」のまま誤って書き換わっていないこと、の両方を確認。同一ブランチ(claude/goal-overview-rxgrf2)への追加コミットのためPR#95のタイトル・本文を更新して反映(新規PRは作成せず)。
+- 関連ファイル: `a11y-migration-kb/rules/table/simple-structure.md`(新規)、`a11y-migration-kb/rules/table/index.md`、`goal2-app/public/app.js`、`goal2-app/data/rules.jsonl`、`a11y-migration-kb/build/rules.jsonl`。関連PR: #95。
+
+**2026-07-22 続き: 「表を直したのに全体完了にならない」報告から、AI見出し提案が表セル内を破壊する実バグを発見**
+
+- PR#95提示後、ユーザーから「安城市のサンプルページで表を修正したのに見出しの設定の修正が完了するまで全体が完了にならないのはおかしくないか」と質問。当初は「全候補に決定を下すまでページ完了にならない」という既存の完了判定仕様(`renderCandidates()`)の説明で応答し、加えて具体的に調べた「見出し階層の順守」候補(ページ先頭のh1→h2変換)は表と無関係と回答した。
+- ユーザーから「表内のことでは？」と再指摘があり、実際にはユーザーが見ていたのは別サンプル(安城市 指定緊急避難場所一覧)の別候補(「見出しの設定」= `html-structure.heading-required`、cand_003〜006)で、表のth要素(名称・連絡先・所在地・面積)を個別にh4見出しへ変換する提案だったことが、動画とサンプルHTML原文の提示で判明。ローカル環境(GEMINI_API_KEY未設定)では再現できず、コード上も現在の`buildHeadingReviewOutline()`はth/tdの祖先チェックが無いため理論上は再現しうるが、実際にAskUserQuestionで確認したところ**ユーザーはCloud Run本番環境(未再デプロイ、古いコード)で確認していたことが判明**。
+- 原因調査の結果、ユーザーが貼り付けたサンプルHTML原文から根本原因が判明: 表のth要素が`<th scope="col"><p><strong>名称</strong></p></th>`のように内部に`<p>`要素を持つ構造になっており、`buildHeadingReviewOutline()`(AIへ渡す文書アウトライン構築)が`h1〜h6,p`を祖先を問わず収集していたため、この`<p>`もアウトラインに含まれ、AIの`missing_headings`提案で`<h4>名称</h4><p>名称</p>`のようにth要素内部へ新しい見出しを挿入する候補が生成される構造的バグだった。現行コードにも実在するバグ(本番が古いから起きているのではなく、現行コードでもGEMINI_API_KEY設定時は再現しうる)と判断し修正。
+- `buildHeadingReviewOutline()`と`collectHeadingCandidates()`内のp/div短文マッチャーの両方に`element.closest("th,td")`による除外を追加。`node --check`・`node test/run-tests.js`成功。ユーザー提示の実データHTMLを`window.goal2Engine.analyze()`で直接解析し、th要素内の短文を対象にした見出し変換候補が生成されないこと、既存の`table.th-scope`候補は引き続き正しく生成されることを確認(ただしAI有効時の実際の抑止効果はGEMINI_API_KEY未設定のため未検証、入力除外のみ確認)。
+- 教訓: ユーザーの「おかしくないですか」という素朴な疑問(完了条件への疑問)が、調査を進めると全く別の重大なバグ(表構造破壊)の発見につながった。最初の説明(完了判定仕様の説明)だけで納得せず、ユーザーが「表内のことでは」と食い下がった点を軽視せず、具体的な動画・HTML原文の提示を求めたことが功を奏した。また、本番環境が未再デプロイという事実と、コード自体に実在するバグという事実は別の問題であり、「本番は古いから」で思考停止せず、現行コードそのものに同じ脆弱性がないか確認する必要がある。
+- 関連ファイル: `goal2-app/public/app.js`
+
+**2026-07-22 続き: 「miChecker版もこのように修正されてしまう」から二重フィルタ不足を発見**
+
+- 上記のth/td除外修正をユーザーに説明したところ、「miChecker版もこのように修正されてしまうようです」と、`<p><strong>連絡先</strong></p>` → `<h4>連絡先</h4><p><strong>連絡先</strong></p>`という同じ症状を提示された。miCheckerモードは`isMicheckerRelevantRule()`でmichecker_check_idsを持たないルール(`html-structure.heading-required`はこれに該当)を除外する設計のため、本来この症状が出ないはずだが、別バグとして実在した。
+- 原因: `runAnalysis()`のmiCheckerモードフィルタは`generateCandidates()`直後、enrichment(AI呼び出し)より**前**に1回だけ適用されていた。`enrichHeadingReviewWithLlm`・`enrichAvoidTextAsImageWithLlm`・`enrichAsciiArtWithLlm`はいずれも`items.push()`で新規候補を追加することがあり、この新規追加分はフィルタを一切通過せず素通りしていた。
+- 修正: 同じフィルタをenrichment完了後にも追加適用(二重フィルタ)。前段は既存どおりenrichment対象・LLM呼び出し件数を絞る最適化として維持し、後段でenrichmentが追加した非対応ルール候補を確実に除外する。
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで`tables`サンプルをKBモード(31件)とmiCheckerモード(23件、`html-structure.heading-required`含まれず)で解析しエラー無しを確認。AI enrichmentが実際に新規候補を追加するケースでの効果はGEMINI_API_KEY未設定のため未検証。
+- 教訓: 1つの症状報告(表セル内の見出し破壊)を直しても、同じ根本原因が複数の経路(KBモード・miCheckerモード)に染み出している可能性がある。「モード違いでも同じ症状が出た」というユーザーの追加報告は、表面的な修正が不十分だったことを示す重要なシグナルであり、安易に「まだデプロイされていないだけ」と決めつけず、コードパスを最後まで追う必要がある。
+- 関連ファイル: `goal2-app/public/app.js`
+
+**2026-07-22 続き: 「これもおかしいね」曖昧見出し候補の修正前後同一問題、span/太字誤検知の疑いは誤り**
+
+- ユーザーが安城市サンプルで、AIの曖昧見出し検知(`html-structure.heading-content-quality`、見出し「注意！」)候補のスクリーンショットを提示。「修正前HTML」「修正後HTML」が完全に同一で「これもおかしい」と指摘。
+- 一旦「`<span>`を太字として誤判定しているのでは」との仮説をユーザーから提示されたが、コード調査(`buildHeadingReviewOutline`・AI検知ロジック・CSS)では該当箇所無し。ユーザーに実際のAI理由(reason)文言の提示を依頼したところ、「見出しの文言が抽象的で、直後の段落で説明されている具体的な注意内容（一時避難場所の利用制限）が不明瞭です。(AI判定)」という正当な判定内容であることが判明し、span/太字仮説は誤りと確定。バグではなく機能が正しく動作している例だった。
+- 本質的な論点は「なぜ修正前後が同一に見えるか」で、これは`html-structure.heading-content-quality`が設計上あえて代替文言をAIに提案させていない(`patch_mode: "none"`)ためと判明。ユーザーに改善方向(AIに代替文言も提案させる/UIで「AIは文言を提案しない」旨を明示する)を確認し、後者(UI注記)を選択いただいた。
+- `goal2-app/public/index.html`の`#afterHtml`直後に`#afterHtmlNoAiSuggestionNote`(既定hidden)を追加し、`renderDetail()`で`rule_id === "html-structure.heading-content-quality" && patch_mode === "none"`のときだけ表示するよう実装。Playwrightで、記号のみ見出し(`<h2>※</h2>`)を含むカスタムHTMLを解析し、該当候補選択時のみ注記が出て他の候補では出ないことを確認(テキストフィルタでの候補選択に切り替えた後に確認が安定した — `.nth(idx)`インデックスクリックはリスト再描画で対象がずれる既知の落とし穴に再度ハマったため)。
+- 教訓: ユーザーの技術的な仮説(span/太字誤検知)が結果的に誤りだったケースでも、その仮説を検証する過程(AIのreason文言を実際に取得)で、より本質的な別の改善点(UI上の分かりにくさ)にたどり着けた。ユーザーの仮説を鵜呑みにせず、かつ頭ごなしに否定もせず、検証可能な形で確認を依頼したことが功を奏した。
+- 関連ファイル: `goal2-app/public/index.html`、`goal2-app/public/app.js`
+
+**2026-07-22 GOAL3: 画像相対パス絶対化の要望から、画像が丸ごと消える重大バグを発見・修正**
+
+- ユーザーから「本文抽出の際に画像パスなどが相対パスで記載されている際に認識できなくなってしまうので絶対パスに置き換えるようにしてください」と要望(例: 尼崎市の交通案内ページ)。当該ページは環境のプロキシポリシーで直接フェッチできなかったため、相対パス画像を含む合成HTMLで検証しながら実装。
+- 絶対パス化のPlaywright検証中、`<img>`要素が抽出結果から完全に消えていることに気づき調査。`removeEmptyElements()`(GOAL3の空要素除去処理)が、`<img>`/`<iframe>`/`<table>`/`<video>`/`<audio>`要素を**それ自身が該当タグであっても**「保護対象」と判定できていなかった(子孫にこれらのタグを含むかどうかの`querySelector`チェックのみで、要素自身へのチェック`matches()`が欠落)。`<img>`はtextContentを持たないため、この判定漏れで無条件に「空要素」として除去されてしまい、GOAL3で抽出した本文から画像が(相対パスかどうかに関わらず)常に消えるという、要望より重大な既存バグだった。
+- 修正: `removeEmptyElements()`に`element.matches("img,iframe,table,video,audio")`の自己チェックを追加。あわせて要望どおり`absolutizeResourceUrl`/`absolutizeSrcsetValue`/`absolutizeImageUrls`を新設し、`img[src]`・`img[srcset]`・`source[srcset]`を旧ページURL基準の絶対URLへ変換する処理を追加(`cleanContentClone`等へ`baseUrl`を伝播、GOAL1バッチ処理の`window.goal3Engine.extract()`にも`page.url`を渡すよう変更)。
+- 検証: `node --check`・`node test/run-tests.js`成功。Playwrightで、裸のimg/`<p>`で囲んだimgの両方が修正前は消え修正後は残ることを確認。ルート相対・相対(srcset含む)・プロトコル相対パスが旧ページURL基準で正しい絶対URLに変換され、既に絶対URLの値・`data:`URIは変更されないことを確認。
+- 教訓: 機能要望(絶対パス化)を実装するための検証作業そのものが、要望よりも深刻な既存バグ(画像の消失)を偶然発見する機会になった。新機能のためのテストコードを書く際は、期待する変化(パスが絶対になる)だけでなく、要素の存在自体が保たれているかも含めて出力全体を確認するべき。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/goal1.js`
+
+**2026-07-22 「画像: alt・キャプション・複雑画像」サンプルに文字入りバナー画像を追加**
+
+- ユーザーから「画像の中に文字が入っているバナーに対して代替テキストを正しく提供できるか検証したい」との要望。既存の生成PNGサンプル画像(sample-park/map/flower/family-generated.png)にならい、Playwrightでスタイル付きdivをスクリーンショットして`sample-banner-generated.png`(600×180px、「夏の交通安全運動実施中　7月11日（土）～7月20日（月）」の文言入り、青地・黄色縁取りの自治体バナー風デザイン)を新規生成。
+- 「画像」サンプルのHTMLに`<img src="/images/sample-banner-generated.png" alt="" width="600">`を追加(alt=""は、実際は情報を持つ画像に空altを付けてしまう実務でよくある誤りを意図的に再現)。`generateImageNameDraft()`にもPoCフォールバックエントリを追加。
+- Playwrightで、バナー画像が実際に配信されること(HTTP 200)、`image.alt-text`候補としてバナーが正しく候補一覧に含まれることを確認。
+- **重要な制約をユーザーに申し送り**: `image.avoid-text-as-image`(画像内埋め込み文字のvision検出)やGemini vision経由の`image.alt-text`強化は、サーバー側で画像バイトを実際に取得できて初めて動作する。このサンプルの「旧ページURL」は`https://www.example-city.jp/...`という実在しないプレースホルダドメインのため、画像取得は常に失敗しAI vision判定は実行されない(既存の他4サンプル画像も同じ制約を受けており、今回新規に生じたものではない)。実際のAI vision判定(バナー内の文字を正しく検出できるか)を検証するには、実在する旧ページURL(ユーザーが以前提示した尼崎市の例等)で試す必要がある旨を伝えた。
+- 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/images/sample-banner-generated.png`(新規)
+
+**2026-07-22〜24 実在バナー画像の検証用にGitHub Pagesページを公開、AI vision実テストの土台を整備**
+
+- 上記の制約を受け、ユーザーが実際の観光地特集バナー画像(実写真+日本語文字入りの本格的な旅行バナー)を貼り付け、「GitHubページに公開しよう、画像はこちらを使用して」と依頼。
+- 画像ファイル自体はチャット上で視覚的に見えるのみでこの環境のディスクには保存されない(アップロードディレクトリを何度探索しても見つからない)ことが判明。動画のような`@"/root/.claude/uploads/..."`形式のファイル添付とは異なる扱いだった。複数回の再送でも解決せず、最終的にユーザーがGitHubのWeb UIから直接アップロードする方式で合意。
+- リポジトリ(`koteikara/11y-agent`)に`docs/`ディレクトリを新設。`docs/images/`(画像アップロード先として`.gitkeep`で先に作成)と、見出し・本文を含む実ページに近い構成の`docs/tourism-spots-feature.html`(ファイル名は「index」を避け内容が分かる名前にとの指示どおり)を作成。ユーザーが`docs/images/tourism-feature-banner.png`へ画像をアップロードし、Settings > PagesでGitHub Pagesを`main`/`docs`ソースに設定し、`https://koteikara.github.io/11y-agent/tourism-spots-feature.html`として公開完了。
+- この環境からは`design-system.isct.ac.jp`同様`github.io`への直接fetchもプロキシポリシーでブロックされるため、公開確認はGitHub API(`get_file_contents`)でファイルの存在を確認する形で代替した。
+- 教訓: チャットに貼り付けられた画像は、動画等の「ファイル添付」とは異なり、この環境のファイルシステムには保存されないことがある(モデルには視覚的に見えても`find`等では発見できない)。同じ方法で繰り返し依頼しても解決しないため、早めに「ファイル添付」「URLで渡す」「相手が直接配置する」等の代替手段に切り替える判断が必要。
+- 関連ファイル: `docs/images/.gitkeep`、`docs/tourism-spots-feature.html`(いずれも新規)
+
+**2026-07-24 実ページでの検証から、GOAL3のheader内バナー画像消失バグとバージョン表示機能を発見・実装**
+
+- 公開したページ(`docs/tourism-spots-feature.html`)をユーザーが実際にGOAL3で本文抽出したところ「画像が欠落する」と報告。あわせて「デプロイが最新かわかりにくいのでバージョン情報をページのどこかに入れよう」との提案。
+- 画像欠落は、PR#98(`removeEmptyElements()`の自己チェック漏れ)とは別の、GOAL3側の2段階のバグだった: (1) `isLikelyContentBlock()`がheaderをテキスト量だけで判定しバナー画像だけのheaderを常に除去、(2) それを直しても`isLeadingTemplateFragment()`の`if (!text) return true`という早期returnが、ページ先頭の無テキスト要素(headerがまさにこれ)を画像の有無を問わず除去。さらに(3) `dedupeCandidates()`がテキストの同一性だけで候補を重複判定し、画像を含むbody候補と含まないmain候補を「同じ」とみなしてfootprintの小さいmain候補を残し画像入りのbody候補を捨てる、という3段階目のバグも重なっていた。3つとも修正し、`hasSubstantialImage()`ヘルパーを新設(閾値は当初80x40で設定したが、Playwright回帰確認で典型的なサイトロゴ(120x40)まで拾ってしまうことが判明し、幅300px・高さ80px以上に調整、ヒーロー・バナー画像相当のみを対象化)。
+- バージョン表示: `goal2-app/public/version-badge.js`を新設し、`/build-info.json`(Cloud Runデプロイ時にPowerShellスクリプトが`git rev-parse`等から生成、ローカル開発では存在せず404で非表示)を読み込んで画面右下に「build: <コミット短縮ID> (デプロイ日時)」を表示。3画面(index/goal3/goal1)すべてに追加し、`CLOUD_RUN_DEPLOY.md`にも生成手順と確認方法を追記。これにより、本セッションで繰り返し発生した「本番が古いコードのままで再現しない」という混乱を今後減らせる見込み。
+- 教訓: ユーザー自身が用意した実ページでの検証(サンプルではなく本物のURL)が、サンプルでは決して踏まなかったコードパス(header内の無テキストバナー画像)のバグを次々とあぶり出した。合成テストデータだけに頼らず、実データでの検証機会を活かして深掘りする価値が高い。また、1つの症状(画像消失)の背後に、独立した複数のバグ(除去ロジック2箇所+重複排除ロジック1箇所)が積み重なっているケースがあり、1つ直して満足せず、実際に期待どおりの最終結果が出るまで確認を続ける必要がある。
+- 関連ファイル: `goal2-app/public/goal3.js`、`goal2-app/public/version-badge.js`(新規)、`goal2-app/public/index.html`、`goal2-app/public/goal3.html`、`goal2-app/public/goal1.html`、`goal2-app/public/styles.css`、`goal2-app/CLOUD_RUN_DEPLOY.md`
+
+**2026-07-24 バージョン表示の動作確認後、複雑画像(チラシ・ポスター)のAI画像名ルール逸脱を発見・修正**
+
+- バージョン表示の位置をキャプチャ画像で説明した直後、ユーザーから「いけた。ただ生成した画像名がルールと逸脱してます」と、実際にGEMINI_API_KEY有効な環境で観光地特集バナー(写真多数配置のポスター)をGOAL2解析させた結果を共有。生成された画像名は「観光地特集のポスター。各地のグルメや景勝地の写真が多数配置。」で、KBルール`image/complex-image-report.md`が要求する「詳細は以下」という接尾辞が無かった。
+- 原因は独立した2点: (1) `applyImageAltLlmResult()`が`image.complex-image-report`候補でもAIの`alt_text`をそのまま上書きしており、機械的な下書き(`generateComplexImageNameDraft`)が正しく付けていた「詳細は以下」をAI enrichmentが上書きで消していた。(2) さらに根本として、この画像は機械的な複雑画像判定(`isComplexImageCandidate`)自体が発火しておらず(alt=""のため既存alt文字列条件が不成立、src/alt/captionにも「地図」「グラフ」等の既存キーワードが一致しない)、そもそも`image.complex-image-report`候補が生成されていなかった。AIのレスポンススキーマには`is_complex`フィールドが元々あったが、クライアント側で一切参照されていない「死んだフィールド」だった。
+- 修正: `applyImageAltLlmResult()`で、`rule_id === "image.complex-image-report"`のときに加えAIが`is_complex: true`と判定した場合も「詳細は以下」を付与するよう変更。あわせて`isComplexImageCandidate()`のキーワードに「チラシ」「ポスター」「バナー」等を追加(KBルールの例示に合わせたdefense-in-depth)。
+- 検証: `node --check`・`node test/run-tests.js`成功。Node上でsuffix付与ロジックを直接検証(4パターンで期待どおりの結果)。GEMINI_API_KEYが無いためAIレスポンス経由の実地検証はできず、ロジックの単体検証に留まる。
+- 教訓: `is_complex`のように、レスポンススキーマには定義されているのにクライアント側で一切参照されていない「死んだフィールド」がある場合、そのフィールドが本来防ぐはずだった不具合(ここでは複雑画像の誤分類・命名規則違反)が実際に発生するまで気づかれないことがある。プロンプト設計時に定義したスキーマフィールドが、実装側で本当に消費されているかを後から棚卸しする価値がある。
+- 関連ファイル: `goal2-app/public/app.js`
+
+## Not Completed Yet（2026-10-04 に整理する前の一覧）
+
+- Goal 3のコンテンツ抽出ヒューリスティック(スコアリング・除外ルール)を、`a11y-migration-kb/` のコンテンツ範囲抽出条件として正式に文書化する作業は未完了。
+- Goal 3の抽出候補とGoal 1のバッチ処理(ページ一覧・テンプレート分類)の接続方法は未定義。
+- Goal 3の誤抽出・見落としを検証するためのテストセット、精度指標は未定義。
+- Goal 3の `/api/fetch-html` を実案件の旧サイトへ使ってよいかのデータ送信ポリシー、認証が必要な旧サイトへの対応方針は未定義。
+
+- ~~Cloud Run上のGoal 2実行画面について、Google Cloudプロジェクト、リージョン、ネットワーク制限、認証方式は未決定。~~ → 2026-09-25 決定: 認証は IAP。2026-09-28 に共通のパスワード(Basic 認証)へ変更。`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1 で実装した(PR #154)が、本番への適用は未実施。
+- Cloud Run PoCの具体的なGoogle Cloud構成、DB は未決定。証跡の保存先は 2026-09-25 に共有ドライブと決めた(置き場所と名前の決まりは同じ設計書の 3.5)。
+- Goal 2実行画面の初期PoCは実装済みだが、CMS入力欄制約は未反映。認証(共通のパスワード)は実装済み(PR #154)で本番への適用が未実施、証跡の共有ドライブでの運用は決定済みで、画面が決まりどおりの名前で保存するようにした(PR #153)が、共有ドライブの `移行証跡` フォルダーの用意は未実施(`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2)。アプリ側での永続保存とログ方針は未決定で未実装。
+- CMS入力欄で許可されるHTMLタグ・属性・入力欄制約は未確認。
+- 一括処理方式とページ単位方式を組み合わせるハイブリッド案は未整理。
+- `gemini-a11y-agent` から引き継ぐ品質監査項目を `done-definition.md` へ正式反映する作業は未完了。
+- `gemini-a11y-agent` の report-only ルールを `a11y-migration-kb/` のルール体系へ対応づける作業は未完了。
+- GitHub調査で見つけた外部検査エンジンを `axe-core` 直接利用にするか、`pa11y --runner axe` 経由にするかは未決定。
+- 外部検査エンジンを使う場合に、本文領域のroot selector、抽出済みHTML断片、CMS登録後プレビュー内の本文領域のどれを主対象にするかは未決定。
+- 外部検査結果を `content`、`old-site-template`、`new-cms-template`、`unknown` に分類する具体的な判定方法は未定義。
+- GitHub外調査で見つけた参照資料を、`a11y-migration-kb/` の各ルールへ対応づける作業は未完了。
+- W3C / WAIC / GOV.UK / デジタル庁の参照先を、作業者説明用とAGENT判定用にどう分けるかは未定義。
+- miCheckerをCLI/APIなどで自動実行できるか、GUI前提の手動ゲートにするかは未決定。
+- 抽出済みHTML断片をmiCheckerで確認するための検査用HTMLラッパー設計は未定義。
+- CMS登録後プレビューURLをmiCheckerで安定して検査する運用は未定義。
+- miChecker結果をスプレッドシート証跡へ取り込む形式は未定義。
+- ~~miCheckerの指摘分類と `a11y-migration-kb/` のルール分類の対応づけは未定義~~ → 2026-07-07実装: `a11y-migration-kb/tools/actf2json.py`で公式チェック項目カタログ(268件)をJSON化し、`goal2-app`の`michecker-compare.js`で比較結果行の内容テキストをテンプレート照合してKBルール(マニュアル版/miChecker版)へ逆引き表示する機能を実装・実データで検証済み。マニュアル版/miChecker版を明示的に「選ばせる」専用UI(トグル等)は作らず、両方に一致する場合はバッジを並記する形で対応した。
+- A11yc libraryを実際にローカルまたは検証環境で動かすかは未決定。
+- A11ycの `issues` 形式を、本プロジェクトの候補形式・証跡列へどう対応づけるかは未定義。
+- 駒瑠市のどの `criteria` / `preset` をPoC用テストセットに採用するかは未定義。
+- 公開A11yc ACSへ顧客HTMLを送信してよいかどうかのデータ送信ポリシーは未定義。
+- Cloud Run上でA11yc libraryを同一コンテナに含めるか、別サービスに分けるかは未定義。
+- Cloud Run上でLLM/APIへHTMLを送信する場合の匿名化、保持、監査ログ、利用範囲は未定義。
+- Goal 2実行画面の初期ワイヤーフロー、画面項目、最終HTML出力形式はPoC実装済みだが、作業者実務に合わせた詳細調整は未完了。
+- A11yc ACS型の問題箇所表示はPoC実装済みだが、CMS入力欄制約やスプレッドシート証跡への本接続は未定義。
+- レンダリングHTML上のハイライト、該当HTML断片、修正候補、最終HTML出力の同期はPoC実装済みだが、複数候補競合や複雑なHTML断片での検証は未完了。
+- `採用`、`編集して採用`、`却下`、`要確認` の状態と理由はJSON/CSV証跡へ出力できるが、既存スプレッドシート列への正式対応は未定義。
+- 外部LLM/APIへHTMLを送信してよいか、送信可能な範囲、匿名化、監査ログの扱いは未定義。
+- 外部OSSの検査結果を、本プロジェクトの候補形式・証跡形式・スプレッドシート記録へどう対応づけるかは未定義。
+- 旧サイトHTMLの取得方法、対象URL一覧の形式、ページ一覧の作成方法は未定義。
+- デザインテンプレートやサイトカテゴリーの分類ルールは未定義。
+- 移行対象コンテンツを抽出するためのID、class、要素の指定方法は未定義。
+- AGENTが受け取る入力形式と、出力するHTML・修正記録・要確認事項の形式は、Goal 2実行画面で実装済み（入力は本文HTML断片、出力は最終HTML・証跡JSON/CSV・注意事項の一覧）。残っているのは、この形式をCMS登録の入力欄制約とスプレッドシートの証跡列へ正式に対応づけることである。
+- `a11y-migration-kb/` の各ルールを、AGENTが実行可能なチェック・変換手順へどう対応づけるかは未定義。
+- CMS管理画面への登録方法、入力欄制約、登録前後の検証方法は未定義。
+- スプレッドシートに残す証跡の列、粒度、更新タイミングは未定義。
+- 作業者、承認者、SV、顧客確認の責任分界は未整理。
+- PoC対象ページ、評価指標、検証手順は2026年8月に実施済み（`memory/verification-2026-08-summary.md`）。残っているのは、遠野市以外の4自治体での検証と、検証で出た指摘を踏まえた評価指標の見直しである。
+
+## Next Candidate Work（2026-10-04 に整理する前の一覧）
+
+- Goal 2初期PoCを作業者に試してもらい、候補表示、採用/編集/却下/要確認、最終HTML、証跡出力の使い勝手を確認する。
+- CMS入力欄で許可されるHTMLタグ・属性・自動変換の制約を調べ、PoCの最終HTML出力に反映する。
+- 既存スプレッドシート列に合わせて証跡JSON/CSVの列を調整する。
+- Cloud Runで扱う実案件HTMLのデータ送信ポリシー、認証方式、ログ方針を決める。
+- AGENTの入出力仕様を定義する。
+- スプレッドシートに残す作業記録・証跡の項目を定義する。
+- `a11y-migration-kb/` のルールを、機械的変換、AI判断、人間確認、エスカレーションに分類し直す。
+- サンプルHTMLを使った小さなPoCの流れを設計する。
+- CMS登録前に検証できる項目と、CMS登録後にしか検証できない項目を分ける。
+- `memory/gemini-a11y-agent-review.md` の引き継ぎ候補から、最初のPoCで採用するものを選ぶ。
+- 出力HTML品質監査のCritical / High / Medium基準を、本リポジトリの完了基準へ移す。
+- `memory/github-a11y-projects-research.md` の候補から、最初のPoCで使う外部検査エンジンを選ぶ。
+- 外部検査エンジンの `violations`、`incomplete`、`cantTell` 相当の結果を、作業者確認・承認者確認・証跡へ接続する形式を設計する。
+- 旧サイトごとの本文領域抽出ルールと、スコープ外領域の除外ルールを設計する。
+- ページ全体検査の結果を、本文領域修正候補とテンプレート課題に切り分ける分類仕様を作る。
+- `memory/non-github-a11y-resources-research.md` をもとに、`a11y-migration-kb/` と外部参照資料の対応表を作る。
+- miCheckerの確認結果を記録する証跡列を設計する。
+- ~~miCheckerで出やすい指摘を `a11y-migration-kb/` のルールへ対応づける~~ → 2026-07-07完了(WCAGベースのカバレッジ分析・ルール拡張、および比較結果画面での逆引き表示機能を実装)。
+- CMS登録前ラッパーHTMLとCMS登録後プレビューURLの両方でmiChecker確認する小さなPoCを設計する。
+- A11yc libraryの `Analyzer::analyzeHtml()` と `is_partial` を使った本文HTML断片検査のPoCを設計する。
+- 駒瑠市のOK/NGページを使い、画像、表、リンク、見出し、フォームのテストセットを作る。
+- A11yc結果とmiChecker結果を同じ駒瑠市ページで比較し、本文起因・テンプレート起因・人間確認対象に分類する。
+- 最終HTML出力をCMSへ貼り付ける前提で、CMS入力欄制約に合うHTML断片形式を検討する。
+- レンダリングHTML上の候補ハイライトと、採用/編集/却下操作の状態遷移を設計する。
+- 候補ごとの状態、編集内容、却下理由、要確認理由を証跡列へ落とし込む。
+- 表、画像、リンク、見出しの4領域について、外部参照資料を使ったAGENT候補分類を試作する。
+
+- Goal 3の抽出ロジックを、実際の旧サイトHTMLサンプル(駒瑠市など)で検証し、誤抽出・見落としを記録する。
+- Goal 3の抽出根拠表示を、`a11y-migration-kb/` のコンテンツ範囲抽出条件・除外領域の記録要件と対応づける。
