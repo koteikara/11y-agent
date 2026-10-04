@@ -13,7 +13,7 @@ if errorlevel 1 (
 echo [1/6] Bundling server.js and its local dependencies into a single file...
 echo (Node's single-executable feature does not resolve require() calls to local
 echo  files such as ./lib/rules at runtime, so everything must be bundled first.)
-call npx esbuild server.js --bundle --platform=node --outfile=server.bundled.js
+call npx --yes esbuild@0.28.2 server.js --bundle --platform=node --outfile=server.bundled.js
 if errorlevel 1 exit /b 1
 
 echo [2/6] Generating the SEA blob from sea-config.json...
@@ -48,7 +48,7 @@ if not defined SIGNTOOL (
 if errorlevel 1 exit /b 1
 
 echo [5/6] Injecting the blob into goal2-app.exe with postject...
-call npx postject goal2-app.exe NODE_SEA_BLOB sea-prep.blob ^
+call npx --yes postject@1.0.0-alpha.6 goal2-app.exe NODE_SEA_BLOB sea-prep.blob ^
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 ^
   --overwrite
 if errorlevel 1 exit /b 1

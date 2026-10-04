@@ -1,0 +1,12 @@
+# gcloud builds submit で Cloud Build へ送るファイルを、Dockerfile が使うものに絞る。
+# 手元の設定(.goal2-app-local/)、Windows 版のビルド生成物、テスト、一時ファイルを送らないためである。
+# public/build-info.json はデプロイのたびに作り、画面の build: 表示に使うので、送る(public/ ごと含める)。
+# ここに足すときは、ルートの .gitignore から写さない。.gitignore は build-info.json を無視している。
+/*
+!/.gcloudignore
+!/Dockerfile
+!/package.json
+!/server.js
+!/lib/
+!/public/
+!/data/

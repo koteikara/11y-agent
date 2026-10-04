@@ -8,7 +8,7 @@
 
 - ビルドを行うWindows PCに **Node.js 24以降(LTS)** がインストールされていること。`goal2-app.exe`はビルドしたPCのNode.jsを中に含めるので、ビルドしたPCのNode.jsの版が、そのまま利用者のPCで動く版になる。
 - ビルドを行うWindows PCに **`signtool`(Windows SDK Signing Tools)** がインストールされていること。`node.exe`は署名済みバイナリのため、SEA化する前に署名を除去する必要があり、これが無いと`goal2-app.exe`は生成されても正しく動作しない(起動時にアプリではなくNode.jsの対話モードが開いてしまう)。
-- インターネット接続(初回ビルド時に `npx esbuild`・`npx postject` が実行される)。
+- インターネット接続(初回ビルド時に `npx` が `esbuild@0.28.2` と `postject@1.0.0-alpha.6` を取得する。版は `build-windows-app.bat` で固定しており、作り直しても同じ版で作られる)。
 
 Node.js・signtoolが入っているかどうかは、次の2つの節の確認手順で分かる。すでに両方入っているPCでは、このセクションは読み飛ばして「ビルド手順」に進んでよい。
 

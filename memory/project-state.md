@@ -159,7 +159,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - 「AIで再確認」ボタン（`TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.9、3.14）。AI が書き替えた候補の `after_html` が古いまま当たる制限（3.6）が残っている。
 - issue #136（`text.partial-date` が「1/2」を日付と判定する）。ルール側の別件で、構造変更1では扱わない。
 - PR-2.6 の候補（構造の手段でもキャプションを必須にする揃え方）。
-- 小さめの整備: `goal2-app/.gcloudignore`、`build-windows-app.bat` の `npx esbuild` と `npx postject` の版の固定、lock ファイルが無いこと。
+- 小さめの整備: lock ファイルが無いこと(npm の依存は0件)。`goal2-app/.gcloudignore` と、`build-windows-app.bat` の `esbuild` と `postject` の版の固定は 2026-10-04 に済んだ。
 
 ### 未決定（課題候補一覧へ委ねた）
 
