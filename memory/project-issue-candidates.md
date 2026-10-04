@@ -90,7 +90,7 @@
 | S0 | ユーザー提示の前回会話 | 目的、Goal 1〜3、機械処理と人の判断の分離 |
 | S1 | [AGENTS.md](../AGENTS.md) | Target Work / Content-Only Scope Boundary / miChecker Quality Signal / Important Constraints |
 | S2 | [workstream.md](../workstream.md) | Goal 1 / Goal 2、Candidate Review Interaction / Hosting Direction |
-| S3 | [memory/project-state.md](project-state.md) | Current Progress / Decisions / Not Completed Yet |
+| S3 | [memory/project-state.md](project-state.md) | Current Progress / Decisions / Not Completed Yet（2026-10-04 に整理する前の一覧と古い経緯は [project-state-archive-2026-07-to-09.md](project-state-archive-2026-07-to-09.md)） |
 | S4 | [a11y-migration-kb/reference/spreadsheet-fields.md](../a11y-migration-kb/reference/spreadsheet-fields.md) | 移行作業欄 / 公開作業欄 |
 | S5 | [a11y-migration-kb/cms/input-areas.md](../a11y-migration-kb/cms/input-areas.md) | 説明 |
 | S6 | [a11y-migration-kb/reference/question-protocol.md](../a11y-migration-kb/reference/question-protocol.md) | ポイント |

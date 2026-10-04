@@ -25,13 +25,13 @@
 
 - 背景・目的: クラウドのセッションで進めていた作業がすべて main に入ったので、途中になっている作業を棚卸しし、進め方を Opus 5.5 と Fable で相談した。ユーザーがその順番を承認した。あわせて、`memory/project-state.md` が 311KB になり、毎回読める大きさを超えていたので小さくした。
 - 主な変更内容:
-  - `memory/project-state-archive-2026-07-09.md` を新しく作り、Current Progress のうち遠野市フィードバック対応の 4.1〜4.3 より前の経緯と、整理する前の Not Completed Yet と Next Candidate Work を、書き替えずに移した。
+  - `memory/project-state-archive-2026-07-to-09.md` を新しく作り、Current Progress のうち遠野市フィードバック対応の 4.1〜4.3 より前の経緯と、整理する前の Not Completed Yet と Next Candidate Work を、書き替えずに移した。
   - `memory/project-state.md` の Not Completed Yet を、「決めたが未実施(ユーザーの作業)」「コード未着手(設計書あり)」「未決定(課題候補一覧へ委ねた)」の3段に分けた。業務側の未決は `memory/project-issue-candidates.md` の ID を指すだけにした。済んでいた項目(作業者による試用、認証方式の決定など)は除いた。
   - Next Candidate Work を、承認された順番(Node.js 24、P1 の本番適用、exe の配り直し、共有ドライブ、手元の小さめの作業、S5、4.7 と 4.8、L3、A01 と C01)と、ユーザーに決めてもらう事項に置き換えた。
-  - 棚卸しで分かった事実を書いた。本番は `c8131ee` のままで、次のデプロイで S4 と P2 も出るので証跡の列と保存名が変わること、L3 の開始条件の一つが L2 の人の判定であること、10/20 の期限は 9/25 に済んでいること。
+  - 棚卸しで分かった事実を書いた。本番は `c8131ee` のままで、次のデプロイで S4 と P2 も出るので証跡の列と保存名が変わること、L3 の開始条件の一つが L2 の人の判定であること。10/20 の期限は、Current Progress の 9/25 の記録で済んでいると確認した。
   - Update Policy に、Current Progress は直近の要約にとどめ、大きくなったら古い部分をアーカイブへ移す決まりを足した。
-- レビュー: (push 前に記入)
-- 関連ファイル: `memory/project-state.md`、`memory/project-state-archive-2026-07-09.md`(新規)
+- レビュー: Fable が見た。移した行の欠けと重複は無かった。要修正2件(「AIで再確認」の制限の節番号が 3.7 でなく 3.6、10/20 の期限を今回書いたと読める記述)と提案3件(アーカイブのファイル名が日付に読める、`project-issue-candidates.md` の参照表にアーカイブを足す、本番との差の項目でやることを先に書く)を直した。
+- 関連ファイル: `memory/project-state.md`、`memory/project-state-archive-2026-07-to-09.md`(新規)、`memory/project-issue-candidates.md`(参照表の S3 の行)
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-04: push の前に Fable のレビューを通す
