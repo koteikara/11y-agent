@@ -2,7 +2,7 @@
 project: 11y-agent
 repository: https://github.com/koteikara/11y-agent
 status: active
-updated: 2026-09-28
+updated: 2026-10-04
 knowledge_mocs:
   - AI・自動化
   - UI・デザイン
@@ -76,6 +76,7 @@ flowchart LR
 - **手元で動くサーバーは同じ PC からの要求だけを受け付ける**（2026-09-28、P0）。待ち受けは環境変数 `HOST` で決め、無ければ Cloud Run（`K_SERVICE` がある）では `0.0.0.0`、それ以外では `127.0.0.1` にする。手元の待ち受けでは `Host` ヘッダーを確かめ、すべての POST で `Content-Type: application/json` と `Origin` の一致を求め、htmlchecker.exe のパスは保存と実行の直前に形を確かめる。Windows 版が、同じネットワークの別の機器や別のサイトから任意の実行ファイルを動かせる作りだったためである。確かめる処理は `goal2-app/lib/local-guard.js`、設計は `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の 3.2 にある。
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
+- **開発は手元の作業フォルダで行い、GitHubはバックアップにする**（2026-10-04、ユーザー確定）。`D:\Codex\11y-agent-deploy` の `main` に直接コミットし、そのまま `git push origin main` する。ブランチとPRは使わない。デプロイも同じフォルダから行い、コミットしてpush済みの `main` だけを送る（`goal2-app/CLOUD_RUN_DEPLOY.md`）。それまではクラウドのセッションがPRを作り、GitHubの `main` をデプロイ専用のフォルダへ同期していた。
 - **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（共通のパスワード、2026-09-28 に IAP から変更）と証跡の置き場所（共有ドライブ）は決めた。パスワードを確かめる処理（P1、PR #154）と、証跡を決まった名前で保存する画面の変更（P2、PR #153。名前は `goal2-app/public/evidence-filename.js` で作る）は入れたが、本番のシークレットの作成とデプロイ、共有ドライブのフォルダーの用意は未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
 - 外部検査エンジン（axe-core、A11yc library）を組み込まない判断は、`memory/project-state.md` で未決定として残っている。理由未確認。
@@ -121,7 +122,7 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 
 ビルドとデプロイは2系統ある。
 
-- Cloud Run: `goal2-app/CLOUD_RUN_DEPLOY.md` のPowerShell手順で、GitHubの `main` を別フォルダへ同期してから `gcloud builds submit` と `gcloud run deploy` を実行する。
+- Cloud Run: `goal2-app/CLOUD_RUN_DEPLOY.md` のPowerShell手順で、手元の `main` がコミット済みでGitHubの `main` と一致することを確かめてから `gcloud builds submit` と `gcloud run deploy` を実行する。
 - Windows `.exe`: `goal2-app/build-windows-app.bat` を実行する。Node.js 24以上とsigntoolが必要（`LOCAL_WINDOWS_APP.md`）。作るPCのNode.jsが中に入るので、作るPCの版が利用者の版になる。
 
 環境変数名は次の通り（値は記載しない）。

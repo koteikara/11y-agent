@@ -20,30 +20,41 @@ Goal 2(`/`)とGoal 3(`/goal3.html`)は、別々のアプリ・別々のCloud Run
 
 ## 前提
 
-- デプロイ元は GitHub リポジトリ `koteikara/11y-agent` の `main` ブランチ(ローカルの手元フォルダではなく、GitHub上にマージ済みの内容をデプロイする)
-- デプロイ作業用フォルダは `C:\Codex\11y-agent-deploy`(手元の開発用チェックアウトとは別に用意し、常にGitHubの最新内容へ揃える)
+- 開発もデプロイも、手元の作業フォルダ `D:\Codex\11y-agent-deploy` の `main` で行う(2026-10-04 から。それまでは GitHub の `main` をデプロイ専用のフォルダへ同期していた)
+- GitHub リポジトリ `koteikara/11y-agent` はバックアップとして使う。変更は `main` にコミットし、そのまま `git push origin main` する
+- デプロイするのは、コミットして GitHub へ push 済みの `main` だけにする。画面右下の `build:` 表示のコミットIDを GitHub の履歴で引けるようにするためである
 - デプロイ先サービス名は `goal2-a11y-review`
 - リージョンは `asia-northeast1`
 - コンテナポートは `8080`
 
 ## 更新デプロイ
 
-PowerShell で次を実行します。まず GitHub の `main` ブランチを作業用フォルダへ同期し、そのフォルダから Cloud Build に送ります(ローカルでの未コミットの変更は含まれません)。
+PowerShell で、次の2つの段に分けて実行します。
+
+### 1. 送る内容を確かめる
+
+`gcloud builds submit` は、コミットしていない変更も含めて `goal2-app` フォルダの中身をそのまま送ります。
+そのため、デプロイの前に、手元の `main` がコミット済みで、GitHub の `main` と同じであることを確かめます。
 
 ```powershell
-$REPO_URL = "https://github.com/koteikara/11y-agent.git"
-$WORKDIR = "C:\Codex\11y-agent-deploy"
+$WORKDIR = "D:\Codex\11y-agent-deploy"
+cd $WORKDIR
 
-if (Test-Path $WORKDIR) {
-  cd $WORKDIR
-  git fetch origin main
-  git checkout main
-  git reset --hard origin/main
-} else {
-  git clone --branch main $REPO_URL $WORKDIR
-  cd $WORKDIR
-}
+git fetch origin main
+git branch --show-current          # main と出ること
+git status --porcelain             # 何も出ないこと
+git rev-parse HEAD origin/main     # 同じ値が2行出ること
+```
 
+3つのどれかが違うときは、デプロイに進みません。
+
+- ブランチが `main` でない: `git switch main` で戻す
+- `git status --porcelain` に何か出る: コミットするか、要らない変更なら取り消す
+- 2行の値が違う: 手元が進んでいれば `git push origin main`、GitHub が進んでいれば `git pull --ff-only` で揃える
+
+### 2. ビルドしてデプロイする
+
+```powershell
 cd "$WORKDIR\goal2-app"
 
 $PROJECT_ID = gcloud config get-value project
@@ -76,7 +87,10 @@ gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --project=$PROJECT_
 
 デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。ローカル開発環境(`node server.js`)では `public/build-info.json` が存在しないため、この表示自体が出ません(表示が無い=ローカル、という目印にもなります)。
 
-`main` 以外のブランチ(マージ前のPRなど)を試験的にデプロイしたい場合は、`git clone --branch main` と `git checkout main` の部分をブランチ名に置き換えます。ただし通常の更新デプロイは、PRがマージされて `main` に反映された後に実行します。
+`public/build-info.json` はデプロイのたびに作り直す生成物なので、`.gitignore` で無視しています。
+
+変更を本番に出す前に試したいときも、先にコミットして push します。
+そのうえで `gcloud run deploy` に `--no-traffic --tag <名前>` を付け、トラフィックを流さないリビジョンを作ってタグ付きの URL で確かめてから、`gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest` で移します。
 
 ## 反映確認
 
@@ -97,7 +111,7 @@ https://goal2-a11y-review-700549743482.asia-northeast1.run.app/goal3.html
 - `gcloud run deploy` が成功しているか
 - ブラウザのキャッシュが残っていないか
 - Cloud Run の最新リビジョンに 100% のトラフィックがあるか
-- 画面右下の `build:` 表示のコミットIDが古いままでないか(古い場合はデプロイ手順そのものが最新の`main`を取得できていない可能性がある)
+- 画面右下の `build:` 表示のコミットIDが古いままでないか(古い場合は、手元の `main` が最新でないままデプロイした可能性がある。「1. 送る内容を確かめる」からやり直す)
 
 ## 共通のパスワード
 
@@ -334,11 +348,14 @@ Gemini API の 2.5 系の廃止日は発表されていない。入出力は55�
 
 ### `git` コマンドが見つからない、または認証を求められる
 
-Git for Windows がインストールされていない場合は先にインストールします。プライベートリポジトリの場合、初回の `git clone`/`git fetch` で GitHub の認証(ブラウザでのサインインまたはトークン入力)を求められることがあります。
+Git for Windows がインストールされていない場合は先にインストールします。プライベートリポジトリの場合、初回の `git fetch`/`git push` で GitHub の認証(ブラウザでのサインインまたはトークン入力)を求められることがあります。
 
-### `git reset --hard origin/main` で作業内容が消えないか心配
+### `git push` が拒否される
 
-`$WORKDIR`(`C:\Codex\11y-agent-deploy`)はデプロイ専用の作業フォルダであり、開発用チェックアウト(`C:\Codex\a11y-agent` など)とは別に用意します。このフォルダには編集中のファイルを置かないようにすれば、`git reset --hard` で消えて困る内容は発生しません。
+GitHub の `main` に手元に無いコミットがあると、`git push origin main` は `rejected` で止まります。
+`git pull --ff-only` で取り込んでから push し直します。
+`--ff-only` で取り込めないとき(手元と GitHub の両方に別のコミットがあるとき)は、`git pull --rebase` で手元のコミットを GitHub の後ろに付け直します。
+`git push --force` は GitHub 側のコミットを消すので使いません。
 
 ### `IMAGE` が作れない
 

@@ -26,3 +26,6 @@ goal2-app/server.bundled.js
 # 一時生成物(--write-output の出力、サーバーのログ)
 goal2-app/tmp/
 *.log
+
+# デプロイのたびに作り直すバージョン表示(CLOUD_RUN_DEPLOY.md)
+goal2-app/public/build-info.json

@@ -5,7 +5,7 @@
 この文書は、Claude Code(またはCodex等のAGENT)がこのリポジトリに対して行った修正・更新を、後から追跡できるように記録する。
 
 - 新しいエントリは常に先頭(直近の変更)に追加する。
-- 1エントリ = 1PR(または1まとまりの作業)を基本とする。
+- 1エントリ = 1PR(または1まとまりの作業)を基本とする。2026-10-04 からは PR を使わず `main` に直接コミットするので、「関連PR/コミット」にはコミットの短縮IDを書く。
 - 「何を」「なぜ」「関連ファイル」「関連PR/コミット」を簡潔に書く。詳細な経緯は `memory/project-state.md` を参照する。
 
 ## Entry Format
@@ -18,6 +18,16 @@
 - 関連ファイル
 - 関連PR/コミット
 ```
+
+## 2026-10-04: 手元で開発し、main に直接 push する運用に変える
+
+- 背景・目的: ユーザーが、手元の作業フォルダ `D:\Codex\11y-agent-deploy` で開発し、GitHub をバックアップとして使う運用に変えた。変更は `main` に直接コミットして push し、ブランチと PR は使わない。これまでのデプロイ手順は、GitHub の `main` をデプロイ専用のフォルダへ `git reset --hard origin/main` で同期する前提だったので、開発中の変更を消すおそれがあった。
+- 主な変更内容:
+  - `goal2-app/CLOUD_RUN_DEPLOY.md`: 前提を手元の作業フォルダからのデプロイに書き替えた。同期の手順(`git clone`、`git reset --hard`)を外し、デプロイの前に、ブランチが `main` であること、コミットしていない変更が無いこと、手元と GitHub の `main` が同じであることを確かめる段を足した。`gcloud builds submit` はコミットしていない変更も送るためである。PR のブランチを試す説明を、push してから `--no-traffic --tag` で試す説明に替えた。よくあるつまずきの `git reset --hard` の節を、`git push` が拒否されたときの節に替えた。
+  - `.gitignore`: デプロイのたびに作り直す `goal2-app/public/build-info.json` を足した。
+  - `PROJECT_CONTEXT.md` の設計判断とデプロイの説明、`memory/project-state.md` の Decisions に新しい運用を書いた。PR を前提にしたレビュー体制の決め直しが要ることも書いた。
+- 関連ファイル: `goal2-app/CLOUD_RUN_DEPLOY.md`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-09-28: P1 Cloud Run に共通のパスワードを掛ける
 
