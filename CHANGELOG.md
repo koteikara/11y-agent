@@ -25,14 +25,14 @@
 
 - 背景・目的: 遠野市の指摘13。「次にやること」パネルは移動できるが、大きさを変えられなかった(`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 4.6)。
 - 主な変更内容:
-  - `goal2-app/public/app.js`: パネルの角にリサイズのつまみ(`button.page-agent-resize`)を足した。ドラッグと矢印キー(8px、Shift で40px)で大きさを変え、下限は 280×160、上限はビューポートから24pxを引いた値。大きさは `localStorage` の `goal2.pageAgentSize` に保存し、起動時に戻す。ウィンドウを縮めたときは、大きさも画面の中に収める。
+  - `goal2-app/public/app.js`: パネルの角にリサイズのつまみ(`button.page-agent-resize`)を足した。ドラッグと矢印キー(8px、Shift で40px)で大きさを変える。下限は 280×160 で、上限は、つまみの側の画面の端まで12pxを残す値(ビューポートから24pxを引いた値を超えない)。大きさは `localStorage` の `goal2.pageAgentSize` に保存し、起動時に戻す。ウィンドウを縮めたときは、大きさも画面の中に収める。
   - つまみは画面の中央を向いた角に付き、反対の角を止めて広げる。パネルの既定の位置は右下で、設計どおり右下のつまみにすると、右と下へ12pxしか広がらなかったためである。
   - 大きさの上限の定数は `init()` より前で宣言した。後ろに置くと、起動時の復元が宣言前の参照で例外になり、`try` に握りつぶされて大きさが戻らなかった(テストで見つけた)。
   - `goal2-app/public/styles.css`: 本文の部分(`.page-agent-body`)を分け、溢れたらその中でスクロールする。つまみを角丸の内側に収め、つまみのある側の余白を広げて、閉じるボタンや主ボタンと重ならないようにした。
-  - `goal2-app/test/goal2-output/run-output-tests.js` に 23a〜23g を足した(既定の位置での広がり方、移動、反対の角での広がり方、再読み込み、矢印キー、下限とパネル内のスクロール、画面からはみ出さないこと)。
-  - 設計書 4.6 に実装の記録と設計との差4つを書いた。`goal2-app/WORKER_GUIDE.md`(パネルの位置を「左下」から「右下」に直し、大きさの変え方を足した)と `public/verification-guide.html` に大きさを変えられることを書いた。
-- 検証: Node 24.19 で `npm test`、`test:llm`(33件)、`test:goal2-output`(251件。変更前は244件)、`test:table-nesting`(7件)、`test:michecker-parity`(223件)が通った。`test:saga-gold` は佐賀市 fixture が手元に無いので回していない。パネルの見た目はスクリーンショットで確かめた。手元に Playwright 1.56.1 と Chromium(CI と同じ版)を入れた。
-- レビュー: (push 前に記入)
+  - `goal2-app/test/goal2-output/run-output-tests.js` に 23a〜23j を足した(既定の位置での広がり方、移動、反対の角での広がり方、再読み込み、矢印キー、下限とパネル内のスクロール、画面の端までの広がり方、押し続けても縮まないこと、矢印キーの向きの説明、閉じている間のウィンドウの大きさの変化)。
+  - 設計書 4.6 に実装の記録と設計との差5つを書いた。`goal2-app/WORKER_GUIDE.md`(パネルの位置を「左下」から「右下」に直し、大きさの変え方を足した)と `public/verification-guide.html` に大きさを変えられることを書いた。
+- 検証: Node 24.19 で `npm test`、`test:llm`(33件)、`test:goal2-output`(254件。変更前は244件)、`test:table-nesting`(7件)、`test:michecker-parity`(223件)が通った。`test:saga-gold` は佐賀市 fixture が手元に無いので回していない。パネルの見た目はスクリーンショットで確かめた。手元に Playwright 1.56.1 と Chromium(CI と同じ版)を入れた。
+- レビュー: Fable が見た。要修正3件を直した。(1) 広げてパネルの中心が画面の中央を越えると、つまみの角が入れ替わり、同じ向きの操作で縮み始めた。角を決め直すのを、パネルを動かしたときとウィンドウの大きさが変わったときだけにした。(2) パネルを閉じている間にウィンドウの大きさが変わると、0×0 に測れたパネルが最小の大きさで左上に出た。閉じている間は大きさと位置を直さない。(3) どの矢印キーで大きくなるかが、つまみの名前から分からなかった。角に合わせた説明を `aria-describedby` で付けた。3件とも、直す前のコードで落ちるテスト(23h〜23j)を足した。提案のうち、`pointercancel` の扱い、つまみの当たり判定を24pxに広げること、パネルの中のボタンのフォーカスの枠を白にすること、定数とコメントの並び、上限の書き方を取り入れた。
 - 関連ファイル: `goal2-app/public/app.js`、`goal2-app/public/styles.css`、`goal2-app/test/goal2-output/run-output-tests.js`、`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md`、`goal2-app/WORKER_GUIDE.md`、`goal2-app/public/verification-guide.html`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 

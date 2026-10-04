@@ -3360,11 +3360,84 @@ async function main() {
     await dragBy(".page-agent-resize", 4000, 4000);
     const atMaximum = await panelRect();
     check(
-      "23g. 大きくしても画面の外へははみ出さない",
-      atMaximum.left >= 12 && atMaximum.top >= 12 && atMaximum.right <= 1280 - 12 && atMaximum.bottom <= 900 - 12,
+      "23g. 右下のつまみでは画面の端から12pxのところまで広がり、外へははみ出さない",
+      near(atMaximum.left, atMinimum.left) &&
+        near(atMaximum.top, atMinimum.top) &&
+        near(atMaximum.right, 1280 - 12) &&
+        near(atMaximum.bottom, 900 - 12),
       JSON.stringify(atMaximum)
     );
     await agentPage.close();
+
+    // 23h. 広げてパネルの中心が画面の中央を越えても、つまみの角は変わらない。変わると、
+    // 同じ向きの矢印キーで途中から縮み始める(レビューで見つけた)。
+    const growPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await growPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
+    await growPage.waitForSelector("#pageAgentPanel .page-agent-resize", { timeout: 15000 });
+    const growState = () =>
+      growPage.evaluate(() => {
+        const panel = document.getElementById("pageAgentPanel");
+        const r = panel.getBoundingClientRect();
+        return {
+          width: Math.round(r.width),
+          right: Math.round(r.right),
+          grip: panel.dataset.resizeGrip,
+          hint: document.getElementById("pageAgentResizeHint")?.textContent || "",
+        };
+      });
+    const growStart = await growState();
+    await growPage.focus("#pageAgentPanel .page-agent-resize");
+    const growWidths = [];
+    for (let i = 0; i < 40; i += 1) {
+      await growPage.keyboard.press("Shift+ArrowLeft");
+      growWidths.push((await growState()).width);
+    }
+    const growEnd = await growState();
+    check(
+      "23h. 同じ向きの矢印キーを押し続けても縮み始めず、つまみの角も変わらない",
+      growStart.grip === "top-left" &&
+        growEnd.grip === "top-left" &&
+        growWidths.every((w, i) => i === 0 || w >= growWidths[i - 1]) &&
+        near(growEnd.width, growStart.right - 12) &&
+        near(growEnd.right, growStart.right),
+      JSON.stringify({ growStart, growEnd, growWidths })
+    );
+    check(
+      "23i. つまみの説明は、どの矢印キーで大きくなるかを角に合わせて伝える",
+      growStart.hint.includes("左か上の矢印キーで大きく") &&
+        (await growPage.getAttribute("#pageAgentPanel .page-agent-resize", "aria-describedby")) === "pageAgentResizeHint",
+      growStart.hint
+    );
+    await growPage.close();
+
+    // 23j. 閉じている間にウィンドウの大きさが変わっても、次に出したときの大きさと位置を壊さない。
+    // 閉じたパネルは 0×0 に測れるので、以前は最小の大きさで左上に出ていた(レビューで見つけた)。
+    const hiddenPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await hiddenPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
+    await hiddenPage.waitForSelector("#pageAgentPanel .page-agent-resize", { timeout: 15000 });
+    await hiddenPage.focus("#pageAgentPanel .page-agent-resize");
+    for (let i = 0; i < 5; i += 1) await hiddenPage.keyboard.press("ArrowLeft");
+    const hiddenRect = () =>
+      hiddenPage.evaluate(() => {
+        const r = document.getElementById("pageAgentPanel").getBoundingClientRect();
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+      });
+    const beforeClose = await hiddenRect();
+    await hiddenPage.click("#pageAgentPanel .page-agent-close");
+    await hiddenPage.setViewportSize({ width: 1200, height: 850 });
+    await hiddenPage.waitForTimeout(200);
+    await hiddenPage.click("#resetButton");
+    await hiddenPage.waitForSelector("#pageAgentPanel:not([hidden]) .page-agent-resize", { timeout: 5000 });
+    const afterShow = await hiddenRect();
+    check(
+      "23j. 閉じている間にウィンドウを縮めても、出し直したパネルは同じ大きさで画面の中に出る",
+      near(afterShow.width, beforeClose.width) &&
+        near(afterShow.height, beforeClose.height) &&
+        afterShow.left + afterShow.width <= 1200 - 12 &&
+        afterShow.left > 12,
+      JSON.stringify({ beforeClose, afterShow })
+    );
+    await hiddenPage.close();
 
   } finally {
     if (browser) await browser.close();

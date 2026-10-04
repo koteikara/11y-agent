@@ -1331,10 +1331,23 @@ label {
   cursor: nwse-resize;
 }
 
+/* The visible grip is 16px, but the pointer target is 24px so it is easier to grab. */
+.page-agent-resize::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
 .page-agent-resize:hover,
 .page-agent-resize:focus-visible {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
+}
+
+/* The shared focus ring is a faint blue that disappears on the panel's blue background. */
+.page-agent-panel button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 .page-agent-resize-icon {

@@ -536,10 +536,6 @@
     micheckerChecklistList: document.getElementById("micheckerChecklistList"),
   };
 
-  // goal1.html loads this file for its analysis engine only — the goal2 screen's
-  // elements don't exist there, so running the UI init would throw on the first
-  // addEventListener. The engine surface (window.goal2Engine, defined near the end
-  // of this file) works either way.
   // Limits for resizing the "next step" panel. Declared before init() runs, because
   // init() restores the saved size and would otherwise hit these before they exist.
   const PAGE_AGENT_MIN_WIDTH = 280;
@@ -547,6 +543,10 @@
   const PAGE_AGENT_VIEWPORT_GAP = 24;
   const PAGE_AGENT_EDGE_MARGIN = 12;
 
+  // goal1.html loads this file for its analysis engine only — the goal2 screen's
+  // elements don't exist there, so running the UI init would throw on the first
+  // addEventListener. The engine surface (window.goal2Engine, defined near the end
+  // of this file) works either way.
   const uiReady = Boolean(els.analyzeButton && els.candidateList && els.htmlInput);
   if (uiReady) {
     init();
@@ -620,7 +620,7 @@
     els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentDrag);
     els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentResize);
     els.pageAgentPanel?.addEventListener("keydown", handlePageAgentDragHandleKeydown);
-    window.addEventListener("resize", ensurePageAgentInViewport);
+    window.addEventListener("resize", handlePageAgentWindowResize);
     els.previewFrame.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrame));
     els.previewFrameExpanded?.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrameExpanded));
     els.copyHtmlButton.addEventListener("click", () => copyText(els.finalHtml.value));
@@ -8643,7 +8643,8 @@
             .join("")}
         </div>
       </div>
-      <button type="button" class="page-agent-resize" data-page-agent-action="resize-handle" aria-label="矢印キーでパネルの大きさを変更" title="ドラッグか矢印キーで大きさを変更">${resizeGripIconSvg()}</button>
+      <button type="button" class="page-agent-resize" data-page-agent-action="resize-handle" aria-label="パネルの大きさを変更" aria-describedby="pageAgentResizeHint" title="${escapeHtml(pageAgentResizeHintText())}">${resizeGripIconSvg()}</button>
+      <span id="pageAgentResizeHint" class="visually-hidden">${escapeHtml(pageAgentResizeHintText())}</span>
     `;
     ensurePageAgentInViewport();
 
@@ -8915,6 +8916,7 @@
     const left = clamp(rect.left + delta[0], margin, maxLeft);
     const top = clamp(rect.top + delta[1], margin, maxTop);
     setPageAgentPosition(left, top);
+    updatePageAgentGripCorner();
     try {
       localStorage.setItem("goal2.pageAgentPosition", JSON.stringify({ left: Math.round(left), top: Math.round(top) }));
     } catch {
@@ -8935,7 +8937,8 @@
     els.pageAgentPanel.setPointerCapture?.(event.pointerId);
     event.preventDefault();
     window.addEventListener("pointermove", dragPageAgent);
-    window.addEventListener("pointerup", stopPageAgentDrag, { once: true });
+    window.addEventListener("pointerup", stopPageAgentDrag);
+    window.addEventListener("pointercancel", stopPageAgentDrag);
   }
 
   function dragPageAgent(event) {
@@ -8954,6 +8957,9 @@
     state.pageAgentDrag = null;
     els.pageAgentPanel.classList.remove("is-dragging");
     window.removeEventListener("pointermove", dragPageAgent);
+    window.removeEventListener("pointerup", stopPageAgentDrag);
+    window.removeEventListener("pointercancel", stopPageAgentDrag);
+    updatePageAgentGripCorner();
     const rect = els.pageAgentPanel.getBoundingClientRect();
     try {
       localStorage.setItem("goal2.pageAgentPosition", JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
@@ -8972,6 +8978,7 @@
       const left = clamp(saved.left, margin, Math.max(margin, window.innerWidth - rect.width - margin));
       const top = clamp(saved.top, margin, Math.max(margin, window.innerHeight - rect.height - margin));
       setPageAgentPosition(left, top);
+      updatePageAgentGripCorner();
     } catch {
       // Ignore invalid persisted values.
     }
@@ -8981,6 +8988,9 @@
   // The grip sits on the corner that faces the middle of the screen, and the
   // opposite corner stays put while resizing. The panel is docked bottom-right
   // by default, where a bottom-right grip could only grow by the 12px margin.
+  // The corner is chosen again only when the panel moves (or the window
+  // resizes), never while or after resizing: growing the panel moves its centre
+  // past the middle of the screen, and a flipped grip would then shrink it.
   function pageAgentGripCorner(rect) {
     return {
       left: rect.left + rect.width / 2 > window.innerWidth / 2,
@@ -8989,15 +8999,31 @@
   }
 
   function updatePageAgentGripCorner() {
-    if (!els.pageAgentPanel || state.pageAgentResize) return;
+    if (!els.pageAgentPanel || els.pageAgentPanel.hidden || state.pageAgentResize) return;
     const corner = pageAgentGripCorner(els.pageAgentPanel.getBoundingClientRect());
     els.pageAgentPanel.dataset.resizeGrip = `${corner.top ? "top" : "bottom"}-${corner.left ? "left" : "right"}`;
+    const hint = pageAgentResizeHintText();
+    els.pageAgentPanel.querySelector("#pageAgentResizeHint")?.replaceChildren(hint);
+    els.pageAgentPanel.querySelector(".page-agent-resize")?.setAttribute("title", hint);
+  }
+
+  function currentPageAgentGripCorner() {
+    const grip = els.pageAgentPanel?.dataset.resizeGrip;
+    if (!grip) return null;
+    return { top: grip.startsWith("top-"), left: grip.endsWith("-left") };
+  }
+
+  function pageAgentResizeHintText() {
+    const corner = currentPageAgentGripCorner() || { top: true, left: true };
+    const grow = `${corner.left ? "左" : "右"}か${corner.top ? "上" : "下"}`;
+    const shrink = `${corner.left ? "右" : "左"}か${corner.top ? "下" : "上"}`;
+    return `ドラッグするか、${grow}の矢印キーで大きく、${shrink}の矢印キーで小さくなります。`;
   }
 
   // The fixed edges are the ones away from the grip; the panel may grow up to
   // the viewport edge on the grip side.
   function pageAgentResizeFrame(rect) {
-    const corner = pageAgentGripCorner(rect);
+    const corner = currentPageAgentGripCorner() || pageAgentGripCorner(rect);
     const fixedX = corner.left ? rect.right : rect.left;
     const fixedY = corner.top ? rect.bottom : rect.top;
     const roomX = corner.left ? fixedX - PAGE_AGENT_EDGE_MARGIN : window.innerWidth - fixedX - PAGE_AGENT_EDGE_MARGIN;
@@ -9031,7 +9057,8 @@
     els.pageAgentPanel.classList.add("is-resizing");
     event.preventDefault();
     window.addEventListener("pointermove", resizePageAgent);
-    window.addEventListener("pointerup", stopPageAgentResize, { once: true });
+    window.addEventListener("pointerup", stopPageAgentResize);
+    window.addEventListener("pointercancel", stopPageAgentResize);
   }
 
   function resizePageAgent(event) {
@@ -9045,8 +9072,9 @@
     state.pageAgentResize = null;
     els.pageAgentPanel.classList.remove("is-resizing");
     window.removeEventListener("pointermove", resizePageAgent);
+    window.removeEventListener("pointerup", stopPageAgentResize);
+    window.removeEventListener("pointercancel", stopPageAgentResize);
     savePageAgentSize();
-    updatePageAgentGripCorner();
   }
 
   // Arrow keys move the grip by 8px, the same way a pointer drag would.
@@ -9106,8 +9134,16 @@
     els.pageAgentPanel.style.height = `${Math.round(height)}px`;
   }
 
+  function handlePageAgentWindowResize() {
+    ensurePageAgentInViewport();
+    updatePageAgentGripCorner();
+  }
+
+  // A dismissed panel is display:none and measures 0x0, so it is left alone
+  // until renderPageAgent() shows it again and calls this.
   function ensurePageAgentInViewport() {
-    if (els.pageAgentPanel?.style.width && els.pageAgentPanel.style.height) {
+    if (!els.pageAgentPanel || els.pageAgentPanel.hidden) return;
+    if (els.pageAgentPanel.style.width && els.pageAgentPanel.style.height) {
       const rect = els.pageAgentPanel.getBoundingClientRect();
       const width = clamp(rect.width, PAGE_AGENT_MIN_WIDTH, pageAgentViewportMaxWidth());
       const height = clamp(rect.height, PAGE_AGENT_MIN_HEIGHT, pageAgentViewportMaxHeight());
@@ -9115,8 +9151,8 @@
         setPageAgentSize(width, height);
       }
     }
-    updatePageAgentGripCorner();
-    if (!els.pageAgentPanel || !els.pageAgentPanel.style.left || !els.pageAgentPanel.style.top) return;
+    if (!els.pageAgentPanel.dataset.resizeGrip) updatePageAgentGripCorner();
+    if (!els.pageAgentPanel.style.left || !els.pageAgentPanel.style.top) return;
     const rect = els.pageAgentPanel.getBoundingClientRect();
     const margin = 12;
     const left = clamp(rect.left, margin, Math.max(margin, window.innerWidth - rect.width - margin));
@@ -9131,7 +9167,6 @@
     els.pageAgentPanel.style.top = `${Math.round(top)}px`;
     els.pageAgentPanel.style.right = "auto";
     els.pageAgentPanel.style.bottom = "auto";
-    updatePageAgentGripCorner();
   }
 
   function clamp(value, min, max) {
