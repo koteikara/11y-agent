@@ -19,6 +19,7 @@
 //  15. 見出しから導けないとき、1行目のセルを連結したキャプションを作っていた(指摘2)。
 //  16. h3が並ぶページで先頭の見出ししか直らなかった(指摘1)。
 //  17. 表の構造変換の手段が、要確認のまま一括採用で自動採用されていた(PR-2.5)。
+//  23. 「次にやること」パネルの大きさを変えられなかった(指摘13、設計書 4.6)。
 //
 // 構造変更1 S4(画面と証跡):
 //  21. 取り下げた候補が証跡に出ていなかった。orphaned が「修正が失われた」と区別されていなかった。
@@ -3255,6 +3256,115 @@ async function main() {
       JSON.stringify(goal1Names)
     );
     await goal1Page.close();
+
+    // 23. 「次にやること」パネルの大きさ(指摘13)。新しいコンテキストで開き、保存した大きさと位置の影響を受けないようにする。
+    const agentPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await agentPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load" });
+    await agentPage.waitForSelector("#pageAgentPanel .page-agent-resize", { timeout: 15000 });
+    const panelRect = () =>
+      agentPage.evaluate(() => {
+        const r = document.getElementById("pageAgentPanel").getBoundingClientRect();
+        return { left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) };
+      });
+    const dragBy = async (selector, dx, dy) => {
+      const box = await agentPage.locator(`#pageAgentPanel ${selector}`).boundingBox();
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await agentPage.mouse.move(x, y);
+      await agentPage.mouse.down();
+      await agentPage.mouse.move(x + dx, y + dy, { steps: 8 });
+      await agentPage.mouse.up();
+    };
+    const near = (a, b) => Math.abs(a - b) <= 1;
+
+    const gripCorner = () => agentPage.evaluate(() => document.getElementById("pageAgentPanel").dataset.resizeGrip);
+
+    // 既定では右下に寄っているので、つまみは左上に付き、右下の角を止めて左上へ広がる。
+    const beforeResize = await panelRect();
+    const defaultGrip = await gripCorner();
+    await dragBy(".page-agent-resize", -80, -60);
+    const afterResize = await panelRect();
+    check(
+      "23a. 右下に寄ったパネルは左上のつまみで広がり、右下の角は動かない",
+      defaultGrip === "top-left" &&
+        near(afterResize.width, beforeResize.width + 80) &&
+        near(afterResize.height, beforeResize.height + 60) &&
+        near(afterResize.right, beforeResize.right) &&
+        near(afterResize.bottom, beforeResize.bottom),
+      JSON.stringify({ defaultGrip, beforeResize, afterResize })
+    );
+
+    // 本体を画面の左上へ動かすと、つまみは右下に移る。
+    await dragBy(".page-agent-kicker", 100 - afterResize.left, 80 - afterResize.top);
+    const afterMove = await panelRect();
+    const movedGrip = await gripCorner();
+    check(
+      "23b. 本体をドラッグすると位置が変わり、大きさは変わらない。左上に寄せるとつまみは右下に付く",
+      near(afterMove.left, 100) &&
+        near(afterMove.top, 80) &&
+        near(afterMove.width, afterResize.width) &&
+        near(afterMove.height, afterResize.height) &&
+        movedGrip === "bottom-right",
+      JSON.stringify({ afterResize, afterMove, movedGrip })
+    );
+
+    await dragBy(".page-agent-resize", 50, 40);
+    const afterGrow = await panelRect();
+    check(
+      "23c. 右下のつまみでは左上の角が動かずに広がる",
+      near(afterGrow.width, afterMove.width + 50) &&
+        near(afterGrow.height, afterMove.height + 40) &&
+        near(afterGrow.left, afterMove.left) &&
+        near(afterGrow.top, afterMove.top),
+      JSON.stringify({ afterMove, afterGrow })
+    );
+
+    await agentPage.reload({ waitUntil: "load" });
+    await agentPage.waitForSelector("#pageAgentPanel .page-agent-resize", { timeout: 15000 });
+    const afterReload = await panelRect();
+    check(
+      "23d. 再読み込みのあとも大きさと位置が戻る",
+      near(afterReload.width, afterGrow.width) &&
+        near(afterReload.height, afterGrow.height) &&
+        near(afterReload.left, afterGrow.left) &&
+        near(afterReload.top, afterGrow.top),
+      JSON.stringify({ afterGrow, afterReload })
+    );
+
+    await agentPage.focus("#pageAgentPanel .page-agent-resize");
+    await agentPage.keyboard.press("ArrowRight");
+    await agentPage.keyboard.press("ArrowDown");
+    const afterKeys = await panelRect();
+    const gripStillFocused = await agentPage.evaluate(() => document.activeElement?.classList.contains("page-agent-resize"));
+    check(
+      "23e. つまみにフォーカスして矢印キーを押すと、つまみが8pxずつ動いて大きさが変わる",
+      near(afterKeys.width, afterReload.width + 8) &&
+        near(afterKeys.height, afterReload.height + 8) &&
+        near(afterKeys.left, afterReload.left) &&
+        gripStillFocused,
+      JSON.stringify({ afterReload, afterKeys, gripStillFocused })
+    );
+
+    await dragBy(".page-agent-resize", -2000, -2000);
+    const atMinimum = await panelRect();
+    const bodyScrolls = await agentPage.evaluate(() => {
+      const body = document.querySelector("#pageAgentPanel .page-agent-body");
+      return body.scrollHeight > body.clientHeight;
+    });
+    check(
+      "23f. 小さくしても 280×160 で止まり、溢れた中身はパネルの中でスクロールする",
+      atMinimum.width === 280 && atMinimum.height === 160 && near(atMinimum.left, afterKeys.left) && bodyScrolls,
+      JSON.stringify({ atMinimum, bodyScrolls })
+    );
+
+    await dragBy(".page-agent-resize", 4000, 4000);
+    const atMaximum = await panelRect();
+    check(
+      "23g. 大きくしても画面の外へははみ出さない",
+      atMaximum.left >= 12 && atMaximum.top >= 12 && atMaximum.right <= 1280 - 12 && atMaximum.bottom <= 900 - 12,
+      JSON.stringify(atMaximum)
+    );
+    await agentPage.close();
 
   } finally {
     if (browser) await browser.close();

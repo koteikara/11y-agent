@@ -86,6 +86,8 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P2 のうち、3.5 の画面の変更の1と2、4章 P2 の4を実装した(PR #153、2026-09-28)。Goal 2 に「証跡JSONを保存」を足し、証跡の JSON と CSV を `<日時>_<題名>_<ページの識別>_evidence.<拡張子>` で保存する。GOAL1 の書き出し(バッチ JSON、一覧 CSV、証跡 CSV)は先頭に書き出した日時を付けた。名前は `public/evidence-filename.js` で作り、日本時間は UTC に9時間を足して作る。`WORKER_GUIDE.md` に共有ドライブの保存先と手順の節を足した。証跡の中身は変えていない。ページの識別は設計書の10文字ではなく8文字のハッシュであることが分かり、ユーザーの確認を得て設計書の 2.3 と 3.5 の決まりと例を8文字に直した。「作業者」欄はこれまでどおり作業者が書く(3.5)
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1「Cloud Run に共通のパスワードを掛ける」を実装した(PR #154、2026-09-28)。`APP_PASSWORD` があるときは `GET /api/health` を除くすべての要求で HTTP の Basic 認証を求め、両方を SHA-256 にしてから `crypto.timingSafeEqual()` で比べる。Cloud Run で `APP_PASSWORD` が無いか16文字より短いときは 503 を返し、起動時にエラーを1行出す。`/api/` の要求は、パスワードの有無にかかわらず、`Sec-Fetch-Site` が `same-origin` か `none` でなければ 403 にする。確かめる処理は `lib/app-auth.js`、テストは `test/app-auth/`。確かめる順(`Host`、`Sec-Fetch-Site`、パスワード、POST の送り元)と設計との差4つは設計書の 4章 P1 に書いた。本番のシークレットの作成とデプロイ(「本番への適用」)はマージ後にユーザーが行い、そのとき「P1 より前の最後のリビジョン」と「P1 の最初のリビジョン」の名前をここに記録する
 
+- `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の 4.6「操作パネルの大きさを変えられない」(指摘13)を直した(2026-10-04、main 直接)。「次にやること」パネルの角につまみを足し、ドラッグと矢印キーで大きさを変え、再読み込みのあとも戻す。つまみは画面の中央を向いた角に付く。設計との差は設計書 4.6 の「実装の記録」にある。手元に Playwright 1.56.1 と Chromium を入れ、CI と同じブラウザのテストを push 前に回せるようにした。
+
 ## Decisions
 
 - 開発の進め方（2026-10-04 ユーザー確定）: 手元の作業フォルダ `D:\Codex\11y-agent-deploy` で開発し、`main` に直接コミットして `git push origin main` する。GitHub はバックアップとして使い、ブランチと PR は使わない。CI は `main` への push で走る。デプロイも同じフォルダから、push 済みの `main` だけを送る（`goal2-app/CLOUD_RUN_DEPLOY.md`）。push の前に、手元で Fable のサブエージェントに `origin/main..HEAD` の差分をレビューさせ、要修正の指摘を直してから push する（2026-10-04 ユーザー確定。手順は `AGENTS.md` の Agent Working Policy）。指摘に同意できないときはユーザーが判断する。
@@ -154,7 +156,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 ### コード未着手（設計書あり、担当は Opus）
 
 - 構造変更1 S5「GOAL1 のループ化」（`goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.13）。S3 と S4 からの申し送り（GOAL1 の証跡の `null` のキー、段落を作り替える候補の排他グループなど）を同時に入れる。
-- 遠野市フィードバックの 4.6（操作パネルの大きさ）、4.7（通常のテキストに見出しを提案する）、4.8（写真の文字まで文字起こしする）。4.7 と 4.8 は AI への指示の変更なので、評価の結果を添える。
+- 遠野市フィードバックの 4.7（通常のテキストに見出しを提案する）、4.8（写真の文字まで文字起こしする）。AI への指示の変更なので、評価の結果を添える。4.6 は 2026-10-04 に済んだ。
 - LLM L3「本番の切り替え」（`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` 4章 L3、本番運用の P3）。P3 で足す決まり（本番で `LLM_RECORD_DIR` が設定されていたら書き出さずに警告する）と、発注元と自治体への説明文の案を含む。
 - 「AIで再確認」ボタン（`TONO_FEEDBACK_FIX_INSTRUCTIONS.md` 3.9、3.14）。AI が書き替えた候補の `after_html` が古いまま当たる制限（3.6）が残っている。
 - issue #136（`text.partial-date` が「1/2」を日付と判定する）。ルール側の別件で、構造変更1では扱わない。
@@ -182,7 +184,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 2. ユーザーが P1 を本番に適用する。
 3. ユーザーが `goal2-app.exe` を作り直して配り直す。
 4. ユーザーが共有ドライブのフォルダーを用意する。
-5. 1〜4 と並行して、Opus が手元で小さめの作業を進める。順に、このファイルの整理、`goal2-app/.gcloudignore`、`npx esbuild` と `npx postject` の版の固定、4.6(4.6 より前の3つは 2026-10-04 に済んだ)。
+5. 1〜4 と並行して、Opus が手元で小さめの作業を進める。順に、このファイルの整理、`goal2-app/.gcloudignore`、`npx esbuild` と `npx postject` の版の固定、4.6(4つとも 2026-10-04 に済んだ)。
 6. Opus が S5 を進める。P1 を適用し、本番で S4 が落ち着いてから始める。手元に Playwright と佐賀市 fixture（`.tmp-gemini-a11y-agent`）を置いてから push する。
 7. Opus が 4.7 と 4.8 を進める。
 8. L2 の人の判定と、L3 に要る決定がそろってから L3 を進める。

@@ -1274,8 +1274,11 @@ label {
   z-index: 30;
   display: grid;
   grid-template-columns: 1fr;
+  /* The body row takes the rest of the height and scrolls when a resized panel is too short. */
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   width: min(400px, calc(100vw - 48px));
+  max-height: calc(100vh - 24px);
   padding: 18px;
   border: 0;
   border-radius: var(--radius-xl);
@@ -1295,6 +1298,91 @@ label {
   box-shadow:
     0 10px 30px rgba(13, 20, 38, 0.24),
     0 24px 56px rgba(13, 20, 38, 0.18);
+}
+
+.page-agent-panel.is-resizing {
+  cursor: nwse-resize;
+}
+
+.page-agent-body {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Like the drag handle, the resize grip stays quiet until hovered or focused.
+   8px keeps the 16px grip inside the 26px rounded corner. */
+.page-agent-resize {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: nwse-resize;
+}
+
+.page-agent-resize:hover,
+.page-agent-resize:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.page-agent-resize-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* app.js sets data-resize-grip to the corner that faces the middle of the screen.
+   The padding on the grip's side keeps it clear of the close and action buttons. */
+.page-agent-panel[data-resize-grip^="top-"] {
+  padding-top: 26px;
+}
+
+.page-agent-panel[data-resize-grip^="bottom-"] {
+  padding-bottom: 26px;
+}
+
+.page-agent-panel[data-resize-grip^="top-"] .page-agent-resize {
+  top: 8px;
+  bottom: auto;
+}
+
+.page-agent-panel[data-resize-grip$="-left"] .page-agent-resize {
+  left: 8px;
+  right: auto;
+}
+
+.page-agent-panel[data-resize-grip="top-right"] .page-agent-resize,
+.page-agent-panel[data-resize-grip="bottom-left"] .page-agent-resize,
+.page-agent-panel[data-resize-grip="top-right"].is-resizing,
+.page-agent-panel[data-resize-grip="bottom-left"].is-resizing {
+  cursor: nesw-resize;
+}
+
+.page-agent-panel[data-resize-grip="top-left"] .page-agent-resize-icon {
+  transform: scale(-1, -1);
+}
+
+.page-agent-panel[data-resize-grip="top-right"] .page-agent-resize-icon {
+  transform: scaleY(-1);
+}
+
+.page-agent-panel[data-resize-grip="bottom-left"] .page-agent-resize-icon {
+  transform: scaleX(-1);
 }
 
 .page-agent-panel.phase-input {

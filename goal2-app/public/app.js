@@ -430,6 +430,7 @@
     quickEditOpen: false,
     selectedSampleId: inputSamples[0].id,
     pageAgentDrag: null,
+    pageAgentResize: null,
     pageAgentDismissed: false,
     ruleScopeMode: "kb",
     llmUsage: { calls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedCostJpy: 0 },
@@ -539,6 +540,13 @@
   // elements don't exist there, so running the UI init would throw on the first
   // addEventListener. The engine surface (window.goal2Engine, defined near the end
   // of this file) works either way.
+  // Limits for resizing the "next step" panel. Declared before init() runs, because
+  // init() restores the saved size and would otherwise hit these before they exist.
+  const PAGE_AGENT_MIN_WIDTH = 280;
+  const PAGE_AGENT_MIN_HEIGHT = 160;
+  const PAGE_AGENT_VIEWPORT_GAP = 24;
+  const PAGE_AGENT_EDGE_MARGIN = 12;
+
   const uiReady = Boolean(els.analyzeButton && els.candidateList && els.htmlInput);
   if (uiReady) {
     init();
@@ -546,6 +554,7 @@
 
   async function init() {
     bindEvents();
+    restorePageAgentSize();
     restorePageAgentPosition();
     await loadSagaSamples();
     populateSampleSelect();
@@ -609,6 +618,7 @@
     });
     els.pageAgentPanel?.addEventListener("click", handlePageAgentAction);
     els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentDrag);
+    els.pageAgentPanel?.addEventListener("pointerdown", startPageAgentResize);
     els.pageAgentPanel?.addEventListener("keydown", handlePageAgentDragHandleKeydown);
     window.addEventListener("resize", ensurePageAgentInViewport);
     els.previewFrame.addEventListener("load", () => scrollPreviewToSelectedCandidate(els.previewFrame));
@@ -8620,17 +8630,20 @@
           <button type="button" class="page-agent-close" data-page-agent-action="close" aria-label="次にやることパネルを閉じる" title="閉じる">${closeIconSvg()}</button>
         </div>
       </div>
-      <h3>${escapeHtml(nextTask.title)}</h3>
-      <p>${escapeHtml(nextTask.body)}</p>
-      <div class="page-agent-actions">
-        <button type="button" class="primary" data-page-agent-action="${escapeHtml(nextTask.action)}" ${nextTask.disabled ? "disabled" : ""}>${escapeHtml(nextTask.label)}</button>
-        ${secondaryActions
-          .map(
-            (action) =>
-              `<button type="button" data-page-agent-action="${escapeHtml(action.action)}" ${action.disabled ? "disabled" : ""}>${escapeHtml(action.label)}</button>`
-          )
-          .join("")}
+      <div class="page-agent-body">
+        <h3>${escapeHtml(nextTask.title)}</h3>
+        <p>${escapeHtml(nextTask.body)}</p>
+        <div class="page-agent-actions">
+          <button type="button" class="primary" data-page-agent-action="${escapeHtml(nextTask.action)}" ${nextTask.disabled ? "disabled" : ""}>${escapeHtml(nextTask.label)}</button>
+          ${secondaryActions
+            .map(
+              (action) =>
+                `<button type="button" data-page-agent-action="${escapeHtml(action.action)}" ${action.disabled ? "disabled" : ""}>${escapeHtml(action.label)}</button>`
+            )
+            .join("")}
+        </div>
       </div>
+      <button type="button" class="page-agent-resize" data-page-agent-action="resize-handle" aria-label="矢印キーでパネルの大きさを変更" title="ドラッグか矢印キーで大きさを変更">${resizeGripIconSvg()}</button>
     `;
     ensurePageAgentInViewport();
 
@@ -8652,6 +8665,14 @@
     return `
       <svg class="move-drag-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
         <path d="M12 3v18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12h18M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+      </svg>
+    `;
+  }
+
+  function resizeGripIconSvg() {
+    return `
+      <svg class="page-agent-resize-icon" viewBox="0 0 16 16" focusable="false" aria-hidden="true">
+        <path d="M14 6L6 14M14 10l-4 4" />
       </svg>
     `;
   }
@@ -8872,6 +8893,10 @@
   }
 
   function handlePageAgentDragHandleKeydown(event) {
+    if (event.target.closest(".page-agent-resize")) {
+      handlePageAgentResizeKeydown(event);
+      return;
+    }
     if (!event.target.closest(".page-agent-drag")) return;
     const step = event.shiftKey ? 40 : 16;
     const deltas = {
@@ -8952,7 +8977,145 @@
     }
   }
 
+  // The resize grip is a button, so startPageAgentDrag() already ignores it.
+  // The grip sits on the corner that faces the middle of the screen, and the
+  // opposite corner stays put while resizing. The panel is docked bottom-right
+  // by default, where a bottom-right grip could only grow by the 12px margin.
+  function pageAgentGripCorner(rect) {
+    return {
+      left: rect.left + rect.width / 2 > window.innerWidth / 2,
+      top: rect.top + rect.height / 2 > window.innerHeight / 2,
+    };
+  }
+
+  function updatePageAgentGripCorner() {
+    if (!els.pageAgentPanel || state.pageAgentResize) return;
+    const corner = pageAgentGripCorner(els.pageAgentPanel.getBoundingClientRect());
+    els.pageAgentPanel.dataset.resizeGrip = `${corner.top ? "top" : "bottom"}-${corner.left ? "left" : "right"}`;
+  }
+
+  // The fixed edges are the ones away from the grip; the panel may grow up to
+  // the viewport edge on the grip side.
+  function pageAgentResizeFrame(rect) {
+    const corner = pageAgentGripCorner(rect);
+    const fixedX = corner.left ? rect.right : rect.left;
+    const fixedY = corner.top ? rect.bottom : rect.top;
+    const roomX = corner.left ? fixedX - PAGE_AGENT_EDGE_MARGIN : window.innerWidth - fixedX - PAGE_AGENT_EDGE_MARGIN;
+    const roomY = corner.top ? fixedY - PAGE_AGENT_EDGE_MARGIN : window.innerHeight - fixedY - PAGE_AGENT_EDGE_MARGIN;
+    return {
+      corner,
+      fixedX,
+      fixedY,
+      width: rect.width,
+      height: rect.height,
+      maxWidth: Math.max(PAGE_AGENT_MIN_WIDTH, Math.min(window.innerWidth - PAGE_AGENT_VIEWPORT_GAP, roomX)),
+      maxHeight: Math.max(PAGE_AGENT_MIN_HEIGHT, Math.min(window.innerHeight - PAGE_AGENT_VIEWPORT_GAP, roomY)),
+    };
+  }
+
+  // dx and dy are how far the grip moved, so dragging away from the fixed corner enlarges the panel.
+  function applyPageAgentResize(frame, dx, dy) {
+    const width = clamp(frame.width + (frame.corner.left ? -dx : dx), PAGE_AGENT_MIN_WIDTH, frame.maxWidth);
+    const height = clamp(frame.height + (frame.corner.top ? -dy : dy), PAGE_AGENT_MIN_HEIGHT, frame.maxHeight);
+    setPageAgentSize(width, height);
+    setPageAgentPosition(
+      frame.corner.left ? frame.fixedX - width : frame.fixedX,
+      frame.corner.top ? frame.fixedY - height : frame.fixedY
+    );
+  }
+
+  function startPageAgentResize(event) {
+    if (event.button !== 0 || !event.target.closest(".page-agent-resize")) return;
+    const frame = pageAgentResizeFrame(els.pageAgentPanel.getBoundingClientRect());
+    state.pageAgentResize = { frame, startX: event.clientX, startY: event.clientY };
+    els.pageAgentPanel.classList.add("is-resizing");
+    event.preventDefault();
+    window.addEventListener("pointermove", resizePageAgent);
+    window.addEventListener("pointerup", stopPageAgentResize, { once: true });
+  }
+
+  function resizePageAgent(event) {
+    if (!state.pageAgentResize) return;
+    const { frame, startX, startY } = state.pageAgentResize;
+    applyPageAgentResize(frame, event.clientX - startX, event.clientY - startY);
+  }
+
+  function stopPageAgentResize() {
+    if (!state.pageAgentResize) return;
+    state.pageAgentResize = null;
+    els.pageAgentPanel.classList.remove("is-resizing");
+    window.removeEventListener("pointermove", resizePageAgent);
+    savePageAgentSize();
+    updatePageAgentGripCorner();
+  }
+
+  // Arrow keys move the grip by 8px, the same way a pointer drag would.
+  function handlePageAgentResizeKeydown(event) {
+    const step = event.shiftKey ? 40 : 8;
+    const deltas = {
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+    };
+    const delta = deltas[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    applyPageAgentResize(pageAgentResizeFrame(els.pageAgentPanel.getBoundingClientRect()), delta[0], delta[1]);
+    savePageAgentSize();
+  }
+
+  function savePageAgentSize() {
+    const rect = els.pageAgentPanel.getBoundingClientRect();
+    try {
+      localStorage.setItem(
+        "goal2.pageAgentSize",
+        JSON.stringify({ width: Math.round(rect.width), height: Math.round(rect.height) })
+      );
+      localStorage.setItem("goal2.pageAgentPosition", JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+    } catch {
+      // Size persistence is optional.
+    }
+  }
+
+  // Runs before restorePageAgentPosition() so the position is clamped with the restored size.
+  function restorePageAgentSize() {
+    if (!els.pageAgentPanel) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem("goal2.pageAgentSize") || "null");
+      if (!saved || typeof saved.width !== "number" || typeof saved.height !== "number") return;
+      setPageAgentSize(
+        clamp(saved.width, PAGE_AGENT_MIN_WIDTH, pageAgentViewportMaxWidth()),
+        clamp(saved.height, PAGE_AGENT_MIN_HEIGHT, pageAgentViewportMaxHeight())
+      );
+    } catch {
+      // Ignore invalid persisted values.
+    }
+  }
+
+  function pageAgentViewportMaxWidth() {
+    return Math.max(PAGE_AGENT_MIN_WIDTH, window.innerWidth - PAGE_AGENT_VIEWPORT_GAP);
+  }
+
+  function pageAgentViewportMaxHeight() {
+    return Math.max(PAGE_AGENT_MIN_HEIGHT, window.innerHeight - PAGE_AGENT_VIEWPORT_GAP);
+  }
+
+  function setPageAgentSize(width, height) {
+    els.pageAgentPanel.style.width = `${Math.round(width)}px`;
+    els.pageAgentPanel.style.height = `${Math.round(height)}px`;
+  }
+
   function ensurePageAgentInViewport() {
+    if (els.pageAgentPanel?.style.width && els.pageAgentPanel.style.height) {
+      const rect = els.pageAgentPanel.getBoundingClientRect();
+      const width = clamp(rect.width, PAGE_AGENT_MIN_WIDTH, pageAgentViewportMaxWidth());
+      const height = clamp(rect.height, PAGE_AGENT_MIN_HEIGHT, pageAgentViewportMaxHeight());
+      if (Math.round(width) !== Math.round(rect.width) || Math.round(height) !== Math.round(rect.height)) {
+        setPageAgentSize(width, height);
+      }
+    }
+    updatePageAgentGripCorner();
     if (!els.pageAgentPanel || !els.pageAgentPanel.style.left || !els.pageAgentPanel.style.top) return;
     const rect = els.pageAgentPanel.getBoundingClientRect();
     const margin = 12;
@@ -8968,6 +9131,7 @@
     els.pageAgentPanel.style.top = `${Math.round(top)}px`;
     els.pageAgentPanel.style.right = "auto";
     els.pageAgentPanel.style.bottom = "auto";
+    updatePageAgentGripCorner();
   }
 
   function clamp(value, min, max) {
