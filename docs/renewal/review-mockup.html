@@ -3,210 +3,368 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>移行ページの確認(モックアップ)</title>
+<title>校正台(移行ページの確認のモックアップ)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Shippori+Mincho+B1:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --text: #1b2230;
-    --muted: #4a5468;
-    --line: #d3d8e2;
-    --control: #8a93a6;
-    --surface: #ffffff;
-    --ground: #f4f5f7;
-    --select: #1f3f8f;
-    --del: #b4232c;
-    --del-bg: #fde8e7;
-    --ins: #0f6b5c;
-    --ins-bg: #e0f4ef;
-    --warn: #8a5a00;
-    --warn-bg: #fff3d6;
-    --tag: #5b3fa0;
-    --tag-bg: #efeafb;
-    --sans: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif;
-    --mono: "BIZ UDGothic", Consolas, monospace;
+    --ground: #efe9dd;
+    --paper: #fbf8f1;
+    --ink: #1d1a16;
+    --ink-soft: #5b5346;
+    --rule: #d8cfbd;
+    --control: #8f8574;
+    --shu: #b3311f;
+    --shu-bg: #fbe9e4;
+    --ai: #1f4a86;
+    --ai-bg: #e6edf8;
+    --karashi: #7a5300;
+    --karashi-bg: #f8eccb;
+    --murasaki: #5a3d8a;
+    --murasaki-bg: #efe9f6;
+    --marker: #fff1a8;
+    --mincho: "Shippori Mincho B1", "Yu Mincho", "YuMincho", serif;
+    --sans: "Zen Kaku Gothic New", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif;
+    --mono: "JetBrains Mono", "BIZ UDGothic", Consolas, monospace;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+    --shadow-paper: 0 1px 0 rgba(29, 26, 22, .04), 0 18px 40px -24px rgba(29, 26, 22, .28);
+    --shadow-lift: 0 8px 20px -12px rgba(29, 26, 22, .35);
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .11  0 0 0 0 .10  0 0 0 0 .08  0 0 0 .055 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
-    background: var(--ground);
-    color: var(--text);
+    background: var(--grain), var(--ground);
+    color: var(--ink);
     font-family: var(--sans);
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.7;
     display: grid;
     grid-template-rows: auto 1fr auto;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
   button, input, select, textarea { font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  :focus-visible { outline: 2px solid var(--ai); outline-offset: 2px; border-radius: 4px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .mono { font-family: var(--mono); }
+  .mincho { font-family: var(--mincho); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 
-  /* 案件の帯 */
+  /* キー(鍵盤) */
+  kbd {
+    display: inline-block; font-family: var(--mono); font-size: 11px; line-height: 16px; min-width: 18px; text-align: center;
+    padding: 0 4px; margin-left: 6px; border: 1px solid var(--control); border-radius: 4px; background: var(--paper);
+    box-shadow: 0 2px 0 var(--control); color: var(--ink-soft); transform: translateY(-1px);
+  }
+
+  .button {
+    display: inline-flex; align-items: center; gap: 2px;
+    border: 1px solid var(--control); border-radius: 4px; background: var(--paper); padding: 3px 10px; cursor: pointer;
+    transition: border-color 120ms var(--ease), background-color 120ms var(--ease);
+  }
+  .button:hover { border-color: var(--ink); background: #fffdf8; }
+  .button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .button[aria-pressed="true"] kbd { background: transparent; color: var(--paper); border-color: var(--paper); box-shadow: none; }
+
+  /* ===== 案件の帯 ===== */
   .project-bar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
-    padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: auto minmax(320px, 1fr) auto; align-items: center; gap: 12px 32px;
+    padding: 14px 24px 12px;
   }
-  .project-bar h1 { font-size: 16px; margin: 0; }
-  .project-bar dl { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; }
-  .project-bar dl div { display: flex; gap: 4px; align-items: baseline; }
-  .project-bar dt { color: var(--muted); font-size: 12px; }
-  .project-bar dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .project-bar .help-button { margin-left: auto; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-seal {
+    width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--shu); color: var(--shu);
+    display: grid; place-items: center; font-family: var(--mincho); font-weight: 800; font-size: 18px;
+    transform: rotate(-6deg); box-shadow: inset 0 0 0 2px var(--ground), inset 0 0 0 3px var(--shu);
+  }
+  .brand h1 { margin: 0; font-family: var(--mincho); font-weight: 800; font-size: 32px; line-height: 1.1; letter-spacing: .04em; }
+  .brand .sub { display: block; font-size: 12px; color: var(--ink-soft); letter-spacing: .08em; }
+  .ledger { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 4px 20px; }
+  .ledger-figure { font-family: var(--mincho); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .ledger-figure .big { font-size: 32px; letter-spacing: .02em; }
+  .ledger-figure .of { font-size: 14px; color: var(--ink-soft); margin-left: 6px; }
+  .ledger-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--paper); box-shadow: inset 0 0 0 1px var(--rule); margin-bottom: 6px; }
+  .ledger-bar span { display: block; height: 100%; transform-origin: left; animation: grow 400ms var(--ease) both; }
+  .seg-done { background: var(--ink); }
+  .seg-t2 { background: repeating-linear-gradient(135deg, var(--shu) 0 3px, #d0705f 3px 6px); }
+  .seg-t1 { background: var(--control); }
+  .seg-t0 { background: var(--rule); }
+  @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .ledger-legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; font-size: 12px; color: var(--ink-soft); }
+  .ledger-legend div { display: flex; align-items: center; gap: 6px; }
+  .ledger-legend dt::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .ledger-legend .l-done dt::before { background: var(--ink); }
+  .ledger-legend .l-t2 dt::before { background: var(--shu); }
+  .ledger-legend .l-t1 dt::before { background: var(--control); }
+  .ledger-legend .l-t0 dt::before { background: var(--rule); box-shadow: inset 0 0 0 1px var(--control); }
+  .ledger-legend dd { margin: 0; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .day { display: flex; gap: 24px; align-items: center; }
+  .day dl { margin: 0; display: flex; gap: 20px; }
+  .day dt { font-size: 12px; color: var(--ink-soft); }
+  .day dd { margin: 0; font-family: var(--mincho); font-weight: 700; font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .day dd small { font-size: 12px; font-family: var(--sans); font-weight: 500; margin-left: 2px; }
+  .tools { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 
-  /* 3列 */
+  /* ===== 3列 ===== */
   .workspace {
-    display: grid;
-    grid-template-columns: 300px minmax(0, 1fr) 380px;
-    min-height: 0;
+    display: grid; grid-template-columns: 300px minmax(0, 1fr) 372px; gap: 12px;
+    min-height: 0; padding: 0 12px 0;
   }
-  .column { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--surface); }
-  .column:last-child { border-right: 0; }
-  .column-head { padding: 8px 12px; border-bottom: 1px solid var(--line); }
-  .column-head h2 { font-size: 16px; margin: 0; }
-  .column-body { overflow: auto; min-height: 0; flex: 1; }
+  .column {
+    min-height: 0; display: flex; flex-direction: column;
+    background: var(--paper); border-radius: 6px; box-shadow: var(--shadow-paper), 0 0 0 1px rgba(29, 26, 22, .06);
+  }
+  .column-head { padding: 12px 16px 10px; border-bottom: 1px solid var(--rule); }
+  .column-head h2 { font-family: var(--mincho); font-weight: 700; font-size: 18px; margin: 0; letter-spacing: .04em; }
+  .column-body { overflow: auto; min-height: 0; flex: 1; scrollbar-width: thin; scrollbar-color: var(--control) transparent; }
   @media (max-width: 1099px) {
-    body { overflow: auto; }
+    html, body { height: auto; }
+    body { overflow: auto; display: block; }
+    .project-bar { grid-template-columns: 1fr; }
+    .day { flex-wrap: wrap; }
+    .tools { flex-direction: row; flex-wrap: wrap; }
     .workspace { grid-template-columns: 280px minmax(0, 1fr); }
-    .candidates-column { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+    .queue-column, .diff-column { height: 72vh; }
+    .candidates-column { grid-column: 1 / -1; margin-top: 0; }
+    .candidates-column .column-body { overflow: visible; }
+    .confirm-bar { position: sticky; bottom: 0; z-index: 2; }
   }
 
-  /* 待ち行列 */
-  .queue-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
-  .queue-filters select { padding: 0 4px; border: 1px solid var(--control); border-radius: 4px; background: var(--surface); }
+  /* ===== 待ち行列 ===== */
+  .queue-filters { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+  .queue-filters select { padding: 0 6px; border: 1px solid var(--control); border-radius: 4px; background: var(--paper); }
   .queue-list { list-style: none; margin: 0; padding: 0; }
   .queue-item {
-    display: grid; grid-template-columns: 1fr auto; gap: 0 8px; width: 100%;
-    padding: 8px 12px 8px 9px; border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--line);
+    position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; gap: 0 10px;
+    width: 100%; height: 80px; padding: 8px 16px 8px 13px; overflow: hidden;
+    border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--rule);
     background: none; text-align: left; cursor: pointer;
+    transition: background-color 160ms var(--ease), box-shadow 160ms var(--ease);
   }
-  .queue-item[aria-current="true"] { border-left-color: var(--select); background: #f7f8fb; }
-  .queue-item .qi-id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .queue-item .qi-title { grid-column: 1 / 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .queue-item .qi-meta { grid-column: 1 / -1; display: flex; gap: 8px; font-size: 12px; color: var(--muted); }
-  .queue-item .qi-state { grid-row: 1 / 3; grid-column: 2; align-self: center; font-size: 12px; white-space: nowrap; }
-  .state-done { color: var(--ins); }
-  .state-later { color: var(--warn); }
-  .tier { border: 1px solid var(--control); border-radius: 4px; padding: 0 4px; color: var(--text); }
-  .tier.t2 { font-weight: 700; border-color: var(--text); }
+  .queue-item:hover { background: #fffdf8; }
+  .queue-item[aria-current="true"] { border-left-color: var(--ink); background: #fffdf8; box-shadow: var(--shadow-lift); z-index: 1; }
+  .qi-id { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: .02em; }
+  .qi-title { grid-column: 1 / 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .qi-meta { grid-column: 1 / -1; display: flex; gap: 12px; font-size: 12px; color: var(--ink-soft); }
+  .qi-state { grid-row: 1 / 3; grid-column: 2; align-self: center; font-size: 12px; color: var(--ink-soft); }
+  .tier-mark { letter-spacing: .1em; }
+  .tier-mark.t2 { color: var(--ink); font-weight: 700; }
+  .seal-small {
+    display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+    border: 1.5px solid var(--shu); color: var(--shu); font-family: var(--mincho); font-weight: 800; font-size: 14px; transform: rotate(-10deg);
+  }
+  .sticky {
+    position: absolute; top: 0; right: 0; padding: 2px 10px 2px 12px; font-size: 11px; font-weight: 700;
+    color: var(--karashi); background: var(--karashi-bg); border-bottom-left-radius: 6px; box-shadow: -1px 1px 0 rgba(122, 83, 0, .2);
+  }
 
-  /* 差分 */
-  .page-head { padding: 8px 16px; border-bottom: 1px solid var(--line); }
-  .page-head h2 { font-size: 18px; margin: 0; }
-  .page-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); }
-  .page-meta a { color: var(--select); }
-  .view-tabs { display: flex; gap: 4px; margin-top: 8px; }
-  .view-tabs button {
-    border: 1px solid var(--control); border-bottom: 0; border-radius: 4px 4px 0 0; padding: 2px 12px; background: var(--ground); cursor: pointer;
+  /* ===== 紙 ===== */
+  .page-head { padding: 14px 24px 12px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: end; }
+  .page-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-soft); }
+  .page-meta a { color: var(--ai); text-underline-offset: 3px; }
+  .page-head h2 { font-family: var(--mincho); font-weight: 700; font-size: 24px; line-height: 1.35; margin: 0; letter-spacing: .02em; }
+  .view-switch { display: flex; gap: 0; }
+  .view-switch .button { border-radius: 0; }
+  .view-switch .button:first-child { border-radius: 4px 0 0 4px; }
+  .view-switch .button:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+  .desk { padding: 28px 24px 64px; }
+  .sheet {
+    position: relative; max-width: 760px; margin: 0 auto; padding: 44px 48px 52px 76px;
+    background: var(--paper); border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(29, 26, 22, .07), 0 1px 0 rgba(29, 26, 22, .04), 0 24px 48px -28px rgba(29, 26, 22, .35);
+    font-size: 15px;
   }
-  .view-tabs button[aria-selected="true"] { background: var(--surface); font-weight: 700; border-color: var(--text); }
-  .diff { padding: 16px 24px 48px; }
-  .block { position: relative; padding: 4px 0 4px 12px; border-left: 3px solid transparent; }
-  .block + .block { margin-top: 8px; }
-  .block.is-current { border-left-color: var(--select); }
-  .block-num {
-    position: absolute; left: -22px; top: 6px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+  .sheet::before { content: ""; position: absolute; top: 0; bottom: 0; left: 56px; border-left: 1px solid var(--shu-bg); }
+  .sheet.leaving { animation: leave 280ms var(--ease) forwards; }
+  .sheet.entering { animation: enter 280ms var(--ease) both; }
+  @keyframes leave { to { transform: translateX(-32px); opacity: 0; } }
+  @keyframes enter { from { transform: translateX(32px); opacity: 0; } }
+  .diff-column { position: relative; }
+  .stamp {
+    position: absolute; top: 50%; left: 50%; margin: -40px 0 0 -52px; width: 104px; height: 104px; border-radius: 50%; z-index: 3;
+    display: grid; place-items: center; color: var(--shu); font-family: var(--mincho); font-weight: 800; font-size: 40px;
+    border: 4px solid var(--shu); box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 6px var(--shu);
+    transform: rotate(-12deg); animation: stamp 320ms var(--ease) both; pointer-events: none; mix-blend-mode: multiply;
   }
-  .version { border-radius: 4px; padding: 4px 8px; }
-  .version + .version { margin-top: 4px; }
-  .version-label { display: block; font-size: 12px; font-weight: 700; }
-  .version.before { background: var(--del-bg); }
-  .version.before .version-label { color: var(--del); }
-  .version.before .content { text-decoration: line-through; text-decoration-color: var(--del); }
-  .version.before .content table, .version.before .content img { text-decoration: none; opacity: 0.75; }
-  .version.after { background: var(--ins-bg); }
-  .version.after .version-label { color: var(--ins); }
-  .version.later { outline: 2px dashed var(--warn); }
-  .content h2, .content h3, .content h4 { margin: 0; line-height: 1.4; }
-  .content h2 { font-size: 18px; }
-  .content h3 { font-size: 16px; }
-  .content h4 { font-size: 14px; }
+  @keyframes stamp { 0% { transform: rotate(-24deg) scale(1.7); opacity: 0; } 70% { opacity: 1; } 100% { transform: rotate(-12deg) scale(1); opacity: .92; } }
+
+  .block { position: relative; }
+  .block + .block { margin-top: 14px; }
+  .marker {
+    position: absolute; left: -64px; top: 2px; width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-family: var(--mincho); font-weight: 700; font-size: 13px;
+    border: 1.5px solid var(--ink-soft); color: var(--ink-soft); background: var(--paper);
+    transition: all 160ms var(--ease);
+  }
+  .block.is-current .marker { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .block-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+  .block-label .rule-name { position: relative; color: var(--ink); font-weight: 700; padding: 0 2px; }
+  .block.is-current .rule-name { background: linear-gradient(transparent 52%, var(--marker) 52%, var(--marker) 92%, transparent 92%) no-repeat; background-size: 100% 100%; animation: sweep 220ms var(--ease) both; }
+  @keyframes sweep { from { background-size: 0 100%; } to { background-size: 100% 100%; } }
+  .tag-badge { font-family: var(--mono); font-size: 11px; color: var(--murasaki); background: var(--murasaki-bg); border-radius: 4px; padding: 1px 6px; }
+  .state-note { font-size: 12px; }
+  .state-note.accepted, .state-note.edited, .state-note.project { color: var(--ai); }
+  .state-note.rejected { color: var(--shu); }
+  .state-note.later { color: var(--karashi); }
+
+  .version { position: relative; padding: 8px 12px 10px; border-radius: 4px; }
+  .version + .version { margin-top: 6px; }
+  .version-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; margin-bottom: 2px; }
+  .version.before { background: var(--shu-bg); }
+  .version.before .version-label { color: var(--shu); }
+  .version.before .content { text-decoration: line-through; text-decoration-color: var(--shu); text-decoration-thickness: 1.5px; }
+  .version.before .content table, .version.before .content .img-ph { opacity: .7; }
+  .version.after { background: var(--ai-bg); }
+  .version.after .version-label { color: var(--ai); }
+  .version.after .content { text-decoration: underline; text-decoration-color: rgba(31, 74, 134, .45); text-underline-offset: 4px; }
+  .version.after .content table { text-decoration: none; }
+  .version.later { box-shadow: inset 0 0 0 2px var(--karashi); }
+  .version.plain { background: transparent; padding-left: 0; }
+  details.version > summary { cursor: pointer; font-size: 11px; font-weight: 700; color: var(--shu); letter-spacing: .08em; }
+  .content h2, .content h3, .content h4 { margin: 0; line-height: 1.45; font-weight: 700; }
+  .content h2 { font-size: 20px; }
+  .content h3 { font-size: 17px; }
+  .content h4 { font-size: 15px; }
   .content p { margin: 0; }
-  .content table { border-collapse: collapse; margin: 4px 0; background: var(--surface); }
-  .content caption { text-align: left; font-weight: 700; }
-  .content th, .content td { border: 1px solid #8a93a6; padding: 2px 8px; text-align: left; }
-  .content th { background: #eef0f4; }
-  .content ul { margin: 0; padding-left: 20px; }
+  .content table { border-collapse: collapse; margin: 6px 0; background: var(--paper); font-size: 14px; }
+  .content caption { text-align: left; font-weight: 700; padding-bottom: 2px; }
+  .content th, .content td { border: 1px solid var(--control); padding: 3px 10px; text-align: left; }
+  .content th { background: #f1ebde; }
   .content .img-ph {
-    display: inline-flex; align-items: center; justify-content: center; width: 160px; height: 96px;
-    border: 1px solid #8a93a6; background: #e9ecf2; color: var(--muted); font-size: 12px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center; width: 180px; height: 104px; border-radius: 4px;
+    background: repeating-linear-gradient(135deg, #ece5d6 0 8px, #e6dece 8px 16px); color: var(--ink-soft); font-size: 12px;
+    box-shadow: inset 0 0 0 1px var(--control);
   }
-  .content .alt-note { display: block; font-size: 12px; color: var(--muted); }
+  .content .alt-note { display: block; font-size: 12px; color: var(--ink-soft); }
   .code-view { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; }
-  .code-view .d { background: var(--del-bg); color: var(--del); text-decoration: line-through; }
-  .code-view .i { background: var(--ins-bg); color: var(--ins); }
-  .tier0-note { margin: 24px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--ground); }
+  .code-view .d { display: block; background: var(--shu-bg); color: var(--shu); text-decoration: line-through; padding: 2px 6px; border-radius: 4px; }
+  .code-view .i { display: block; background: var(--ai-bg); color: var(--ai); text-decoration: underline; padding: 2px 6px; border-radius: 4px; margin-top: 4px; }
+  .code-view .mark { font-family: var(--sans); font-weight: 700; text-decoration: none; display: inline-block; margin-right: 8px; }
+  .note-box { margin: 0; padding: 20px 24px; border: 1px dashed var(--control); border-radius: 6px; color: var(--ink-soft); }
+  .note-box strong { display: block; font-family: var(--mincho); font-size: 18px; color: var(--ink); margin-bottom: 4px; }
 
-  /* 候補 */
-  .cand-summary { font-size: 12px; color: var(--muted); }
-  .cand-list { list-style: none; margin: 0; padding: 0; }
+  /* ===== 校正の指示 ===== */
+  .cand-summary { font-size: 12px; color: var(--ink-soft); margin: 2px 0 0; }
+  .cand-list { list-style: none; margin: 0; padding: 8px; }
   .cand {
-    border-bottom: 1px solid var(--line); border-left: 3px solid transparent; padding: 8px 12px 8px 9px;
+    border-radius: 6px; border-left: 3px solid transparent; padding: 10px 12px 10px 11px;
+    transition: background-color 160ms var(--ease), box-shadow 160ms var(--ease);
   }
-  .cand.is-current { border-left-color: var(--select); background: #f7f8fb; }
+  .cand + .cand { margin-top: 4px; }
+  .cand:not(.is-current):hover { background: #fffdf8; }
+  .cand.is-current { border-left-color: var(--ink); background: #fffdf8; box-shadow: var(--shadow-lift), 0 0 0 1px var(--rule); }
   .cand-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
-  .cand-num { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .tag-badge { font-family: var(--mono); font-size: 12px; color: var(--tag); background: var(--tag-bg); border-radius: 4px; padding: 0 4px; }
+  .num-badge {
+    width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center;
+    font-family: var(--mincho); font-weight: 700; font-size: 12px; border: 1.5px solid var(--ink-soft); color: var(--ink-soft);
+  }
+  .cand.is-current .num-badge { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .cand-rule { font-weight: 700; }
-  .cand-flag { font-size: 12px; color: var(--warn); background: var(--warn-bg); border-radius: 4px; padding: 0 4px; font-weight: 700; }
+  .cand-flag { font-size: 11px; color: var(--karashi); background: var(--karashi-bg); border-radius: 4px; padding: 0 6px; font-weight: 700; }
   .cand-state { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; }
-  .cand-state.accepted, .cand-state.edited { color: var(--ins); }
-  .cand-state.rejected { color: var(--del); }
-  .cand-state.later { color: var(--warn); }
-  .cand-state.pending { color: var(--muted); font-weight: 400; }
-  .cand-snippet { margin: 4px 0; font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 0 8px; }
-  .cand-snippet dt { color: var(--muted); }
+  .cand-state.accepted, .cand-state.edited, .cand-state.project { color: var(--ai); }
+  .cand-state.rejected { color: var(--shu); }
+  .cand-state.later { color: var(--karashi); }
+  .cand-state.pending { color: var(--ink-soft); font-weight: 400; }
+  .cand-state.pop { animation: pop 160ms var(--ease); }
+  @keyframes pop { 50% { transform: scale(1.18); } }
+  .cand-snippet { margin: 6px 0 0 30px; font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
+  .cand-snippet dt { color: var(--ink-soft); }
   .cand-snippet dd { margin: 0; }
-  .cand-snippet .b { color: var(--del); text-decoration: line-through; }
-  .cand-snippet .a { color: var(--ins); }
-  .cand-why { font-size: 12px; color: var(--muted); margin: 0; }
-  .cand-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-  .cand-actions button, .action-button {
-    border: 1px solid var(--control); border-radius: 4px; background: var(--surface); padding: 2px 8px; cursor: pointer;
-  }
-  .cand-actions button:hover, .action-button:hover { border-color: var(--text); }
-  .cand-actions kbd, .confirm-bar kbd, .help-list kbd {
-    font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; background: var(--ground);
-  }
-  .cand-edit textarea { width: 100%; min-height: 96px; font-family: var(--mono); font-size: 12px; border: 1px solid var(--text); border-radius: 4px; padding: 4px; }
-  .cand-edit .hint { font-size: 12px; color: var(--muted); }
+  .cand-snippet .b { color: var(--shu); text-decoration: line-through; }
+  .cand-snippet .a { color: var(--ai); text-decoration: underline; text-underline-offset: 3px; }
+  .cand-detail { margin-left: 30px; }
+  .cand-why { font-size: 12px; color: var(--ink-soft); margin: 6px 0 0; }
+  .cand-why strong { color: var(--karashi); }
+  .cand-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .cand-edit { margin-top: 8px; }
+  .cand-edit label { font-size: 12px; font-weight: 700; }
+  .cand-edit textarea { width: 100%; min-height: 96px; font-family: var(--mono); font-size: 12px; border: 1px solid var(--ink); border-radius: 4px; padding: 6px; background: #fffdf8; }
+  .cand-edit .hint { font-size: 12px; color: var(--ink-soft); margin: 0; }
 
-  /* 確定の帯 */
+  /* ===== 確定の帯 ===== */
   .confirm-bar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
-    padding: 8px 16px; background: var(--surface); border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+    margin: 12px; padding: 10px 14px 10px 20px; background: var(--paper); border-radius: 6px;
+    box-shadow: var(--shadow-paper), 0 0 0 1px rgba(29, 26, 22, .06);
   }
-  .confirm-bar .message { flex: 1; min-width: 240px; }
-  .confirm-bar .message.done { color: var(--ins); font-weight: 700; }
+  .confirm-bar .message { flex: 1; min-width: 240px; margin: 0; }
+  .confirm-bar .message.done { color: var(--ai); font-weight: 700; }
+  .confirm-bar .message.ask { color: var(--karashi); font-weight: 700; }
+  .confirm-bar .later-input { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 240px; font-size: 12px; font-weight: 700; }
+  .confirm-bar .later-input input { flex: 1; border: 1px solid var(--control); border-radius: 4px; padding: 4px 10px; background: #fffdf8; font-weight: 400; font-size: 14px; }
+  .hanko-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .hanko {
+    width: 56px; height: 56px; border-radius: 50%; cursor: pointer;
+    display: grid; place-items: center; font-family: var(--mincho); font-weight: 800; font-size: 15px; letter-spacing: .08em;
+    background: var(--shu); color: #fff; border: 0;
+    box-shadow: inset 0 0 0 3px var(--shu), inset 0 0 0 4.5px rgba(255, 255, 255, .7), 0 6px 14px -8px rgba(179, 49, 31, .8);
+    transition: transform 120ms var(--ease), box-shadow 120ms var(--ease);
+  }
+  .hanko:hover:not(:disabled) { transform: rotate(-6deg); }
+  .hanko:active:not(:disabled) { transform: rotate(-6deg) scale(.94); }
+  .hanko:disabled { background: transparent; color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--control); cursor: not-allowed; }
+  .hanko-key { font-size: 11px; color: var(--ink-soft); }
+  .hanko-key kbd { margin-left: 0; }
   .primary-button {
-    border: 1px solid var(--select); border-radius: 4px; background: var(--select); color: #fff; padding: 4px 16px; cursor: pointer; font-weight: 700;
+    border: 1px solid var(--ai); border-radius: 4px; background: var(--ai); color: #fff; padding: 4px 14px; cursor: pointer; font-weight: 700;
   }
-  .primary-button:disabled { background: var(--surface); color: var(--muted); border-color: var(--line); cursor: not-allowed; }
-  .primary-button kbd { background: transparent; color: inherit; border-color: currentColor; }
+  .primary-button kbd { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .7); box-shadow: none; }
 
-  /* キーの一覧 */
-  dialog { border: 1px solid var(--text); border-radius: 4px; padding: 16px 24px; max-width: 520px; }
-  dialog::backdrop { background: rgba(27, 34, 48, 0.4); }
-  dialog h2 { font-size: 16px; margin: 0 0 8px; }
-  .help-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0 0 16px; }
+  /* ===== ダイアログ ===== */
+  dialog {
+    border: 0; border-radius: 6px; padding: 24px 28px; max-width: 580px; background: var(--paper); color: var(--ink);
+    box-shadow: 0 0 0 1px rgba(29, 26, 22, .08), 0 30px 60px -20px rgba(29, 26, 22, .45);
+  }
+  dialog::backdrop { background: rgba(29, 26, 22, .35); backdrop-filter: blur(2px); }
+  dialog h2 { font-family: var(--mincho); font-weight: 700; font-size: 20px; margin: 0 0 12px; }
+  .help-list { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0 0 16px; }
+  .help-list dt { white-space: nowrap; }
   .help-list dd { margin: 0; }
-  .mock-note { font-size: 12px; color: var(--muted); }
+  .help-list kbd { margin-left: 0; }
+  .rules-list { margin: 0 0 16px; padding-left: 20px; }
+  .rules-list li + li { margin-top: 6px; }
+  .mock-note { font-size: 12px; color: var(--ink-soft); }
 </style>
 </head>
 <body>
 <header class="project-bar">
-  <h1>遠野市 取込回1</h1>
-  <dl aria-label="案件の進み具合">
-    <div><dt>移行する</dt><dd>1,922</dd></div>
-    <div><dt>確定</dt><dd id="statDone">1,045</dd></div>
-    <div><dt>段階2の残り</dt><dd id="statT2">118</dd></div>
-    <div><dt>段階1の残り</dt><dd id="statT1">402</dd></div>
-    <div><dt>段階0(自動)</dt><dd>357</dd></div>
-    <div><dt>今日の確定</dt><dd id="statToday">84</dd></div>
-    <div><dt>残りの見込み</dt><dd>4.2 日</dd></div>
-  </dl>
-  <button type="button" class="action-button help-button" id="helpButton" aria-haspopup="dialog">キーの一覧<kbd>?</kbd></button>
+  <div class="brand">
+    <span class="brand-seal" aria-hidden="true">校</span>
+    <div>
+      <h1>遠野市</h1>
+      <span class="sub">取込回 1 ・ 校正台</span>
+    </div>
+  </div>
+
+  <div class="ledger" role="group" aria-label="案件の進み具合">
+    <p class="ledger-figure" style="margin:0"><span class="big" id="statDone">1,045</span><span class="of">/ 1,922 ページ確定</span></p>
+    <div class="ledger-bar" aria-hidden="true">
+      <span class="seg-done" id="segDone"></span><span class="seg-t2" id="segT2"></span><span class="seg-t1" id="segT1"></span><span class="seg-t0" id="segT0"></span>
+    </div>
+    <dl class="ledger-legend">
+      <div class="l-done"><dt>確定</dt><dd id="legDone">1,045</dd></div>
+      <div class="l-t2"><dt>段階2 読む</dt><dd id="statT2">118</dd></div>
+      <div class="l-t1"><dt>段階1 一目</dt><dd id="statT1">402</dd></div>
+      <div class="l-t0"><dt>段階0 自動</dt><dd>357</dd></div>
+    </dl>
+  </div>
+
+  <div class="day">
+    <dl>
+      <div><dt>今日の確定</dt><dd><span id="statToday">84</span><small>ページ</small></dd></div>
+      <div><dt>残りの見込み</dt><dd>4.2<small>日</small></dd></div>
+    </dl>
+    <div class="tools">
+      <button type="button" class="button" id="rulesButton" aria-haspopup="dialog">案件で採用中のルール <span id="rulesCount">0</span> 件</button>
+      <button type="button" class="button" id="helpButton" aria-haspopup="dialog" aria-keyshortcuts="?">キーの一覧<kbd aria-hidden="true">?</kbd></button>
+    </div>
+  </div>
 </header>
 
 <div class="workspace">
@@ -230,51 +388,58 @@
 
   <main class="column diff-column" aria-labelledby="pageTitle">
     <div class="page-head">
-      <h2 id="pageTitle"></h2>
       <div class="page-meta" id="pageMeta"></div>
-      <div class="view-tabs" role="tablist" aria-label="表示の切り替え">
-        <button type="button" role="tab" id="tabVisual" aria-selected="true" aria-controls="diffPanel">見た目の差分</button>
-        <button type="button" role="tab" id="tabCode" aria-selected="false" aria-controls="diffPanel">HTML の差分</button>
+      <h2 id="pageTitle" tabindex="-1"></h2>
+      <div class="view-switch" role="group" aria-label="差分の表示">
+        <button type="button" class="button" id="viewVisual" aria-pressed="true" aria-keyshortcuts="v">見た目</button>
+        <button type="button" class="button" id="viewCode" aria-pressed="false" aria-keyshortcuts="v">HTML<kbd aria-hidden="true">V</kbd></button>
       </div>
     </div>
-    <div class="column-body">
-      <div class="diff" id="diffPanel" role="tabpanel" aria-labelledby="tabVisual"></div>
+    <div class="column-body" id="deskScroll">
+      <div class="desk">
+        <section class="sheet" id="diffPanel" aria-label="このページの差分"></section>
+      </div>
     </div>
   </main>
 
-  <aside class="column candidates-column" aria-labelledby="candTitle">
+  <section class="column candidates-column" aria-labelledby="candTitle">
     <div class="column-head">
-      <h2 id="candTitle">修正の候補</h2>
+      <h2 id="candTitle">校正の指示</h2>
       <p class="cand-summary" id="candSummary"></p>
     </div>
     <div class="column-body">
       <ul class="cand-list" id="candList"></ul>
     </div>
-  </aside>
+  </section>
 </div>
 
-<footer class="confirm-bar">
-  <p class="message" id="confirmMessage"></p>
-  <button type="button" class="action-button" id="laterPageButton">このページを後回し</button>
-  <button type="button" class="primary-button" id="confirmButton">確定して次へ<kbd>Enter</kbd></button>
-</footer>
+<div class="confirm-bar" role="region" aria-label="このページの確定" id="confirmBar"></div>
 
 <div class="visually-hidden" aria-live="polite" id="announcer"></div>
 
 <dialog id="helpDialog" aria-labelledby="helpTitle">
   <h2 id="helpTitle">キーの一覧</h2>
   <dl class="help-list">
-    <dt><kbd>J</kbd> / <kbd>K</kbd></dt><dd>次の候補 / 前の候補</dd>
+    <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>次の指示 / 前の指示</dd>
     <dt><kbd>A</kbd></dt><dd>採用</dd>
     <dt><kbd>R</kbd></dt><dd>却下</dd>
     <dt><kbd>E</kbd></dt><dd>編集して採用(Ctrl+Enter で決定、Esc で取り消し)</dd>
-    <dt><kbd>L</kbd></dt><dd>後回し(要確認)</dd>
-    <dt><kbd>Shift</kbd>+<kbd>A</kbd></dt><dd>このルールの候補を、案件の全ページで採用</dd>
-    <dt><kbd>Enter</kbd></dt><dd>このページを確定して次のページへ</dd>
-    <dt><kbd>N</kbd> / <kbd>P</kbd></dt><dd>次のページ / 前のページ(確定しない)</dd>
-    <dt><kbd>V</kbd></dt><dd>見た目の差分と HTML の差分を切り替え</dd>
+    <dt><kbd>L</kbd></dt><dd>後回し(質問の下書きを1行書ける。Enter で決定、Esc で書かずに後回し)</dd>
+    <dt><kbd>Shift</kbd> <kbd>A</kbd></dt><dd>このルールを案件の全ページで採用(確定の帯で確かめてから適用)</dd>
+    <dt><kbd>Enter</kbd></dt><dd>判を押して確定し、次のページへ</dd>
+    <dt><kbd>Shift</kbd> <kbd>Enter</kbd></dt><dd>残りの指示をすべて採用して確定(要確認が残るページでは使えない)</dd>
+    <dt><kbd>N</kbd> <kbd>P</kbd></dt><dd>次のページ / 前のページ(確定しない)</dd>
+    <dt><kbd>V</kbd></dt><dd>見た目と HTML の表示を切り替え</dd>
   </dl>
+  <p class="mock-note">決定は何度でも押し直せます。確定したページも、確定の帯の「確定を取り消す」で戻せます。</p>
   <p class="mock-note">これはモックアップです。ページと候補は遠野市のページをまねた架空のもので、保存や書き戻しはしません。</p>
+  <form method="dialog"><button class="primary-button" value="close">閉じる</button></form>
+</dialog>
+
+<dialog id="rulesDialog" aria-labelledby="rulesTitle">
+  <h2 id="rulesTitle">案件で採用中のルール</h2>
+  <p class="mock-note">Shift+A で案件の全ページに適用したルールです。外すと、まだ確定していないページの指示が未判断に戻ります。</p>
+  <ul class="rules-list" id="rulesList"></ul>
   <form method="dialog"><button class="primary-button" value="close">閉じる</button></form>
 </dialog>
 
@@ -285,43 +450,40 @@
   // ---- 架空のデータ ----
   const PAGES = [
     {
-      id: "tono00009_0701", title: "救命講習会のご案内", tier: 2, rank: "S", template: 15,
+      id: "tono00009_0701", title: "救命講習会のご案内", tier: 2, rank: "S", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,14675,306,575,html",
       blocks: [
         { html: "<h2>救命講習会のご案内</h2>" },
-        { html: "<p>遠野消防署では、市民の皆さんを対象に救命講習会を開催します。</p>" },
-        { cand: "c1" },
-        { cand: "c2" },
-        { cand: "c3" },
+        { html: "<p>遠野消防署では、市民の皆さんを対象に救命講習会を開催します。心肺蘇生法と AED の使い方を、実技を交えて学びます。</p>" },
+        { cand: "c1" }, { cand: "c2" }, { cand: "c3" },
         { html: "<h3>申込方法</h3>" },
-        { cand: "c4" },
-        { cand: "c5" },
+        { cand: "c4" }, { cand: "c5" },
       ],
       candidates: [
-        { id: "c1", tag: "<p>", rule: "日付と曜日の表記", why: "KB: 日付の表記、曜日の表記", confidence: "high",
+        { id: "c1", tag: "<p>", rule: "日付と曜日の表記", why: "根拠: 日付の表記、曜日の表記", confidence: "high",
           before: "<p>日時：令和８年５月１０日(日)　９：００～１２：００</p>",
           after: "<p>日時：令和8年5月10日（日曜日）午前9時から正午まで</p>",
           b: "令和８年５月１０日(日)　９：００～１２：００", a: "令和8年5月10日（日曜日）午前9時から正午まで" },
-        { id: "c2", tag: "<table>", rule: "表の見出しと説明", why: "KB: 表のキャプション、見出しセル", confidence: "high",
+        { id: "c2", tag: "<table>", rule: "表の見出しと説明", why: "根拠: 表のキャプション、見出しセル", confidence: "high",
           before: "<table><tr><td>会場</td><td>遠野消防署 2階会議室</td></tr><tr><td>定員</td><td>20名</td></tr></table>",
           after: "<table><caption>救命講習会の会場と定員</caption><tr><th scope=\"row\">会場</th><td>遠野消防署 2階会議室</td></tr><tr><th scope=\"row\">定員</th><td>20名</td></tr></table>",
-          b: "見出しの無い2行2列の表", a: "caption を足し、1列目を行見出し th にする" },
-        { id: "c3", tag: "<a>", rule: "ページ内リンクを文章にする", why: "KB: ページ内アンカーリンク(取込で #id が残らない)", confidence: "high",
+          b: "見出しの無い2行2列の表", a: "表の説明を足し、1列目を行見出しにする" },
+        { id: "c3", tag: "<a>", rule: "ページ内リンクを文章にする", why: "根拠: ページ内アンカーリンク(取込で #id が残らない)", confidence: "high",
           before: "<p>持ち物は<a href=\"#mochimono\">こちら</a>をご覧ください。</p>",
           after: "<p>持ち物は、本ページ内の「持ち物」の箇所をご覧ください。</p>",
-          b: "<a href=\"#mochimono\">こちら</a>", a: "本ページ内の「持ち物」の箇所" },
-        { id: "c4", tag: "<a>", rule: "ファイルの種別と容量の表記", why: "KB: ファイルの表示テキスト(CMS が種別と容量を自動で出す)", confidence: "high",
+          b: "こちら(ページ内リンク)", a: "本ページ内の「持ち物」の箇所" },
+        { id: "c4", tag: "<a>", rule: "ファイルの種別と容量の表記", why: "根拠: ファイルの表示テキスト(CMS が種別と容量を自動で出す)", confidence: "high",
           before: "<p><a href=\"https://www.city.tono.iwate.jp/uploaded/attachment/1234.pdf\">申込書(PDF 39KB)</a></p>",
           after: "<p><a href=\"https://www.city.tono.iwate.jp/uploaded/attachment/1234.pdf\">救命講習会の申込書</a></p>",
           b: "申込書(PDF 39KB)", a: "救命講習会の申込書" },
-        { id: "c5", tag: "<p>", rule: "電話番号の表記", why: "KB: 電話番号とファクス番号", confidence: "review",
+        { id: "c5", tag: "<p>", rule: "電話番号の表記", why: "根拠: 電話番号とファクス番号", confidence: "review",
           before: "<p>問合せ：遠野消防署　TEL62-2111</p>",
           after: "<p>問い合わせ先：遠野消防署　電話：0198-62-2111</p>",
           b: "TEL62-2111", a: "電話：0198-62-2111", note: "市外局番を補った。局番が合っているか確かめる" },
       ],
     },
     {
-      id: "tono00008_0701", title: "住宅用火災警報器について", tier: 1, rank: "A", template: 15,
+      id: "tono00008_0701", title: "住宅用火災警報器について", tier: 1, rank: "A", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,14218,306,574,html",
       blocks: [
         { html: "<h2>住宅用火災警報器について</h2>" },
@@ -330,18 +492,18 @@
         { cand: "c2" },
       ],
       candidates: [
-        { id: "c1", tag: "<img>", rule: "画像の代替テキスト", why: "KB: 画像の代替テキスト(AI の下書き)", confidence: "high",
+        { id: "c1", tag: "<img>", rule: "画像の代替テキスト", why: "根拠: 画像の代替テキスト(AI の下書き)", confidence: "high",
           before: "<p><img alt=\"画像\" data-ph=\"天井に付けた火災警報器の写真\"></p>",
           after: "<p><img alt=\"寝室の天井に取り付けた住宅用火災警報器\" data-ph=\"天井に付けた火災警報器の写真\"></p>",
-          b: "alt=\"画像\"", a: "alt=\"寝室の天井に取り付けた住宅用火災警報器\"" },
-        { id: "c2", tag: "<p>", rule: "全角の英数字", why: "KB: 英数字の表記", confidence: "high",
+          b: "代替テキスト「画像」", a: "代替テキスト「寝室の天井に取り付けた住宅用火災警報器」" },
+        { id: "c2", tag: "<p>", rule: "全角の英数字", why: "根拠: 英数字の表記", confidence: "high",
           before: "<p>交換の目安は設置から１０年です。</p>",
           after: "<p>交換の目安は設置から10年です。</p>",
           b: "１０年", a: "10年" },
       ],
     },
     {
-      id: "tono00010_0701", title: "野外焼却から火災を起こさないために", tier: 1, rank: "B", template: 15,
+      id: "tono00010_0701", title: "野外焼却から火災を起こさないために", tier: 1, rank: "B", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,15629,306,574,html",
       blocks: [
         { cand: "c1" },
@@ -349,78 +511,89 @@
         { cand: "c2" },
       ],
       candidates: [
-        { id: "c1", tag: "<h4>", rule: "見出しのレベル", why: "KB: 見出しの順序(h2 の次が h4 になっている)", confidence: "high",
+        { id: "c1", tag: "<h4>", rule: "見出しのレベル", why: "根拠: 見出しの順序(大見出しの次に小見出しが来ている)", confidence: "high",
           before: "<h4>野外焼却の禁止</h4>",
           after: "<h3>野外焼却の禁止</h3>",
-          b: "h4", a: "h3" },
-        { id: "c2", tag: "<span>", rule: "文字の色", why: "KB: 文字色(CMS が受け付けるのは赤と青)", confidence: "high",
+          b: "見出しレベル4", a: "見出しレベル3" },
+        { id: "c2", tag: "<span>", rule: "文字の色", why: "根拠: 文字色(CMS が受け付けるのは赤と青)", confidence: "high",
           before: "<p><span style=\"color:#cc0000\">強風注意報が出ているときは燃やさないでください。</span></p>",
           after: "<p><span style=\"color:red\">強風注意報が出ているときは燃やさないでください。</span></p>",
-          b: "color:#cc0000", a: "color:red" },
+          b: "濃い赤(#cc0000)", a: "CMS の赤(red)" },
       ],
     },
     {
-      id: "tono00013_0701", title: "救急統計と火災統計(令和8年4月更新)", tier: 2, rank: "SS", template: 15,
+      id: "tono00013_0701", title: "救急統計と火災統計(令和8年4月更新)", tier: 2, rank: "SS", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,17951,306,575,html",
       blocks: [
         { html: "<h2>救急統計と火災統計</h2>" },
-        { cand: "c1" },
-        { cand: "c2" },
+        { cand: "c1" }, { cand: "c2" },
       ],
       candidates: [
-        { id: "c1", tag: "<table>", rule: "結合したセルの表を分ける", why: "KB: セル結合(見出しの結合)", confidence: "review",
+        { id: "c1", tag: "<table>", rule: "結合したセルの表を分ける", why: "根拠: セル結合(見出しの結合)", confidence: "review",
           before: "<table><tr><th rowspan=\"2\">区分</th><th colspan=\"2\">令和7年</th></tr><tr><th>件数</th><th>人数</th></tr><tr><td>急病</td><td>812</td><td>790</td></tr></table>",
           after: "<table><caption>令和7年の救急出動(区分別)</caption><tr><th scope=\"col\">区分</th><th scope=\"col\">件数</th><th scope=\"col\">人数</th></tr><tr><th scope=\"row\">急病</th><td>812</td><td>790</td></tr></table>",
-          b: "2段の見出しを結合した表", a: "見出しを1段にし、年を caption に移す", note: "見出しの意味を変えていないか、元の表と見比べる" },
-        { id: "c2", tag: "<p>", rule: "機種依存文字", why: "KB: 特殊文字のチェック", confidence: "high",
+          b: "2段の見出しを結合した表", a: "見出しを1段にし、年を表の説明に移す", note: "見出しの意味を変えていないか、元の表と見比べる" },
+        { id: "c2", tag: "<p>", rule: "機種依存文字", why: "根拠: 特殊文字のチェック", confidence: "high",
           before: "<p>※①は速報値です。</p>",
           after: "<p>※（1）は速報値です。</p>",
           b: "①", a: "（1）" },
       ],
     },
     {
-      id: "tono00021_0701", title: "消防団員を募集しています", tier: 0, rank: "B", template: 15,
+      id: "tono00021_0701", title: "消防団員を募集しています", tier: 0, rank: "B", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,16010,306,574,html",
       blocks: [], candidates: [],
     },
     {
-      id: "tono00030_0701", title: "Tono Fire Department (English)", tier: 1, rank: "A", template: 15,
+      id: "tono00030_0701", title: "Tono Fire Department (English)", tier: 1, rank: "A", template: "本体の詳細ページ",
       url: "https://www.city.tono.iwate.jp/index.cfm/50,18822,306,574,html",
       blocks: [
         { html: "<h2>英語のご案内</h2>" },
         { cand: "c1" },
       ],
       candidates: [
-        { id: "c1", tag: "<p>", rule: "外国語の言語の指定", why: "KB: 外国語(lang 属性)", confidence: "high",
+        { id: "c1", tag: "<p>", rule: "外国語の言語の指定", why: "根拠: 外国語(言語の指定)", confidence: "high",
           before: "<p>In case of emergency, call 119.</p>",
           after: "<p lang=\"en\">In case of emergency, call 119.</p>",
-          b: "lang なし", a: "lang=\"en\"" },
+          b: "言語の指定なし", a: "英語(lang=\"en\")" },
       ],
     },
   ];
 
   const TIER_LABEL = { 0: "段階0 自動", 1: "段階1 一目", 2: "段階2 読む" };
-  const STATE_LABEL = { pending: "未判断", accepted: "✓ 採用", edited: "✓ 編集して採用", rejected: "✕ 却下", later: "△ 後回し" };
+  const TIER_DOTS = { 0: "○", 1: "●", 2: "●●" };
+  const STATE_LABEL = { pending: "未判断", accepted: "✓ 採用", edited: "✓ 編集して採用", rejected: "✕ 却下", later: "△ 後回し", project: "✓ 案件で採用" };
+  const PROJECT_PAGES = 312; // 案件の未確定ページのうち、そのルールの指示があるページの数(架空)
+  const TOTAL = 1922, T0 = 357;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   PAGES.forEach((p) => {
     p.status = p.tier === 0 ? "auto" : "pending";
-    p.candidates.forEach((c) => { c.state = "pending"; c.edited = null; });
+    p.candidates.forEach((c) => { c.state = "pending"; c.edited = null; c.question = ""; });
   });
 
-  const state = { pageIndex: 0, candIndex: 0, view: "visual", editing: null, flash: "", done: 1045, today: 84, t1: 402, t2: 118 };
+  const state = {
+    pageIndex: 0, candIndex: 0, view: "visual", editing: null,
+    mode: "normal", // normal | confirmAll | laterNote | busy
+    flash: "", projectRules: [], popIndex: null,
+    done: 1045, today: 84, t1: 402, t2: 118,
+  };
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const announce = (text) => { $("announcer").textContent = ""; setTimeout(() => { $("announcer").textContent = text; }, 30); };
+  const plain = (label) => label.replace(/^[✓✕△] /, "");
+  const wait = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? 0 : ms));
 
   const visiblePages = () => {
     const tier = $("tierFilter").value;
     const laterOnly = $("laterFilter").checked;
-    return PAGES.map((p, i) => ({ p, i })).filter(({ p }) => (tier === "all" || String(p.tier) === tier) && (!laterOnly || p.status === "later"));
+    return PAGES.map((p, i) => ({ p, i })).filter(({ p }) =>
+      (tier === "all" || String(p.tier) === tier) && (!laterOnly || p.status === "question" || p.status === "untouched"));
   };
   const page = () => PAGES[state.pageIndex];
   const cand = () => page().candidates[state.candIndex];
 
-  // 画像は実物の代わりに枠で見せる。
+  // 画像は実物の代わりに枠で見せる。本実装では旧サイトの HTML をサニタイズするか、sandbox の iframe で描く。
   const renderContent = (html) =>
     html.replace(/<img alt="([^"]*)" data-ph="([^"]*)">/g, (m, alt, ph) => `<span class="img-ph">${escapeHtml(ph)}</span><span class="alt-note">代替テキスト：${alt ? escapeHtml(alt) : "(なし)"}</span>`);
 
@@ -428,102 +601,122 @@
   const renderQueue = () => {
     const list = $("queueList");
     list.innerHTML = visiblePages().map(({ p, i }) => {
-      const stateText = p.status === "done" ? '<span class="state-done">✓ 確定</span>'
-        : p.status === "later" ? '<span class="state-later">△ 後回し</span>'
-        : p.status === "auto" ? "自動" : `${p.candidates.length} 件`;
+      let right = `<span class="qi-state">${p.status === "auto" ? "自動" : `${p.candidates.length} 件`}</span>`;
+      let sticky = "";
+      if (p.status === "done") right = '<span class="qi-state"><span class="seal-small" role="img" aria-label="確定済み">済</span></span>';
+      if (p.status === "question") { right = '<span class="qi-state"><span class="seal-small" role="img" aria-label="確定済み">済</span></span>'; sticky = '<span class="sticky">質問中</span>'; }
+      if (p.status === "untouched") sticky = '<span class="sticky">後回し</span>';
       return `<li><button type="button" class="queue-item" data-index="${i}" aria-current="${i === state.pageIndex}">
+        ${sticky}
         <span class="qi-id">${p.id}</span>
-        <span class="qi-state">${stateText}</span>
+        ${right}
         <span class="qi-title">${escapeHtml(p.title)}</span>
-        <span class="qi-meta"><span class="tier t${p.tier}">${TIER_LABEL[p.tier]}</span><span>難易度 ${p.rank}</span><span>テンプレート ${p.template}</span></span>
+        <span class="qi-meta"><span class="tier-mark t${p.tier}"><span aria-hidden="true">${TIER_DOTS[p.tier]} </span>${TIER_LABEL[p.tier]}</span><span>難易度 ${p.rank}</span></span>
       </button></li>`;
-    }).join("") || '<li class="tier0-note">条件に合うページはありません。</li>';
-    list.querySelectorAll(".queue-item").forEach((b) => b.addEventListener("click", () => openPage(Number(b.dataset.index))));
-    const current = list.querySelector('[aria-current="true"]');
-    if (current) current.scrollIntoView({ block: "nearest" });
+    }).join("") || '<li style="padding:16px" class="mock-note">条件に合うページはありません。</li>';
+    list.querySelectorAll(".queue-item").forEach((b) => b.addEventListener("click", () => {
+      openPage(Number(b.dataset.index));
+      $("queueList").querySelector('[aria-current="true"]')?.focus();
+    }));
+    list.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
   };
 
-  // ---- 差分 ----
+  // ---- 紙 ----
+  const blockLabel = (c) =>
+    `<div class="block-label"><span class="tag-badge">${escapeHtml(c.tag)}</span><span class="rule-name">${escapeHtml(c.rule)}</span><span class="state-note ${c.state}">${STATE_LABEL[c.state]}</span></div>`;
+
   const renderDiff = () => {
     const p = page();
     $("pageTitle").textContent = p.title;
-    $("pageMeta").innerHTML = `<span class="mono">${p.id}</span><span>${TIER_LABEL[p.tier]}</span><span>難易度 ${p.rank}</span><span>テンプレート ${p.template}</span><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">旧ページを開く(新しいタブ)</a>`;
-    $("tabVisual").setAttribute("aria-selected", String(state.view === "visual"));
-    $("tabCode").setAttribute("aria-selected", String(state.view === "code"));
-    $("diffPanel").setAttribute("aria-labelledby", state.view === "visual" ? "tabVisual" : "tabCode");
+    $("pageMeta").innerHTML = `<span class="mono">${p.id}</span><span>${TIER_LABEL[p.tier]}</span><span>難易度 ${p.rank}</span><span>${escapeHtml(p.template)}</span><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">旧ページを開く(新しいタブ)</a>`;
+    $("viewVisual").setAttribute("aria-pressed", String(state.view === "visual"));
+    $("viewCode").setAttribute("aria-pressed", String(state.view === "code"));
     const panel = $("diffPanel");
     if (p.tier === 0) {
-      panel.innerHTML = '<p class="tier0-note">このページは段階0です。一括処理が安全な候補だけを自動で採用したので、確認は要りません。差分は証跡に残っています。</p>';
+      panel.innerHTML = '<p class="note-box"><strong>確認は要りません</strong>このページは段階0です。一括処理が安全な指示だけを自動で採用しました。差分は証跡に残っています。</p>';
       return;
     }
     panel.innerHTML = p.blocks.map((block) => {
       if (!block.cand) {
-        return `<div class="block">${state.view === "visual" ? `<div class="content">${renderContent(block.html)}</div>` : `<pre class="code-view">${escapeHtml(block.html)}</pre>`}</div>`;
+        return `<div class="block">${state.view === "visual" ? `<div class="version plain"><div class="content">${renderContent(block.html)}</div></div>` : `<pre class="code-view">${escapeHtml(block.html)}</pre>`}</div>`;
       }
       const ci = p.candidates.findIndex((c) => c.id === block.cand);
       const c = p.candidates[ci];
       const afterHtml = c.edited || c.after;
-      const showBefore = c.state === "pending" || c.state === "rejected" || c.state === "later";
-      const showAfter = c.state !== "rejected";
+      const decided = ["accepted", "edited", "project"].includes(c.state);
       const current = ci === state.candIndex ? " is-current" : "";
-      const num = `<span class="block-num" aria-hidden="true">${ci + 1}</span>`;
+      const head = `<span class="marker" aria-hidden="true">${ci + 1}</span>${blockLabel(c)}`;
+      const aria = `role="group" aria-label="指示 ${ci + 1}、${escapeHtml(c.rule)}、${plain(STATE_LABEL[c.state])}"`;
       if (state.view === "code") {
-        const parts = [];
-        if (showBefore) parts.push(`<span class="d">${escapeHtml(c.before)}</span>`);
-        if (showAfter) parts.push(`<span class="i">${escapeHtml(afterHtml)}</span>`);
-        return `<div class="block${current}" data-cand="${ci}">${num}<pre class="code-view">${parts.join("\n")}</pre></div>`;
+        const body = c.state === "rejected"
+          ? `<span>${escapeHtml(c.before)}</span>`
+          : `<span class="d"><span class="mark">削除：</span>${escapeHtml(c.before)}</span><span class="i"><span class="mark">追加：</span>${escapeHtml(afterHtml)}</span>`;
+        return `<div class="block${current}" ${aria}>${head}<pre class="code-view">${body}</pre></div>`;
       }
       const later = c.state === "later" ? " later" : "";
-      return `<div class="block${current}" data-cand="${ci}">${num}
-        ${showBefore ? `<div class="version before${later}"><span class="version-label">修正前</span><div class="content">${renderContent(c.before)}</div></div>` : ""}
-        ${showAfter ? `<div class="version after${later}"><span class="version-label">${c.state === "pending" || c.state === "later" ? "修正後(候補)" : "修正後"}</span><div class="content">${renderContent(afterHtml)}</div></div>` : ""}
-      </div>`;
+      let html;
+      if (c.state === "rejected") {
+        html = `<div class="version plain"><span class="version-label">元のまま(却下)</span><div class="content">${renderContent(c.before)}</div></div>`;
+      } else {
+        const before = decided
+          ? `<details class="version before"><summary>修正前を見る</summary><div class="content">${renderContent(c.before)}</div></details>`
+          : `<div class="version before${later}"><span class="version-label">修正前</span><div class="content">${renderContent(c.before)}</div></div>`;
+        const after = `<div class="version after${later}"><span class="version-label">${decided ? "修正後" : "修正後(候補)"}</span><div class="content">${renderContent(afterHtml)}</div></div>`;
+        html = before + after;
+      }
+      return `<div class="block${current}" ${aria}>${head}${html}</div>`;
     }).join("");
-    const cur = panel.querySelector(".block.is-current");
-    if (cur) cur.scrollIntoView({ block: "nearest" });
+    panel.querySelector(".block.is-current")?.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
   };
 
-  // ---- 候補 ----
+  // ---- 校正の指示 ----
   const renderCandidates = () => {
     const p = page();
     const list = $("candList");
     const pending = p.candidates.filter((c) => c.state === "pending").length;
-    $("candSummary").textContent = p.tier === 0 ? "確認の要る候補はありません。" : `${p.candidates.length} 件のうち、未判断 ${pending} 件`;
+    $("candSummary").textContent = p.tier === 0 ? "確認の要る指示はありません。" : `${p.candidates.length} 件のうち、未判断 ${pending} 件`;
     list.innerHTML = p.candidates.map((c, i) => {
       const isCurrent = i === state.candIndex;
       const editing = state.editing === i;
       return `<li class="cand${isCurrent ? " is-current" : ""}" data-index="${i}">
-        <button type="button" class="cand-head" aria-expanded="${isCurrent}" aria-label="候補 ${i + 1}、${escapeHtml(c.rule)}、${STATE_LABEL[c.state].replace(/^[✓✕△] /, "")}${c.confidence === "review" ? "、要確認" : ""}">
-          <span class="cand-num">${i + 1}</span>
+        <button type="button" class="cand-head" aria-expanded="${isCurrent}" aria-label="指示 ${i + 1}、${escapeHtml(c.rule)}、${plain(STATE_LABEL[c.state])}${c.confidence === "review" ? "、要確認" : ""}">
+          <span class="num-badge" aria-hidden="true">${i + 1}</span>
           <span class="tag-badge">${escapeHtml(c.tag)}</span>
           <span class="cand-rule">${escapeHtml(c.rule)}</span>
           ${c.confidence === "review" ? '<span class="cand-flag">要確認</span>' : ""}
-          <span class="cand-state ${c.state}">${STATE_LABEL[c.state]}</span>
+          <span class="cand-state ${c.state}${state.popIndex === i ? " pop" : ""}">${STATE_LABEL[c.state]}</span>
         </button>
         <dl class="cand-snippet">
           <dt>修正前</dt><dd class="b">${escapeHtml(c.b)}</dd>
           <dt>修正後</dt><dd class="a">${escapeHtml(c.a)}</dd>
         </dl>
-        ${isCurrent && c.note ? `<p class="cand-why"><strong>確かめること：</strong>${escapeHtml(c.note)}</p>` : ""}
-        ${isCurrent ? `<p class="cand-why">${escapeHtml(c.why)}</p>` : ""}
-        ${editing ? `<div class="cand-edit"><label for="editArea">修正後の HTML を直す</label><textarea id="editArea" class="mono">${escapeHtml(c.edited || c.after)}</textarea><p class="hint">Ctrl+Enter で決定、Esc で取り消し</p></div>` : ""}
-        ${isCurrent ? `<div class="cand-actions" role="group" aria-label="候補 ${i + 1} の判断">
-          <button type="button" data-act="accepted">採用<kbd>A</kbd></button>
-          <button type="button" data-act="rejected">却下<kbd>R</kbd></button>
-          <button type="button" data-act="edit">編集<kbd>E</kbd></button>
-          <button type="button" data-act="later">後回し<kbd>L</kbd></button>
-          <button type="button" data-act="all">案件の全ページで採用<kbd>Shift+A</kbd></button>
+        ${isCurrent ? `<div class="cand-detail">
+          ${c.note ? `<p class="cand-why"><strong>確かめること</strong> ${escapeHtml(c.note)}</p>` : ""}
+          <p class="cand-why">${escapeHtml(c.why)}</p>
+          ${c.question ? `<p class="cand-why"><strong>質問の下書き</strong> ${escapeHtml(c.question)}</p>` : ""}
+          ${editing ? `<div class="cand-edit"><label for="editArea">修正後の HTML を直す</label><textarea id="editArea" class="mono">${escapeHtml(c.edited || c.after)}</textarea><p class="hint">Ctrl+Enter で決定、Esc で取り消し</p></div>` : ""}
+          <div class="cand-actions" role="group" aria-label="指示 ${i + 1} の判断">
+            <button type="button" class="button" data-act="accepted" aria-keyshortcuts="a">採用<kbd aria-hidden="true">A</kbd></button>
+            <button type="button" class="button" data-act="rejected" aria-keyshortcuts="r">却下<kbd aria-hidden="true">R</kbd></button>
+            <button type="button" class="button" data-act="edit" aria-keyshortcuts="e">編集<kbd aria-hidden="true">E</kbd></button>
+            <button type="button" class="button" data-act="later" aria-keyshortcuts="l">後回し<kbd aria-hidden="true">L</kbd></button>
+            <button type="button" class="button" data-act="all" aria-keyshortcuts="Shift+A">案件の全ページで採用<kbd aria-hidden="true">⇧A</kbd></button>
+          </div>
         </div>` : ""}
       </li>`;
     }).join("");
+    state.popIndex = null;
     list.querySelectorAll(".cand").forEach((li) => {
       const i = Number(li.dataset.index);
-      li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => { state.candIndex = i; act(b.dataset.act); }));
+      li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => {
+        state.candIndex = i;
+        act(b.dataset.act);
+      }));
       li.querySelector(".cand-head").addEventListener("click", () => {
         state.candIndex = i;
         state.editing = null;
         renderDiff(); renderCandidates();
-        $("candList").querySelector(".cand.is-current .cand-head")?.focus();
+        focusCurrentHead();
       });
     });
     if (state.editing !== null) {
@@ -534,60 +727,114 @@
         if (e.key === "Escape") { e.preventDefault(); finishEdit(false); }
       });
     }
-    const cur = list.querySelector(".cand.is-current");
-    if (cur && state.editing === null) cur.scrollIntoView({ block: "nearest" });
+    if (state.editing === null) list.querySelector(".cand.is-current")?.scrollIntoView({ block: "nearest" });
+  };
+
+  // 描き直してもフォーカスを失わないよう、選択中の指示の見出しへ戻す。指示が無いページでは題名へ。
+  const focusCurrentHead = () => {
+    const head = $("candList").querySelector(".cand.is-current .cand-head");
+    if (head) head.focus();
+    else $("pageTitle").focus();
   };
 
   // ---- 確定の帯 ----
+  const hanko = (enabled) => `<div class="hanko-wrap">
+      <button type="button" class="hanko" id="confirmButton" ${enabled ? "" : "disabled"} aria-keyshortcuts="Enter" aria-label="判を押して確定し、次のページへ">確定</button>
+      <span class="hanko-key" aria-hidden="true"><kbd>Enter</kbd></span>
+    </div>`;
+
   const renderConfirm = () => {
     const p = page();
+    const bar = $("confirmBar");
+    if (state.mode === "confirmAll") {
+      const c = cand();
+      bar.innerHTML = `<p class="message ask">「${escapeHtml(c.rule)}」を、案件の未確定の ${PROJECT_PAGES} ページで採用します。よろしいですか。</p>
+        <button type="button" class="primary-button" id="applyAll">適用する<kbd aria-hidden="true">Enter</kbd></button>
+        <button type="button" class="button" id="cancelAll">やめる<kbd aria-hidden="true">Esc</kbd></button>`;
+      $("applyAll").addEventListener("click", applyAll);
+      $("cancelAll").addEventListener("click", cancelMode);
+      $("applyAll").focus();
+      return;
+    }
+    if (state.mode === "laterNote") {
+      bar.innerHTML = `<div class="later-input"><label for="laterNote">質問の下書き(任意)</label><input type="text" id="laterNote" placeholder="例: 市外局番が合っているか、担当課に確かめる"></div>
+        <button type="button" class="primary-button" id="laterSave">後回しにする<kbd aria-hidden="true">Enter</kbd></button>
+        <button type="button" class="button" id="laterSkip">書かずに後回し<kbd aria-hidden="true">Esc</kbd></button>`;
+      const input = $("laterNote");
+      input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finishLater(input.value.trim()); }
+        if (e.key === "Escape") { e.preventDefault(); finishLater(""); }
+      });
+      $("laterSave").addEventListener("click", () => finishLater(input.value.trim()));
+      $("laterSkip").addEventListener("click", () => finishLater(""));
+      return;
+    }
     const pending = p.candidates.filter((c) => c.state === "pending").length;
-    const button = $("confirmButton");
-    const message = $("confirmMessage");
-    message.classList.remove("done");
-    if (p.status === "done") {
-      message.textContent = "このページは確定済みです。N で次のページへ進めます。";
-      message.classList.add("done");
-      button.disabled = true;
+    const reviewPending = p.candidates.some((c) => c.state === "pending" && c.confidence === "review");
+    let message = "";
+    let cls = "";
+    let canConfirm = false;
+    let extra = "";
+    if (p.status === "done" || p.status === "question") {
+      message = p.status === "done" ? "このページは確定済みです。N で次のページへ進めます。" : "このページは質問中で確定しました。回答が来たら待ち行列の上に戻ります。";
+      cls = "done";
+      extra = '<button type="button" class="button" id="undoConfirm">確定を取り消す</button>';
     } else if (p.tier === 0) {
-      message.textContent = "段階0のページです。確認は要りません。";
-      button.disabled = true;
+      message = "段階0のページです。確認は要りません。";
     } else if (pending) {
-      message.textContent = `未判断の候補が ${pending} 件あります。すべて判断すると確定できます。`;
-      button.disabled = true;
+      message = `未判断の指示が ${pending} 件あります。すべて判断すると判を押せます。` + (reviewPending ? "" : " Shift+Enter で残りをすべて採用して確定できます。");
     } else {
       const later = p.candidates.filter((c) => c.state === "later").length;
-      message.textContent = later ? `後回しの候補が ${later} 件あります。確定すると、質問欄に下書きを書きます(モックでは書きません)。` : "すべて判断しました。Enter で確定して次のページへ進みます。";
-      button.disabled = false;
+      message = later ? `後回しの指示が ${later} 件あります。確定すると、質問欄に下書きを書きます(モックでは書きません)。` : "すべて判断しました。Enter で判を押して次のページへ進みます。";
+      canConfirm = true;
     }
+    if (state.flash) { message = `${state.flash} ${message}`; state.flash = ""; }
+    const canLater = p.tier !== 0 && p.status !== "done" && p.status !== "question";
+    bar.innerHTML = `<p class="message ${cls}" id="confirmMessage">${escapeHtml(message)}</p>
+      ${extra}
+      ${canLater ? '<button type="button" class="button" id="laterPageButton">このページを後回し</button>' : ""}
+      ${hanko(canConfirm)}`;
+    $("confirmButton").addEventListener("click", confirmPage);
+    $("laterPageButton")?.addEventListener("click", laterPage);
+    $("undoConfirm")?.addEventListener("click", undoConfirm);
   };
 
   const renderAll = () => { renderQueue(); renderDiff(); renderCandidates(); renderConfirm(); };
 
-  // 一度だけ出す知らせ(案件の全ページで採用したときなど)を、帯の文の前に足す。
-  const showFlash = () => {
-    if (!state.flash) return;
-    const message = $("confirmMessage");
-    message.textContent = `${state.flash} ${message.textContent}`;
-    state.flash = "";
-  };
-
+  const fmt = (n) => n.toLocaleString("ja-JP");
   const updateStats = () => {
-    $("statDone").textContent = state.done.toLocaleString();
+    $("statDone").textContent = fmt(state.done);
+    $("legDone").textContent = fmt(state.done);
     $("statToday").textContent = state.today;
     $("statT1").textContent = state.t1;
     $("statT2").textContent = state.t2;
+    $("rulesCount").textContent = state.projectRules.length;
+    const pct = (n) => `${(n / TOTAL) * 100}%`;
+    $("segDone").style.width = pct(state.done);
+    $("segT2").style.width = pct(state.t2);
+    $("segT1").style.width = pct(state.t1);
+    $("segT0").style.width = pct(T0);
   };
 
   // ---- 操作 ----
-  const openPage = (index) => {
+  const openPage = (index, entering) => {
     state.pageIndex = index;
     state.editing = null;
+    state.mode = "normal";
     const p = page();
     const firstPending = p.candidates.findIndex((c) => c.state === "pending");
     state.candIndex = firstPending >= 0 ? firstPending : 0;
     renderAll();
-    announce(`${p.title}。${TIER_LABEL[p.tier]}。候補 ${p.candidates.length} 件。`);
+    const sheet = $("diffPanel");
+    sheet.classList.remove("leaving");
+    if (entering && !reduceMotion) {
+      sheet.classList.remove("entering");
+      void sheet.offsetWidth;
+      sheet.classList.add("entering");
+    }
+    $("deskScroll").scrollTop = 0;
+    announce(`${p.title}。${TIER_LABEL[p.tier]}。指示 ${p.candidates.length} 件。`);
   };
 
   const moveCand = (delta) => {
@@ -596,8 +843,9 @@
     state.candIndex = (state.candIndex + delta + n) % n;
     state.editing = null;
     renderDiff(); renderCandidates();
+    focusCurrentHead();
     const c = cand();
-    announce(`候補 ${state.candIndex + 1}。${c.rule}。${STATE_LABEL[c.state]}。`);
+    announce(`指示 ${state.candIndex + 1}。${c.rule}。${plain(STATE_LABEL[c.state])}。`);
   };
 
   const nextPending = () => {
@@ -608,21 +856,55 @@
     else if (wrap >= 0) state.candIndex = wrap;
   };
 
+  const isLocked = () => ["done", "question"].includes(page().status) || page().tier === 0;
+
   const act = (kind) => {
     const p = page();
-    if (!p.candidates.length || p.status === "done") return;
+    if (!p.candidates.length || state.mode !== "normal") return;
+    if (isLocked()) { announce("確定済みのページです。直すときは、確定を取り消してください。"); return; }
     const c = cand();
     if (kind === "edit") { state.editing = state.candIndex; renderCandidates(); return; }
-    if (kind === "all") {
-      c.state = "accepted";
-      announce(`「${c.rule}」の候補を、案件の未確定のページ 312 件で採用しました(モックでは数だけを示します)。`);
-      state.flash = `「${c.rule}」を案件の未確定の全ページで採用しました(取り消すときは案件の設定から外す)。`;
-    } else {
-      c.state = kind;
-      announce(`候補 ${state.candIndex + 1} を${STATE_LABEL[kind].replace(/^[✓✕△] /, "")}にしました。`);
-    }
+    if (kind === "all") { state.mode = "confirmAll"; renderConfirm(); announce(`「${c.rule}」を案件の全ページで採用するか確かめます。`); return; }
+    if (kind === "later") { state.mode = "laterNote"; renderConfirm(); return; }
+    c.state = kind;
+    state.popIndex = state.candIndex;
+    announce(`指示 ${state.candIndex + 1} を${plain(STATE_LABEL[kind])}にしました。`);
     nextPending();
-    renderDiff(); renderCandidates(); renderConfirm(); showFlash();
+    renderDiff(); renderCandidates(); renderConfirm();
+    focusCurrentHead();
+  };
+
+  const cancelMode = () => {
+    state.mode = "normal";
+    renderConfirm();
+    focusCurrentHead();
+    announce("取りやめました。");
+  };
+
+  const applyAll = () => {
+    const c = cand();
+    c.state = "project";
+    state.popIndex = state.candIndex;
+    if (!state.projectRules.includes(c.rule)) state.projectRules.push(c.rule);
+    updateStats();
+    state.mode = "normal";
+    state.flash = `「${c.rule}」を案件の未確定の ${PROJECT_PAGES} ページで採用しました。外すときは「案件で採用中のルール」から。`;
+    announce(state.flash);
+    nextPending();
+    renderDiff(); renderCandidates(); renderConfirm();
+    focusCurrentHead();
+  };
+
+  const finishLater = (note) => {
+    const c = cand();
+    c.state = "later";
+    c.question = note;
+    state.popIndex = state.candIndex;
+    state.mode = "normal";
+    announce(`指示 ${state.candIndex + 1} を後回しにしました。${note ? "質問の下書きを付けました。" : ""}`);
+    nextPending();
+    renderDiff(); renderCandidates(); renderConfirm();
+    focusCurrentHead();
   };
 
   const finishEdit = (save) => {
@@ -630,70 +912,152 @@
     if (save) {
       c.edited = $("editArea").value;
       c.state = "edited";
-      announce(`候補 ${state.editing + 1} を編集して採用しました。`);
+      state.popIndex = state.editing;
+      announce(`指示 ${state.editing + 1} を編集して採用しました。`);
     }
     state.editing = null;
     if (save) nextPending();
     renderDiff(); renderCandidates(); renderConfirm();
-    $("candList").querySelector(save ? ".cand.is-current .cand-head" : ".cand.is-current [data-act='edit']")?.focus();
+    if (save) focusCurrentHead();
+    else $("candList").querySelector(".cand.is-current [data-act='edit']")?.focus();
   };
 
-  const nextPageIndex = (delta) => {
+  // 絞り込みの中で、次(または前)のページを探す。
+  const neighborPage = (delta, onlyPending) => {
     const visible = visiblePages().map(({ i }) => i);
     if (!visible.length) return state.pageIndex;
-    const pos = visible.indexOf(state.pageIndex);
+    const pos = Math.max(0, visible.indexOf(state.pageIndex));
+    for (let step = 1; step <= visible.length; step += 1) {
+      const idx = visible[(pos + delta * step + visible.length * step) % visible.length];
+      if (!onlyPending || PAGES[idx].status === "pending") return idx;
+    }
     return visible[(pos + delta + visible.length) % visible.length];
   };
 
-  const confirmPage = () => {
-    const p = page();
-    if ($("confirmButton").disabled) return;
-    p.status = p.candidates.some((c) => c.state === "later") ? "later" : "done";
-    state.done += 1; state.today += 1;
-    if (p.tier === 1) state.t1 -= 1;
-    if (p.tier === 2) state.t2 -= 1;
+  const countConfirm = (p, sign) => {
+    state.done += sign; state.today += sign;
+    if (p.tier === 1) state.t1 -= sign;
+    if (p.tier === 2) state.t2 -= sign;
     updateStats();
-    announce(`${p.title}を確定しました。`);
-    const next = PAGES.findIndex((q, i) => i > state.pageIndex && q.status === "pending");
-    openPage(next >= 0 ? next : nextPageIndex(1));
   };
 
-  $("confirmButton").addEventListener("click", confirmPage);
-  $("laterPageButton").addEventListener("click", () => {
-    page().status = "later";
-    announce(`${page().title}を後回しにしました。`);
-    openPage(nextPageIndex(1));
-  });
-  $("tabVisual").addEventListener("click", () => { state.view = "visual"; renderDiff(); });
-  $("tabCode").addEventListener("click", () => { state.view = "code"; renderDiff(); });
+  // 判を押す: 紙に判が落ち、紙が抜けて次の紙が差し込まれる。
+  const confirmPage = async () => {
+    const p = page();
+    const button = $("confirmButton");
+    if (state.mode !== "normal" || !button || button.disabled) return;
+    state.mode = "busy";
+    p.status = p.candidates.some((c) => c.state === "later") ? "question" : "done";
+    countConfirm(p, 1);
+    announce(`${p.title}を確定しました。`);
+    const sheet = $("diffPanel");
+    if (!reduceMotion) {
+      const stamp = document.createElement("span");
+      stamp.className = "stamp";
+      stamp.setAttribute("aria-hidden", "true");
+      stamp.textContent = "済";
+      const column = sheet.closest(".diff-column");
+      column.appendChild(stamp);
+      await wait(380);
+      sheet.classList.add("leaving");
+      await wait(260);
+      stamp.remove();
+    }
+    state.mode = "normal";
+    openPage(neighborPage(1, true), true);
+    focusCurrentHead();
+  };
+
+  const acceptRestAndConfirm = () => {
+    const p = page();
+    if (state.mode !== "normal" || isLocked()) return;
+    if (p.candidates.some((c) => c.state === "pending" && c.confidence === "review")) {
+      announce("要確認の指示が残っているので、まとめて採用できません。");
+      return;
+    }
+    p.candidates.forEach((c) => { if (c.state === "pending") c.state = "accepted"; });
+    renderDiff(); renderCandidates(); renderConfirm();
+    confirmPage();
+  };
+
+  const laterPage = () => {
+    const p = page();
+    if (isLocked()) return;
+    p.status = "untouched";
+    announce(`${p.title}を後回しにしました。`);
+    openPage(neighborPage(1, true), true);
+    focusCurrentHead();
+  };
+
+  const undoConfirm = () => {
+    const p = page();
+    countConfirm(p, -1);
+    p.status = "pending";
+    announce(`${p.title}の確定を取り消しました。`);
+    renderAll();
+    focusCurrentHead();
+  };
+
+  // ---- 画面の部品 ----
+  $("viewVisual").addEventListener("click", () => { state.view = "visual"; renderDiff(); });
+  $("viewCode").addEventListener("click", () => { state.view = "code"; renderDiff(); });
   $("tierFilter").addEventListener("change", renderQueue);
   $("laterFilter").addEventListener("change", renderQueue);
   $("helpButton").addEventListener("click", () => $("helpDialog").showModal());
   $("helpDialog").addEventListener("close", () => $("helpButton").focus());
+  $("rulesButton").addEventListener("click", () => {
+    const list = $("rulesList");
+    list.innerHTML = state.projectRules.length
+      ? state.projectRules.map((r, i) => `<li>${escapeHtml(r)} <button type="button" class="button" data-rule="${i}">外す</button></li>`).join("")
+      : "<li>まだありません。</li>";
+    list.querySelectorAll("[data-rule]").forEach((b) => b.addEventListener("click", () => {
+      const rule = state.projectRules.splice(Number(b.dataset.rule), 1)[0];
+      PAGES.forEach((p) => {
+        if (p.status !== "pending") return;
+        p.candidates.forEach((c) => { if (c.rule === rule && c.state === "project") c.state = "pending"; });
+      });
+      updateStats();
+      $("rulesDialog").close();
+      announce(`「${rule}」を外しました。未確定のページの指示は未判断に戻りました。`);
+      renderAll();
+    }));
+    $("rulesDialog").showModal();
+  });
+  $("rulesDialog").addEventListener("close", () => $("rulesButton").focus());
 
   document.addEventListener("keydown", (e) => {
-    if ($("helpDialog").open) return;
+    if ($("helpDialog").open || $("rulesDialog").open || state.mode === "busy") return;
     const t = e.target;
     if (t.matches("textarea, input, select")) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const key = e.key;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.key === "Process") return;
+    if (state.mode === "confirmAll") {
+      if (e.key === "Escape") { e.preventDefault(); cancelMode(); }
+      return;
+    }
+    if (e.key === "Enter") {
+      // 指示の見出しは選ぶだけのボタンなので、そこでの Enter も確定にする。ほかのボタンとリンクは押す。
+      if (t.matches("button:not(.cand-head), a")) return;
+      e.preventDefault();
+      if (e.shiftKey) acceptRestAndConfirm(); else confirmPage();
+      return;
+    }
+    // CapsLock で A が来ても、Shift が押されていなければ「案件の全ページで採用」にしない。
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     const map = {
       j: () => moveCand(1), k: () => moveCand(-1),
-      a: () => act("accepted"), r: () => act("rejected"), e: () => act("edit"), l: () => act("later"),
-      A: () => act("all"),
-      n: () => openPage(nextPageIndex(1)), p: () => openPage(nextPageIndex(-1)),
+      a: () => act(e.shiftKey ? "all" : "accepted"),
+      r: () => act("rejected"), e: () => act("edit"), l: () => act("later"),
+      n: () => { openPage(neighborPage(1, false), true); focusCurrentHead(); },
+      p: () => { openPage(neighborPage(-1, false), true); focusCurrentHead(); },
       v: () => { state.view = state.view === "visual" ? "code" : "visual"; renderDiff(); },
       "?": () => $("helpDialog").showModal(),
     };
-    if (key === "Enter") {
-      // 候補の見出しは選ぶだけのボタンなので、そこでの Enter も確定にする。ほかのボタンとリンクは押す。
-      if (t.matches("button:not(.cand-head), a")) return;
-      e.preventDefault(); confirmPage(); return;
-    }
-    const fn = map[key] || (key.length === 1 ? map[key.toLowerCase()] && !e.shiftKey ? map[key.toLowerCase()] : null : null);
+    if (e.shiftKey && key !== "a" && key !== "?") return;
+    const fn = map[key];
     if (fn) { e.preventDefault(); fn(); }
   });
 
+  updateStats();
   openPage(0);
 })();
 </script>
