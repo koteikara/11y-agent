@@ -173,6 +173,10 @@
   .nav-pair .button { padding: 1px 8px; font-size: 12px; }
   .page-tools { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 12px; }
   .page-head h2 { grid-column: 1 / -1; grid-row: 2; }
+  @media (max-width: 1339px) {
+    .page-meta { grid-column: 1 / -1; }
+    .page-tools { grid-column: 1 / -1; grid-row: 3; justify-content: flex-end; margin-top: 4px; }
+  }
   .cand-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
   .cand-edit .edit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .queue-empty .button { margin-top: 8px; }
@@ -311,7 +315,6 @@
   .cand-edit { margin-top: 8px; }
   .cand-edit label { font-size: 12px; font-weight: 700; }
   .cand-edit textarea { width: 100%; min-height: 96px; font-family: var(--mono); font-size: 12px; border: 1px solid var(--ink); border-radius: 4px; padding: 6px; background: var(--paper-raised); }
-  .cand-edit .hint { font-size: 12px; color: var(--ink-soft); margin: 0; }
   .auto-list { margin: 8px 0 0; padding: 0 0 0 18px; font-size: 13px; color: var(--ink-soft); }
   .auto-list li + li { margin-top: 4px; }
 
@@ -357,6 +360,9 @@
   .help-list dt { white-space: nowrap; }
   .help-list dd { margin: 0; }
   .help-list kbd { margin-left: 0; }
+  .help-h3 { font-family: var(--mincho); font-weight: 700; font-size: 18px; margin: 16px 0 6px; }
+  .help-text { margin: 0 0 8px; font-size: 13px; }
+  .help-list.words dt { font-weight: 700; }
   .rules-list { margin: 0 0 16px; padding-left: 20px; }
   .rules-list li + li { margin-top: 6px; }
   .mock-note { font-size: 12px; color: var(--ink-soft); }
@@ -405,7 +411,7 @@
     </dl>
     <div class="tools">
       <button type="button" class="button" id="rulesButton" aria-haspopup="dialog">案件で採用中のルール <span id="rulesCount">0</span> 件</button>
-      <button type="button" class="button" id="helpButton" aria-haspopup="dialog" aria-keyshortcuts="?">キーの一覧<kbd aria-hidden="true">?</kbd></button>
+      <button type="button" class="button" id="helpButton" aria-haspopup="dialog" aria-keyshortcuts="?">キーと言葉の一覧<kbd aria-hidden="true">?</kbd></button>
     </div>
   </div>
 </header>
@@ -431,6 +437,7 @@
           <div><dt><span aria-hidden="true">● </span>さっと確認</dt><dd>表記の揃え、代替テキストなど、小さな直しだけのページ。差分を見て採用します。</dd></div>
           <div><dt><span aria-hidden="true">○ </span>確認不要</dt><dd>安全な直しだけを一括処理が済ませたページ。開かなくても構いません。</dd></div>
         </dl>
+        <p>難易度(SS、S、A、B、C)は移行管理シートの区分で、確認の深さとは別に付きます。</p>
       </details>
     </div>
     <div class="column-body" id="queueScroll">
@@ -448,7 +455,7 @@
           <button type="button" class="button" id="nextPage" aria-keyshortcuts="n">次のページ<kbd aria-hidden="true">N</kbd></button>
         </div>
         <div class="view-switch" role="group" aria-label="差分の表示">
-          <button type="button" class="button" id="viewVisual" aria-pressed="true" aria-keyshortcuts="v">見た目</button>
+          <button type="button" class="button" id="viewVisual" aria-pressed="true">見た目</button>
           <button type="button" class="button" id="viewCode" aria-pressed="false" aria-keyshortcuts="v">HTML<kbd aria-hidden="true">V</kbd></button>
         </div>
       </div>
@@ -470,8 +477,8 @@
       <div class="cand-nav">
         <p class="cand-summary" id="candSummary"></p>
         <div class="nav-pair" role="group" aria-label="指示の移動">
-          <button type="button" class="button" id="prevCand" aria-keyshortcuts="k">前<kbd aria-hidden="true">K</kbd></button>
-          <button type="button" class="button" id="nextCand" aria-keyshortcuts="j">次<kbd aria-hidden="true">J</kbd></button>
+          <button type="button" class="button" id="prevCand" aria-keyshortcuts="k" aria-label="前の指示">前<kbd aria-hidden="true">K</kbd></button>
+          <button type="button" class="button" id="nextCand" aria-keyshortcuts="j" aria-label="次の指示">次<kbd aria-hidden="true">J</kbd></button>
         </div>
       </div>
     </div>
@@ -486,7 +493,9 @@
 <div class="visually-hidden" aria-live="polite" id="announcer"></div>
 
 <dialog id="helpDialog" aria-labelledby="helpTitle">
-  <h2 id="helpTitle">キーの一覧</h2>
+  <h2 id="helpTitle">キーと言葉の一覧</h2>
+  <h3 class="help-h3">キー</h3>
+  <p class="help-text">キーでできることは、すべて画面のボタンでもできます。決定は何度でも押し直せます。確定したページも、決裁の帯の「確定を取り消す」で戻せます。</p>
   <dl class="help-list">
     <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>次の指示 / 前の指示</dd>
     <dt><kbd>A</kbd></dt><dd>採用</dd>
@@ -495,20 +504,26 @@
     <dt><kbd>L</kbd></dt><dd>後回し(質問の下書きを1行書ける。Enter で決定、Esc で書かずに後回し)</dd>
     <dt><kbd>Shift</kbd> <kbd>A</kbd></dt><dd>このルールを案件の全ページで採用(決裁の帯で確かめてから適用)</dd>
     <dt><kbd>Enter</kbd></dt><dd>判を押して確定し、次のページへ</dd>
-    <dt><kbd>Shift</kbd> <kbd>Enter</kbd></dt><dd>残りの指示をすべて採用して確定(要確認が残るページでは使えない)</dd>
+    <dt><kbd>Shift</kbd> <kbd>Enter</kbd></dt><dd>残りの指示をすべて採用して確定(確かめる点のある指示が残るページでは使えない)</dd>
     <dt><kbd>N</kbd> <kbd>P</kbd></dt><dd>次のページ / 前のページ(確定しない)</dd>
     <dt><kbd>V</kbd></dt><dd>見た目と HTML の表示を切り替え</dd>
   </dl>
-  <p class="mock-note">キーでできることは、すべて画面のボタンでもできます。</p>
-  <p class="mock-note">決定は何度でも押し直せます。確定したページも、決裁の帯の「確定を取り消す」で戻せます。</p>
-  <p class="mock-note">確認の深さ: しっかり確認(表、見出し、意味に関わる直し。読んで判断)、さっと確認(小さな直しだけ。差分を見て採用)、確認不要(安全な直しだけを一括処理が済ませた)。</p>
+  <h3 class="help-h3">言葉</h3>
+  <dl class="help-list words">
+    <dt>確認の深さ</dt><dd>ページをどこまで読んで確かめるか。一括処理が直しの中身から決める。</dd>
+    <dt>しっかり確認</dt><dd>表の作り、見出し、意味に関わる直しがあるページ。修正前と修正後を読んで判断する。</dd>
+    <dt>さっと確認</dt><dd>表記の揃え、代替テキストなど、小さな直しだけのページ。差分を見て採用する。</dd>
+    <dt>確認不要</dt><dd>安全な直しだけを一括処理が済ませたページ。開かなくてよい。</dd>
+    <dt>確かめる点あり</dt><dd>指示に付く札。一括処理が自信を持てなかった直しで、「確かめること」を読んで判断する。</dd>
+    <dt>難易度</dt><dd>移行管理シートの区分(SS、S、A、B、C)。確認の深さとは別に付く。</dd>
+  </dl>
   <p class="mock-note">これはモックアップです。ページと候補は遠野市のページをまねた架空のもので、保存や書き戻しはしません。</p>
   <form method="dialog"><button class="primary-button" value="close">閉じる</button></form>
 </dialog>
 
 <dialog id="rulesDialog" aria-labelledby="rulesTitle">
   <h2 id="rulesTitle">案件で採用中のルール</h2>
-  <p class="mock-note">Shift+A で案件の全ページに適用したルールです。外すと、まだ確定していないページの指示が未判断に戻ります。</p>
+  <p class="mock-note">「このルールを案件の全ページで採用」(Shift+A)で適用したルールです。外すと、まだ確定していないページの指示が未判断に戻ります。</p>
   <ul class="rules-list" id="rulesList"></ul>
   <form method="dialog"><button class="primary-button" value="close">閉じる</button></form>
 </dialog>
@@ -716,6 +731,7 @@
       </button></li>`;
     }).join("");
     list.querySelectorAll(".queue-item").forEach((b) => b.addEventListener("click", () => {
+      if (blockedByMode()) return;
       openPage(Number(b.dataset.index), true);
       $("queueList").querySelector('[aria-current="true"]')?.focus();
     }));
@@ -792,22 +808,20 @@
     const list = $("candList");
     if (p.tier === 0) {
       $("candSummary").textContent = "確認の要る指示はありません。";
-      $("prevCand").disabled = $("nextCand").disabled = true;
       list.innerHTML = `<li class="cand"><details open><summary><strong>自動で採用した指示 ${p.autoApplied.length} 件</strong></summary><ul class="auto-list">${p.autoApplied.map((a) => `<li><span class="tag-badge">${escapeHtml(a.tag)}</span> ${escapeHtml(a.rule)}：${escapeHtml(a.text)}</li>`).join("")}</ul></details></li>`;
       return;
     }
     const pending = p.candidates.filter((c) => c.state === "pending").length;
     $("candSummary").textContent = `${p.candidates.length} 件のうち、未判断 ${pending} 件`;
-    $("prevCand").disabled = $("nextCand").disabled = p.candidates.length < 2;
     list.innerHTML = p.candidates.map((c, i) => {
       const isCurrent = i === state.candIndex;
       const editing = state.editing === i;
       return `<li class="cand${isCurrent ? " is-current" : ""}" data-index="${i}">
-        <button type="button" class="cand-head" aria-expanded="${isCurrent}" aria-label="指示 ${i + 1}、${escapeHtml(c.rule)}、${plain(STATE_LABEL[c.state])}${c.confidence === "review" ? "、要確認" : ""}">
+        <button type="button" class="cand-head" aria-expanded="${isCurrent}" aria-label="指示 ${i + 1}、${escapeHtml(c.rule)}、${plain(STATE_LABEL[c.state])}${c.confidence === "review" ? "、確かめる点あり" : ""}">
           <span class="num-badge" aria-hidden="true">${i + 1}</span>
           <span class="tag-badge">${escapeHtml(c.tag)}</span>
           <span class="cand-rule">${escapeHtml(c.rule)}</span>
-          ${c.confidence === "review" ? '<span class="cand-flag">要確認</span>' : ""}
+          ${c.confidence === "review" ? '<span class="cand-flag">確かめる点あり</span>' : ""}
           <span class="cand-state ${c.state}${state.popIndex === i ? " pop" : ""}">${STATE_LABEL[c.state]}</span>
         </button>
         <dl class="cand-snippet">
@@ -835,10 +849,12 @@
     list.querySelectorAll(".cand[data-index]").forEach((li) => {
       const i = Number(li.dataset.index);
       li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => {
+        if (blockedByMode()) return;
         state.candIndex = i;
         act(b.dataset.act);
       }));
       li.querySelector(".cand-head").addEventListener("click", () => {
+        if (blockedByMode()) return;
         state.candIndex = i;
         state.editing = null;
         renderDiff(); renderCandidates();
@@ -871,9 +887,25 @@
       <span class="hanko-key" aria-hidden="true"><kbd>Enter</kbd></span>
     </div>`;
 
+  // 確かめ中や下書き中は、ほかの操作を受けない。押されたら、決裁の帯の操作を先に済ませるよう知らせる。
+  const blockedByMode = () => {
+    if (state.mode !== "confirmAll" && state.mode !== "laterNote") return false;
+    announce("決裁の帯の確かめ(または下書き)を先に済ませてください。");
+    $("confirmBar").querySelector("button, input")?.focus();
+    return true;
+  };
+
+  const syncNavButtons = () => {
+    const locked = state.mode === "confirmAll" || state.mode === "laterNote";
+    const few = page().candidates.length < 2;
+    $("prevCand").disabled = $("nextCand").disabled = locked || few;
+    $("prevPage").disabled = $("nextPage").disabled = locked;
+  };
+
   const renderConfirm = () => {
     const p = page();
     const bar = $("confirmBar");
+    syncNavButtons();
     if (state.mode === "confirmAll") {
       const c = cand();
       bar.innerHTML = `<p class="message ask">「${escapeHtml(c.rule)}」を、案件の未確定の ${PROJECT_PAGES} ページで採用します。よろしいですか。</p>
@@ -915,7 +947,7 @@
       message = "確認不要のページです。開かなくても構いません。";
       tally = `<div class="tally" aria-hidden="true"><span class="n">0</span><span class="of">件 自動</span></div>`;
     } else if (pending) {
-      message = `すべて判断すると判を押せます。${reviewPending ? "要確認の指示が残っています。" : "残りをまとめて採用して確定することもできます。"}`;
+      message = `すべて判断すると判を押せます。${reviewPending ? "確かめる点のある指示が残っています。" : "「残りをすべて採用して確定」(Shift+Enter)で、まとめて進めることもできます。"}`;
     } else {
       const later = p.candidates.filter((c) => c.state === "later").length;
       message = later ? `後回しの指示が ${later} 件あります。確定すると、質問欄に下書きを書きます(モックでは書きません)。` : "すべて判断しました。判を押す(Enter)と、次のページへ進みます。";
@@ -927,7 +959,7 @@
     bar.innerHTML = `${tally}<p class="message ${cls}" id="confirmMessage">${pending && p.status === "pending" ? `<span class="visually-hidden">未判断の指示が ${pending} 件あります。</span>` : ""}${escapeHtml(message)}</p>
       ${extra}
       ${canLater ? '<button type="button" class="button" id="laterPageButton">このページを後回し</button>' : ""}
-      ${canAcceptRest ? '<button type="button" class="button ink" id="acceptRestButton" aria-keyshortcuts="Shift+Enter">残りをすべて採用して確定<kbd aria-hidden="true">⇧Enter</kbd></button>' : ""}
+      ${canAcceptRest ? '<button type="button" class="button" id="acceptRestButton" aria-keyshortcuts="Shift+Enter">残りをすべて採用して確定<kbd aria-hidden="true">⇧Enter</kbd></button>' : ""}
       ${hanko(canConfirm)}`;
     $("confirmButton").addEventListener("click", confirmPage);
     $("laterPageButton")?.addEventListener("click", laterPage);
@@ -973,13 +1005,13 @@
     announce(`${p.title}。${TIER_LABEL[p.tier]}。指示 ${p.candidates.length} 件。`);
   };
 
-  const moveCand = (delta) => {
+  const moveCand = (delta, keepFocus) => {
     const n = page().candidates.length;
     if (!n) return;
     state.candIndex = (state.candIndex + delta + n) % n;
     state.editing = null;
     renderDiff(); renderCandidates();
-    focusCurrentHead();
+    if (!keepFocus) focusCurrentHead();
     const c = cand();
     announce(`指示 ${state.candIndex + 1}。${c.rule}。${plain(STATE_LABEL[c.state])}。`);
   };
@@ -997,7 +1029,12 @@
   const act = (kind) => {
     const p = page();
     if (!p.candidates.length || state.mode !== "normal") return;
-    if (isLocked()) { announce("確定済みのページです。直すときは、確定を取り消してください。"); return; }
+    if (isLocked()) {
+      state.flash = p.tier === 0 ? "確認不要のページなので、指示はありません。" : "確定済みのページです。直すときは「確定を取り消す」を押してください。";
+      announce(state.flash);
+      renderConfirm();
+      return;
+    }
     const c = cand();
     if (kind === "edit") { state.editing = state.candIndex; renderCandidates(); return; }
     if (kind === "all") { state.mode = "confirmAll"; renderConfirm(); announce(`「${c.rule}」を案件の全ページで採用するか確かめます。`); return; }
@@ -1106,7 +1143,7 @@
     const p = page();
     if (state.mode !== "normal" || isLocked()) return;
     if (p.candidates.some((c) => c.state === "pending" && c.confidence === "review")) {
-      announce("要確認の指示が残っているので、まとめて採用できません。");
+      announce("確かめる点のある指示が残っているので、まとめて採用できません。");
       return;
     }
     p.candidates.forEach((c) => { if (c.state === "pending") c.state = "accepted"; });
@@ -1135,8 +1172,8 @@
   // ---- 画面の部品 ----
   $("prevPage").addEventListener("click", () => { if (state.mode === "normal") { openPage(neighborPage(-1, false), true); focusCurrentHead(); } });
   $("nextPage").addEventListener("click", () => { if (state.mode === "normal") { openPage(neighborPage(1, false), true); focusCurrentHead(); } });
-  $("prevCand").addEventListener("click", () => { if (state.mode === "normal") moveCand(-1); });
-  $("nextCand").addEventListener("click", () => { if (state.mode === "normal") moveCand(1); });
+  $("prevCand").addEventListener("click", () => { if (state.mode === "normal") moveCand(-1, true); });
+  $("nextCand").addEventListener("click", () => { if (state.mode === "normal") moveCand(1, true); });
   $("viewVisual").addEventListener("click", () => { state.view = "visual"; renderDiff(); });
   $("viewCode").addEventListener("click", () => { state.view = "code"; renderDiff(); });
   $("tierFilter").addEventListener("change", renderQueue);
