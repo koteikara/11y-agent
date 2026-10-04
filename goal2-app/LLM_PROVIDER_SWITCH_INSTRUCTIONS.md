@@ -237,7 +237,7 @@ gemini アダプターのテストのために、`GEMINI_API_BASE_URL`（既定�
 ## 4. 実装ステージ
 
 各ステージの終わりに5章の検証を通す。
-コードの PR は、設計・レビュー担当の承認相当と Codex の二次レビューのあとで、ユーザーがマージを判断する。
+進め方(コミット、push の前のレビュー)は `AGENTS.md` の Agent Working Policy に従う。
 
 **L0 つなぎ（10月20日への対応）**。
 3.8 の3つの変更と、そのテストを入れる。
@@ -303,7 +303,7 @@ Gemini との比較には Gemini の API キーも要る。
 **L3 本番の切り替え**。
 L2 の結果に従って、本番の Cloud Run の設定を変える（文字は `LLM_TEXT_PROVIDER=sakura`、画像は L2 の結果しだい、受け皿は `gemini`）。
 あわせて、画面と文書を直す。
-画面の変更は `public/app.js` に触れるので、構造変更1 の S4 がマージされてから行う。
+画面の変更は `public/app.js` に触れる。前提にしていた構造変更1 の S4 は入っている(PR #141)。
 
 - 画面: 外国語の候補の説明にある「(Gemini APIによる判定)」を「(AIによる判定)」にする。LLM の費用の表示に、答えた提供元を出す。
 - 証跡: JSON のトップに `llm: { text_provider, text_model, vision_provider, vision_model }` を足す。候補ごとの列は足さない。

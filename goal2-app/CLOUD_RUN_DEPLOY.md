@@ -40,13 +40,14 @@ PowerShell で、次の2つの段に分けて実行します。
 $WORKDIR = "D:\Codex\11y-agent-deploy"
 cd $WORKDIR
 
-git fetch origin main
+git fetch origin main              # エラーが出たら進まない
 git branch --show-current          # main と出ること
 git status --porcelain             # 何も出ないこと
 git rev-parse HEAD origin/main     # 同じ値が2行出ること
 ```
 
-3つのどれかが違うときは、デプロイに進みません。
+`git fetch` が失敗すると `origin/main` が古いままになり、確認が通ってしまいます。
+fetch がエラーを出したときと、3つのどれかが違うときは、デプロイに進みません。
 
 - ブランチが `main` でない: `git switch main` で戻す
 - `git status --porcelain` に何か出る: コミットするか、要らない変更なら取り消す
@@ -80,12 +81,15 @@ $PW_VERSION = "<版の番号>"
 
 gcloud builds submit --tag "$IMAGE" .
 gcloud run deploy $SERVICE --image "$IMAGE" --region $REGION --project=$PROJECT_ID --platform managed --port 8080 --memory 512Mi --cpu 1 --allow-unauthenticated --update-secrets="APP_PASSWORD=app-password:$PW_VERSION"
+
+# 手元の node server.js で古い build: 表示が出ないよう、作ったファイルを消す
+Remove-Item public/build-info.json
 ```
 
 `APP_PASSWORD` が無いイメージを Cloud Run で動かすと、画面も API も 503 になります(`GET /api/health` だけは開けます)。
 シークレット `app-password` をまだ作っていないときは、先に下の「共通のパスワード」の1と2を行います。
 
-デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。ローカル開発環境(`node server.js`)では `public/build-info.json` が存在しないため、この表示自体が出ません(表示が無い=ローカル、という目印にもなります)。
+デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。手元の `node server.js` では、デプロイの最後に `public/build-info.json` を消すので、この表示は出ません(表示が無い=手元、という目印にもなります)。
 
 `public/build-info.json` はデプロイのたびに作り直す生成物なので、`.gitignore` で無視しています。
 

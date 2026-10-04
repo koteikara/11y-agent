@@ -5,7 +5,8 @@
 この文書は、Claude Code(またはCodex等のAGENT)がこのリポジトリに対して行った修正・更新を、後から追跡できるように記録する。
 
 - 新しいエントリは常に先頭(直近の変更)に追加する。
-- 1エントリ = 1PR(または1まとまりの作業)を基本とする。2026-10-04 からは PR を使わず `main` に直接コミットする。コミットは自分のIDをエントリに書けないので、「関連PR/コミット」には前のエントリと同じく分かる範囲を書き、IDは `git log -- CHANGELOG.md` で引く。
+- 1エントリ = 1PR(または1まとまりの作業)を基本とする。2026-10-04 からは PR を使わず `main` に直接コミットする。そのエントリの「関連PR/コミット」には `main への直接のコミット(PR なし)` と書き、コミットIDは書かない。IDが要るときは `git log -- CHANGELOG.md` で引く。
+- push の前に受けた Fable のレビューの結果を「レビュー」の項に1行で書く(指摘の件数と、直した内容)。
 - 「何を」「なぜ」「関連ファイル」「関連PR/コミット」を簡潔に書く。詳細な経緯は `memory/project-state.md` を参照する。
 
 ## Entry Format
@@ -15,6 +16,7 @@
 
 - 背景・目的
 - 主な変更内容(箇条書き)
+- レビュー
 - 関連ファイル
 - 関連PR/コミット
 ```
@@ -23,8 +25,8 @@
 
 - 背景・目的: PR を使わなくなったので、これまでの承認相当と Codex の二次レビューの流れが使えなくなった。ユーザーが、push の前に手元で Fable にレビューさせる形に決めた。
 - 主な変更内容: `AGENTS.md` の Agent Working Policy に、push の前に Fable のサブエージェントへ `origin/main..HEAD` の差分をレビューさせ、要修正の指摘を直してから push する手順を足した。`memory/project-state.md` の Decisions の旧レビュー体制に、置き換えたことを書いた。`PROJECT_CONTEXT.md` の設計判断にも足した。
-- レビュー: (push 前に記入)
-- 関連ファイル: `AGENTS.md`、`memory/project-state.md`、`PROJECT_CONTEXT.md`
+- レビュー: Fable が、このエントリと前のエントリの変更をあわせて見た。要修正4件(レビュー欄が空、Entry Format にレビューの項が無い、関連PR/コミットの書き方が決まらない、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md` に PR とマージの進め方が残っていた)と提案4件(手元に残る `build-info.json`、`git fetch` が失敗したときの扱い、済んだ作業の条件として残っていた PR とマージの記述)を直した。`goal2-app/.gcloudignore` を置く提案は見送った。
+- 関連ファイル: `AGENTS.md`、`memory/project-state.md`、`PROJECT_CONTEXT.md`、`CHANGELOG.md`(Purpose と Entry Format)、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LLM_PROVIDER_SWITCH_INSTRUCTIONS.md`、`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-04: 手元で開発し、main に直接 push する運用に変える
@@ -35,7 +37,8 @@
   - `.gitignore`: デプロイのたびに作り直す `goal2-app/public/build-info.json` を足した。
   - `PROJECT_CONTEXT.md` の設計判断とデプロイの説明、`memory/project-state.md` の Decisions に新しい運用を書いた。PR を前提にしたレビュー体制の決め直しが要ることも書いた。
 - 関連ファイル: `goal2-app/CLOUD_RUN_DEPLOY.md`、`.gitignore`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
-- 関連PR/コミット: `d18f693`(main への直接のコミット、PR なし)
+- レビュー: レビューを通さずに push した。次のエントリのレビューで、この変更もあわせて見た。
+- 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-09-28: P1 Cloud Run に共通のパスワードを掛ける
 
