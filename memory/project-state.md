@@ -182,7 +182,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 2. ユーザーが P1 を本番に適用する。
 3. ユーザーが `goal2-app.exe` を作り直して配り直す。
 4. ユーザーが共有ドライブのフォルダーを用意する。
-5. 1〜4 と並行して、Opus が手元で小さめの作業を進める。順に、このファイルの整理、`goal2-app/.gcloudignore`、`npx esbuild` と `npx postject` の版の固定、4.6。
+5. 1〜4 と並行して、Opus が手元で小さめの作業を進める。順に、このファイルの整理、`goal2-app/.gcloudignore`、`npx esbuild` と `npx postject` の版の固定、4.6(4.6 より前の3つは 2026-10-04 に済んだ)。
 6. Opus が S5 を進める。P1 を適用し、本番で S4 が落ち着いてから始める。手元に Playwright と佐賀市 fixture（`.tmp-gemini-a11y-agent`）を置いてから push する。
 7. Opus が 4.7 と 4.8 を進める。
 8. L2 の人の判定と、L3 に要る決定がそろってから L3 を進める。

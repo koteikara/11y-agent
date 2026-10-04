@@ -4,6 +4,8 @@
 # ここに足すときは、ルートの .gitignore から写さない。.gitignore は build-info.json を無視している。
 /*
 !/.gcloudignore
+# Cloud Build の Docker ビルドでも .dockerignore が効くよう、一緒に送る。
+!/.dockerignore
 !/Dockerfile
 !/package.json
 !/server.js

@@ -33,7 +33,7 @@ PowerShell で、次の2つの段に分けて実行します。
 
 ### 1. 送る内容を確かめる
 
-`gcloud builds submit` は、コミットしていない変更も含めて `goal2-app` フォルダの中身をそのまま送ります。
+`gcloud builds submit` は、`.gcloudignore` で絞ったファイル(後述)を、コミットしていない変更も含めてそのまま送ります。
 そのため、デプロイの前に、手元の `main` がコミット済みで、GitHub の `main` と同じであることを確かめます。
 
 ```powershell
@@ -92,7 +92,7 @@ Remove-Item public/build-info.json
 デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。手元の `node server.js` では、デプロイの最後に `public/build-info.json` を消すので、この表示は出ません(表示が無い=手元、という目印にもなります)。
 
 `public/build-info.json` はデプロイのたびに作り直す生成物なので、`.gitignore` で無視しています。
-`gcloud builds submit` が送るファイルは `goal2-app/.gcloudignore` で、Dockerfile が使うもの(`package.json`、`server.js`、`lib/`、`public/`、`data/`)に絞っています。`build-info.json` は `public/` に含まれるので送られます。送るファイルの一覧は `gcloud meta list-files-for-upload .` で確かめられます。
+`gcloud builds submit` が送るファイルは `goal2-app/.gcloudignore` で、Dockerfile が使うもの(`package.json`、`server.js`、`lib/`、`public/`、`data/`)と、`Dockerfile`、`.dockerignore`、`.gcloudignore` に絞っています。`build-info.json` は `public/` に含まれるので送られます。送るファイルの一覧は `gcloud meta list-files-for-upload .` で確かめられます。
 
 変更を本番に出す前に試したいときも、先にコミットして push します。
 そのうえで `gcloud run deploy` に `--no-traffic --tag <名前>` を付け、トラフィックを流さないリビジョンを作ってタグ付きの URL で確かめてから、`gcloud run services update-traffic $SERVICE --region $REGION --project=$PROJECT_ID --to-latest` で移します。

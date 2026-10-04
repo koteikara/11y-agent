@@ -21,14 +21,14 @@
 - 関連PR/コミット
 ```
 
-## 2026-10-04: Cloud Build へ送るファイルを絞り、Windows 版のビルドのツールの版を固定する
+## 2026-10-04: Cloud Build へ送るファイルを絞り、Windows 版をビルドするツールの版を固定する
 
 - 背景・目的: 途中の作業の進め方(前のエントリ)で、Opus が手元で進める小さめの作業とした2件である。`goal2-app` には `.gcloudignore` が無く、`gcloud builds submit` は手元の設定(`.goal2-app-local/`)、テスト、Windows 版のビルド生成物まで Cloud Build へ送っていた。イメージに入るのは Dockerfile が写すものだけなので本番への影響は無いが、送らなくてよいものを送っていた。Windows 版のビルドは `npx esbuild` と `npx postject` を版を決めずに取得していたので、作り直すたびに違う版で作られるおそれがあった。P0 の `.exe` の作り直しの前に固定する。
 - 主な変更内容:
-  - `goal2-app/.gcloudignore` を足した。Dockerfile が使う `package.json`、`server.js`、`lib/`、`public/`、`data/` と、Dockerfile と `.gcloudignore` 自身だけを送る。`public/build-info.json` は `public/` に含まれるので送られる。ルートの `.gitignore` から写すと `build-info.json` まで除いてしまうので、写さないよう注記した。`gcloud meta list-files-for-upload .` で、送るのが63ファイル(`build-info.json` を含む)であることを確かめた。
+  - `goal2-app/.gcloudignore` を足した。Dockerfile が使う `package.json`、`server.js`、`lib/`、`public/`、`data/` と、`Dockerfile`、`.dockerignore`、`.gcloudignore` だけを送る。`.dockerignore` は、Cloud Build の Docker ビルドでも効くよう一緒に送る。`public/build-info.json` は `public/` に含まれるので送られる。ルートの `.gitignore` から写すと `build-info.json` まで除いてしまうので、写さないよう注記した。`gcloud meta list-files-for-upload .` で、送るのが64ファイル(`build-info.json` を含む)であることを確かめた。
   - `goal2-app/build-windows-app.bat` を `npx --yes esbuild@0.28.2` と `npx --yes postject@1.0.0-alpha.6` にした。手元で `esbuild@0.28.2` が `server.js` をまとめ、まとめたファイルでサーバーが起動して `/api/health` に応えることと、`postject@1.0.0-alpha.6` が動くことを確かめた。`.exe` まで作る確認は、Node.js 24 の入った PC で行う(P0 の作り直しのとき)。
   - `goal2-app/CLOUD_RUN_DEPLOY.md` に送るファイルの絞り方と確かめ方を、`goal2-app/LOCAL_WINDOWS_APP.md` に固定した版を書いた。`PROJECT_CONTEXT.md` の未解決事項と `memory/project-state.md` の未着手の一覧を直した。
-- レビュー: (push 前に記入)
+- レビュー: Fable が見た。要修正は無かった。`.gcloudignore` で送るファイルと Dockerfile の COPY に過不足が無いこと、`npx` に `--yes` が要ること、固定した版がいまの最新でこれまでと出力が変わらないことを確かめた。提案4件(手順書の「フォルダの中身をそのまま送る」の文、`.dockerignore` も送る、project-state の進め方に済んだ印、見出しの「の」の連続)を取り入れた。
 - 関連ファイル: `goal2-app/.gcloudignore`(新規)、`goal2-app/build-windows-app.bat`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`goal2-app/LOCAL_WINDOWS_APP.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
