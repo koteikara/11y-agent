@@ -1,0 +1,199 @@
+<p>【T0200】取込試験 02 リストと表。この段落は試験の始まりの目印。</p>
+
+<p>【T0201】箇条書き ul</p>
+<ul>
+<li>りんご</li>
+<li>みかん</li>
+<li>ぶどう</li>
+</ul>
+
+<p>【T0202】番号付き ol</p>
+<ol>
+<li>申請書を書く</li>
+<li>窓口に出す</li>
+<li>受付票を受け取る</li>
+</ol>
+
+<p>【T0203】番号付き ol の start と type</p>
+<ol start="3" type="a">
+<li>3番目から始まる項目</li>
+<li>次の項目</li>
+</ol>
+
+<p>【T0204】番号付き ol の reversed と li の value</p>
+<ol reversed>
+<li value="10">10 番の項目</li>
+<li>9 番の項目</li>
+</ol>
+
+<p>【T0205】入れ子の箇条書き</p>
+<ul>
+<li>大項目1
+<ul>
+<li>小項目1-1</li>
+<li>小項目1-2</li>
+</ul>
+</li>
+<li>大項目2</li>
+</ul>
+
+<p>【T0206】箇条書きと番号付きの入れ子</p>
+<ol>
+<li>手順1
+<ul>
+<li>補足A</li>
+</ul>
+</li>
+<li>手順2</li>
+</ol>
+
+<p>【T0207】定義リスト dl・dt・dd</p>
+<dl>
+<dt>受付時間</dt>
+<dd>午前8時30分から午後5時15分</dd>
+<dt>場所</dt>
+<dd>市役所1階 市民課</dd>
+</dl>
+
+<p>【T0208】li の中の複数の段落</p>
+<ul>
+<li><p>項目の1段落目。</p><p>項目の2段落目。</p></li>
+</ul>
+
+<p>【T0209】li の中の強調</p>
+<ul>
+<li><strong>持ち物</strong>:本人確認書類</li>
+</ul>
+
+<p>【T0210】表: 最も単純な表(見出しなし)</p>
+<table>
+<tr><td>A1</td><td>B1</td></tr>
+<tr><td>A2</td><td>B2</td></tr>
+</table>
+
+<p>【T0211】表: caption と列見出し th(scope="col")</p>
+<table>
+<caption>開館時間</caption>
+<tr><th scope="col">曜日</th><th scope="col">時間</th></tr>
+<tr><td>平日</td><td>9時から17時</td></tr>
+<tr><td>土曜</td><td>9時から12時</td></tr>
+</table>
+
+<p>【T0212】表: thead・tbody・tfoot</p>
+<table>
+<caption>手数料の合計</caption>
+<thead><tr><th scope="col">項目</th><th scope="col">金額</th></tr></thead>
+<tbody><tr><td>住民票</td><td>300円</td></tr><tr><td>印鑑証明</td><td>300円</td></tr></tbody>
+<tfoot><tr><th scope="row">合計</th><td>600円</td></tr></tfoot>
+</table>
+
+<p>【T0213】表: 行見出し th(scope="row")</p>
+<table>
+<caption>担当課の連絡先</caption>
+<tr><th scope="row">市民課</th><td>0198-62-2111</td></tr>
+<tr><th scope="row">税務課</th><td>0198-62-2112</td></tr>
+</table>
+
+<p>【T0214】表: 行と列の両方に見出し</p>
+<table>
+<caption>月別の利用者数</caption>
+<tr><td></td><th scope="col">4月</th><th scope="col">5月</th></tr>
+<tr><th scope="row">本館</th><td>120</td><td>140</td></tr>
+<tr><th scope="row">分館</th><td>30</td><td>35</td></tr>
+</table>
+
+<p>【T0215】表: colspan(横の結合)</p>
+<table>
+<caption>横に結合した見出し</caption>
+<tr><th scope="colgroup" colspan="2">午前</th><th scope="col">午後</th></tr>
+<tr><td>9時</td><td>11時</td><td>14時</td></tr>
+</table>
+
+<p>【T0216】表: rowspan(縦の結合)</p>
+<table>
+<caption>縦に結合した見出し</caption>
+<tr><th scope="rowgroup" rowspan="2">第1週</th><td>月曜</td></tr>
+<tr><td>火曜</td></tr>
+</table>
+
+<p>【T0217】表: headers 属性と id</p>
+<table>
+<caption>headers 属性の表</caption>
+<tr><th id="h-item">項目</th><th id="h-fee">手数料</th></tr>
+<tr><td headers="h-item">戸籍謄本</td><td headers="h-fee">450円</td></tr>
+</table>
+
+<p>【T0218】表: colgroup と col</p>
+<table>
+<caption>列の幅を決めた表</caption>
+<colgroup><col style="width:30%;"><col style="width:70%;"></colgroup>
+<tr><th scope="col">名前</th><th scope="col">説明</th></tr>
+<tr><td>図書館</td><td>本を借りられる施設</td></tr>
+</table>
+
+<p>【T0219】表: 廃止された属性 summary、border、width、cellpadding、cellspacing、align、bgcolor</p>
+<table summary="古い書き方の表" border="1" width="80%" cellpadding="4" cellspacing="0" align="center" bgcolor="#eeeeee">
+<tr><th>見出し</th><td>値</td></tr>
+</table>
+
+<p>【T0220】表: セルの style(背景色、文字の寄せ、幅)</p>
+<table>
+<caption>セルに style を付けた表</caption>
+<tr><th scope="col" style="background-color:#ddeeff;">見出し</th><th scope="col" style="width:200px;">幅を決めた見出し</th></tr>
+<tr><td style="text-align:center;">中央</td><td style="text-align:right;">右</td></tr>
+</table>
+
+<p>【T0221】表: 空のセルと &amp;nbsp; だけのセル</p>
+<table>
+<caption>空のセル</caption>
+<tr><th scope="col">項目</th><th scope="col">値</th></tr>
+<tr><td>空</td><td></td></tr>
+<tr><td>空白だけ</td><td>&nbsp;</td></tr>
+</table>
+
+<p>【T0222】表: セルの中の箇条書き</p>
+<table>
+<caption>セルの中のリスト</caption>
+<tr><th scope="row">持ち物</th><td><ul><li>本人確認書類</li><li>印鑑</li></ul></td></tr>
+</table>
+
+<p>【T0223】表: セルの中の段落と改行</p>
+<table>
+<caption>セルの中の段落</caption>
+<tr><th scope="row">説明</th><td><p>1段落目。</p><p>2段落目。<br>改行した行。</p></td></tr>
+</table>
+
+<p>【T0224】表: 入れ子の表</p>
+<table>
+<caption>外側の表</caption>
+<tr><th scope="row">内訳</th><td>
+<table><caption>内側の表</caption><tr><th scope="col">品目</th><th scope="col">数</th></tr><tr><td>A</td><td>1</td></tr></table>
+</td></tr>
+</table>
+
+<p>【T0225】表: セルの中の見出し h3(段組みに使った表)</p>
+<table>
+<tr><td><h3>左の見出し</h3><p>左の段落。</p></td><td><h3>右の見出し</h3><p>右の段落。</p></td></tr>
+</table>
+
+<p>【T0226】表: th の abbr 属性</p>
+<table>
+<caption>abbr 属性の見出し</caption>
+<tr><th scope="col" abbr="人数">参加者の人数</th></tr>
+<tr><td>25</td></tr>
+</table>
+
+<p>【T0227】表: 大きめの表(5列×6行)</p>
+<table>
+<caption>5列6行の表</caption>
+<thead><tr><th scope="col">No</th><th scope="col">施設名</th><th scope="col">住所</th><th scope="col">電話</th><th scope="col">定員</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>第一公民館</td><td>中央1-1</td><td>0198-00-0001</td><td>50</td></tr>
+<tr><td>2</td><td>第二公民館</td><td>中央2-2</td><td>0198-00-0002</td><td>40</td></tr>
+<tr><td>3</td><td>第三公民館</td><td>中央3-3</td><td>0198-00-0003</td><td>30</td></tr>
+<tr><td>4</td><td>第四公民館</td><td>中央4-4</td><td>0198-00-0004</td><td>20</td></tr>
+<tr><td>5</td><td>第五公民館</td><td>中央5-5</td><td>0198-00-0005</td><td>10</td></tr>
+</tbody>
+</table>
+
+<p>【T0299】取込試験 02 の終わりの目印。</p>

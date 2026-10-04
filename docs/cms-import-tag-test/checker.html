@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMS取込試験の照合</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #1d2433;
+    --muted: #4d566a;
+    --line: #c9cfdb;
+    --accent: #1f4fbf;
+    --ok: #146c2e;
+    --warn: #8a5300;
+    --bad: #b3261e;
+    --focus: #1f4fbf;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 32px 0 8px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 16px; margin: 20px 0 8px; }
+  p { margin: 0 0 8px; }
+  section.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  label { font-weight: 600; }
+  .field { margin-bottom: 12px; }
+  .field input[type="text"], .field input[type="url"], textarea {
+    width: 100%; padding: 6px 8px; border: 1px solid #8a93a6; border-radius: 4px; font: inherit;
+  }
+  textarea { min-height: 120px; font-family: Consolas, monospace; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px 24px; }
+  button {
+    font: inherit; padding: 6px 16px; border-radius: 4px; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.secondary { background: #fff; color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .status { margin-top: 8px; padding: 8px 12px; border-left: 4px solid var(--accent); background: #eef2fb; }
+  .status.error { border-color: var(--bad); background: #fbeeee; }
+  table { border-collapse: collapse; width: 100%; background: var(--surface); }
+  caption { text-align: left; font-weight: 700; padding: 4px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; text-align: left; }
+  thead th { background: #e8ebf2; position: sticky; top: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .badge.same { color: var(--ok); border: 1px solid var(--ok); }
+  .badge.wrap { color: var(--ok); border: 1px dashed var(--ok); }
+  .badge.changed { color: var(--warn); border: 1px solid var(--warn); }
+  .badge.gone, .badge.nomarker { color: var(--bad); border: 1px solid var(--bad); }
+  details summary { cursor: pointer; color: var(--accent); }
+  pre.code { white-space: pre-wrap; word-break: break-all; font-size: 12px; background: #f2f4f8; padding: 6px; margin: 4px 0; max-height: 240px; overflow: auto; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
+  .filters label { font-weight: 400; }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CMS取込試験の照合</h1>
+  <p>取込試験のページ(01〜05)が、SMART CMS に取り込まれたあとにどう変わったかを、項目ごとに確かめる画面です。ファイルはこの画面の中だけで読み、どこにも送りません。</p>
+  <p class="hint">手順は同じフォルダの README.md にあります。</p>
+
+  <h2>1. 準備: 印を実在する URL に置き換える</h2>
+  <section class="card" aria-labelledby="prep-title">
+    <h3 id="prep-title">置き換える印と URL</h3>
+    <p class="hint">04 と 05 には、画像やファイルの代わりに波かっこ2つで囲んだ印があります。旧サイトに実在する絶対 URL を入れてください。存在しない URL があると、取込はページごと失敗します。</p>
+    <div class="grid" id="placeholderFields"></div>
+    <div class="field">
+      <label for="templateFiles">置き換える試験ページ(複数選べます)</label><br>
+      <input type="file" id="templateFiles" accept=".html,.htm" multiple>
+    </div>
+    <button type="button" id="prepareButton">置き換えて保存する</button>
+    <div id="prepareStatus" class="status" hidden role="status"></div>
+  </section>
+
+  <h2>2. 照合: 元の HTML と取込後の HTML を比べる</h2>
+  <section class="card" aria-labelledby="compare-title">
+    <h3 id="compare-title">読み込むファイル</h3>
+    <div class="grid">
+      <div class="field">
+        <label for="originalFiles">元の試験ページ(FTP に上げたもの。複数選べます)</label><br>
+        <input type="file" id="originalFiles" accept=".html,.htm" multiple>
+      </div>
+      <div class="field">
+        <label for="importedFiles">取込後のページを保存した HTML(複数選べます)</label><br>
+        <input type="file" id="importedFiles" accept=".html,.htm" multiple>
+        <p class="hint">CMS のプレビュー URL を開き、Ctrl+S で「ウェブページ、HTML のみ」を選んで保存したもの。「取り込み範囲プレビュー」の HTML でも構いません。</p>
+      </div>
+    </div>
+    <div class="field">
+      <label for="importedPaste">取込後の HTML を貼り付ける(ファイルの代わりに使えます)</label>
+      <textarea id="importedPaste" spellcheck="false"></textarea>
+    </div>
+    <button type="button" id="compareButton">照合する</button>
+    <div id="compareStatus" class="status" hidden role="status"></div>
+  </section>
+
+  <div id="results" hidden>
+    <h2>3. 結果</h2>
+    <section class="card" aria-labelledby="summary-title">
+      <h3 id="summary-title">判定の内訳</h3>
+      <div id="summary"></div>
+      <p>
+        <button type="button" class="secondary" id="exportCases">項目ごとの結果を CSV で保存</button>
+        <button type="button" class="secondary" id="exportInventory">タグと属性の残り具合を CSV で保存</button>
+      </p>
+      <p class="hint">判定の意味: 「そのまま」は元と同じ。「囲みだけ違う」は div の囲みを外すと同じ(CMS がパーツの囲みを足した場合など)。「変化あり」はタグ、属性、文字のどれかが変わった。「消えた」は中身が残っていない。「目印なし」は取込後の HTML に目印の段落が無い(ページごと失敗した、または保存した範囲に含まれない)。</p>
+    </section>
+
+    <section class="card" aria-labelledby="inventory-title">
+      <h3 id="inventory-title">タグと属性の残り具合</h3>
+      <p class="hint">元の試験ページに出てくるタグ、属性、style の指定ごとに、取込後にも残った項目の数を数えます。「目印なし」の項目は数えません。</p>
+      <div class="table-wrap" id="inventory"></div>
+    </section>
+
+    <section class="card" aria-labelledby="cases-title">
+      <h3 id="cases-title">項目ごとの結果</h3>
+      <div class="filters" role="group" aria-label="判定で絞り込む" id="filters"></div>
+      <div class="table-wrap" id="cases"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const PLACEHOLDERS = [
+    { key: "IMAGE_JPG", label: "JPEG 画像の URL" },
+    { key: "IMAGE_PNG", label: "PNG 画像の URL" },
+    { key: "IMAGE_GIF", label: "GIF 画像の URL" },
+    { key: "IMAGE_ICON", label: "ファイルの種類を示すアイコン画像の URL" },
+    { key: "FILE_PDF", label: "PDF ファイルの URL" },
+    { key: "FILE_XLSX", label: "Excel ファイルの URL" },
+    { key: "FILE_DOCX", label: "Word ファイルの URL" },
+    { key: "YOUTUBE_EMBED", label: "YouTube の埋め込み URL(https://www.youtube.com/embed/…)" },
+  ];
+  const MARKER = /【(T\d{4})】/;
+  const STATUS_LABEL = {
+    same: "そのまま",
+    wrap: "囲みだけ違う",
+    changed: "変化あり",
+    gone: "消えた",
+    nomarker: "目印なし",
+  };
+  const STATUS_ORDER = ["nomarker", "gone", "changed", "wrap", "same"];
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const readFile = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file, "utf-8");
+  });
+  const showStatus = (el, message, isError) => {
+    el.hidden = false;
+    el.classList.toggle("error", Boolean(isError));
+    el.textContent = message;
+  };
+
+  // ---- 1. 準備 ----
+  const fieldsHost = $("placeholderFields");
+  PLACEHOLDERS.forEach(({ key, label }) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    wrap.innerHTML = `<label for="ph-${key}">${escapeHtml(label)}</label><br><span class="hint">印: {{${key}}}</span><input type="url" id="ph-${key}" placeholder="https://">`;
+    fieldsHost.appendChild(wrap);
+    try {
+      const saved = localStorage.getItem(`cms-import-test.${key}`);
+      if (saved) wrap.querySelector("input").value = saved;
+    } catch { /* 保存できない環境では毎回入れる */ }
+  });
+
+  const download = (name, text, type) => {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  $("prepareButton").addEventListener("click", async () => {
+    const status = $("prepareStatus");
+    const files = [...$("templateFiles").files];
+    if (!files.length) return showStatus(status, "置き換える試験ページを選んでください。", true);
+    const values = {};
+    PLACEHOLDERS.forEach(({ key }) => {
+      const value = $(`ph-${key}`).value.trim();
+      values[key] = value;
+      try { localStorage.setItem(`cms-import-test.${key}`, value); } catch { /* 無視 */ }
+    });
+    const messages = [];
+    for (const file of files) {
+      const text = await readFile(file);
+      const missing = new Set();
+      const replaced = text.replace(/\{\{([A-Z_]+)\}\}/g, (whole, key) => {
+        if (values[key]) return values[key].replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+        missing.add(key);
+        return whole;
+      });
+      if (missing.size) {
+        messages.push(`${file.name}: 未入力の印があるので保存しませんでした(${[...missing].join("、")})。`);
+        continue;
+      }
+      download(file.name, replaced, "text/html;charset=utf-8");
+      messages.push(`${file.name}: 保存しました。`);
+    }
+    showStatus(status, messages.join("\n"), messages.some((m) => m.includes("保存しませんでした")));
+  });
+
+  // ---- 2. 照合 ----
+  // 目印を含む最も内側の要素を、文書の順に返す。
+  const findMarkers = (doc) => {
+    const walker = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT);
+    const found = [];
+    const seen = new Set();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const m = node.nodeValue.match(MARKER);
+      if (!m || seen.has(m[1])) continue;
+      seen.add(m[1]);
+      const element = node.parentElement;
+      const description = (element.textContent || "").replace(MARKER, "").trim();
+      found.push({ id: m[1], element, description });
+    }
+    return found;
+  };
+
+  // 目印の段落から次の目印の段落までの中身を、項目 ID ごとに取り出す。
+  const extractCases = (html) => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const markers = findMarkers(doc);
+    const cases = new Map();
+    for (let i = 0; i < markers.length - 1; i += 1) {
+      const current = markers[i];
+      const next = markers[i + 1];
+      if (current.element.contains(next.element) || next.element.contains(current.element)) continue;
+      const range = doc.createRange();
+      range.setStartAfter(current.element);
+      range.setEndBefore(next.element);
+      const holder = doc.createElement("div");
+      holder.appendChild(range.cloneContents());
+      cases.set(current.id, { id: current.id, description: current.description, holder });
+    }
+    const last = markers[markers.length - 1];
+    if (last) cases.set(last.id, { id: last.id, description: last.description, holder: null });
+    return cases;
+  };
+
+  const normalizeStyle = (value) =>
+    value
+      .split(";")
+      .map((part) => part.trim().replace(/\s*:\s*/, ":").toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join(";");
+
+  const normalizeText = (text) => text.replace(/[\s ]+/g, " ").trim();
+
+  // 比べやすい1本の文字列にする。unwrapDiv のときは div の囲みを外して比べる。
+  const canonical = (node, unwrapDiv) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = normalizeText(node.nodeValue);
+      return t ? `"${t}"` : "";
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const children = [...node.childNodes].map((child) => canonical(child, unwrapDiv)).filter(Boolean).join(" ");
+    const tag = node.tagName.toLowerCase();
+    if (unwrapDiv && tag === "div") return children;
+    const attrs = [...node.attributes]
+      .map((a) => `${a.name.toLowerCase()}=${a.name.toLowerCase() === "style" ? normalizeStyle(a.value) : normalizeText(a.value)}`)
+      .sort()
+      .join(" ");
+    return `<${tag}${attrs ? " " + attrs : ""}>${children}</${tag}>`;
+  };
+  const canonicalOf = (holder, unwrapDiv) =>
+    holder ? [...holder.childNodes].map((child) => canonical(child, unwrapDiv)).filter(Boolean).join(" ") : "";
+
+  // タグ、属性、style の指定の一覧。
+  const inventoryOf = (holder) => {
+    const keys = new Set();
+    if (!holder) return keys;
+    holder.querySelectorAll("*").forEach((el) => {
+      const tag = el.tagName.toLowerCase();
+      keys.add(tag);
+      [...el.attributes].forEach((a) => {
+        const name = a.name.toLowerCase();
+        keys.add(`${tag}@${name}`);
+        if (name === "style") {
+          normalizeStyle(a.value).split(";").filter(Boolean).forEach((decl) => keys.add(`${tag}@style:${decl.split(":")[0]}`));
+        }
+      });
+    });
+    return keys;
+  };
+
+  const hasContent = (holder) => Boolean(holder && (normalizeText(holder.textContent || "") || holder.querySelector("img,iframe,table,video,audio,svg,object,embed,canvas,math,hr,input,select,textarea,button")));
+
+  let lastResult = null;
+
+  $("compareButton").addEventListener("click", async () => {
+    const status = $("compareStatus");
+    const originals = [...$("originalFiles").files];
+    const importedFiles = [...$("importedFiles").files];
+    const pasted = $("importedPaste").value.trim();
+    if (!originals.length) return showStatus(status, "元の試験ページを選んでください。", true);
+    if (!importedFiles.length && !pasted) return showStatus(status, "取込後の HTML をファイルで選ぶか、貼り付けてください。", true);
+
+    const originalCases = new Map();
+    for (const file of originals) {
+      const text = await readFile(file);
+      if (/\{\{[A-Z_]+\}\}/.test(text)) {
+        return showStatus(status, `${file.name} に置き換えていない印があります。FTP に上げたファイル(置き換え後)を選んでください。`, true);
+      }
+      extractCases(text).forEach((value, key) => originalCases.set(key, { ...value, file: file.name }));
+    }
+    const importedCases = new Map();
+    const importedTexts = await Promise.all(importedFiles.map(readFile));
+    if (pasted) importedTexts.push(pasted);
+    importedTexts.forEach((text) => extractCases(text).forEach((value, key) => {
+      if (!importedCases.has(key)) importedCases.set(key, value);
+    }));
+
+    const rows = [];
+    [...originalCases.values()]
+      .filter((c) => c.holder && !/(00|99)$/.test(c.id))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .forEach((orig) => {
+        const imp = importedCases.get(orig.id);
+        const before = inventoryOf(orig.holder);
+        let statusKey;
+        let after = new Set();
+        if (!imp || !imp.holder) {
+          statusKey = "nomarker";
+        } else {
+          after = inventoryOf(imp.holder);
+          // 一致を先に見る。空の段落の試験(T0151)のように、元から中身が無い項目を「消えた」にしないため。
+          if (canonicalOf(orig.holder, false) === canonicalOf(imp.holder, false)) statusKey = "same";
+          else if (canonicalOf(orig.holder, true) === canonicalOf(imp.holder, true)) statusKey = "wrap";
+          else if (!hasContent(imp.holder)) statusKey = "gone";
+          else statusKey = "changed";
+        }
+        const lost = statusKey === "nomarker" ? [] : [...before].filter((k) => !after.has(k)).sort();
+        const added = statusKey === "nomarker" ? [] : [...after].filter((k) => !before.has(k)).sort();
+        rows.push({
+          id: orig.id,
+          file: orig.file,
+          description: orig.description,
+          status: statusKey,
+          lost,
+          added,
+          before,
+          after,
+          originalHtml: orig.holder.innerHTML.trim(),
+          importedHtml: imp && imp.holder ? imp.holder.innerHTML.trim() : "",
+        });
+      });
+
+    if (!rows.length) return showStatus(status, "元の試験ページに目印の段落が見つかりませんでした。", true);
+    lastResult = { rows, inventory: buildInventory(rows) };
+    render();
+    const nomarker = rows.filter((r) => r.status === "nomarker").length;
+    showStatus(status, `${rows.length} 項目を照合しました。${nomarker ? `目印なしが ${nomarker} 項目あります。取込が失敗したページか、保存した範囲を確かめてください。` : ""}`, false);
+  });
+
+  const buildInventory = (rows) => {
+    const table = new Map();
+    rows.forEach((row) => {
+      if (row.status === "nomarker") return;
+      row.before.forEach((key) => {
+        const entry = table.get(key) || { key, total: 0, kept: 0, lostIn: [] };
+        entry.total += 1;
+        if (row.after.has(key)) entry.kept += 1;
+        else entry.lostIn.push(row.id);
+        table.set(key, entry);
+      });
+    });
+    return [...table.values()].sort((a, b) => (a.kept / a.total) - (b.kept / b.total) || a.key.localeCompare(b.key));
+  };
+
+  const activeFilters = new Set(STATUS_ORDER);
+
+  const render = () => {
+    const { rows, inventory } = lastResult;
+    $("results").hidden = false;
+
+    const counts = Object.fromEntries(STATUS_ORDER.map((k) => [k, rows.filter((r) => r.status === k).length]));
+    $("summary").innerHTML = `<table><caption>判定ごとの項目数(全 ${rows.length} 項目)</caption><thead><tr><th scope="col">判定</th><th scope="col">項目数</th></tr></thead><tbody>${STATUS_ORDER.map((k) => `<tr><th scope="row"><span class="badge ${k}">${STATUS_LABEL[k]}</span></th><td class="num">${counts[k]}</td></tr>`).join("")}</tbody></table>`;
+
+    $("inventory").innerHTML = `<table><caption>タグ・属性・style の指定ごとの残り具合</caption><thead><tr><th scope="col">タグ、属性、style の指定</th><th scope="col">出てくる項目</th><th scope="col">残った項目</th><th scope="col">残った割合</th><th scope="col">消えた項目の ID</th></tr></thead><tbody>${inventory.map((e) => `<tr><th scope="row"><code>${escapeHtml(e.key)}</code></th><td class="num">${e.total}</td><td class="num">${e.kept}</td><td class="num">${Math.round((e.kept / e.total) * 100)}%</td><td>${escapeHtml(e.lostIn.join(" "))}</td></tr>`).join("")}</tbody></table>`;
+
+    const filters = $("filters");
+    filters.innerHTML = STATUS_ORDER.map((k) => `<label><input type="checkbox" value="${k}" ${activeFilters.has(k) ? "checked" : ""}> ${STATUS_LABEL[k]}(${counts[k]})</label>`).join("");
+    filters.querySelectorAll("input").forEach((box) => box.addEventListener("change", () => {
+      if (box.checked) activeFilters.add(box.value);
+      else activeFilters.delete(box.value);
+      renderCases();
+    }));
+    renderCases();
+  };
+
+  const renderCases = () => {
+    const rows = lastResult.rows.filter((r) => activeFilters.has(r.status));
+    $("cases").innerHTML = `<table><caption>項目ごとの結果(${rows.length} 項目を表示)</caption><thead><tr><th scope="col">ID</th><th scope="col">試験の内容</th><th scope="col">判定</th><th scope="col">消えたもの</th><th scope="col">増えたもの</th><th scope="col">HTML</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${r.id}</th><td>${escapeHtml(r.description)}</td><td><span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span></td><td>${r.lost.map((k) => `<code>${escapeHtml(k)}</code>`).join("<br>")}</td><td>${r.added.map((k) => `<code>${escapeHtml(k)}</code>`).join("<br>")}</td><td><details><summary>元と取込後を見る</summary><p>元</p><pre class="code">${escapeHtml(r.originalHtml)}</pre><p>取込後</p><pre class="code">${escapeHtml(r.importedHtml || "(なし)")}</pre></details></td></tr>`).join("")}</tbody></table>`;
+  };
+
+  const csvCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
+  const toCsv = (header, lines) => "﻿" + [header, ...lines].map((cols) => cols.map(csvCell).join(",")).join("\r\n");
+
+  $("exportCases").addEventListener("click", () => {
+    if (!lastResult) return;
+    const csv = toCsv(
+      ["ID", "ファイル", "試験の内容", "判定", "消えたもの", "増えたもの", "元のHTML", "取込後のHTML"],
+      lastResult.rows.map((r) => [r.id, r.file, r.description, STATUS_LABEL[r.status], r.lost.join(" "), r.added.join(" "), r.originalHtml, r.importedHtml])
+    );
+    download("cms-import-test-cases.csv", csv, "text/csv;charset=utf-8");
+  });
+
+  $("exportInventory").addEventListener("click", () => {
+    if (!lastResult) return;
+    const csv = toCsv(
+      ["タグ・属性・styleの指定", "出てくる項目", "残った項目", "残った割合", "消えた項目のID"],
+      lastResult.inventory.map((e) => [e.key, e.total, e.kept, `${Math.round((e.kept / e.total) * 100)}%`, e.lostIn.join(" ")])
+    );
+    download("cms-import-test-inventory.csv", csv, "text/csv;charset=utf-8");
+  });
+})();
+</script>
+</body>
+</html>

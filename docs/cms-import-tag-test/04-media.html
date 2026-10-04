@@ -1,0 +1,98 @@
+<p>【T0400】取込試験 04 画像とファイル。この段落は試験の始まりの目印。FTP に上げる前に、波かっこ2つで囲んだ印(IMAGE_JPG など)を旧サイトに実在する絶対 URL へ置き換える。置き換えないと取込はページごと失敗する。</p>
+
+<p>【T0401】画像: alt あり(JPEG)</p>
+<p><img src="{{IMAGE_JPG}}" alt="試験用の写真の代替テキスト"></p>
+
+<p>【T0402】画像: alt あり(PNG)と width・height</p>
+<p><img src="{{IMAGE_PNG}}" alt="試験用の図の代替テキスト" width="300" height="200"></p>
+
+<p>【T0403】画像: alt あり(GIF)</p>
+<p><img src="{{IMAGE_GIF}}" alt="試験用の GIF 画像"></p>
+
+<p>【T0404】画像: alt="" (装飾の画像)</p>
+<p><img src="{{IMAGE_PNG}}" alt=""></p>
+
+<p>【T0405】画像: alt 属性なし</p>
+<p><img src="{{IMAGE_JPG}}"></p>
+
+<p>【T0406】画像: title 属性と loading 属性</p>
+<p><img src="{{IMAGE_JPG}}" alt="title 付きの画像" title="画像の補足" loading="lazy"></p>
+
+<p>【T0407】画像: style 属性(幅と回り込み)</p>
+<p><img src="{{IMAGE_JPG}}" alt="左に回り込む画像" style="float:left;width:150px;">画像の右側に回り込む文。画像の右側に回り込む文。</p>
+
+<p>【T0408】画像: 段落の外に単独で置いた img</p>
+<img src="{{IMAGE_PNG}}" alt="段落の外の画像">
+
+<p>【T0409】画像: 2枚の横並び(同じ段落)</p>
+<p><img src="{{IMAGE_JPG}}" alt="横並びの1枚目"><img src="{{IMAGE_PNG}}" alt="横並びの2枚目"></p>
+
+<p>【T0410】画像: 3枚の横並び(同じ段落)</p>
+<p><img src="{{IMAGE_JPG}}" alt="3枚並びの1枚目"><img src="{{IMAGE_PNG}}" alt="3枚並びの2枚目"><img src="{{IMAGE_GIF}}" alt="3枚並びの3枚目"></p>
+
+<p>【T0411】画像: 表で横並びにした2枚</p>
+<table>
+<tr><td><img src="{{IMAGE_JPG}}" alt="表で並べた1枚目"></td><td><img src="{{IMAGE_PNG}}" alt="表で並べた2枚目"></td></tr>
+</table>
+
+<p>【T0412】画像: figure と figcaption</p>
+<figure>
+<img src="{{IMAGE_JPG}}" alt="説明付きの写真">
+<figcaption>写真の説明文(キャプション)。</figcaption>
+</figure>
+
+<p>【T0413】画像: 画像の下に説明の段落</p>
+<p><img src="{{IMAGE_JPG}}" alt="説明を下に置いた写真"></p>
+<p>写真の下に置いた説明の段落。</p>
+
+<p>【T0414】画像のリンク(画像だけを a で囲む)</p>
+<p><a href="https://www.city.tono.iwate.jp/"><img src="{{IMAGE_PNG}}" alt="遠野市のトップページ"></a></p>
+
+<p>【T0415】画像と文字の両方を含むリンク</p>
+<p><a href="https://www.city.tono.iwate.jp/"><img src="{{IMAGE_PNG}}" alt="">遠野市のトップページ</a></p>
+
+<p>【T0416】ファイルのリンク: PDF(種別と容量を書いた文字)</p>
+<p><a href="{{FILE_PDF}}">申請書(PDF:120KB)</a></p>
+
+<p>【T0417】ファイルのリンク: PDF(種別と容量なし)</p>
+<p><a href="{{FILE_PDF}}">申請書</a></p>
+
+<p>【T0418】ファイルのリンク: Excel</p>
+<p><a href="{{FILE_XLSX}}">集計表(Excel)</a></p>
+
+<p>【T0419】ファイルのリンク: Word</p>
+<p><a href="{{FILE_DOCX}}">記入例(Word)</a></p>
+
+<p>【T0420】ファイルのリンク: アイコン画像を前に置いたもの</p>
+<p><img src="{{IMAGE_ICON}}" alt="PDFファイル"><a href="{{FILE_PDF}}">申請書</a></p>
+
+<p>【T0421】ファイルのリンク: アイコン画像をリンクの中に入れたもの</p>
+<p><a href="{{FILE_PDF}}"><img src="{{IMAGE_ICON}}" alt="PDFファイル">申請書</a></p>
+
+<p>【T0422】ファイルのリンク: 文中に置いたもの</p>
+<p>記入方法は<a href="{{FILE_PDF}}">記入の手引き(PDF)</a>をご覧ください。</p>
+
+<p>【T0423】ファイルのリンク: 箇条書きの中</p>
+<ul>
+<li><a href="{{FILE_PDF}}">様式1(PDF)</a></li>
+<li><a href="{{FILE_XLSX}}">様式2(Excel)</a></li>
+</ul>
+
+<p>【T0424】ファイルのリンク: 表の中</p>
+<table>
+<caption>様式の一覧</caption>
+<tr><th scope="col">様式</th><th scope="col">ファイル</th></tr>
+<tr><td>様式1</td><td><a href="{{FILE_PDF}}">様式1(PDF)</a></td></tr>
+<tr><td>様式2</td><td><a href="{{FILE_XLSX}}">様式2(Excel)</a></td></tr>
+</table>
+
+<p>【T0425】ファイルのリンク: target="_blank"</p>
+<p><a href="{{FILE_PDF}}" target="_blank">申請書(PDF、新しいタブで開きます)</a></p>
+
+<p>【T0426】埋め込み動画 iframe(YouTube、title 付き)</p>
+<iframe width="560" height="315" src="{{YOUTUBE_EMBED}}" title="試験用の動画(YouTube)" allowfullscreen></iframe>
+
+<p>【T0427】埋め込み動画 iframe(title なし)</p>
+<iframe width="560" height="315" src="{{YOUTUBE_EMBED}}"></iframe>
+
+<p>【T0499】取込試験 04 の終わりの目印。</p>
