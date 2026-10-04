@@ -1,4 +1,4 @@
-<p>【T0100】取込試験 01 文字と構造。この段落は試験の始まりの目印。</p>
+<p>【T0100】取込試験 01 文字と構造。この段落は試験の始まりの目印。照合画面の「準備」で、波かっこ2つで囲んだ印(SITE_TOP など)を置き換えてから FTP に上げる。</p>
 
 <p>【T0101】見出し h2</p>
 <h2>見出しレベル2の試験</h2>
@@ -61,7 +61,7 @@
 <p>利用者名:<bdi>山田</bdi>。<bdo dir="ltr">ABC</bdo>。長いURLの例 https://www.example.jp/<wbr>very/<wbr>long/<wbr>path</p>
 
 <p>【T0121】引用ブロック blockquote(cite 属性付き)</p>
-<blockquote cite="https://www.city.tono.iwate.jp/">
+<blockquote cite="{{SITE_TOP}}">
 <p>引用ブロックの中の段落。</p>
 </blockquote>
 
@@ -85,12 +85,8 @@
 <section><h3>section の中の見出し</h3><p>section の中の段落。</p></section>
 <article><h3>article の中の見出し</h3><p>article の中の段落。</p></article>
 
-<p>【T0127】aside、nav、header、footer、main</p>
+<p>【T0127】aside(nav、header、footer、main は取込範囲を変えうるので 06 で試す)</p>
 <aside><p>aside の中の段落。</p></aside>
-<nav><p>nav の中の段落。</p></nav>
-<header><p>header の中の段落。</p></header>
-<footer><p>footer の中の段落。</p></footer>
-<main><p>main の中の段落。</p></main>
 
 <p>【T0128】開閉 details・summary</p>
 <details>
@@ -174,5 +170,20 @@
 
 <p>【T0152】見出しの中の強調とリンクなし span</p>
 <h3><strong>強調を含む</strong><span>見出し</span></h3>
+
+<p>【T0153】style 属性: CMS が許す文字色の書き方(red、#ff0000、blue、#0000ff)</p>
+<p><span style="color:red;">red の文字</span>、<span style="color:#ff0000;">#ff0000 の文字</span>、<span style="color:blue;">blue の文字</span>、<span style="color:#0000ff;">#0000ff の文字</span>。</p>
+
+<p>【T0154】style 属性: 字下げ(margin-left と text-indent)</p>
+<p style="margin-left:2em;">margin-left で字下げした段落。</p>
+<p style="text-indent:1em;">text-indent で1行目を字下げした段落。</p>
+
+<p>【T0155】style 属性: 書体と行の高さ(font-family と line-height)</p>
+<p style="font-family:'MS Pゴシック',sans-serif;">書体を指定した段落。</p>
+<p style="line-height:2;">行の高さを指定した段落。</p>
+
+<p>【T0156】全角空白だけの段落と、文中の全角空白</p>
+<p>　</p>
+<p>申込先　市民課</p>
 
 <p>【T0199】取込試験 01 の終わりの目印。</p>

@@ -46,10 +46,10 @@
 <p>写真の下に置いた説明の段落。</p>
 
 <p>【T0414】画像のリンク(画像だけを a で囲む)</p>
-<p><a href="https://www.city.tono.iwate.jp/"><img src="{{IMAGE_PNG}}" alt="遠野市のトップページ"></a></p>
+<p><a href="{{SITE_TOP}}"><img src="{{IMAGE_PNG}}" alt="旧サイトのトップページ"></a></p>
 
 <p>【T0415】画像と文字の両方を含むリンク</p>
-<p><a href="https://www.city.tono.iwate.jp/"><img src="{{IMAGE_PNG}}" alt="">遠野市のトップページ</a></p>
+<p><a href="{{SITE_TOP}}"><img src="{{IMAGE_PNG}}" alt="">旧サイトのトップページ</a></p>
 
 <p>【T0416】ファイルのリンク: PDF(種別と容量を書いた文字)</p>
 <p><a href="{{FILE_PDF}}">申請書(PDF:120KB)</a></p>
@@ -94,5 +94,14 @@
 
 <p>【T0427】埋め込み動画 iframe(title なし)</p>
 <iframe width="560" height="315" src="{{YOUTUBE_EMBED}}"></iframe>
+
+<p>【T0428】画像ファイルへの文字のリンク(拡大画像)</p>
+<p><a href="{{IMAGE_JPG}}">拡大画像</a></p>
+
+<p>【T0429】画像ファイルへのリンクを付けた画像(サムネイル)</p>
+<p><a href="{{IMAGE_JPG}}"><img src="{{IMAGE_JPG}}" alt="サムネイルの写真" width="120"></a></p>
+
+<p>【T0430】ファイルのリンク: 全角で書いた種別と容量</p>
+<p><a href="{{FILE_PDF}}">申請書（PDF：1,928kbyte）</a></p>
 
 <p>【T0499】取込試験 04 の終わりの目印。</p>

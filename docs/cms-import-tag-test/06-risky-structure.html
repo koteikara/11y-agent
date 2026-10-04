@@ -1,0 +1,32 @@
+<p>【T0600】取込試験 06 取込範囲や参照に関わる要素。この段落は試験の始まりの目印。ページごと失敗することがある。失敗したときはエラー内容を控え、怪しい項目を外して取り込み直す。</p>
+
+<p>【T0601】main、header、footer、nav(取込範囲の指定や除外の指定にかかりうる)</p>
+<nav><p>nav の中の段落。</p></nav>
+<header><p>header の中の段落。</p></header>
+<footer><p>footer の中の段落。</p></footer>
+<main><p>main の中の段落。</p></main>
+
+<p>【T0602】相対パスのリンク(FTP 上の置き場を基準に解決される)</p>
+<p><a href="./01-text.html">同じフォルダの試験ページ 01</a></p>
+
+<p>【T0603】ルートからのパスのリンク</p>
+<p><a href="/">サーバーのルート</a></p>
+
+<p>【T0604】地図の埋め込み(Google マップの iframe)</p>
+<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3000!2d141.53!3d39.33!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1" width="400" height="300" title="地図" loading="lazy"></iframe>
+
+<p>【T0605】video 要素と audio 要素(参照するファイルなし。要素が残るかだけを見る)</p>
+<video controls width="320">動画を再生できない環境向けの文。</video>
+<audio controls>音声を再生できない環境向けの文。</audio>
+
+<p>【T0606】object 要素と embed 要素(PDF の印を置き換える)</p>
+<object data="{{FILE_PDF}}" type="application/pdf" width="300" height="200"><p>PDF を表示できない環境向けの文。</p></object>
+<embed src="{{FILE_PDF}}" type="application/pdf" width="300" height="200">
+
+<p>【T0607】canvas 要素</p>
+<canvas width="100" height="50">canvas を表示できない環境向けの文。</canvas>
+
+<p>【T0608】数式 math</p>
+<math><mi>x</mi><mo>=</mo><mn>2</mn></math>
+
+<p>【T0699】取込試験 06 の終わりの目印。</p>

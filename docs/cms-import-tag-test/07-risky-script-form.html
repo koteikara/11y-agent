@@ -1,0 +1,30 @@
+<p>【T0700】取込試験 07 スクリプトとフォーム。この段落は試験の始まりの目印。ページごと失敗することがある。</p>
+
+<p>【T0701】script 要素</p>
+<script>document.title = document.title;</script>
+
+<p>【T0702】style 要素</p>
+<style>.t0702 { color: #006600; }</style>
+<p class="t0702">style 要素で色を付けた段落。</p>
+
+<p>【T0703】noscript 要素</p>
+<noscript><p>JavaScript が無効のときの段落。</p></noscript>
+
+<p>【T0704】フォームの部品(label、input、select、textarea、button)</p>
+<form action="#">
+<p><label for="t0704-name">氏名</label><input type="text" id="t0704-name" name="name"></p>
+<p><label for="t0704-kind">種別</label><select id="t0704-kind" name="kind"><option>個人</option><option>団体</option></select></p>
+<p><label for="t0704-note">備考</label><textarea id="t0704-note" name="note"></textarea></p>
+<p><button type="button">送信しない</button></p>
+</form>
+
+<p>【T0705】JavaScript のリンク(href="javascript:…")</p>
+<p><a href="javascript:void(0)">何もしないリンク</a></p>
+
+<p>【T0706】イベント属性(onclick)</p>
+<p><button type="button" onclick="void(0)">onclick 付きのボタン</button></p>
+
+<p>【T0707】取込失敗の原因になったことがある属性(file_size、data-foreign-domain)</p>
+<p><a href="{{SITE_TOP}}" file_size="250104" data-foreign-domain="">属性の付いたリンク</a></p>
+
+<p>【T0799】取込試験 07 の終わりの目印。</p>
