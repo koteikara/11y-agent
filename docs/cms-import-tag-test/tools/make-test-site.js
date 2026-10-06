@@ -3,6 +3,8 @@
 // 画像(JPEG、PNG、GIF、アイコン、SVG、WebP)、PDF、Excel、Word を test-site/ に書き出す。
 // 使い方(リポジトリの直下で): node docs/cms-import-tag-test/tools/make-test-site.js
 // 画像と PDF は goal2-app に入っている Playwright の Chromium で描く。
+// 要るもの: Node 22.2 以降(zlib.crc32 を使う)と、goal2-app/node_modules の Playwright。
+// goal2-app を手放すときは、Playwright の読み込み先を書き換える。
 "use strict";
 
 const fs = require("fs");
@@ -76,6 +78,9 @@ function makeGif(width, height, palette, pixelAt) {
 
 // ---- ZIP(Excel と Word の入れ物) --------------------------------------------
 
+// ZIP の更新日時(DOS 形式)。0 は形式上不正な日付になるので、1980-01-01 00:00 を書く。
+const DOS_DATE_1980_01_01 = 0x0021 << 16;
+
 function makeZip(entries) {
   const locals = [];
   const centrals = [];
@@ -87,13 +92,13 @@ function makeZip(entries) {
     const nameBuf = Buffer.from(name, "utf8");
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x0800, 6);
-    local.writeUInt16LE(8, 8); local.writeUInt32LE(0, 10); local.writeUInt32LE(crc, 14);
+    local.writeUInt16LE(8, 8); local.writeUInt32LE(DOS_DATE_1980_01_01, 10); local.writeUInt32LE(crc, 14);
     local.writeUInt32LE(comp.length, 18); local.writeUInt32LE(data.length, 22);
     local.writeUInt16LE(nameBuf.length, 26); local.writeUInt16LE(0, 28);
     locals.push(local, nameBuf, comp);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(0x0800, 8); central.writeUInt16LE(8, 10); central.writeUInt32LE(0, 12);
+    central.writeUInt16LE(0x0800, 8); central.writeUInt16LE(8, 10); central.writeUInt32LE(DOS_DATE_1980_01_01, 12);
     central.writeUInt32LE(crc, 16); central.writeUInt32LE(comp.length, 20); central.writeUInt32LE(data.length, 24);
     central.writeUInt16LE(nameBuf.length, 28); central.writeUInt32LE(offset, 42);
     centrals.push(central, nameBuf);
@@ -163,12 +168,13 @@ const indexBody = `<h1>試験用サイトのトップページ</h1>
 </ul>
 <p><img src="img/photo.jpg" alt="試験用の JPEG 画像" width="320" height="180"></p>`;
 
-const pageBody = `<h1>試験用サイトの下層ページ</h1>
+const pageBody = `<h1 id="top">試験用サイトの下層ページ</h1>
 <p>試験ページの「下層ページへのリンク」は、このページを指します。URL にクエリ(?id=1)を付けても同じページが返ります。</p>
+<p>試験ページの「別のページの見出しへのリンク」(T0312)は、この見出しの id(top)を指します。</p>
 <h2 id="section1">見出し1</h2>
-<p>ページ内アンカーの行き先の1つ目です。</p>
+<p>id の付いた見出しの例です。</p>
 <h2 id="section2">見出し2</h2>
-<p>ページ内アンカーの行き先の2つ目です。</p>
+<p>id の付いた見出しの例です。</p>
 <p><a href="index.html">トップページへ戻る</a></p>`;
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>

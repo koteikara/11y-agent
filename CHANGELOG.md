@@ -25,12 +25,12 @@
 
 - 背景・目的: ユーザーから、CMS 取込試験のために実在する旧サイトのページ、画像、ファイルを探すのが手間なので、試験用のページを作ろうと指示があった。
 - 主な変更内容:
-  - `docs/cms-import-tag-test/test-site/`: 旧サイトの役をする試験用サイトを足した。トップページ、下層ページ(クエリ付きでも返る。ページ内アンカーの行き先あり)、JPEG、PNG、GIF、アイコン、SVG、WebP の画像、PDF、Excel、Word。中身は試験のためだけのもので、検索エンジンに載せない指定を入れた。
+  - `docs/cms-import-tag-test/test-site/`: 旧サイトの役をする試験用サイトを足した。トップページ、下層ページ(クエリ付きでも返る。試験ページの別のページの見出しへのリンクが指す `top` の id あり)、JPEG、PNG、GIF、アイコン、SVG、WebP の画像、PDF、Excel、Word。中身は試験のためだけのもので、検索エンジンに載せない指定を入れた。
   - `docs/cms-import-tag-test/tools/make-test-site.js`: 試験用サイトを作り直すスクリプト。画像と PDF は goal2-app の Playwright の Chromium で描き、GIF と Excel と Word は Node の標準の機能だけで書く。
   - `docs/cms-import-tag-test/checker.html`: 「試験用サイトの URL」を入れて「試験用サイトで埋める」を押すと、YouTube 以外の印がすべて埋まるようにした。
-  - `docs/cms-import-tag-test/README.md`: 試験用サイトの使い方と、置き場(試験ページと同じ FTP のサーバか、別のサーバか)で確かめられることが変わることを書いた。「取得素材ドメイン」の確かめは、FTP と別のサーバに置いたときだけ本番と同じ条件になる。
-- 検証: 生成した画像6つを Chromium で読み込めること(GIF、JPEG、PNG、アイコン、WebP、SVG の大きさ)、Excel と Word の入れ物の中身の一覧を確かめた。照合画面で、URL が空のときに知らせが出ること、末尾の / を補って12の印のうち YouTube 以外の11を埋めること、ページのエラーが無いことを Playwright で確かめた。
-- レビュー: (Fable のレビューのあとに書く)
+  - `docs/cms-import-tag-test/README.md`: 試験用サイトの使い方と、置き場が試験ページと同じ FTP のサーバか別のサーバかで、確かめられることが変わると書いた。「取得素材ドメイン」の確かめは、FTP と別のサーバに置いたときだけ本番と同じ条件になる。
+- 検証: 生成した画像6つを Chromium で読み込めること(GIF、JPEG、PNG、アイコン、WebP、SVG の大きさ)、Excel と Word の入れ物の中身の一覧を確かめ、手元の Excel と Word で開いて1行目の文字が読めることを確かめた。照合画面で、URL が空のときに知らせが出ること、末尾の / を補って12の印のうち YouTube 以外の11を埋めること、ページのエラーが無いことを Playwright で確かめた。
+- レビュー: Fable がコミット済みのファイルを読み取りで確かめ(GIF の符号、ZIP の各オフセットと CRC、PNG、WebP、JPEG、PDF の形)、要修正1件を直した。03 の別のページの見出しへのリンクは `#top` を指すのに、下層ページに `top` の id が無かった。見出しに `id="top"` を付けた。提案のうち、webp の但し書きを実在する旧サイトを使うときに限ること、同じサーバに置いたときに 12 と 13 の空の設定の結果が分からないこと、埋めた印も保存すること、ZIP の日時を正しい値にすること、スクリプトの前提(Node 22.2 以降と goal2-app の Playwright)を書くこと、Excel と Word で開いて確かめること、この文の直しを取り入れた。
 - 関連ファイル: `docs/cms-import-tag-test/test-site/`(新規)、`docs/cms-import-tag-test/tools/make-test-site.js`(新規)、`docs/cms-import-tag-test/checker.html`、`docs/cms-import-tag-test/README.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 

@@ -222,7 +222,9 @@
     $("siteBase").value = base;
     try { localStorage.setItem("cms-import-test.SITE_BASE", base); } catch { /* 無視 */ }
     PLACEHOLDERS.forEach(({ key, site }) => {
-      if (site) $(`ph-${key}`).value = base + site;
+      if (!site) return;
+      $(`ph-${key}`).value = base + site;
+      try { localStorage.setItem(`cms-import-test.${key}`, base + site); } catch { /* 無視 */ }
     });
     showStatus(status, "YouTube 以外の印を、試験用サイトの URL で埋めました。YouTube の埋め込み URL は手で入れてください。", false);
   });
