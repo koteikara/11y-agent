@@ -76,7 +76,12 @@
   <h2>1. 準備: 印を実在する URL に置き換える</h2>
   <section class="card" aria-labelledby="prep-title">
     <h3 id="prep-title">置き換える印と URL</h3>
-    <p class="hint">試験ページには、旧サイトのページ、画像、ファイルの代わりに波かっこ2つで囲んだ印があります。旧サイトに実在する絶対 URL を入れてください。存在しない URL があると、取込はページごと失敗します。置き換えたファイルは、名前の末尾に -ready を付けて保存します。複数のファイルを続けて保存するとき、Chrome が「複数ファイルのダウンロード」を許可するか尋ねるので、許可してください。</p>
+    <p class="hint">試験ページには、旧サイトのページ、画像、ファイルの代わりに波かっこ2つで囲んだ印があります。同じフォルダの test-site/ を試験用の置き場に上げ、その URL を下の「試験用サイトの URL」に入れて「試験用サイトで埋める」を押すと、YouTube 以外の印がすべて埋まります。旧サイトに実在する絶対 URL を1つずつ入れてもかまいません。存在しない URL があると、取込はページごと失敗します。置き換えたファイルは、名前の末尾に -ready を付けて保存します。複数のファイルを続けて保存するとき、Chrome が「複数ファイルのダウンロード」を許可するか尋ねるので、許可してください。</p>
+    <div class="field">
+      <label for="siteBase">試験用サイトの URL(test-site/ を置いたフォルダ。末尾は /)</label><br>
+      <input type="url" id="siteBase" placeholder="https://example.jp/cms-import-test/test-site/">
+      <button type="button" class="secondary" id="fillFromSite">試験用サイトで埋める</button>
+    </div>
     <div class="grid" id="placeholderFields"></div>
     <div class="field">
       <label for="templateFiles">置き換える試験ページ(複数選べます)</label><br>
@@ -139,18 +144,18 @@
   "use strict";
 
   const PLACEHOLDERS = [
-    { key: "SITE_TOP", label: "旧サイトのトップページの URL" },
-    { key: "SITE_PAGE", label: "旧サイトの下層ページの URL(実在するもの。できればクエリ付き)" },
-    { key: "IMAGE_JPG", label: "JPEG 画像の URL" },
-    { key: "IMAGE_PNG", label: "PNG 画像の URL" },
-    { key: "IMAGE_GIF", label: "GIF 画像の URL" },
-    { key: "IMAGE_ICON", label: "ファイルの種類を示すアイコン画像の URL" },
-    { key: "FILE_PDF", label: "PDF ファイルの URL" },
-    { key: "FILE_XLSX", label: "Excel ファイルの URL" },
-    { key: "FILE_DOCX", label: "Word ファイルの URL" },
+    { key: "SITE_TOP", label: "旧サイトのトップページの URL", site: "index.html" },
+    { key: "SITE_PAGE", label: "旧サイトの下層ページの URL(実在するもの。できればクエリ付き)", site: "page.html?id=1" },
+    { key: "IMAGE_JPG", label: "JPEG 画像の URL", site: "img/photo.jpg" },
+    { key: "IMAGE_PNG", label: "PNG 画像の URL", site: "img/chart.png" },
+    { key: "IMAGE_GIF", label: "GIF 画像の URL", site: "img/stripe.gif" },
+    { key: "IMAGE_ICON", label: "ファイルの種類を示すアイコン画像の URL", site: "img/icon-pdf.png" },
+    { key: "FILE_PDF", label: "PDF ファイルの URL", site: "files/sample.pdf" },
+    { key: "FILE_XLSX", label: "Excel ファイルの URL", site: "files/sample.xlsx" },
+    { key: "FILE_DOCX", label: "Word ファイルの URL", site: "files/sample.docx" },
     { key: "YOUTUBE_EMBED", label: "YouTube の埋め込み URL(https://www.youtube.com/embed/…)" },
-    { key: "IMAGE_SVG", label: "SVG 画像ファイルの URL(12 だけで使う)" },
-    { key: "IMAGE_WEBP", label: "webp 画像ファイルの URL(13 だけで使う)" },
+    { key: "IMAGE_SVG", label: "SVG 画像ファイルの URL(12 だけで使う)", site: "img/shape.svg" },
+    { key: "IMAGE_WEBP", label: "webp 画像ファイルの URL(13 だけで使う)", site: "img/photo.webp" },
   ];
   const MARKER_ALL = /【(T\d{4})】/g;
   const MARKER_ONE = /【(T\d{4})】/;
@@ -198,6 +203,28 @@
       const saved = localStorage.getItem(`cms-import-test.${key}`);
       if (saved) wrap.querySelector("input").value = saved;
     } catch { /* 保存できない環境では毎回入れる */ }
+  });
+
+  // 試験用サイト(test-site/)を置いた URL から、YouTube 以外の印をまとめて埋める。
+  try {
+    const savedBase = localStorage.getItem("cms-import-test.SITE_BASE");
+    if (savedBase) $("siteBase").value = savedBase;
+  } catch { /* 保存できない環境では毎回入れる */ }
+  $("fillFromSite").addEventListener("click", () => {
+    const status = $("prepareStatus");
+    let base = $("siteBase").value.trim();
+    if (!/^https?:\/\//i.test(base)) {
+      showStatus(status, "試験用サイトの URL を http:// か https:// から入れてください。", true);
+      $("siteBase").focus();
+      return;
+    }
+    if (!base.endsWith("/")) base += "/";
+    $("siteBase").value = base;
+    try { localStorage.setItem("cms-import-test.SITE_BASE", base); } catch { /* 無視 */ }
+    PLACEHOLDERS.forEach(({ key, site }) => {
+      if (site) $(`ph-${key}`).value = base + site;
+    });
+    showStatus(status, "YouTube 以外の印を、試験用サイトの URL で埋めました。YouTube の埋め込み URL は手で入れてください。", false);
   });
 
   const download = (name, text, type) => {

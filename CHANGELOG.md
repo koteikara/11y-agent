@@ -21,6 +21,19 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-06: CMS 取込試験に、旧サイトの役をする試験用サイトを足す
+
+- 背景・目的: ユーザーから、CMS 取込試験のために実在する旧サイトのページ、画像、ファイルを探すのが手間なので、試験用のページを作ろうと指示があった。
+- 主な変更内容:
+  - `docs/cms-import-tag-test/test-site/`: 旧サイトの役をする試験用サイトを足した。トップページ、下層ページ(クエリ付きでも返る。ページ内アンカーの行き先あり)、JPEG、PNG、GIF、アイコン、SVG、WebP の画像、PDF、Excel、Word。中身は試験のためだけのもので、検索エンジンに載せない指定を入れた。
+  - `docs/cms-import-tag-test/tools/make-test-site.js`: 試験用サイトを作り直すスクリプト。画像と PDF は goal2-app の Playwright の Chromium で描き、GIF と Excel と Word は Node の標準の機能だけで書く。
+  - `docs/cms-import-tag-test/checker.html`: 「試験用サイトの URL」を入れて「試験用サイトで埋める」を押すと、YouTube 以外の印がすべて埋まるようにした。
+  - `docs/cms-import-tag-test/README.md`: 試験用サイトの使い方と、置き場(試験ページと同じ FTP のサーバか、別のサーバか)で確かめられることが変わることを書いた。「取得素材ドメイン」の確かめは、FTP と別のサーバに置いたときだけ本番と同じ条件になる。
+- 検証: 生成した画像6つを Chromium で読み込めること(GIF、JPEG、PNG、アイコン、WebP、SVG の大きさ)、Excel と Word の入れ物の中身の一覧を確かめた。照合画面で、URL が空のときに知らせが出ること、末尾の / を補って12の印のうち YouTube 以外の11を埋めること、ページのエラーが無いことを Playwright で確かめた。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `docs/cms-import-tag-test/test-site/`(新規)、`docs/cms-import-tag-test/tools/make-test-site.js`(新規)、`docs/cms-import-tag-test/checker.html`、`docs/cms-import-tag-test/README.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-05: 画像と PDF を取得素材ドメインで CMS の素材にする
 
 - 背景・目的: 旧サイトを閉じると画像と PDF が切れる問題について、ユーザーから、取り込みの設定で別のサーバの素材も取り込める、と指摘があった。取得素材ドメインに旧サイトのサーバを入れれば、FTP に写さずに素材にできる。
