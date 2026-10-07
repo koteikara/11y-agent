@@ -136,6 +136,8 @@ async function main() {
 
     // コンテンツパターン(サブサイトの候補)。子育てのページ(/b/)は、本体と違う作りで、ページどうしでリンクし合う。
     const patternsOut = await cli("patterns", dir);
+    // 巡回が構造とリンクを残しているので、抽出は旧ページを読み直さない。
+    assert.ok(!/構造とリンクを調べた/.test(patternsOut), patternsOut);
     const patterns = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8"));
     const first = patterns.candidates[0];
     assert.strictEqual(first.key, "/b/", JSON.stringify(patterns.candidates.map((c) => c.key)));

@@ -13,13 +13,12 @@ const fs = require("fs");
 const path = require("path");
 const { clusterByStructure } = require("../lib/structure");
 const { buildXlsx } = require("../lib/xlsx");
-const { urlKey, isPrintPage } = require("./crawl");
+const { urlKey, isPrintPage, ANALYSIS_VERSION } = require("./crawl");
 
 const TEMPLATE_LINK_RATIO = 0.3; // これ以上のページから張られているリンクは、メニューなどのテンプレートのリンクとみなす
 const MAX_DIRECTORY_DEPTH = 3;
 const LABEL_PROPAGATION_ROUNDS = 15;
-// 調べた結果(analysis.json)の版。構造やリンクの拾い方を変えたら上げ、作り直させる。
-const ANALYSIS_VERSION = 1;
+const READ_CONCURRENCY = 8;
 
 function readRecords(project, settings) {
   const file = path.join(project.root, "crawl", "records.jsonl");
@@ -112,31 +111,51 @@ async function runPatterns(project, { engine, log, report }) {
   report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる`);
 
   // ページごとの構造とリンク。調べた結果は crawl/pages/<鍵>/analysis.json に残し、次からは使い回す。
+  // 共有ドライブでは、ファイルを1件読むのに時間がかかるので、READ_CONCURRENCY 件まで並べて読む
+  // (1件ずつ読むと、1ページに約8秒かかった)。結果は pages の順のまま入れる。
   const analysis = new Map();
+  const results = new Array(pages.length);
   let analyzed = 0;
-  for (const page of pages) {
-    const dir = path.join(project.root, "crawl", "pages", urlKey(page.url));
-    const cacheFile = path.join(dir, "analysis.json");
-    let cached = project.readJson(cacheFile);
-    if (!cached || cached.analysisVersion !== ANALYSIS_VERSION) {
-      let html;
-      try {
-        html = fs.readFileSync(path.join(dir, "source.html"), "utf8");
-      } catch {
-        continue;
-      }
-      const base = page.finalUrl || page.url;
-      // 構造とリンクを、1回の往復で調べる。
-      const result = await engine.evaluate(
-        async (arg) => ({ structure: await window.batchTools.structureOnly(arg), links: await window.batchTools.pageLinks(arg) }),
-        { html, url: base }
-      );
-      cached = { analysisVersion: ANALYSIS_VERSION, ...result.structure, links: result.links.links };
-      project.queueWrite(cacheFile, JSON.stringify(cached));
-      analyzed += 1;
+  let next = 0;
+  const readJsonAsync = async (file) => {
+    try {
+      return JSON.parse(await fs.promises.readFile(file, "utf8"));
+    } catch {
+      return null;
     }
-    analysis.set(page.url, cached);
-  }
+  };
+  const lanes = Array.from({ length: READ_CONCURRENCY }, async () => {
+    while (next < pages.length) {
+      const index = next;
+      next += 1;
+      const page = pages[index];
+      const dir = path.join(project.root, "crawl", "pages", urlKey(page.url));
+      const cacheFile = path.join(dir, "analysis.json");
+      let cached = await readJsonAsync(cacheFile);
+      if (!cached || cached.analysisVersion !== ANALYSIS_VERSION) {
+        let html;
+        try {
+          html = await fs.promises.readFile(path.join(dir, "source.html"), "utf8");
+        } catch {
+          continue;
+        }
+        const base = page.finalUrl || page.url;
+        // 構造とリンクを、1回の往復で調べる。
+        const result = await engine.evaluate(
+          async (arg) => ({ structure: await window.batchTools.structureOnly(arg), links: await window.batchTools.pageLinks(arg) }),
+          { html, url: base }
+        );
+        cached = { analysisVersion: ANALYSIS_VERSION, ...result.structure, links: result.links.links };
+        project.queueWrite(cacheFile, JSON.stringify(cached));
+        analyzed += 1;
+      }
+      results[index] = cached;
+    }
+  });
+  await Promise.all(lanes);
+  pages.forEach((page, index) => {
+    if (results[index]) analysis.set(page.url, results[index]);
+  });
   if (analyzed) report(`  構造とリンクを調べた: ${analyzed} ページ(ほかは前の結果を使った)`);
   const urls = pages.map((page) => page.url).filter((url) => analysis.has(url));
   const pageSet = new Set(urls);

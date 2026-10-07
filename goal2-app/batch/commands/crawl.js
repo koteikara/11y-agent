@@ -26,6 +26,9 @@ const fs = require("fs");
 const path = require("path");
 const { fetchPage, headFile, assertAllowed, createCookieJar, isHtmlType } = require("../lib/fetcher");
 const { parseRobots, isAllowedByRobots, parseSitemap } = require("../lib/robots");
+// コンテンツパターンの抽出が使う、ページごとの構造とリンク(analysis.json)の版。構造やリンクの拾い方を
+// 変えたら上げ、作り直させる。巡回が書き、抽出が読む。
+const ANALYSIS_VERSION = 1;
 
 const FILE_EXTENSION = /\.(pdf|docx?|xlsx?|pptx?|csv|zip|lzh|txt|jtd|odt|ods|odp|rtf|jpe?g|png|gif|bmp|svg|webp|ico|tiff?|mp3|mp4|m4a|wav|wmv|avi|mov|flv|exe|ics|kml|kmz)$/i;
 const STATE_SAVE_EVERY = 25;
@@ -617,7 +620,14 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     }
     let info;
     try {
-      info = await engine.evaluate((arg) => window.batchTools.pageLinks(arg), { html: result.html, url: result.finalUrl });
+      // リンクと一緒に構造も調べ、コンテンツパターンの抽出が使う analysis.json を残す。抽出のときに
+      // 共有ドライブから旧ページを読み直すと、1ページに約8秒かかった(相模原市の 12,238 ページで約1日)。
+      const evaluated = await engine.evaluate(
+        async (arg) => ({ links: await window.batchTools.pageLinks(arg), structure: await window.batchTools.structureOnly(arg) }),
+        { html: result.html, url: result.finalUrl }
+      );
+      info = evaluated.links;
+      info.structure = evaluated.structure;
     } catch {
       appendRecord({ url, depth, from, via, kind: "page", status: result.status, reason: "inspect-error", ok: false });
       return;
@@ -659,6 +669,12 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
     project.queueWrite(path.join(dir, "source.html"), result.html);
+    if (!duplicateOf) {
+      project.queueWrite(
+        path.join(dir, "analysis.json"),
+        JSON.stringify({ analysisVersion: ANALYSIS_VERSION, ...info.structure, links: info.links })
+      );
+    }
     writeMeta(path.join(dir, "meta.json"), {
       url,
       finalUrl,
@@ -868,4 +884,4 @@ function writeCrawlLists(project, state, settings) {
   };
 }
 
-module.exports = { runCrawl, readCrawledPage, normalizeUrl, urlKey, isHtmlType, isPrintPage };
+module.exports = { runCrawl, readCrawledPage, normalizeUrl, urlKey, isHtmlType, isPrintPage, ANALYSIS_VERSION };

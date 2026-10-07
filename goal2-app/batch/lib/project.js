@@ -124,6 +124,7 @@ function writeJson(filePath, value) {
 // 別のページのフォルダどうしである。ページごとのファイルは、一時ファイルを経ずに直接書く(名前を変える操作の
 // ぶん遅くなるため)。途中で止まって書きかけの JSON が残っても、readJson は無いものとして扱う。
 const WRITE_CONCURRENCY = 8;
+const WRITE_RETRY_DELAYS_MS = [500, 2000, 5000];
 
 function createWriteQueue() {
   const pending = [];
@@ -147,15 +148,25 @@ function createWriteQueue() {
   const enqueue = (filePath, content) =>
     new Promise((resolve) => {
       pending.push(async () => {
-        try {
-          const dir = path.dirname(filePath);
-          if (!madeDirs.has(dir)) {
-            await fs.promises.mkdir(dir, { recursive: true });
-            madeDirs.add(dir);
+        const dir = path.dirname(filePath);
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            if (!madeDirs.has(dir)) {
+              await fs.promises.mkdir(dir, { recursive: true });
+              madeDirs.add(dir);
+            }
+            await fs.promises.writeFile(filePath, content);
+            break;
+          } catch (error) {
+            // 共有ドライブでは、フォルダを作る操作がまれに ENOENT で失敗し、すぐやり直すと通る
+            // (大阪市の学校のサイトの巡回で、7,600 ページ目で1回だけ起き、巡回が止まった)。間を空けてやり直す。
+            if (attempt < WRITE_RETRY_DELAYS_MS.length) {
+              await new Promise((r) => setTimeout(r, WRITE_RETRY_DELAYS_MS[attempt]));
+              continue;
+            }
+            firstError = firstError || error;
+            break;
           }
-          await fs.promises.writeFile(filePath, content);
-        } catch (error) {
-          firstError = firstError || error;
         }
         resolve();
       });
