@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
 const { startFakeOldSite } = require("./fake-old-site");
+const { isStructuralCandidate } = require("../../batch/commands/process");
 
 const appRoot = path.resolve(__dirname, "..", "..");
 const CLI = path.join(appRoot, "batch", "cli.js");
@@ -118,7 +119,8 @@ async function main() {
     // 6. 自動で採用にしたルールの候補だけを採用する。
     const settingsPath = path.join(dir, "project", "settings.json");
     const withAuto = readJson(settingsPath);
-    withAuto.rules.autoAccept = ["text.alphanumeric", "text.spaced-characters"];
+    // 構造を変える候補を出すルール(リスト、見出し)を入れても、それらは採用しない。
+    withAuto.rules.autoAccept = ["text.alphanumeric", "text.spaced-characters", "text.list", "html-structure.heading-order"];
     fs.writeFileSync(settingsPath, JSON.stringify(withAuto));
     await cli("process", dir, "--force");
     const accepted = Object.keys(readJson(path.join(dir, "project", "summary.json")).pages)
@@ -127,6 +129,10 @@ async function main() {
       .flatMap((c) => c.candidates.filter((candidate) => candidate.decision?.status === "accepted"));
     assert.ok(accepted.length > 0, "自動で採用にしたルールの候補が採用されていない");
     assert.ok(accepted.every((candidate) => withAuto.rules.autoAccept.includes(candidate.rule_id)));
+    assert.ok(
+      accepted.every((candidate) => !isStructuralCandidate(candidate, {})),
+      "構造を変える候補を自動で採用してはいけない"
+    );
     console.log(`  ok   本処理: 自動で採用にしたルールの候補だけを採用する(${accepted.length} 件)`);
 
     // 7. 「AI 修正」タブへ写す一覧。

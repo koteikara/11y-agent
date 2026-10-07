@@ -85,7 +85,7 @@ function writeSummary(project) {
     pages,
   });
   // GAS が読む。Excel で開いても化けないよう、UTF-8 の BOM を付ける。
-  project.writeFileAtomic(project.paths.status, `﻿${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`);
+  project.writeFileAtomic(project.paths.status, `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`);
   return counts;
 }
 

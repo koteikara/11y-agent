@@ -60,11 +60,31 @@ async function runFetch(project, { engine, ids, retryFailed = true, log, report 
     }
 
     inspectQueue = inspectQueue.then(async () => {
-      const inspection = await engine.evaluate((arg) => window.batchTools.inspectPage(arg), {
-        html: result.html,
-        pageTitle: page.pageTitle || "",
-        url: result.finalUrl,
-      });
+      let inspection;
+      try {
+        inspection = await engine.evaluate((arg) => window.batchTools.inspectPage(arg), {
+          html: result.html,
+          pageTitle: page.pageTitle || "",
+          url: result.finalUrl,
+        });
+      } catch {
+        // 1ページの調べの失敗で取得全体を止めない。エラーの文言はページの中の文言を含むことが
+        // あるので、台帳と記録には理由だけを書く。
+        project.writePageText(page.id, "source.html", result.html);
+        project.writePageJson(page.id, "fetch.json", {
+          id: page.id,
+          oldUrl: page.oldUrl,
+          fetchedAt,
+          ok: false,
+          reason: "inspect-error",
+          status: result.status,
+          finalUrl: result.finalUrl,
+        });
+        counts.failed += 1;
+        counts.reasons["inspect-error"] = (counts.reasons["inspect-error"] || 0) + 1;
+        log.write({ id: page.id, result: "failed", reason: "inspect-error" });
+        return;
+      }
       project.writePageText(page.id, "source.html", result.html);
       const ledger = {
         id: page.id,

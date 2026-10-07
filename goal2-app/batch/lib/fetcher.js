@@ -34,7 +34,8 @@ async function assertAllowed(url, rules) {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   // host と hostname:port の両方で照らす(取込環境が決まったポートで動くことがあるため)。
   if (!hostMatches(url.hostname, rules.allowedHosts) && !hostMatches(url.host, rules.allowedHosts)) {
-    throw fetchError("not-allowed-host", `案件の設定の取りに行ってよいサーバーに無い: ${url.host}`);
+    // 転送先が許可外のときに、どこへ飛んだかを台帳に残せるよう、URL を持たせる。
+    throw fetchError("not-allowed-host", `案件の設定の取りに行ってよいサーバーに無い: ${url.host}`, { meta: { finalUrl: url.href } });
   }
   const allowPrivate = hostMatches(url.hostname, rules.privateHosts) || hostMatches(url.host, rules.privateHosts);
   if (allowPrivate) return;
@@ -130,7 +131,14 @@ async function fetchPage(targetUrl, rules, { etag, lastModified } = {}) {
       if (!/text\/html|application\/xhtml\+xml/i.test(meta.contentType)) {
         throw fetchError("not-html", `HTML ではない: ${meta.contentType || "種類なし"}`, { meta });
       }
-      const bytes = await readLimited(response, rules.maxBytes);
+      let bytes;
+      try {
+        bytes = await readLimited(response, rules.maxBytes);
+      } catch (error) {
+        if (error.reason) throw error;
+        // 本文の読み込みの途中でも、時間切れなら timeout としてやり直しの対象にする。
+        throw fetchError(controller.signal.aborted ? "timeout" : "network", `読み込みの途中で止まった: ${error.cause?.code || error.name}`, { meta });
+      }
       const { text, charset } = decode(bytes, detectCharset(meta.contentType, bytes));
       return { ...meta, notModified: false, html: text, charset, bytes: bytes.byteLength };
     }

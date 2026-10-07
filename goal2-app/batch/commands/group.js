@@ -31,14 +31,23 @@ async function runGroup(project, { engine, log, report }) {
   }
 
   const templates = [];
+  const smallTemplates = [];
   let genericPages = 0;
   for (const [structureHash, members] of groups) {
     const approved = settings.templates.approved[structureHash] || null;
+    const proposal = mostCommon(members.map((member) => member.ledger.genericSelector));
     if (members.length < settings.templates.minPages && !approved) {
+      // 承認には回さないが、approve --selector で手で承認できるよう、型と範囲の案は残す。
       genericPages += members.length;
+      smallTemplates.push({
+        structureHash,
+        pageCount: members.length,
+        pageIds: members.map(({ page }) => page.id),
+        proposedSelector: proposal?.value || null,
+        belowMinPages: true,
+      });
       continue;
     }
-    const proposal = mostCommon(members.map((member) => member.ledger.genericSelector));
     const selector = approved?.selector || proposal?.value || null;
     const representative = members.find((member) => member.ledger.genericSelector === selector) || members[0];
 
@@ -72,6 +81,8 @@ async function runGroup(project, { engine, log, report }) {
       pageIds: members.map(({ page }) => page.id),
       proposedSelector: proposal?.value || null,
       proposalAgreement: proposal ? proposal.count : 0,
+      // ID かクラスで書けず、要素の並びの順(nth-of-type)に頼る案は、兄弟の数が変わると外れるので印を付ける。
+      proposalKind: /nth-of-type/.test(proposal?.value || "") ? "path" : "id-or-class",
       approvedSelector: approved?.selector || null,
       representative: representative.page.id,
       mismatches,
@@ -90,6 +101,7 @@ async function runGroup(project, { engine, log, report }) {
     fetchedPages: fetched,
     genericPages,
     templates,
+    smallTemplates,
   });
   writeSummary(project);
 

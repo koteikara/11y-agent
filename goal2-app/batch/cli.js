@@ -86,7 +86,9 @@ async function main() {
       process.exit(2);
     }
     const templates = project.readJson(project.paths.templates);
-    const template = templates?.templates.find((t) => t.structureHash === structureHash);
+    const template = [...(templates?.templates || []), ...(templates?.smallTemplates || [])].find(
+      (t) => t.structureHash === structureHash
+    );
     if (!template) throw new Error(`型のまとめの結果に無い構造のハッシュ: ${structureHash}`);
     const selector = typeof options.selector === "string" ? options.selector : template.proposedSelector;
     if (!selector) throw new Error("本文の範囲の案が無いので、--selector で指定する");
@@ -100,6 +102,10 @@ async function main() {
     return;
   }
 
+  if (!["fetch", "group", "process"].includes(command)) {
+    console.error(`知らないコマンド: ${command}\n${usage()}`);
+    process.exit(2);
+  }
   const settings = project.readSettings();
   const log = project.openLog(command);
   const engine = await startEngine({ ai: settings.ai.enabled });
@@ -113,9 +119,6 @@ async function main() {
       if (engine.usage.aiCalls || engine.usage.aiBlocked) {
         report(`  AI の呼び出し ${engine.usage.aiCalls} 回${engine.usage.aiBlocked ? `(設定で止めた ${engine.usage.aiBlocked} 回)` : ""}`);
       }
-    } else {
-      console.error(`知らないコマンド: ${command}\n${usage()}`);
-      process.exitCode = 2;
     }
   } finally {
     await engine.close();

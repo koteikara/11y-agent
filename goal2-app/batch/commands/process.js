@@ -4,8 +4,26 @@
 // 取り込みの事前の確かめ(段5)は、まだ入れていない。
 const { writeSummary, DEPTH_LABELS } = require("../lib/summary");
 
+// 構造を変える候補(表、見出し、リスト)か。確認の深さと自動の採用の両方で使う。ページの中でも
+// 動かすので、外の変数を使わない。
+function isStructuralCandidate(candidate, fact) {
+  const STRUCTURAL_PATCH_TYPES = ["rebuild", "shift-headings", "replace-with-list", "replace-paragraph-sequence"];
+  const STRUCTURAL_TAG = /^\s*<(h[1-6]|ul|ol|dl|li|table|caption|thead|tbody|tfoot|tr|th|td)\b/i;
+  const ruleId = candidate.rule_id || "";
+  const patchType = candidate.proposal?.patch?.type || "";
+  if (fact?.table_structural) return true;
+  if (STRUCTURAL_PATCH_TYPES.includes(patchType)) return true;
+  if (/^html-structure\.heading-(order|required)$/.test(ruleId) || ruleId === "text.list") return true;
+  // 要素を差し替える、外す、消す候補は、前後のどちらかが表、見出し、リストの要素なら構造を変える。
+  if (["rename-element", "unwrap-element", "remove-element", "replace-html"].includes(patchType)) {
+    return STRUCTURAL_TAG.test(candidate.proposal?.before_html || "") || STRUCTURAL_TAG.test(candidate.proposal?.after_html || "");
+  }
+  return false;
+}
+
 // ページの中で動かす。本文を抜き、候補を作り、案件の設定で「自動で採用」にしたルールの候補だけを採用する。
-async function processInPage({ html, pageTitle, url, selector, autoAcceptRules, disabledRules, ruleScopeMode }) {
+async function processInPage({ html, pageTitle, url, selector, autoAcceptRules, disabledRules, ruleScopeMode, isStructuralSource }) {
+  const isStructural = new Function(`return (${isStructuralSource})`)();
   const body = await window.batchTools.extractBody({ html, pageTitle, url, selector });
   if (!body.html) return { body, analysis: null };
   const analysis = await window.goal2Engine.analyze({ html: body.html, pageTitle: body.pageTitle, oldUrl: url, ruleScopeMode });
@@ -13,8 +31,15 @@ async function processInPage({ html, pageTitle, url, selector, autoAcceptRules, 
   const candidates = analysis.candidates.filter((candidate) => !disabled.has(candidate.rule_id));
   const allowed = new Set(autoAcceptRules);
   // autoAcceptSafe は、渡した候補のうち一括採用してよいものだけを採用する。渡すのは、自動で採用に
-  // したルールの候補だけにする。構造を変える候補は autoAcceptSafe の側で必ず外れる。
-  const autoAccepted = window.goal2Engine.autoAcceptSafe(candidates.filter((candidate) => allowed.has(candidate.rule_id)));
+  // したルールの候補のうち、構造を変えないものだけにする。autoAcceptSafe が外すのは見出しの一括の
+  // 繰り上げと表の構造だけで、リストや見出しの差し替えは通ってしまうため、ここで外す。
+  const autoAccepted = window.goal2Engine.autoAcceptSafe(
+    candidates.filter(
+      (candidate) =>
+        allowed.has(candidate.rule_id) &&
+        !isStructural(candidate, window.goal2Engine.decisionLog.candidateFacts(candidate))
+    )
+  );
   const finalHtml = window.goal2Engine.buildFinalHtml(body.html, candidates);
   const residual = window.goal2Engine.checkResidual(finalHtml);
   const facts = candidates.map((candidate) => window.goal2Engine.decisionLog.candidateFacts(candidate));
@@ -51,11 +76,7 @@ function decideDepth({ extractionMethod, candidates, facts, ruleClasses }) {
     if (candidate.decision?.status) return;
     const fact = facts[index] || {};
     const ruleClass = ruleClasses.get(candidate.rule_id);
-    const structural =
-      fact.table_structural ||
-      fact.element_replacing ||
-      /^html-structure\.heading/.test(candidate.rule_id) ||
-      candidate.rule_id === "text.list";
+    const structural = isStructuralCandidate(candidate, fact);
     const meaning =
       ruleClass === "ai" ||
       ruleClass === "escalation" ||
@@ -81,7 +102,7 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
     if (!ledger?.ok) continue;
     const existing = project.readPageJson(page.id, "candidates.json");
     // 旧ページが変わったページ(取り直しで印が付いたもの、または本文のハッシュが違うもの)はやり直す。
-    if (existing && !force && !ledger.oldPageChanged && existing.sourceFetchedAt === ledger.fetchedAt) {
+    if (existing && !force && !ledger.oldPageChanged && existing.sourceFetchedAt === ledger.fetchedAt && existing.sourceBodyHash === ledger.bodyHash) {
       counts.skipped += 1;
       continue;
     }
@@ -99,10 +120,12 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
         autoAcceptRules: settings.rules.autoAccept,
         disabledRules: settings.rules.disabled,
         ruleScopeMode: settings.ruleScopeMode,
+        isStructuralSource: isStructuralCandidate.toString(),
       });
-    } catch (error) {
+    } catch {
+      // エラーの文言はページの中の文言を含むことがあるので、記録には理由だけを書く。
       counts.failed += 1;
-      log.write({ id: page.id, result: "error", reason: "engine-error", message: String(error.message || error).slice(0, 200) });
+      log.write({ id: page.id, result: "error", reason: "engine-error" });
       continue;
     }
     if (!result.analysis) {
@@ -157,4 +180,4 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
   return counts;
 }
 
-module.exports = { runProcess, decideDepth };
+module.exports = { runProcess, decideDepth, isStructuralCandidate };

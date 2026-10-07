@@ -58,7 +58,8 @@
       sanitizeDocument(parsed.body);
       let element = null;
       try {
-        element = parsed.body.querySelector(selector);
+        // 汎用の判定が body を選んだ型は、範囲の案も body になる。body の中に body は無いので、そのまま使う。
+        element = selector.trim() === "body" ? parsed.body : parsed.body.querySelector(selector);
       } catch {
         return null;
       }
