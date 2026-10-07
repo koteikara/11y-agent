@@ -183,6 +183,16 @@
       };
     },
 
+    // コンテンツパターンの抽出用。ページの構造(要素の道の集まり)だけを返す。本文の抽出はしない。
+    async structureOnly({ html }) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      const paths = parsed.body ? structurePathsOf(parsed.body) : [];
+      return {
+        structurePaths: await Promise.all(paths.map(async (path) => (await sha256Hex(path)).slice(0, 10))),
+        structureVersion: STRUCTURE_VERSION,
+      };
+    },
+
     // 巡回用。ページの題名(title 要素)と、ページの中のリンク先(絶対 URL、# 以降は落とす)を返す。
     // a と area の href、frame と iframe の src を見る。本文のハッシュは重複のページを見つけるのに使う。
     async pageLinks({ html, url }) {

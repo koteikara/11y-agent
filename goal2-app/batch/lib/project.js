@@ -41,6 +41,12 @@ const DEFAULT_SETTINGS = {
     // ファイルの大きさと更新日を聞くか(HEAD。旧サイトへの要求がファイルの数だけ増える)。
     fileHead: false,
   },
+  // コンテンツパターンの抽出(サブサイトの候補)。minPages 未満の群は候補にしない。proposals は、上位の
+  // いくつを「サブサイト候補」として印を付けるか(桜井市の仕様書の例では3つ)。
+  patterns: {
+    minPages: 10,
+    proposals: 3,
+  },
   // 構造の型。similarity は、同じ型とみなす構造の重なり(0〜1)。minPages 未満の型は承認に回さず、
   // 汎用の判定で抜く。approved は承認した型(型の番号ごとに、範囲と代表の構造)。
   templates: {

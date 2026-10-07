@@ -34,7 +34,7 @@ async function main() {
     fs.mkdirSync(path.join(dir, "project"));
     fs.writeFileSync(
       path.join(dir, "project", "settings.json"),
-      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 } })
+      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 }, patterns: { minPages: 3, proposals: 3 } })
     );
 
     const crawlOut = await cli("crawl", dir, "--start", `${origin}/`);
@@ -104,13 +104,24 @@ async function main() {
     assert.ok(ledger.structurePaths.length > 0);
     console.log("  ok   取得: 巡回で取ったページを使い回す");
 
+    // コンテンツパターン(サブサイトの候補)。子育てのページ(/b/)は、本体と違う作りで、ページどうしでリンクし合う。
+    const patternsOut = await cli("patterns", dir);
+    const patterns = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8"));
+    const first = patterns.candidates[0];
+    assert.strictEqual(first.key, "/b/", JSON.stringify(patterns.candidates.map((c) => c.key)));
+    assert.ok(first.proposed && first.differentShare === 1);
+    assert.ok(!patterns.candidates.some((c) => c.entry === `${origin}/`), "始まりのページを入口にする群は候補にしない");
+    const xlsx = fs.readFileSync(path.join(dir, "crawl", "patterns.xlsx"));
+    assert.strictEqual(xlsx.subarray(0, 2).toString(), "PK", "xlsx は ZIP の形で書く");
+    console.log("  ok   コンテンツパターン: サブサイトの候補を順位付けし、xlsx に出す");
+
     // 画面と実行の記録に、旧サイトの本文と題名を出さない。
     const logs = fs
       .readdirSync(path.join(dir, "logs"))
       .map((name) => fs.readFileSync(path.join(dir, "logs", name), "utf8"))
       .join("\n");
     for (const text of ["子育て支援のお知らせ", "テスト市トップ", "<p>"]) {
-      assert.ok(![crawlOut, again, fetchOut].join("\n").includes(text), `画面に出ている: ${text}`);
+      assert.ok(![crawlOut, again, fetchOut, patternsOut].join("\n").includes(text), `画面に出ている: ${text}`);
       assert.ok(!logs.includes(text), `実行の記録に出ている: ${text}`);
     }
     console.log("  ok   画面と実行の記録に、旧サイトの本文と題名を出さない");
