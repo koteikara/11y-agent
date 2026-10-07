@@ -29,7 +29,7 @@
   - `memory/embedding-eval/`: 評価の道具 `eval.mjs` と質問48問 `queries.json` を置いた。モデルを使わない比較用の検索はそのまま動き、埋め込みは Ollama か llama-server を起動して動かす。
   - `memory/project-state.md`: 進捗に1行足した。
 - 検証: `node memory/embedding-eval/eval.mjs` が、リポジトリの中の置き場所から 2026-10-07 の結果と同じ値を出すことを確かめた(文字の一致のみ。埋め込みは手元の llama-server で実行した値)。
-- レビュー: (push 前に記入)
+- レビュー: Fable が文字の一致の結果を再実行して表と一致することと、外部の事実を出典で確かめた。要修正1件を直した。外れた質問の説明で、自動で動くスクリプトのルールの引用が本文と違っていた(本文には「自動リダイレクト」がある)ので、引用を本文どおりにし、理由を「技術用語で書かれていて現象の言葉では書かれていない」に狭めた。提案のうち、題名が2回送られることの注記、正解ラベルの見直しの余地(`image.caption`、`㎡` の質問の難しさ)を限界に書くこと、191MB が量子化後の値であること、モデルの容量の表記を取り入れた。
 - 関連ファイル: `memory/embeddinggemma2-kb-search-2026-10.md`、`memory/embedding-eval/eval.mjs`、`memory/embedding-eval/queries.json`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
