@@ -13,7 +13,8 @@ const { isEngineApiRoute, handleEngineApi } = require("../../lib/engine-api");
 const APP_ROOT = path.resolve(__dirname, "..", "..");
 const PUBLIC_DIR = path.join(APP_ROOT, "public");
 // エンジンのページの置き場所。実在しないホスト名で、route が受けるので外には出ない。
-const ENGINE_ORIGIN = "http://goal2-engine.invalid";
+// https にするのは、ページを安全な文脈にして crypto.subtle(ハッシュ)を使えるようにするため。
+const ENGINE_ORIGIN = "https://goal2-engine.invalid";
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",

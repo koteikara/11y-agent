@@ -21,6 +21,25 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: 段1 一括処理の骨組み(取得、型のまとめ、本処理)
+
+- 背景・目的: リニューアルの「作る順番」の段1の続き。切り出したエンジンを使い、一括処理のうち取得、型のまとめ、本処理を、案件のフォルダの形(`docs/renewal/ARCHITECTURE.md`)で動かせるようにした。書き出し、取り直し、比べ合わせ、取り込みの事前の確かめは、後の段で足す。
+- 主な変更内容:
+  - `goal2-app/batch/cli.js`: `fetch`、`group`、`approve`、`process`、`status` のコマンド。画面と実行の記録には、件数、移行管理 ID、理由だけを出す。
+  - `goal2-app/batch/lib/fetcher.js`: 取得の守り(案件の設定で挙げたサーバーだけ、内部のアドレスは挙げたサーバーだけ例外)、転送、文字コード(応答と meta。Shift_JIS を含む)、大きさの上限、間隔と同時数。
+  - `goal2-app/batch/lib/page-tools.browser.js`: 構造のハッシュ(本文を1つの印にし、文字と数字を伏せ、繰り返しを潰す)、本文のハッシュ、本文の範囲の案(ID のある先祖からの CSS セレクター)、型の範囲と汎用の判定の食い違い。
+  - `goal2-app/batch/commands/`: 取得(台帳 `fetch.json`)、型のまとめ(`templates.json`。10 ページ未満の型は汎用の判定に回す)、本処理(`candidates.json`。自動で採用にしたルールの候補だけを採用し、残る指摘と確認の深さを決める)。
+  - `goal2-app/batch/lib/project.js`、`summary.js`: 案件の設定の既定の値と変更の履歴、`summary.json` と `status.csv`。
+  - `goal2-app/public/goal3.js`: 承認した範囲で本文を抜く `goal3Engine.extractAt` を足した。`public/app.js`: 残る指摘を返す `goal2Engine.checkResidual` を足した。どちらも今の画面の処理は変えていない。
+  - `goal2-app/batch/lib/engine-host.js`: ページで `crypto.subtle` を使うため、エンジンのページの置き場所を https にした。
+  - `goal2-app/test/batch-engine/run-batch-cli-tests.js`、`fake-old-site.js`: 手元の旧サイトの代わりに対して、コマンドを通して確かめる。`npm run test:batch-engine` に足した。
+  - `goal2-app/batch/README.md`、`PROJECT_CONTEXT.md`: 使い方と、段1を始めたこと。
+- 検証: `test:batch-engine`(宿主の一致54件、コマンドの通し10項目)、`npm test` が通ることを確かめた。手元の試走で、16 ページの本処理は、Chromium の起動を含めて約6秒だった。
+- 決めていること: 確認の深さは、承認した型に当たらないページ、構造を変える候補、意味に関わる候補(ルールの種類が ai か escalation、AI の候補、確認が要る候補)が未判断で残るページを「しっかり確認」にする。自動で採用にしたルールが無い今は、ほとんどのページがしっかり確認になる。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `goal2-app/batch/`、`goal2-app/public/goal3.js`、`goal2-app/public/app.js`、`goal2-app/test/batch-engine/`、`goal2-app/package.json`、`PROJECT_CONTEXT.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: 段1 候補のエンジンをサーバーから切り出す
 
 - 背景・目的: リニューアルの「作る順番」の段1。一括処理は、サーバーを立てずに、ディレクターの PC で候補のエンジンを Playwright の Chromium の中で動かす。エンジンが頼っていたサーバーの API を、サーバーと一括処理の両方から使える部品にした。

@@ -50,9 +50,9 @@
   // ID のある先祖からの道の順に試し、文書の中で1つに決まるものを使う。
   function selectorFor(element) {
     const doc = element.ownerDocument;
-    const unique = (selector) => {
+    const unique = (selector, target = element) => {
       try {
-        return doc.querySelectorAll(selector).length === 1 && doc.querySelector(selector) === element;
+        return doc.querySelectorAll(selector).length === 1 && doc.querySelector(selector) === target;
       } catch {
         return false;
       }
@@ -68,7 +68,7 @@
     const steps = [];
     let current = element;
     while (current && current.tagName && current.tagName.toLowerCase() !== "body") {
-      if (current !== element && current.id && unique(`#${cssEscape(current.id)}`)) {
+      if (current !== element && current.id && unique(`#${cssEscape(current.id)}`, current)) {
         steps.unshift(`#${cssEscape(current.id)}`);
         return steps.join(" > ");
       }
