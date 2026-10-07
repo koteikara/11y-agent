@@ -141,9 +141,12 @@ async function main() {
   const log = project.openLog(command);
   // 本処理は、リンク先の題名を、巡回で取ったページの題名から引く。無いものだけを、間隔を空けて取りに行く。
   const crawlTitles = command === "process" ? loadCrawlTitles(project) : null;
+  // 巡回の中で見つけた外す項目(?tm= など)も使って、URL を整えてから引く。
+  const crawlState = project.readJson(path.join(project.root, "crawl", "state.json"), {}) || {};
+  const titleIgnoreParams = [...settings.crawl.ignoreParams, ...(crawlState.learnedIgnoreParams || [])];
   const engine = await startEngine({
     ai: settings.ai.enabled,
-    lookupTitle: crawlTitles ? (url) => crawlTitles.get(normalizeUrl(url, settings.crawl.ignoreParams) || url) || null : null,
+    lookupTitle: crawlTitles ? (url) => crawlTitles.get(normalizeUrl(url, titleIgnoreParams) || url) || null : null,
     linkTitleIntervalMs: settings.fetch.intervalMs,
   });
   try {
@@ -167,8 +170,14 @@ async function main() {
     }
   } finally {
     await engine.close();
-    // 裏で書いているファイルと、ためている実行の記録を書き終える。
-    await project.flush();
+    // 裏で書いているファイルと、ためている実行の記録を書き終える。書き終えられなくても、
+    // コマンドが投げたエラーを隠さないよう、ここでは画面に出すだけにする。
+    try {
+      await project.flush();
+    } catch (error) {
+      console.error(`書き終えられなかった: ${error.message}`);
+      process.exitCode = 1;
+    }
   }
   report(`実行の記録: ${path.relative(project.root, log.file)}`);
 }

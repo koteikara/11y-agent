@@ -1,6 +1,6 @@
 // 案件のフォルダの読み書き。形は docs/renewal/ARCHITECTURE.md の「案件のフォルダの形」。
-// 共有ドライブ(Drive for desktop)の同期が書きかけのファイルを拾わないよう、書くときは
-// 一時ファイルに書いてから名前を変える。
+// 案件全体のファイル(設定、集計、巡回の状態)は、一時ファイルに書いてから名前を変える(writeFileAtomic)。
+// ページごとのファイルは、数が多いので裏の待ち行列で直接書く(下の createWriteQueue)。
 const fs = require("fs");
 const path = require("path");
 
@@ -93,6 +93,8 @@ function readJson(filePath, fallback = null) {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return fallback;
+    // 途中で止まって書きかけのまま残った JSON は、無いものとして扱う(そのページは次の実行で作り直される)。
+    if (error instanceof SyntaxError) return fallback;
     throw new Error(`${filePath} を読めませんでした: ${error.message}`);
   }
 }
@@ -110,14 +112,16 @@ function writeJson(filePath, value) {
 
 // ページごとのファイルを裏で書く待ち行列。共有ドライブ(Drive for desktop)では、ファイルの操作が1回
 // 0.25〜0.5秒かかり、1件ずつ書くと巡回や取得が書き込みに引っ張られる(段2の試走)。並べて書くと
-// 1ファイルあたり約0.08秒になるので、WRITE_CONCURRENCY 件まで並べて書く。同じファイルへの書き込みは
-// 出した順に書く。書き終わりを待つのは flush()。ページごとのファイルは、一時ファイルを経ずに直接書く
-// (名前を変える操作のぶん遅くなるため)。読む側は、書きかけのファイルを読めないものとして扱う。
+// 1ファイルあたり約0.08秒になるので、WRITE_CONCURRENCY 件まで並べて書く。書き終わりを待つのは flush()。
+// 同じフォルダのファイルは、出した順に1つずつ書く。ページのフォルダでは、旧ページ(source.html)を先に、
+// 台帳(meta.json、fetch.json)をあとに出すので、台帳があれば旧ページは書き終わっている。並べるのは、
+// 別のページのフォルダどうしである。ページごとのファイルは、一時ファイルを経ずに直接書く(名前を変える操作の
+// ぶん遅くなるため)。途中で止まって書きかけの JSON が残っても、readJson は無いものとして扱う。
 const WRITE_CONCURRENCY = 8;
 
 function createWriteQueue() {
   const pending = [];
-  const lastByPath = new Map();
+  const lastByDir = new Map();
   const madeDirs = new Set();
   const inFlight = new Set();
   let running = 0;
@@ -154,14 +158,15 @@ function createWriteQueue() {
 
   return {
     write(filePath, content) {
-      // 同じファイルは、前の書き込みが終わってから書く(あとから出した中身が残るように)。
-      const previous = lastByPath.get(filePath) || Promise.resolve();
+      // 同じフォルダのファイルは、前の書き込みが終わってから書く。
+      const dir = path.dirname(filePath);
+      const previous = lastByDir.get(dir) || Promise.resolve();
       const done = previous.then(() => enqueue(filePath, content));
-      lastByPath.set(filePath, done);
+      lastByDir.set(dir, done);
       inFlight.add(done);
       done.then(() => {
         inFlight.delete(done);
-        if (lastByPath.get(filePath) === done) lastByPath.delete(filePath);
+        if (lastByDir.get(dir) === done) lastByDir.delete(dir);
       });
     },
     async flush() {

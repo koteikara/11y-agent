@@ -18,6 +18,8 @@ const { urlKey } = require("./crawl");
 const TEMPLATE_LINK_RATIO = 0.3; // これ以上のページから張られているリンクは、メニューなどのテンプレートのリンクとみなす
 const MAX_DIRECTORY_DEPTH = 3;
 const LABEL_PROPAGATION_ROUNDS = 15;
+// 調べた結果(analysis.json)の版。構造やリンクの拾い方を変えたら上げ、作り直させる。
+const ANALYSIS_VERSION = 1;
 
 function readRecords(project) {
   const file = path.join(project.root, "crawl", "records.jsonl");
@@ -28,7 +30,10 @@ function readRecords(project) {
     const record = JSON.parse(line);
     records.set(record.url, record);
   }
-  return [...records.values()].filter((record) => record.kind === "page" && record.ok && !record.duplicateOf);
+  // URL の順に並べる。記録の順は巡回の到着順で実行ごとに変わり、型の番号や群の結果が変わってしまうため。
+  return [...records.values()]
+    .filter((record) => record.kind === "page" && record.ok && !record.duplicateOf)
+    .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
 }
 
 function directoryPrefixes(url) {
@@ -112,7 +117,7 @@ async function runPatterns(project, { engine, log, report }) {
     const dir = path.join(project.root, "crawl", "pages", urlKey(page.url));
     const cacheFile = path.join(dir, "analysis.json");
     let cached = project.readJson(cacheFile);
-    if (!cached || !cached.structureVersion) {
+    if (!cached || cached.analysisVersion !== ANALYSIS_VERSION) {
       let html;
       try {
         html = fs.readFileSync(path.join(dir, "source.html"), "utf8");
@@ -120,9 +125,12 @@ async function runPatterns(project, { engine, log, report }) {
         continue;
       }
       const base = page.finalUrl || page.url;
-      const structure = await engine.evaluate((arg) => window.batchTools.structureOnly(arg), { html });
-      const links = await engine.evaluate((arg) => window.batchTools.pageLinks(arg), { html, url: base });
-      cached = { ...structure, links: links.links };
+      // 構造とリンクを、1回の往復で調べる。
+      const result = await engine.evaluate(
+        async (arg) => ({ structure: await window.batchTools.structureOnly(arg), links: await window.batchTools.pageLinks(arg) }),
+        { html, url: base }
+      );
+      cached = { analysisVersion: ANALYSIS_VERSION, ...result.structure, links: result.links.links };
       project.queueWrite(cacheFile, JSON.stringify(cached));
       analyzed += 1;
     }
@@ -145,10 +153,15 @@ async function runPatterns(project, { engine, log, report }) {
   // リンク。巡回したページどうしのリンクだけを見る。多くのページから張られているリンクはテンプレートとみなして除く。
   const inbound = new Map();
   const outLinks = new Map();
+  const inLinks = new Map();
   for (const url of urls) {
     const targets = [...new Set(analysis.get(url).links)].filter((link) => pageSet.has(link) && link !== url);
     outLinks.set(url, targets);
-    for (const target of targets) inbound.set(target, (inbound.get(target) || 0) + 1);
+    for (const target of targets) {
+      inbound.set(target, (inbound.get(target) || 0) + 1);
+      if (!inLinks.has(target)) inLinks.set(target, []);
+      inLinks.get(target).push(url);
+    }
   }
   const templateLinks = new Set([...inbound.entries()].filter(([, n]) => n >= urls.length * TEMPLATE_LINK_RATIO).map(([url]) => url));
   const contentEdges = [];
@@ -188,9 +201,10 @@ async function runPatterns(project, { engine, log, report }) {
         if (members.has(to)) internal += 1;
       }
     }
-    for (const [from, targets] of outLinks) {
-      if (members.has(from)) continue;
-      for (const to of targets) if (members.has(to) && !templateLinks.has(to)) fromOutside.set(to, (fromOutside.get(to) || 0) + 1);
+    // 入口のページは、群の外から多く張られているページ。サブサイトのトップはメニューから全ページに張られて
+    // いることが多いので、ここではテンプレートのリンクも数える(除くのは、まとまりの計算だけ)。
+    for (const to of group.members) {
+      for (const from of inLinks.get(to) || []) if (!members.has(from)) fromOutside.set(to, (fromOutside.get(to) || 0) + 1);
     }
     const sortedMembers = [...group.members].sort((a, b) => (byUrl.get(a).depth ?? 99) - (byUrl.get(b).depth ?? 99) || (a < b ? -1 : 1));
     const entry = [...fromOutside.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || sortedMembers[0];

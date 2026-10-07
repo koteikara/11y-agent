@@ -31,8 +31,8 @@
   - `goal2-app/batch/lib/engine-host.js`、`batch/cli.js`: 本処理がリンク先の題名を取りに行くとき、巡回で取ったページの題名があればそれを使い、無ければサーバーごとに間隔を空けて取りに行く。これまでは間隔の決まりを通っていなかった。
   - `goal2-app/test/batch-engine/run-crawl-tests.js`: コンテンツパターンの確かめを足した。
 - 検証: `npm run test:batch-engine`、`npm test` が通ることを確かめた。出した xlsx の中身がすべて正しい XML であることを確かめた。
-- レビュー: (Fable のレビューのあとに書く)
-- 関連ファイル: `goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/xlsx.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/fetch.js`、`goal2-app/batch/commands/process.js`、`goal2-app/batch/lib/engine-host.js`、`goal2-app/batch/cli.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
+- レビュー: Fable が待ち行列、コンテンツパターン、xlsx、題名の引き方、本文を出さない約束を確かめた。要修正3件を直した。(1) 巡回の状態の保存が、書き終わりを待つあいだに他のレーンが進めた分を取りこぼし、再開すると一覧から落ちる URL があった。状態と記録をその時点で写し取ってから書き、処理中の項目も待ち行列に残す。(2) コンテンツパターンの結果が巡回の到着順で変わっていた。URL の順に並べてから使う。(3) 書きかけのファイルを読む側が見抜けなかった。同じページのフォルダは出した順に書き(旧ページが先、台帳があと)、書きかけの JSON は無いものとして読む。提案のうち、入口のページの数え方(テンプレートのリンクも数える)、群の外からのリンクを逆向きの一覧で数えること、構造とリンクを1回の往復で調べること、調べた結果の版、題名を引くときに巡回で見つけた外す項目も使うこと、書き終えられなかったときに元のエラーを隠さないこと、待ち行列と xlsx と robots.txt の単体テスト、設計書へのラベル伝播の偏りと直接書く判断の記述を取り入れた。
+- 関連ファイル: `goal2-app/test/batch-engine/run-batch-unit-tests.js`、`goal2-app/package.json`、`docs/renewal/ARCHITECTURE.md`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/xlsx.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/fetch.js`、`goal2-app/batch/commands/process.js`、`goal2-app/batch/lib/engine-host.js`、`goal2-app/batch/cli.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-07: 段2の途中(確認の時間の見積もりと精度の指標)

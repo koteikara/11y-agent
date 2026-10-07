@@ -267,9 +267,18 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       recordLines = [];
     }
   };
-  const saveState = async (snapshot = state) => {
-    await flushRecords();
-    project.writeJson(paths.state, snapshot);
+  // 状態の保存。ある時点の状態(見た URL、待ち行列、処理中の項目、同じ階層の残り)とその時点までの記録を、
+  // 同期で写し取ってから、ページのファイルを書き終え、記録を追記し、状態を書く。写し取ったあとに他のレーンが
+  // 進めた分は、次の保存に回る(途中で止まって再開すると、処理中だった項目は取り直す)。
+  const inFlight = new Set();
+  let currentBatch = [];
+  const saveState = async () => {
+    const snapshot = JSON.stringify({ ...state, queue: [...inFlight, ...currentBatch, ...state.queue] }, null, 2);
+    const lines = recordLines;
+    recordLines = [];
+    await project.flush();
+    if (lines.length) fs.appendFileSync(paths.records, lines.join(""));
+    project.writeFileAtomic(paths.state, `${snapshot}\n`);
   };
   let sinceSave = 0;
   let lastStart = 0;
@@ -470,15 +479,20 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       const batch = state.queue.filter((item) => item.depth === level);
       state.queue = state.queue.filter((item) => item.depth !== level);
       batch.forEach((item) => queued.delete(item.url));
+      currentBatch = batch;
       const lanes = Array.from({ length: Math.max(1, rules.concurrency) }, async () => {
         while (batch.length) {
           const item = batch.shift();
-          await visit(item);
+          inFlight.add(item);
+          try {
+            await visit(item);
+          } finally {
+            inFlight.delete(item);
+          }
           sinceSave += 1;
           if (sinceSave >= STATE_SAVE_EVERY) {
             sinceSave = 0;
-            // 途中で止まったときのために、まだ取りに行っていない同じ階層の項目も残す。
-            await saveState({ ...state, queue: [...batch, ...state.queue] });
+            await saveState();
           }
         }
       });

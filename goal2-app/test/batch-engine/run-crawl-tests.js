@@ -110,7 +110,11 @@ async function main() {
     const first = patterns.candidates[0];
     assert.strictEqual(first.key, "/b/", JSON.stringify(patterns.candidates.map((c) => c.key)));
     assert.ok(first.proposed && first.differentShare === 1);
-    assert.ok(!patterns.candidates.some((c) => c.entry === `${origin}/`), "始まりのページを入口にする群は候補にしない");
+    // 始まりのページを含むリンクのまとまりは、サイト全体の入口の群なので候補にしない。
+    assert.ok(
+      !patterns.candidates.some((c) => c.kind === "リンクのまとまり" && c.entry === `${origin}/`),
+      "始まりのページを含むリンクのまとまりは候補にしない"
+    );
     const xlsx = fs.readFileSync(path.join(dir, "crawl", "patterns.xlsx"));
     assert.strictEqual(xlsx.subarray(0, 2).toString(), "PK", "xlsx は ZIP の形で書く");
     console.log("  ok   コンテンツパターン: サブサイトの候補を順位付けし、xlsx に出す");
