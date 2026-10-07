@@ -116,8 +116,13 @@ function excludePatterns(settings) {
 
 // 印刷用ページの URL か。道の名前と URL の項目で見る(遠野市の /handlers/printcontent.cfm?…、
 // /print/…、print.html、?print=1、?mode=print など)。
-const PRINT_PATH = /(^|[/_.-])print(content|page|out|er|view|able|friendly)?(\.[a-z0-9]+)?(\/|$)|[/_-](insatsu|印刷)([/_.-]|$)/i;
-const PRINT_PARAMS = /^(print|printable|printmode|insatsu)$/i;
+// 本文のページを外さないよう、狭く取る。insatsu(印刷製本の入札、印刷業の支援)や printer(3D プリンターの
+// 案内)は、自治体サイトでは本文のページの名前に使われるので、印刷用ページとはみなさない。
+const PRINT_PATH = /(^|[/_.-])print(content|page|out|view|able|friendly|er-friendly)?(\.[a-z0-9]+)?(\/|$)/i;
+const PRINT_PARAMS = /^(print|printable|printmode)$/i;
+const PRINT_VALUE_PARAMS = /^(mode|view|type|format|style|tmpl|template|layout|output|media|display|action)$/i;
+const PRINT_VALUES = /^print(able|_?view|_?page|out)?$/i;
+const OFF_VALUES = /^(0|false|no|off)$/i;
 function isPrintPage(target) {
   let pathname = target.pathname;
   try {
@@ -127,8 +132,8 @@ function isPrintPage(target) {
   }
   if (PRINT_PATH.test(pathname)) return true;
   for (const [name, value] of target.searchParams) {
-    if (PRINT_PARAMS.test(name)) return true;
-    if (/^(mode|view|type|format|style)$/i.test(name) && /^print/i.test(value)) return true;
+    if (PRINT_PARAMS.test(name) && !OFF_VALUES.test(value)) return true;
+    if (PRINT_VALUE_PARAMS.test(name) && PRINT_VALUES.test(value)) return true;
   }
   return false;
 }
@@ -227,7 +232,9 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 
   fs.mkdirSync(paths.pages, { recursive: true });
   state = restart ? null : project.readJson(paths.state);
-  if (state?.finished) report("巡回: 前の巡回は終わっている。一覧だけを書き直す(やり直すときは --restart)");
+  // 終わった巡回かどうかは、取り直すページを数えたあとで、まとめて画面に出す。
+  const wasFinished = Boolean(state?.finished);
+  const resumeNotes = [];
   // 待ち行列の中の項目(URL から引く)。同時に2ページ以上をたどると、深い道から先に同じページに
   // 着くことがあるので、まだ取りに行っていなければ、浅い方の階層と見つけた元に直す。
   let queued = new Map();
@@ -262,6 +269,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       rendered: 0,
       learnedIgnoreParams: [],
       paramObservations: {},
+      excludedPrint: {},
       seenCount: 0,
     };
     starts.forEach((url) => enqueue(url, 0, "", "start"));
@@ -275,6 +283,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   state.seenCount = state.seenCount || Object.keys(state.seen).length;
   state.external = state.external || {};
   state.rendered = state.rendered || 0;
+  state.excludedPrint = state.excludedPrint || {};
 
   // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
   // 巡回の途中で PC がネットワークから外れても、再開すればそのあいだのページを取り直せる。
@@ -290,17 +299,43 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         // 途中で止まって書きかけの行は飛ばす。
       }
     }
-    const retry = [...latest.values()].filter((record) => !record.ok && TRANSIENT_REASONS.has(record.reason) && !queued.has(record.url));
+    // 設定を変えて範囲の外になった URL は、取り直さない。
+    const retry = [...latest.values()].filter(
+      (record) => !record.ok && TRANSIENT_REASONS.has(record.reason) && !queued.has(record.url) && inScope(record.url, settings)
+    );
     if (retry.length) {
       for (const record of retry) {
         const item = { url: record.url, depth: record.depth, from: record.from, via: record.via };
         state.queue.push(item);
         queued.set(record.url, item);
       }
-      state.finished = false;
-      report(`  ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
+      resumeNotes.push(`ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
     }
   }
+
+  // 印刷用ページとして外した URL のうち、判定や設定を変えて印刷用でなくなったものは、待ち行列に戻す。
+  let revived = 0;
+  for (const [link, entry] of Object.entries(state.excludedPrint)) {
+    if (settings.crawl.excludePrintPages && isPrintPage(new URL(link))) continue;
+    delete state.excludedPrint[link];
+    if (queued.has(link) || !inScope(link, settings)) continue;
+    const item = { url: link, depth: entry.depth, from: entry.from, via: "link" };
+    state.queue.push(item);
+    queued.set(link, item);
+    state.seen[link] = true;
+    revived += 1;
+  }
+  if (revived) resumeNotes.push(`印刷用ページとして外していたが、いまの判定では外さないページ ${revived} 件を取りに行く`);
+
+  if (resumeNotes.length) state.finished = false;
+  if (wasFinished) {
+    report(
+      resumeNotes.length
+        ? "巡回: 前の巡回は終わっている。次のページだけを取ってから、一覧を書き直す"
+        : "巡回: 前の巡回は終わっている。一覧だけを書き直す(やり直すときは --restart)"
+    );
+  }
+  resumeNotes.forEach((note) => report(`  ${note}`));
   // 記録はためて書く(1行ずつ追記すると共有ドライブでは遅い)。状態を保存する前に、ためた記録と裏で書いている
   // ページのファイルを書き終える(状態が「見た」とする URL の記録とページが、先に残るようにする)。
   let recordLines = [];
@@ -499,8 +534,14 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       const link = normalize(rawLink);
       if (!link) continue;
       if (!inScope(link, settings)) {
+        const linkTarget = new URL(link);
+        // 印刷用ページとして外した URL は、あとで確かめられるよう、状態に残して一覧に書く。
+        if (settings.crawl.excludePrintPages && isAllowedHost(linkTarget, settings) && isPrintPage(linkTarget)) {
+          if (!state.excludedPrint[link]) state.excludedPrint[link] = { from: url, depth: depth + 1 };
+          continue;
+        }
         // 外のサイトへのリンク(巡回の範囲の外にある、許可したサーバーのリンクは数えない)。
-        if (!isAllowedHost(new URL(link), settings)) {
+        if (!isAllowedHost(linkTarget, settings)) {
           state.external[link] = state.external[link] || { from: url, count: 0 };
           state.external[link].count += 1;
         }
@@ -562,7 +603,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 
   const counts = writeCrawlLists(project, state, settings);
   report(
-    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
+    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
   );
   report(
     `  見つけ方: ${Object.entries(counts.via)
@@ -613,6 +654,11 @@ function writeCrawlLists(project, state, settings) {
       record.from || "",
     ]);
   }
+  // 印刷用ページとして外した URL も、一覧に「印刷用として外した」と書く(何を外したかを後から確かめられるように)。
+  const excludedPrint = Object.entries(state.excludedPrint || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const [url, entry] of excludedPrint) {
+    rows.push([url, "", directoryOf(url), entry.depth ?? "", "印刷用として外した", "", "", "", "", entry.from || ""]);
+  }
   writeCsv(project, paths.list, rows);
 
   const sortedEntries = (object) => Object.entries(object).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -634,6 +680,7 @@ function writeCrawlLists(project, state, settings) {
     robots: pages.filter((record) => record.status === "robots").length,
     files: Object.keys(state.files).length,
     external: Object.keys(state.external || {}).length,
+    printExcluded: excludedPrint.length,
     via,
   };
 }

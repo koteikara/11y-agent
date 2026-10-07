@@ -84,7 +84,12 @@ async function main() {
     console.log("  ok   ファイルの一覧: 中身を取らずに URL だけを書く");
 
     // 印刷用ページは、既定で外す。
-    assert.ok(![...byPath.keys()].some((key) => key.startsWith("/print/") || key.includes("printcontent")), "印刷用ページを外す");
+    // 印刷用ページは取りに行かず、一覧には「印刷用として外した」と書く(何を外したかを後から確かめられるように)。
+    for (const key of [...byPath.keys()].filter((k) => k.startsWith("/print/") || k.includes("printcontent"))) {
+      assert.strictEqual(byPath.get(key).状態, "印刷用として外した", key);
+    }
+    assert.strictEqual(byPath.get("/print/1.html")?.状態, "印刷用として外した");
+    assert.ok(!fs.existsSync(path.join(dir, "crawl", "pages", require("../../batch/commands/crawl").urlKey(`${origin}/print/1.html`))), "印刷用ページは取りに行かない");
     // 接続が切れて取れなかったページは、取れないとして記録する(次の実行で取り直す)。
     assert.ok(byPath.get("/flaky.html").状態.startsWith("取れない(network"), byPath.get("/flaky.html").状態);
     console.log("  ok   印刷用ページを既定で外す");

@@ -8,6 +8,7 @@ const zlib = require("zlib");
 const { openProject } = require("../../batch/lib/project");
 const { buildXlsx } = require("../../batch/lib/xlsx");
 const { parseRobots, isAllowedByRobots, parseSitemap } = require("../../batch/lib/robots");
+const { isPrintPage } = require("../../batch/commands/crawl");
 
 // ZIP の中央のディレクトリを読み、名前と中身(展開したもの)を返す。
 function unzip(buffer) {
@@ -92,6 +93,13 @@ async function main() {
   assert.deepStrictEqual(parseSitemap("<sitemapindex><sitemap><loc>https://e.com/s1.xml</loc></sitemap></sitemapindex>"), { urls: [], children: ["https://e.com/s1.xml"] });
   assert.deepStrictEqual(parseSitemap("<urlset><url><loc> https://e.com/a?x=1&amp;y=2 </loc></url></urlset>").urls, ["https://e.com/a?x=1&y=2"]);
   console.log("  ok   robots.txt と sitemap.xml");
+
+  // 4. 印刷用ページの判定。本文のページ(印刷製本の入札、3D プリンターの案内)は外さない。
+  const printPages = ["/handlers/printcontent.cfm?GroupID=1", "/print/a.html", "/a/print.html", "/a.html?print=1", "/a.html?mode=print", "/a?tmpl=print", "/printer-friendly/x"];
+  const contentPages = ["/nyusatsu/insatsu-seihon.html", "/sangyo/insatsu.html", "/shisetsu/3d-printer.html", "/toshokan/printer.html", "/x?type=printer", "/a.html?print=0", "/sprint/news.html", "/blueprint.html"];
+  for (const p of printPages) assert.ok(isPrintPage(new URL(`https://e.jp${p}`)), `印刷用ページと見なかった: ${p}`);
+  for (const p of contentPages) assert.ok(!isPrintPage(new URL(`https://e.jp${p}`)), `本文のページを印刷用と見た: ${p}`);
+  console.log("  ok   印刷用ページの判定");
 
   console.log("\n=== batch unit tests passed ===");
 }

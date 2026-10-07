@@ -25,12 +25,12 @@
 
 - 背景・目的: ユーザーの依頼で、印刷用ページ(本文の写しで、移行の対象ではない)を既定で外す。遠野市の巡回では、各ページの印刷用ページ(`printcontent.cfm`)へのリンクに、開くたびに変わる番号が付いていた。あわせて、PC をネットワークから外して再起動すると聞いたので、巡回の途中でネットワークが切れて取れなかったページを、再開のときに取り直すようにした。
 - 主な変更内容:
-  - `goal2-app/batch/commands/crawl.js`: 印刷用ページの URL(道の名前の print、printcontent、insatsu など、URL の項目の print、mode=print など)を巡回の範囲から外す(`crawl.excludePrintPages`、既定は有効)。一覧を書くときも、設定を入れる前に取っていた印刷用ページを外す。再開のとき、前の実行でネットワークの切断、時間切れ、名前を引けないで取れなかったページを待ち行列に戻す。
+  - `goal2-app/batch/commands/crawl.js`: 印刷用ページの URL(道の名前の print、printcontent、insatsu など、URL の項目の print、mode=print など)を巡回の範囲から外す(`crawl.excludePrintPages`、既定は有効)。一覧を書くときも、設定を入れる前に取っていた印刷用ページを外す。再開のとき、前の実行でネットワークの切断、時間切れ、名前を引けずに取れなかったページを待ち行列に戻す。
   - `goal2-app/batch/commands/patterns.js`: 印刷用ページを群から外す。
   - `goal2-app/test/batch-engine/run-crawl-tests.js`、`fake-old-site.js`: 印刷用ページ、1回目だけ接続を切るページを足して確かめる。
 - 検証: `npm run test:batch-engine` が通ることを確かめた。
-- レビュー: (Fable のレビューのあとに書く)
-- 関連ファイル: `goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/project.js`、`goal2-app/test/batch-engine/`
+- レビュー: Fable が印刷用ページの判定と、再開のときの取り直しを確かめた。要修正3件を直した。(1) 判定が広すぎ、`insatsu`(印刷製本の入札、印刷業の支援)や `printer`(3D プリンターの案内)を含む本文のページまで外し、外したことが記録に残らなかった。道の名前は print、printcontent、printpage など印刷用の形だけにし、`insatsu` と `printer` は外さない。URL の項目は値も見る(`print=0` は外さない、`tmpl=print` などを足す)。外したページは状態に残し、一覧に「印刷用として外した」と書く。判定を変えて印刷用でなくなったページは、再開のときに取りに行く。(2) 終わった巡回で取り直しが起きたとき、「一覧だけを書き直す」と出してから取りに行っていた。取り直すページを数えてから、1つの言い方で出す。(3) この記録の未記入。提案のうち、取り直しを範囲の中に限ること、使い方の文書への記述、判定の単体テストを取り入れた。
+- 関連ファイル: `goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/README.md`、`goal2-app/test/batch-engine/`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-07: コンテンツパターンの抽出と、共有ドライブへの書き込みの速さ
