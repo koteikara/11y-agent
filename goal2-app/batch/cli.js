@@ -13,6 +13,9 @@
 //
 // 画面と実行の記録には、件数、移行管理 ID、理由だけを出す。旧サイトの本文や HTML は出さない
 // (本文を Anthropic に送らないため)。
+// Node はファイルの読み書きと DNS の問い合わせを、同じ裏の作業の枠(既定は4本)で処理する。共有ドライブへの
+// 書き込みが多いと枠がふさがり、DNS の問い合わせが時間切れになるので、枠を増やす(最初の非同期の処理より前に決める)。
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || "16";
 const fs = require("fs");
 const path = require("path");
 const { openProject } = require("./lib/project");

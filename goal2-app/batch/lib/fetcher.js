@@ -20,11 +20,28 @@ function hostMatches(host, list) {
   return list.some((entry) => String(entry || "").toLowerCase() === target);
 }
 
+// サーバーの名前を引いた結果を DNS_CACHE_MS のあいだ覚えて使い回す。巡回で取りに行くサーバーは数が少なく、
+// ページごとに引き直すと、共有ドライブへの書き込みで裏の作業の枠がふさがったときに時間切れになる
+// (遠野市と大阪市の学校のサイトの巡回で、名前を引けない失敗が続いた)。失敗した結果は覚えない。
+const DNS_CACHE_MS = 5 * 60 * 1000;
+const dnsCache = new Map();
+
 async function lookupAll(host) {
-  return Promise.race([
-    dns.promises.lookup(host, { all: true, verbatim: true }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("DNS lookup timed out")), DNS_TIMEOUT_MS)),
-  ]);
+  const cached = dnsCache.get(host);
+  if (cached && cached.expires > Date.now()) return cached.addresses;
+  let timer;
+  try {
+    const addresses = await Promise.race([
+      dns.promises.lookup(host, { all: true, verbatim: true }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("DNS lookup timed out")), DNS_TIMEOUT_MS);
+      }),
+    ]);
+    dnsCache.set(host, { addresses, expires: Date.now() + DNS_CACHE_MS });
+    return addresses;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function assertAllowed(url, rules) {
