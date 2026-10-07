@@ -19,7 +19,8 @@
 //   pages/<鍵>/    source.html と meta.json
 //   list.csv       ページの一覧
 //   files.csv      ファイルの一覧
-//   external.csv   外のサイトへのリンクの一覧
+//   external.csv   外のサイトへのリンクの一覧(サーバーごと。URL はサーバーごとに200件まで)
+//   capped.csv     同じ形の URL が多く、上限で打ち切った形の一覧
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -141,7 +142,7 @@ function isPrintPage(target) {
 
 // URL の項目(? のあと)を持つ URL の「形」。道の数字を伏せ、項目の名前を並べたもの。ブログやカレンダーは、
 // 項目の組み合わせの数だけ URL が増え、巡回が終わらない(椎葉村のブログの itemid、page、catid、トラックバック)。
-// 同じ形の URL は crawl.maxPerQueryPattern 件までにする。項目の無い URL は数えない(記事を道で分けるサイトの、
+// 同じ形の URL は crawl.maxPerQueryPattern 件までにする(項目が2つ以上の形だけ。下の説明)。項目の無い URL は数えない(記事を道で分けるサイトの、
 // 大きな欄を打ち切らないため)。道の中に項目を書くブログ(椎葉村の /blog/index-itemid=12&page=2)も、道に = を
 // 含むものは項目を持つ URL として数える。
 function queryPatternKey(url) {
@@ -151,9 +152,12 @@ function queryPatternKey(url) {
   } catch {
     return null;
   }
-  const pathHasParams = target.pathname.includes("=");
-  if (!target.search && !pathHasParams) return null;
-  const names = [...new Set(target.searchParams.keys())].sort();
+  // 項目の名前は、? のあとと、道の中の「名前=値」(椎葉村の /blog/index-itemid=12&page=2)から集める。
+  const pathNames = [...target.pathname.matchAll(/(?:^|[&;/\-])([A-Za-z_]\w*)=/g)].map((m) => m[1]);
+  const names = [...new Set([...target.searchParams.keys(), ...pathNames])].sort();
+  // 項目が1つだけの形(記事の番号の ?id=N、/blog/index-itemid=N)は、本文のページそのものなので数えない。
+  // 組み合わせで増えるのは、項目が2つ以上の形(記事 × ページ番号、分類 × 月など)である。
+  if (names.length < 2) return null;
   return `${target.origin}${target.pathname.replace(/[0-9]+/g, "N")}?${names.join("&")}`;
 }
 
@@ -322,6 +326,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   }
   state.rendered = state.rendered || 0;
   state.excludedPrint = state.excludedPrint || {};
+  state.stampObservations = state.stampObservations || {};
   state.cappedPatterns = state.cappedPatterns || {};
 
   // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
@@ -343,9 +348,24 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     {
       state.queryPatternVisits = {};
       for (const record of latest.values()) {
-        const key = record.kind === "page" ? queryPatternKey(record.url) : null;
+        const key = record.kind === "page" && record.ok ? queryPatternKey(record.url) : null;
         if (key) state.queryPatternVisits[key] = (state.queryPatternVisits[key] || 0) + 1;
       }
+      // 打ち切った URL のうち、上限を上げたなどで、まだ取れる分は待ち行列に戻す。
+      const room = {};
+      let revivedCapped = 0;
+      for (const record of latest.values()) {
+        if (record.status !== "capped" || queued.has(record.url) || !inScope(record.url, settings)) continue;
+        const key = queryPatternKey(record.url);
+        const used = (state.queryPatternVisits[key] || 0) + (room[key] || 0);
+        if (key && used >= limits.maxPerQueryPattern) continue;
+        room[key] = (room[key] || 0) + 1;
+        const item = { url: record.url, depth: record.depth, from: record.from, via: record.via };
+        state.queue.push(item);
+        queued.set(record.url, item);
+        revivedCapped += 1;
+      }
+      if (revivedCapped) resumeNotes.push(`同じ形が多く打ち切っていたページ ${revivedCapped} 件を取りに行く`);
     }
     // 設定を変えて範囲の外になった URL は、取り直さない。
     const retry = [...latest.values()].filter(
@@ -477,6 +497,75 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     }
   };
 
+  // 開いた時刻の印の見つけ方(取りに行く前に分かる手がかり)。大阪市の学校のサイトでは、リンクの URL に付く
+  // tm= がページを開くたびに変わり、取りに行く前に待ち行列が時刻違いの URL で埋まって、上の見つけ方が働かなかった。
+  // 1つのページの多くのリンク(STAMP_MIN_LINKS 以上)に同じ値で付き、その値が時刻や乱数のような長い値で、
+  // ページごとに値が変わる(STAMP_MIN_PAGES ページで別の値)項目は、開いた時刻の印とみなして外す。
+  // 見つけたら、待ち行列の URL を整え直し、同じ URL になったものを除く。
+  const STAMP_MIN_LINKS = 5;
+  const STAMP_MIN_PAGES = 3;
+  const STAMP_VALUE = /^(?:[0-9]{10,}|[0-9a-f]{16,}|[A-Za-z0-9_-]{20,})$/;
+  const observeStamps = (pageLinks) => {
+    const perName = new Map();
+    for (const link of pageLinks) {
+      let target;
+      try {
+        target = new URL(link);
+      } catch {
+        continue;
+      }
+      if (!isAllowedHost(target, settings)) continue;
+      for (const [name, value] of target.searchParams) {
+        if (state.learnedIgnoreParams.includes(name) || !STAMP_VALUE.test(value)) continue;
+        if (!perName.has(name)) perName.set(name, new Map());
+        const values = perName.get(name);
+        values.set(value, (values.get(value) || 0) + 1);
+      }
+    }
+    for (const [name, values] of perName) {
+      const [value, count] = [...values.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (count < STAMP_MIN_LINKS) continue;
+      const seenValues = (state.stampObservations[name] = state.stampObservations[name] || []);
+      if (!seenValues.includes(value)) seenValues.push(value);
+      if (seenValues.length >= STAMP_MIN_PAGES) {
+        state.learnedIgnoreParams.push(name);
+        delete state.stampObservations[name];
+        report(`  URL の項目 ${name} はページを開くたびに値が変わる印なので、これから外す`);
+        log.write({ result: "learned-ignore-param", param: name, by: "stamp" });
+        renormalizeQueue();
+      }
+    }
+  };
+  // 外す項目が増えたときに、待ち行列の URL を整え直す。整えた URL がもう見たものなら除く。
+  const renormalizeQueue = () => {
+    const kept = [];
+    for (const item of state.queue) {
+      const normalized = normalize(item.url) || item.url;
+      if (normalized !== item.url) {
+        queued.delete(item.url);
+        if (state.seen[normalized]) continue;
+        state.seen[normalized] = true;
+        item.url = normalized;
+        queued.set(normalized, item);
+      }
+      kept.push(item);
+    }
+    state.queue = kept;
+    if (currentBatch.length) {
+      const batchKept = [];
+      for (const item of currentBatch) {
+        const normalized = normalize(item.url) || item.url;
+        if (normalized !== item.url) {
+          if (state.seen[normalized]) continue;
+          state.seen[normalized] = true;
+          item.url = normalized;
+        }
+        batchKept.push(item);
+      }
+      currentBatch.splice(0, currentBatch.length, ...batchKept);
+    }
+  };
+
   const noteFile = (url, type, from) => {
     state.files[url] = state.files[url] || { type, from, count: 0 };
     state.files[url].count += 1;
@@ -492,10 +581,12 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       state.seenCount += 1;
     }
     // 同じ形の URL が上限に達したら、取りに行かずに数だけ残す。
-    const patternKey = queryPatternKey(url);
+    // 始まりと sitemap.xml の URL(サイトが示した有限の一覧)は、上限の外にする。打ち切った URL は記録に残し、
+    // 一覧に「同じ形が多く打ち切った」と書く。上限を上げて再開すると、取りに行く。
+    const patternKey = via === "start" || via === "sitemap" ? null : queryPatternKey(url);
     if (patternKey) {
       if ((state.queryPatternVisits[patternKey] || 0) >= limits.maxPerQueryPattern) {
-        state.cappedPatterns[patternKey] = (state.cappedPatterns[patternKey] || 0) + 1;
+        appendRecord({ url, depth, from, via, kind: "page", status: "capped", pattern: patternKey, ok: false });
         return;
       }
       state.queryPatternVisits[patternKey] = (state.queryPatternVisits[patternKey] || 0) + 1;
@@ -564,6 +655,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     const finalUrl = normalize(result.finalUrl);
     const duplicateOf = info.bodyHash && state.bodyHashes[info.bodyHash] ? state.bodyHashes[info.bodyHash] : null;
     observeParams(url, info.bodyHash);
+    observeStamps(links.keys());
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
     project.queueWrite(path.join(dir, "source.html"), result.html);
@@ -622,7 +714,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         noteFile(link, path.extname(pathname).slice(1).toLowerCase(), url);
         continue;
       }
-      if (state.seenCount >= limits.maxPages) continue;
+      // 上限は、取ったページと待っている URL の数で見る(外した項目で整え直した URL を数えないため)。
+      if (state.pages + state.queue.length >= limits.maxPages) continue;
       enqueue(link, depth + 1, url, linkVia);
     }
   };
@@ -672,7 +765,10 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   await flushRecords();
 
   // 前の版の状態を移したときは、終わった巡回でも状態を書き直す(大きな状態のファイルを小さくする)。
-  if (migratedExternal && state.finished) await saveState();
+  if (migratedExternal && wasFinished && !resumeNotes.length) {
+    await saveState();
+    report("  状態のファイルを新しい形で書き直した");
+  }
   const counts = writeCrawlLists(project, state, settings);
   report(
     `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、同じ形の URL が多く打ち切った ${counts.capped}、ファイル ${counts.files}、外のサイト ${counts.external} サーバー`
@@ -707,6 +803,7 @@ function writeCrawlLists(project, state, settings) {
   const statusLabel = (record) => {
     if (record.ok) return record.duplicateOf ? "重複" : "取れた";
     if (record.status === "robots") return "robots.txt で止めた";
+    if (record.status === "capped") return "同じ形が多く打ち切った";
     return `取れない(${record.reason}${record.status ? ` ${record.status}` : ""})`;
   };
   const rows = [["URL", "タイトル", "ディレクトリ", "階層", "状態", "転送先", "重複先", "更新日", "見つけ方", "見つけた元"]];
@@ -751,20 +848,22 @@ function writeCrawlLists(project, state, settings) {
   writeCsv(project, paths.external, externalRows);
 
   // 同じ形の URL が多く、上限で打ち切った形の一覧。
+  const cappedByPattern = {};
+  for (const record of pages) if (record.status === "capped") cappedByPattern[record.pattern] = (cappedByPattern[record.pattern] || 0) + 1;
   const cappedRows = [["URL の形", "取ったページ", "打ち切った URL"]];
-  for (const [key, skipped] of sortedEntries(state.cappedPatterns || {})) cappedRows.push([key, state.queryPatternVisits?.[key] || 0, skipped]);
+  for (const [key, skipped] of sortedEntries(cappedByPattern)) cappedRows.push([key, state.queryPatternVisits?.[key] || 0, skipped]);
   writeCsv(project, path.join(paths.dir, "capped.csv"), cappedRows);
 
   return {
     pages: pages.length,
     ok: pages.filter((record) => record.ok && !record.duplicateOf).length,
     duplicates: pages.filter((record) => record.duplicateOf).length,
-    failed: pages.filter((record) => !record.ok && record.status !== "robots").length,
+    failed: pages.filter((record) => !record.ok && record.status !== "robots" && record.status !== "capped").length,
     robots: pages.filter((record) => record.status === "robots").length,
     files: Object.keys(state.files).length,
     external: Object.keys(state.externalHosts || {}).length,
     printExcluded: excludedPrint.length,
-    capped: Object.values(state.cappedPatterns || {}).reduce((n, v) => n + v, 0),
+    capped: pages.filter((record) => record.status === "capped").length,
     via,
   };
 }

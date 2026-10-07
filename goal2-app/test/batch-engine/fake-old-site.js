@@ -15,8 +15,9 @@
 //   /clock.html      開いた時刻を付けたリンク(?tm=…)を出すページ。開くたびにリンク先の URL が変わる
 //   /flaky.html      1回目は接続を切る(ネットワークの切断の代わり)。2回目からは取れる
 //   /print/1.html、/handlers/printcontent.cfm  印刷用ページ
-//   /blog/index-itemid=N  道の中に項目を書くブログ(椎葉村の形)。12 件分のリンク
-//   /calendar.html?ym=N  月ごとのカレンダー。12 か月分のリンク(同じ形の URL の上限を確かめる)
+//   /blog/index-itemid=N&page=2  道の中に項目を書くブログ(椎葉村の形)。記事 × ページ番号の組み合わせ 14 件と、
+//                    記事だけの /blog/index-itemid=N を 3 件
+//   /calendar.html?ym=N&day=1  カレンダー。月 × 日の組み合わせ 14 件(同じ形の URL の上限を確かめる)
 //   /news.html?id=N  記事の番号の項目。1〜4 は「該当なし」で同じ中身、5 と 6 は違う中身(外してはいけない項目)
 const fs = require("fs");
 const http = require("http");
@@ -112,8 +113,9 @@ function startFakeOldSite() {
         `<li><a href="/clock.html?tm=${Date.now()}">時刻の付いたリンク</a></li>`,
         ...[1, 2, 3, 4, 5, 6].map((id) => `<li><a href="/news.html?id=${id}">お知らせ${id}</a></li>`),
         '<li><a href="/flaky.html">ときどき切れるページ</a></li>',
-        ...Array.from({ length: 12 }, (_, i) => `<li><a href="/calendar.html?ym=${202601 + i}">カレンダー${i + 1}月</a></li>`),
-        ...Array.from({ length: 12 }, (_, i) => `<li><a href="/blog/index-itemid=${i + 1}">ブログ${i + 1}</a></li>`),
+        ...Array.from({ length: 14 }, (_, i) => `<li><a href="/calendar.html?ym=${202601 + i}&day=1">カレンダー${i + 1}</a></li>`),
+        ...Array.from({ length: 14 }, (_, i) => `<li><a href="/blog/index-itemid=${i + 1}&page=2">ブログ${i + 1}の2ページ目</a></li>`),
+        ...Array.from({ length: 3 }, (_, i) => `<li><a href="/blog/index-itemid=${i + 1}">ブログ${i + 1}</a></li>`),
         '<li><a href="/print/1.html">印刷用</a></li>',
         '<li><a href="/handlers/printcontent.cfm?ContentID=1">印刷用(遠野市の形)</a></li>',
       ];
@@ -153,7 +155,7 @@ Sitemap: http://${request.headers.host}/sitemap.xml
       const tm = `${Date.now()}${clockCount}`;
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html><html><head><title>時刻のページ</title></head><body><p>時刻の付いたリンクのページ。</p>
-<a href="/clock.html?tm=${tm}">もう一度</a><a href="/a/6.html?tm=${tm}">記事6</a><a href="/a/7.html?tm=${tm}">記事7</a><a href="/a/8.html?tm=${tm}">記事8</a></body></html>`);
+<a href="/clock.html?tm=${tm}">もう一度</a><a href="/a/6.html?tm=${tm}">記事6</a><a href="/a/7.html?tm=${tm}">記事7</a><a href="/a/8.html?tm=${tm}">記事8</a><a href="/a/9.html?tm=${tm}">記事9</a><a href="/a/10.html?tm=${tm}">記事10</a></body></html>`);
       return;
     }
     if (url.pathname.startsWith("/blog/index-itemid=")) {

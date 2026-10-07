@@ -34,7 +34,7 @@ async function main() {
     fs.mkdirSync(path.join(dir, "project"));
     fs.writeFileSync(
       path.join(dir, "project", "settings.json"),
-      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 }, patterns: { minPages: 3, proposals: 3 }, crawl: { maxPerQueryPattern: 8 } })
+      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 }, patterns: { minPages: 3, proposals: 3 }, crawl: { maxPerQueryPattern: 10 } })
     );
 
     const crawlOut = await cli("crawl", dir, "--start", `${origin}/`);
@@ -96,12 +96,17 @@ async function main() {
 
     // URL の項目を持つ同じ形の URL は、上限(テストでは 8)で打ち切り、打ち切った形を一覧に残す。
     const calendarRows = [...byPath.keys()].filter((key) => key.startsWith("/calendar.html?"));
-    assert.strictEqual(calendarRows.length, 8, `カレンダーの URL の数: ${calendarRows.length}`);
+    assert.strictEqual(calendarRows.length, 14, `カレンダーの URL の数: ${calendarRows.length}`);
+    assert.strictEqual(calendarRows.filter((key) => byPath.get(key).状態 === "取れた").length, 10);
+    assert.strictEqual(calendarRows.filter((key) => byPath.get(key).状態 === "同じ形が多く打ち切った").length, 4, "打ち切った URL も一覧に残す");
     const capped = fs.readFileSync(path.join(dir, "crawl", "capped.csv"), "utf8");
-    assert.ok(capped.includes("/calendar.html?ym,8,4"), capped);
+    assert.ok(capped.includes("/calendar.html?day&ym,10,4"), capped);
     assert.ok(byPath.has("/news.html?id=6"), "上限より少ない形は打ち切らない");
-    // 道の中に項目を書く形(/blog/index-itemid=N)も、同じ形として数えて打ち切る。
-    assert.strictEqual([...byPath.keys()].filter((key) => key.startsWith("/blog/index-itemid=")).length, 8);
+    // 道の中に項目を書く形(/blog/index-itemid=N&page=2)も、項目が2つの形として数えて打ち切る。
+    const blogPages = [...byPath.keys()].filter((key) => key.startsWith("/blog/index-itemid=") && key.endsWith("&page=2"));
+    assert.strictEqual(blogPages.filter((key) => byPath.get(key).状態 === "取れた").length, 10);
+    // 項目が1つの形(記事そのもの)は打ち切らない。
+    for (const id of [1, 2, 3]) assert.strictEqual(byPath.get(`/blog/index-itemid=${id}`)?.状態, "取れた");
     console.log("  ok   同じ形の URL が多いときは上限で打ち切る(ブログ、カレンダーの組み合わせ)");
 
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。
