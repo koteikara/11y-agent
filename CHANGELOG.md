@@ -21,6 +21,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: EmbeddingGemma 2 を KB のルール検索に使えるかの調査メモを足す
+
+- 背景・目的: ユーザーの依頼で、2026-10-06 公開の埋め込みモデル EmbeddingGemma 2 が API で使えるか、KB のルール検索に使えるかを調べた。「API が無料」とする記事や SNS の投稿の真偽も確かめた。
+- 主な変更内容:
+  - `memory/embeddinggemma2-kb-search-2026-10.md`: 調査メモを新しく作った。API では提供されていないこと(Gemini API にあるのは別モデルの Gemini Embedding 2 で、無料枠は送った内容が改善に使われる)、「API が無料」は利用者の端末で動かすという意味であること、Windows の Ollama では動かず llama.cpp で動いたこと、評価の結果(上位3件に正解が入る割合は文字の一致の81%に対して92%)と限界を書いた。
+  - `memory/embedding-eval/`: 評価の道具 `eval.mjs` と質問48問 `queries.json` を置いた。モデルを使わない比較用の検索はそのまま動き、埋め込みは Ollama か llama-server を起動して動かす。
+  - `memory/project-state.md`: 進捗に1行足した。
+- 検証: `node memory/embedding-eval/eval.mjs` が、リポジトリの中の置き場所から 2026-10-07 の結果と同じ値を出すことを確かめた(文字の一致のみ。埋め込みは手元の llama-server で実行した値)。
+- レビュー: (push 前に記入)
+- 関連ファイル: `memory/embeddinggemma2-kb-search-2026-10.md`、`memory/embedding-eval/eval.mjs`、`memory/embedding-eval/queries.json`、`memory/project-state.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: KB のルール「ファイルの表示テキスト」に、リンクの置き場所の条件を足す
 
 - 背景・目的: 取込試験で、複数行HTML内素材処理を「そのまま」にした案件では、文の中、箇条書き、表の中のファイルのリンクに CMS が種類と容量を表示しないと分かった。ルールは「CMS が自動表示するので削除する」だけで、これらのリンクには当てはまらない。ユーザーの指示で直した。

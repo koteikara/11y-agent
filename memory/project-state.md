@@ -87,6 +87,7 @@ CodexやAGENTが作業を再開するときは、まず `AGENTS.md`、`workstrea
 - `goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1「Cloud Run に共通のパスワードを掛ける」を実装した(PR #154、2026-09-28)。`APP_PASSWORD` があるときは `GET /api/health` を除くすべての要求で HTTP の Basic 認証を求め、両方を SHA-256 にしてから `crypto.timingSafeEqual()` で比べる。Cloud Run で `APP_PASSWORD` が無いか16文字より短いときは 503 を返し、起動時にエラーを1行出す。`/api/` の要求は、パスワードの有無にかかわらず、`Sec-Fetch-Site` が `same-origin` か `none` でなければ 403 にする。確かめる処理は `lib/app-auth.js`、テストは `test/app-auth/`。確かめる順(`Host`、`Sec-Fetch-Site`、パスワード、POST の送り元)と設計との差4つは設計書の 4章 P1 に書いた。本番のシークレットの作成とデプロイ(「本番への適用」)はマージ後にユーザーが行い、そのとき「P1 より前の最後のリビジョン」と「P1 の最初のリビジョン」の名前をここに記録する
 
 - `goal2-app/TONO_FEEDBACK_FIX_INSTRUCTIONS.md` の 4.6「操作パネルの大きさを変えられない」(指摘13)を直した(2026-10-04、main 直接)。「次にやること」パネルの角につまみを足し、ドラッグと矢印キーで大きさを変え、再読み込みのあとも戻す。つまみは画面の中央を向いた角に付く。設計との差は設計書 4.6 の「実装の記録」にある。手元に Playwright 1.56.1 と Chromium を入れ、CI と同じブラウザのテストを push 前に回せるようにした。
+- 2026-10-06 公開の埋め込みモデル EmbeddingGemma 2 が KB のルール検索に使えるかを調べた(2026-10-07、main 直接)。API では提供されておらず、手元の PC で llama.cpp で動かして、KB の67ルールと質問48問で評価した。上位3件に正解が入る割合は、文字の一致の81%に対して92%だった。文章で尋ねてルールを探す画面を作るかは未決定。詳細は `memory/embeddinggemma2-kb-search-2026-10.md`。
 
 ## Decisions
 
