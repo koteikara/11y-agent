@@ -4,7 +4,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { execFile } = require("child_process");
+const { execFile, spawnSync } = require("child_process");
 const { startFakeOldSite } = require("./fake-old-site");
 const { isStructuralCandidate } = require("../../batch/commands/process");
 const { jaccard } = require("../../batch/lib/structure");
@@ -178,9 +178,13 @@ async function main() {
 
     // 9. 同じ案件のフォルダで、2つ目のコマンドは動かさない。動いていないプロセスの印は引き継ぐ。
     assert.ok(!fs.existsSync(path.join(dir, "run.lock")), "終わったコマンドは印を消す");
-    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: process.pid, command: "crawl" }));
+    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: process.pid, host: os.hostname(), command: "crawl" }));
     await assert.rejects(cli("group", dir), /ほかのコマンド\(crawl、プロセス \d+\)が動いている/);
-    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: 999999, command: "crawl" }));
+    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: process.pid, host: "other-pc", command: "crawl" }));
+    await assert.rejects(cli("group", dir), /別の PC\(other-pc\)のコマンドの印がある/);
+    // 終わったプロセスの番号を使う(決め打ちの番号は、長く動いている PC では使われていることがある)。
+    const deadPid = spawnSync(process.execPath, ["-e", ""]).pid;
+    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: deadPid, host: os.hostname(), command: "crawl" }));
     await cli("group", dir);
     assert.ok(!fs.existsSync(path.join(dir, "run.lock")), "引き継いだ印も消す");
     console.log("  ok   同じ案件のフォルダで、コマンドを2つ同時に動かさない");

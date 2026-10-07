@@ -112,20 +112,29 @@ const WRITE_RETRY_DELAYS_MS = [1000, 5000, 15000, 30000];
 // フォルダの位置にファイルがある、容量が無い、などの失敗は、待っても通らないのでやり直さない。
 const isTransientWriteError = (error) => ["ENOENT", "EBUSY", "EAGAIN", "EIO", "EPERM", "UNKNOWN"].includes(error.code);
 
-function writeFileAtomic(filePath, content) {
+// 同期のファイルの操作を、一時的な失敗ならその場で待ってやり直す。
+function withWriteRetry(operation) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      const tmp = `${filePath}.tmp-${process.pid}`;
-      fs.writeFileSync(tmp, content);
-      fs.renameSync(tmp, filePath);
-      return;
+      return operation();
     } catch (error) {
       if (!isTransientWriteError(error) || attempt >= WRITE_RETRY_DELAYS_MS.length) throw error;
-      // 同期の書き込みなので、その場で待つ。
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WRITE_RETRY_DELAYS_MS[attempt]);
+      sleepSync(WRITE_RETRY_DELAYS_MS[attempt]);
     }
   }
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function writeFileAtomic(filePath, content) {
+  withWriteRetry(() => {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const tmp = `${filePath}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, content);
+    fs.renameSync(tmp, filePath);
+  });
 }
 
 function writeJson(filePath, value) {
@@ -339,4 +348,4 @@ function openProject(root) {
   };
 }
 
-module.exports = { openProject, DEFAULT_SETTINGS, mergeDefaults, assertSafeId };
+module.exports = { openProject, DEFAULT_SETTINGS, mergeDefaults, assertSafeId, withWriteRetry, sleepSync };

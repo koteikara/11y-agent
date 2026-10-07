@@ -17,8 +17,10 @@
 // 書き込みが多いと枠がふさがり、DNS の問い合わせが時間切れになるので、枠を増やす(最初の非同期の処理より前に決める)。
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || "16";
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
-const { openProject } = require("./lib/project");
+const { execFileSync } = require("child_process");
+const { openProject, withWriteRetry, sleepSync } = require("./lib/project");
 const { startEngine } = require("./lib/engine-host");
 const { runFetch } = require("./commands/fetch");
 const { runCrawl, normalizeUrl } = require("./commands/crawl");
@@ -149,44 +151,85 @@ async function main() {
 }
 
 // 同じ案件のフォルダで、書き込むコマンドを2つ同時に動かさない。ログインし直したあとに巡回が2つ重なり、
-// 同じファイルに書いて止まった(大阪市の学校のサイト)。印のファイルに動いているプロセスの番号を書き、
-// その番号のプロセスがもう無ければ、前の実行が途中で終わったものとみなして引き継ぐ。
+// 同じファイルに書いて止まった(大阪市の学校のサイト)。印のファイルに、この PC の名前と動いているプロセスの
+// 番号を書く。その番号のプロセスがもう無ければ、前の実行が途中で終わったものとみなし、印を消して作り直す。
+// 作るのも消すのも1つのプロセスしか勝てない操作なので、2つが同時に引き継ぐことはない。
+const LOCK_ATTEMPTS = 5;
+const LOCK_READ_WAIT_MS = 1000;
+
 function acquireLock(project, command) {
   const lockFile = path.join(project.root, "run.lock");
-  const mine = JSON.stringify({ pid: process.pid, command, startedAt: new Date().toISOString() });
-  try {
-    fs.writeFileSync(lockFile, mine, { flag: "wx" });
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    let other = null;
+  const mine = JSON.stringify({ pid: process.pid, host: os.hostname(), command, startedAt: new Date().toISOString() });
+  const shown = path.relative(process.cwd(), lockFile);
+  for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
     try {
-      other = JSON.parse(fs.readFileSync(lockFile, "utf8"));
-    } catch {
-      // 読めない印は、前の実行が書きかけで終わったものとみなす。
+      withWriteRetry(() => fs.writeFileSync(lockFile, mine, { flag: "wx" }));
+      return () => releaseLock(lockFile);
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
     }
-    if (other?.pid && other.pid !== process.pid && isAlive(other.pid)) {
+    const other = readLock(lockFile);
+    if (other === undefined) continue; // 読むあいだに消えた。もう一度作る。
+    if (other?.host && other.host !== os.hostname()) {
+      throw new Error(`この案件のフォルダには、別の PC(${other.host})のコマンドの印がある。そちらが終わっていれば ${shown} を消す`);
+    }
+    if (other?.pid && other.pid !== process.pid && isRunningNode(other.pid)) {
       throw new Error(
         `この案件のフォルダでは、ほかのコマンド(${other.command}、プロセス ${other.pid})が動いている。終わってから動かす` +
-          `(動いていないのが確かなら ${path.relative(process.cwd(), lockFile)} を消す)`
+          `(動いていないのが確かなら ${shown} を消す)`
       );
     }
-    fs.writeFileSync(lockFile, mine);
-  }
-  return () => {
     try {
-      if (JSON.parse(fs.readFileSync(lockFile, "utf8")).pid === process.pid) fs.unlinkSync(lockFile);
-    } catch {
-      // 消せなくても、次の実行がプロセスの番号で引き継ぐ。
+      withWriteRetry(() => fs.unlinkSync(lockFile));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
     }
-  };
+  }
+  throw new Error(`この案件のフォルダの印(${shown})を作れなかった。ほかのコマンドが同時に始まったかもしれない`);
 }
 
-function isAlive(pid) {
+// 印を読む。消えていれば undefined。中身が空や書きかけなら、作った直後で書き途中のこともあるので、
+// 少し待って読み直す。それでも読めなければ、前の実行が書きかけで終わったものとみなす(null)。
+function readLock(lockFile) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let text;
+    try {
+      text = fs.readFileSync(lockFile, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      sleepSync(LOCK_READ_WAIT_MS);
+    }
+  }
+  return null;
+}
+
+function releaseLock(lockFile) {
+  try {
+    if (JSON.parse(fs.readFileSync(lockFile, "utf8")).pid === process.pid) fs.unlinkSync(lockFile);
+  } catch {
+    // 消せなくても、次の実行がプロセスの番号で引き継ぐ。
+  }
+}
+
+// そのプロセスが動いていて、Node のプロセスかを見る。Windows はプロセスの番号をすぐ使い回すので、
+// 番号が生きているだけでは、前のコマンドとは限らない(ほかのアプリが同じ番号を取ることがある)。
+function isRunningNode(pid) {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
-    return error.code === "EPERM";
+    if (error.code !== "EPERM") return false;
+  }
+  if (process.platform !== "win32") return true;
+  try {
+    const out = execFileSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf8", windowsHide: true });
+    return /"node(.exe)?"/i.test(out);
+  } catch {
+    return true;
   }
 }
 
