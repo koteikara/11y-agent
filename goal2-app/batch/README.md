@@ -27,6 +27,8 @@ node batch/cli.js status  <案件のフォルダ>
 どのコマンドも、`project/summary.json` と、「AI 修正」タブへ写す `project/status.csv` を書き直す。
 画面と `logs/` の実行の記録には、件数、移行管理 ID、理由だけを出し、旧サイトの本文は出さない。
 
+同じ案件のフォルダでは、書き込むコマンド(crawl、patterns、fetch、group、process)を2つ同時に動かせない。動いているあいだは、フォルダに `run.lock`(プロセスの番号)を置く。印を置いたプロセスがもう無ければ、次のコマンドが引き継ぐ。
+
 ## 入力と案件の設定
 
 `input/pages.json` は、移行管理シートの GAS が書き出す(段4)。

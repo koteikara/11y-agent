@@ -176,6 +176,15 @@ async function main() {
     }
     console.log("  ok   画面と実行の記録に、旧サイトの本文を出さない");
 
+    // 9. 同じ案件のフォルダで、2つ目のコマンドは動かさない。動いていないプロセスの印は引き継ぐ。
+    assert.ok(!fs.existsSync(path.join(dir, "run.lock")), "終わったコマンドは印を消す");
+    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: process.pid, command: "crawl" }));
+    await assert.rejects(cli("group", dir), /ほかのコマンド\(crawl、プロセス \d+\)が動いている/);
+    fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: 999999, command: "crawl" }));
+    await cli("group", dir);
+    assert.ok(!fs.existsSync(path.join(dir, "run.lock")), "引き継いだ印も消す");
+    console.log("  ok   同じ案件のフォルダで、コマンドを2つ同時に動かさない");
+
     console.log("\n=== batch cli tests passed ===");
   } finally {
     server.close();

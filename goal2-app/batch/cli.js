@@ -140,6 +140,57 @@ async function main() {
     console.error(`知らないコマンド: ${command}\n${usage()}`);
     process.exit(2);
   }
+  const releaseLock = acquireLock(project, command);
+  try {
+    await runCommand(project, command, options, ids, report);
+  } finally {
+    releaseLock();
+  }
+}
+
+// 同じ案件のフォルダで、書き込むコマンドを2つ同時に動かさない。ログインし直したあとに巡回が2つ重なり、
+// 同じファイルに書いて止まった(大阪市の学校のサイト)。印のファイルに動いているプロセスの番号を書き、
+// その番号のプロセスがもう無ければ、前の実行が途中で終わったものとみなして引き継ぐ。
+function acquireLock(project, command) {
+  const lockFile = path.join(project.root, "run.lock");
+  const mine = JSON.stringify({ pid: process.pid, command, startedAt: new Date().toISOString() });
+  try {
+    fs.writeFileSync(lockFile, mine, { flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    let other = null;
+    try {
+      other = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+    } catch {
+      // 読めない印は、前の実行が書きかけで終わったものとみなす。
+    }
+    if (other?.pid && other.pid !== process.pid && isAlive(other.pid)) {
+      throw new Error(
+        `この案件のフォルダでは、ほかのコマンド(${other.command}、プロセス ${other.pid})が動いている。終わってから動かす` +
+          `(動いていないのが確かなら ${path.relative(process.cwd(), lockFile)} を消す)`
+      );
+    }
+    fs.writeFileSync(lockFile, mine);
+  }
+  return () => {
+    try {
+      if (JSON.parse(fs.readFileSync(lockFile, "utf8")).pid === process.pid) fs.unlinkSync(lockFile);
+    } catch {
+      // 消せなくても、次の実行がプロセスの番号で引き継ぐ。
+    }
+  };
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+async function runCommand(project, command, options, ids, report) {
   const settings = project.readSettings();
   const log = project.openLog(command);
   // 本処理は、リンク先の題名を、巡回で取ったページの題名から引く。無いものだけを、間隔を空けて取りに行く。
