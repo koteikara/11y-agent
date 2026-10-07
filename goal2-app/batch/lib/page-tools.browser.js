@@ -1,5 +1,5 @@
 // 一括処理がエンジンのページ(public/engine.html)に足す道具。ページの中で動く。
-// 本文抽出(window.goal3Engine)を使い、構造のハッシュ、本文のハッシュ、本文の範囲の案を作る。
+// 本文抽出(window.goal3Engine)を使い、構造(要素の道の集まり)、本文のハッシュ、本文の範囲の案を作る。
 // 決め方は docs/renewal/ARCHITECTURE.md の「取得とページの台帳」「構造の型と本文の範囲」。
 (function () {
   "use strict";
@@ -22,24 +22,48 @@
     return value.replace(/[0-9]+/g, "#");
   }
 
+  // メニューで今いる項目に付く状態のクラス(globalPrimaryMenuSelected、current など)は、末尾を落として
+  // ほかの項目と同じ名前にする。遠野市の試走で、これがあると同じテンプレートのページが別の構造になった。
+  const STATE_SUFFIX = /(selected|current|active|open|on|over|hover|stay)$/i;
+
   function elementSignature(element) {
     let signature = element.tagName.toLowerCase();
     if (element.id) signature += `#${maskDigits(element.id)}`;
-    const classes = [...element.classList].map(maskDigits).sort();
+    const classes = [...new Set([...element.classList].map((name) => maskDigits(name).replace(STATE_SUFFIX, "")).filter(Boolean))].sort();
     if (classes.length) signature += `.${classes.join(".")}`;
     return signature;
   }
 
-  // 本文の要素の中身を1つの印に置き換え、文字を除いた要素の並びを作る。
-  // 同じ並びが続く兄弟(メニューの項目、パンくずの段)は1つに潰す。
-  function structureOf(element, contentElement) {
-    if (element === contentElement) return "[本文]";
-    const children = [];
-    for (const child of element.children) {
-      const childStructure = structureOf(child, contentElement);
-      if (children[children.length - 1] !== childStructure) children.push(childStructure);
-    }
-    return `${elementSignature(element)}(${children.join(",")})`;
+  // 構造は、body から深さ STRUCTURE_DEPTH までの「要素の道」(body>div#wrap>div.main のような並び)の集まりで表す。
+  // 文字と、文の中の要素(a、span など)は見ない。型のまとめは、この集まりの重なりで似ているページを
+  // まとめる(一部のページだけにある部品や、メニューの開き方の違いで割れないようにするため)。
+  // 汎用の判定が選んだ本文の要素には頼らない。遠野市の試走で、汎用の判定がページ全体を本文に選んだ
+  // ページは構造のほとんどが外れ、同じ作りのページが別の型になった。本文の中の違いは、深さの上限と、
+  // 重なりで比べることで吸収する。
+  // 構造の取り方の版。取り方を変えたら上げる。承認した型は、同じ版の構造とだけ比べる。
+  const STRUCTURE_VERSION = 2;
+  const STRUCTURE_DEPTH = 6;
+  // 文の中の要素と、本文を作る要素(段落、見出し、表、リストなど)は、構造に入れず、中にも入らない。
+  // 本文の作りはページごとに違うので、入れると同じテンプレートのページが別の型になる(本文が浅い所に
+  // あるサイトで起きた)。テンプレートの骨組みは、div や header などの入れ物の並びで見る。
+  const SKIP_TAGS = new Set([
+    "script", "style", "noscript", "template", "link", "meta", "br", "wbr", "img", "picture", "source",
+    "span", "a", "strong", "em", "b", "i", "u", "small", "font", "label", "input", "button", "select", "option", "textarea",
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "table", "ul", "ol", "dl", "li", "blockquote", "pre", "figure", "hr", "iframe",
+  ]);
+
+  function structurePathsOf(body) {
+    const paths = new Set();
+    const walk = (element, prefix, depth) => {
+      for (const child of element.children) {
+        if (SKIP_TAGS.has(child.tagName.toLowerCase())) continue;
+        const path = `${prefix}>${elementSignature(child)}`;
+        paths.add(path);
+        if (depth < STRUCTURE_DEPTH) walk(child, path, depth + 1);
+      }
+    };
+    walk(body, "body", 1);
+    return [...paths].sort();
   }
 
   function cssEscape(value) {
@@ -117,11 +141,14 @@
       const top = extraction.candidates[0] || null;
       const mark = top?.element?.getAttribute(MARK);
       const contentElement = mark != null ? parsed.querySelector(`[${MARK}="${mark}"]`) : null;
-      const structure = parsed.body ? structureOf(parsed.body, contentElement) : "";
+      const paths = parsed.body ? structurePathsOf(parsed.body) : [];
+      const structurePaths = await Promise.all(paths.map(async (path) => (await sha256Hex(path)).slice(0, 10)));
       const bodyText = normalizeText(top ? top.text : "");
       return {
         pageTitle: extraction.pageTitle,
-        structureHash: structure ? (await sha256Hex(structure)).slice(0, 16) : null,
+        structureHash: paths.length ? (await sha256Hex(paths.join("\n"))).slice(0, 16) : null,
+        structurePaths,
+        structureVersion: STRUCTURE_VERSION,
         bodyHash: bodyText ? (await sha256Hex(bodyText)).slice(0, 16) : null,
         bodyTextLength: bodyText.length,
         contentSelector: contentElement ? selectorFor(contentElement) : null,
@@ -139,6 +166,7 @@
             selector,
             pageTitle: result.pageTitle,
             html: result.candidate.html,
+            textLength: normalizeText(result.candidate.text).length,
             bodyHash: (await sha256Hex(normalizeText(result.candidate.text))).slice(0, 16),
           };
         }
@@ -155,11 +183,54 @@
       };
     },
 
+    // ページの文字を、段落や表のセルなどのかたまりごとに分けて返す。body 全体と、selectors の各要素の分。
+    // 型のまとめが、型の多くのページに共通するかたまり(ヘッダー、メニュー、フッター)と、ページごとに
+    // 違うかたまり(本文)を見分け、本文の範囲の案を選ぶのに使う。かたまりはハッシュにして返す。
+    async textBlocks({ html, selectors }) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      parsed.querySelectorAll("script,style,noscript,template").forEach((element) => element.remove());
+      const BLOCK = /^(p|li|td|th|h[1-6]|dt|dd|caption|figcaption|pre|blockquote|div|section|article|aside|header|footer|nav|main|ul|ol|dl|table|tr|form|address)$/i;
+      const blocksOf = async (root) => {
+        if (!root) return null;
+        const texts = new Map();
+        const walker = parsed.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = normalizeText(node.nodeValue);
+          if (!text) continue;
+          let block = node.parentElement;
+          while (block && block !== root && !BLOCK.test(block.tagName)) block = block.parentElement;
+          const key = block || root;
+          texts.set(key, `${texts.get(key) || ""} ${text}`);
+        }
+        const blocks = [];
+        for (const text of texts.values()) {
+          const value = normalizeText(text);
+          blocks.push({ hash: (await sha256Hex(value)).slice(0, 12), length: value.length });
+        }
+        return blocks;
+      };
+      const perSelector = {};
+      for (const selector of selectors) {
+        let element = null;
+        try {
+          element = selector === "body" ? parsed.body : parsed.querySelector(selector);
+        } catch {
+          element = null;
+        }
+        perSelector[selector] = await blocksOf(element);
+      }
+      return { body: await blocksOf(parsed.body), perSelector };
+    },
+
     // 型の範囲で抜いた本文と、汎用の判定で抜いた本文が食い違うか(型のまとめの「食い違いの数」)。
     async compareWithGeneric({ html, pageTitle, url, selector }) {
       const byTemplate = await this.extractBody({ html, pageTitle, url, selector });
       const byGeneric = await this.extractBody({ html, pageTitle, url, selector: null });
-      return { matched: byTemplate.method === "template" && byTemplate.bodyHash === byGeneric.bodyHash, templateFound: byTemplate.method === "template" };
+      return {
+        matched: byTemplate.method === "template" && byTemplate.bodyHash === byGeneric.bodyHash,
+        templateFound: byTemplate.method === "template",
+        textLength: byTemplate.method === "template" ? byTemplate.textLength : 0,
+      };
     },
   };
 })();

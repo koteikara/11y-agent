@@ -16,8 +16,10 @@ const DEFAULT_SETTINGS = {
     maxBytes: 3000000,
     retries: 1,
   },
-  // 構造の型。minPages 未満の型は承認に回さず、汎用の判定で抜く。approved は承認した範囲。
+  // 構造の型。similarity は、同じ型とみなす構造の重なり(0〜1)。minPages 未満の型は承認に回さず、
+  // 汎用の判定で抜く。approved は承認した型(型の番号ごとに、範囲と代表の構造)。
   templates: {
+    similarity: 0.8,
     minPages: 10,
     approved: {},
   },

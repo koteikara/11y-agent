@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // 一括処理。ディレクターの PC で、Claude Code に頼んで動かす(docs/renewal/ARCHITECTURE.md)。
 //
-//   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID]        取得(ページの台帳を書く)
+//   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID] [--reinspect]  取得(ページの台帳を書く)
+//                                                                  --reinspect: 取り直さずに、保存した旧ページを調べ直す
 //   node batch/cli.js group   <案件のフォルダ>                      型のまとめ(本文の範囲の案)
-//   node batch/cli.js approve <案件のフォルダ> <構造のハッシュ> --by <名前> [--selector <CSS>]
+//   node batch/cli.js approve <案件のフォルダ> <型の番号> --by <名前> [--selector <CSS>]
 //                                                                  型の本文の範囲を承認する(校正台ができるまでの代わり)
 //   node batch/cli.js process <案件のフォルダ> [--ids ID,ID] [--force]  本処理(候補と確認の深さ)
 //   node batch/cli.js status  <案件のフォルダ>                      数だけを見せる
@@ -80,25 +81,30 @@ async function main() {
   }
 
   if (command === "approve") {
-    const [structureHash] = rest;
-    if (!structureHash || typeof options.by !== "string") {
-      console.error("approve には、構造のハッシュと --by <名前> が要る");
+    const [templateId] = rest;
+    if (!templateId || typeof options.by !== "string") {
+      console.error("approve には、型の番号と --by <名前> が要る");
       process.exit(2);
     }
     const templates = project.readJson(project.paths.templates);
-    const template = [...(templates?.templates || []), ...(templates?.smallTemplates || [])].find(
-      (t) => t.structureHash === structureHash
-    );
-    if (!template) throw new Error(`型のまとめの結果に無い構造のハッシュ: ${structureHash}`);
-    const selector = typeof options.selector === "string" ? options.selector : template.proposedSelector;
+    const template = [...(templates?.templates || []), ...(templates?.smallTemplates || [])].find((t) => t.templateId === templateId);
+    if (!template) throw new Error(`型のまとめの結果に無い型の番号: ${templateId}`);
+    const selector = typeof options.selector === "string" ? options.selector : template.approvedSelector || template.proposedSelector;
     if (!selector) throw new Error("本文の範囲の案が無いので、--selector で指定する");
+    // 代表の構造も一緒に入れる。本処理は、ページの構造をこれと比べて、承認した型に当たるかを決める。
     project.updateSettings(
       (settings) => {
-        settings.templates.approved[structureHash] = { selector, approvedAt: new Date().toISOString(), approvedBy: options.by };
+        settings.templates.approved[templateId] = {
+          selector,
+          paths: template.paths,
+          structureVersion: templates.structureVersion,
+          approvedAt: new Date().toISOString(),
+          approvedBy: options.by,
+        };
       },
-      { actor: options.by, tool: "batch approve", note: `型 ${structureHash} の本文の範囲を承認(${template.pageCount} ページ)` }
+      { actor: options.by, tool: "batch approve", note: `型 ${templateId} の本文の範囲を承認(${template.pageCount} ページ)` }
     );
-    report(`承認した: 型 ${structureHash}(${template.pageCount} ページ)`);
+    report(`承認した: 型 ${templateId}(${template.pageCount} ページ)`);
     return;
   }
 
@@ -111,7 +117,7 @@ async function main() {
   const engine = await startEngine({ ai: settings.ai.enabled });
   try {
     if (command === "fetch") {
-      await runFetch(project, { engine, ids, log, report });
+      await runFetch(project, { engine, ids, reinspect: Boolean(options.reinspect), log, report });
     } else if (command === "group") {
       await runGroup(project, { engine, log, report });
     } else if (command === "process") {

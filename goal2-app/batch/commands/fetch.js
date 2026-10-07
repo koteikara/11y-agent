@@ -4,7 +4,50 @@
 const { fetchPage, runPaced } = require("../lib/fetcher");
 const { writeSummary } = require("../lib/summary");
 
-async function runFetch(project, { engine, ids, retryFailed = true, log, report }) {
+// 取り直さずに、保存した旧ページ(source.html)を調べ直し、台帳の構造と本文の項目を書き直す。
+// 調べ方(構造の取り方など)を変えたときに、旧サイトへ取りに行かずに済ませるため。
+async function reinspect(project, { engine, ids, log, report }) {
+  const input = project.readInput();
+  const counts = { ok: 0, failed: 0 };
+  for (const page of input.pages) {
+    if (ids && !ids.includes(page.id)) continue;
+    const ledger = project.readPageJson(page.id, "fetch.json");
+    const html = project.readPageText(page.id, "source.html");
+    if (!ledger || !html || ["blocked", "not-allowed-host", "http-status", "not-html"].includes(ledger.reason)) continue;
+    try {
+      const inspection = await engine.evaluate((arg) => window.batchTools.inspectPage(arg), {
+        html,
+        pageTitle: page.pageTitle || "",
+        url: ledger.finalUrl,
+      });
+      project.writePageJson(page.id, "fetch.json", {
+        ...ledger,
+        ok: Boolean(inspection.bodyHash),
+        reason: inspection.bodyHash ? null : "empty-body",
+        pageTitle: inspection.pageTitle,
+        structureHash: inspection.structureHash,
+        structurePaths: inspection.structurePaths,
+        structureVersion: inspection.structureVersion,
+        bodyHash: inspection.bodyHash,
+        bodyTextLength: inspection.bodyTextLength,
+        genericSelector: inspection.contentSelector,
+        references: inspection.references,
+        inspectedAt: new Date().toISOString(),
+      });
+      counts.ok += 1;
+      log.write({ id: page.id, result: "reinspected" });
+    } catch {
+      counts.failed += 1;
+      log.write({ id: page.id, result: "failed", reason: "inspect-error" });
+    }
+  }
+  writeSummary(project);
+  report(`調べ直し: ${counts.ok} 件を調べ直した(失敗 ${counts.failed} 件)`);
+  return counts;
+}
+
+async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false, retryFailed = true, log, report }) {
+  if (onlyReinspect) return reinspect(project, { engine, ids, log, report });
   const input = project.readInput();
   const settings = project.readSettings();
   const rules = settings.fetch;
@@ -101,6 +144,8 @@ async function runFetch(project, { engine, ids, retryFailed = true, log, report 
         etag: result.etag,
         pageTitle: inspection.pageTitle,
         structureHash: inspection.structureHash,
+        structurePaths: inspection.structurePaths,
+        structureVersion: inspection.structureVersion,
         bodyHash: inspection.bodyHash,
         bodyTextLength: inspection.bodyTextLength,
         genericSelector: inspection.contentSelector,

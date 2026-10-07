@@ -7,6 +7,7 @@ const path = require("path");
 const { execFile } = require("child_process");
 const { startFakeOldSite } = require("./fake-old-site");
 const { isStructuralCandidate } = require("../../batch/commands/process");
+const { jaccard } = require("../../batch/lib/structure");
 
 const appRoot = path.resolve(__dirname, "..", "..");
 const CLI = path.join(appRoot, "batch", "cli.js");
@@ -70,8 +71,8 @@ async function main() {
     assert.strictEqual(page("MOVED").finalUrl, `${origin}/a/1.html`);
     assert.strictEqual(page("B1").charset, "shift_jis");
     assert.strictEqual(page("B1").pageTitle, "子育て記事1");
-    assert.ok(page("A002").structureHash && page("A002").structureHash === page("A003").structureHash, "同じテンプレートのページは同じ構造になる");
-    assert.notStrictEqual(page("A002").structureHash, page("B1").structureHash, "違うテンプレートのページは違う構造になる");
+    assert.ok(jaccard(page("A002").structurePaths, page("A003").structurePaths) >= 0.8, "同じテンプレートのページは構造が似ている");
+    assert.ok(jaccard(page("A002").structurePaths, page("B1").structurePaths) < 0.8, "違うテンプレートのページは構造が似ていない");
     assert.ok(fs.existsSync(path.join(dir, "pages", "A002", "source.html")));
     console.log("  ok   取得: 台帳、転送、Shift_JIS、構造のハッシュ");
 
@@ -80,23 +81,25 @@ async function main() {
     assert.match(refetchOut, /取得: 3 件/);
     console.log("  ok   取得: もう一度動かすと、取得できていないページだけを取り直す");
 
-    // 3. 型のまとめ。テンプレート A は 12 ページだが、A001 は本文が大きく汎用の判定が body を選ぶため
-    // 別の構造になる(転送の MOVED も同じページ)。承認に回るのは、10 ページ以上の型だけ。
+    // 3. 型のまとめ。テンプレート A の 12 ページと、転送で同じページに着く MOVED が1つの型になる。
+    // テンプレート B は 3 ページなので、承認に回さない(小さな型として残す)。
     await cli("group", dir);
     const templates = readJson(path.join(dir, "project", "templates.json"));
     assert.strictEqual(templates.templates.length, 1);
     const [templateA] = templates.templates;
-    assert.ok(templateA.pageCount >= 10);
-    assert.ok(templateA.pageIds.every((id) => id.startsWith("A")));
-    assert.strictEqual(templateA.proposedSelector, "#contents > div:nth-of-type(1)", "範囲の案は ID のある先祖から書く");
-    assert.strictEqual(templateA.mismatches, 0);
+    assert.strictEqual(templateA.pageCount, 13);
+    assert.ok(templateA.pageIds.every((id) => id.startsWith("A") || id === "MOVED"));
+    assert.ok(templates.smallTemplates.some((t) => t.pageIds.join(",") === "B1,B2,B3"), "テンプレート B は小さな型として残る");
+    // 範囲の案は、型の多くのページに共通する文字(ヘッダー、メニュー、フッター、脇の欄)を含まない要素になる。
+    assert.ok(/^#contents\b/.test(templateA.proposedSelector), `範囲の案が本文の要素でない: ${templateA.proposedSelector}`);
     assert.strictEqual(templateA.notFound, 0);
     console.log("  ok   型のまとめ: 型と範囲の案、食い違いの数");
 
     // 4. 承認。案件の設定と変更の履歴に残る。
-    await cli("approve", dir, templateA.structureHash, "--by", "テスト");
+    await cli("approve", dir, templateA.templateId, "--by", "テスト");
     const settings = readJson(path.join(dir, "project", "settings.json"));
-    assert.strictEqual(settings.templates.approved[templateA.structureHash].selector, templateA.proposedSelector);
+    assert.strictEqual(settings.templates.approved[templateA.templateId].selector, templateA.proposedSelector);
+    assert.ok(Array.isArray(settings.templates.approved[templateA.templateId].paths), "承認した型に代表の構造が入る");
     assert.match(fs.readFileSync(path.join(dir, "project", "settings-history.jsonl"), "utf8"), /batch approve/);
     console.log("  ok   承認: 案件の設定と変更の履歴");
 

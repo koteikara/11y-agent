@@ -114,7 +114,11 @@ async function fetchPage(targetUrl, rules, { etag, lastModified } = {}) {
       } catch (error) {
         throw fetchError(controller.signal.aborted ? "timeout" : "network", `取得できない: ${error.cause?.code || error.message}`);
       }
+      // 読まない応答の本文は捨てる。捨てないと接続が残り、取得が終わってもプロセスが閉じない
+      // (遠野市の試走で、404 の応答を読まずにいたら、取得のあとにプロセスが残った)。
+      const discard = () => response.body?.cancel().catch(() => {});
       if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.get("location")) {
+        await discard();
         if (redirects >= MAX_REDIRECTS) throw fetchError("redirects", "転送が多すぎる");
         url = new URL(response.headers.get("location"), url);
         continue;
@@ -126,9 +130,16 @@ async function fetchPage(targetUrl, rules, { etag, lastModified } = {}) {
         lastModified: response.headers.get("last-modified") || null,
         etag: response.headers.get("etag") || null,
       };
-      if (response.status === 304) return { ...meta, notModified: true };
-      if (!response.ok) throw fetchError("http-status", `HTTP ${response.status}`, { meta });
+      if (response.status === 304) {
+        await discard();
+        return { ...meta, notModified: true };
+      }
+      if (!response.ok) {
+        await discard();
+        throw fetchError("http-status", `HTTP ${response.status}`, { meta });
+      }
       if (!/text\/html|application\/xhtml\+xml/i.test(meta.contentType)) {
+        await discard();
         throw fetchError("not-html", `HTML ではない: ${meta.contentType || "種類なし"}`, { meta });
       }
       let bytes;

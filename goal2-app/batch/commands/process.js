@@ -3,6 +3,7 @@
 // candidates.json はすべての段が終わってから書くので、途中で止まったページは、もう一度動かせばやり直される。
 // 取り込みの事前の確かめ(段5)は、まだ入れていない。
 const { writeSummary, DEPTH_LABELS } = require("../lib/summary");
+const { matchApprovedTemplate } = require("../lib/structure");
 
 // 構造を変える候補(表、見出し、リスト)か。確認の深さと自動の採用の両方で使う。ページの中でも
 // 動かすので、外の変数を使わない。
@@ -109,7 +110,8 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
     counts.target += 1;
 
     const html = project.readPageText(page.id, "source.html");
-    const approved = settings.templates.approved[ledger.structureHash] || null;
+    const match = matchApprovedTemplate(ledger.structurePaths, settings.templates.approved, settings.templates.similarity, ledger.structureVersion);
+    const approved = match?.template || null;
     let result;
     try {
       result = await engine.evaluate(processInPage, {
@@ -147,7 +149,13 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
       processedAt: new Date().toISOString(),
       sourceFetchedAt: ledger.fetchedAt,
       sourceBodyHash: ledger.bodyHash,
-      extraction: { method: body.method, selector: body.selector, structureHash: ledger.structureHash, bodyHash: body.bodyHash },
+      extraction: {
+        method: body.method,
+        selector: body.selector,
+        templateId: match?.templateId || null,
+        templateSimilarity: match ? Number(match.score.toFixed(3)) : null,
+        bodyHash: body.bodyHash,
+      },
       pageTitle: body.pageTitle,
       sourceHtml: body.html,
       candidates: analysis.candidates,
