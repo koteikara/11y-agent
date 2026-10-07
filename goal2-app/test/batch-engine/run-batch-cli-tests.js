@@ -74,7 +74,7 @@ async function main() {
     assert.ok(jaccard(page("A002").structurePaths, page("A003").structurePaths) >= 0.8, "同じテンプレートのページは構造が似ている");
     assert.ok(jaccard(page("A002").structurePaths, page("B1").structurePaths) < 0.8, "違うテンプレートのページは構造が似ていない");
     assert.ok(fs.existsSync(path.join(dir, "pages", "A002", "source.html")));
-    console.log("  ok   取得: 台帳、転送、Shift_JIS、構造のハッシュ");
+    console.log("  ok   取得: 台帳、転送、Shift_JIS、構造の重なり");
 
     // もう一度動かすと、取得できていないページだけを取り直す。
     const refetchOut = await cli("fetch", dir);
@@ -83,7 +83,7 @@ async function main() {
 
     // 3. 型のまとめ。テンプレート A の 12 ページと、転送で同じページに着く MOVED が1つの型になる。
     // テンプレート B は 3 ページなので、承認に回さない(小さな型として残す)。
-    await cli("group", dir);
+    const groupOut = await cli("group", dir);
     const templates = readJson(path.join(dir, "project", "templates.json"));
     assert.strictEqual(templates.templates.length, 1);
     const [templateA] = templates.templates;
@@ -96,7 +96,7 @@ async function main() {
     console.log("  ok   型のまとめ: 型と範囲の案、食い違いの数");
 
     // 4. 承認。案件の設定と変更の履歴に残る。
-    await cli("approve", dir, templateA.templateId, "--by", "テスト");
+    const approveOut = await cli("approve", dir, templateA.templateId, "--by", "テスト");
     const settings = readJson(path.join(dir, "project", "settings.json"));
     assert.strictEqual(settings.templates.approved[templateA.templateId].selector, templateA.proposedSelector);
     assert.ok(Array.isArray(settings.templates.approved[templateA.templateId].paths), "承認した型に代表の構造が入る");
@@ -138,6 +138,26 @@ async function main() {
     );
     console.log(`  ok   本処理: 自動で採用にしたルールの候補だけを採用する(${accepted.length} 件)`);
 
+    // 6b. 本処理は、承認した型に当たったことを記録する。
+    assert.strictEqual(candidates("A002").extraction.templateId, templateA.templateId);
+    assert.ok(candidates("A002").extraction.templateSimilarity >= 0.8);
+
+    // 6c. 保存した旧ページを取り直さずに調べ直す。
+    const reinspectOut = await cli("fetch", dir, "--reinspect");
+    assert.match(reinspectOut, /調べ直し: 16 件/);
+    assert.ok(page("A002").inspectedAt, "調べ直した日時が台帳に入る");
+    console.log("  ok   調べ直し: 取り直さずに台帳の構造を書き直す");
+
+    // 6d. 構造の取り方の版が違う承認は使わない(取り方を変えたら、承認し直す)。
+    const stale = readJson(settingsPath);
+    stale.templates.approved[templateA.templateId].structureVersion = -1;
+    fs.writeFileSync(settingsPath, JSON.stringify(stale));
+    await cli("process", dir, "--force", "--ids", "A002");
+    assert.strictEqual(candidates("A002").extraction.method, "generic", "版の違う承認で本文を抜いてはいけない");
+    const staleGroupOut = await cli("group", dir);
+    assert.match(staleGroupOut, /使えない承認が 1 件ある/);
+    console.log("  ok   版の違う承認は使わない");
+
     // 7. 「AI 修正」タブへ写す一覧。
     const status = fs.readFileSync(path.join(dir, "project", "status.csv"), "utf8");
     assert.ok(status.startsWith("﻿移行管理ID,取込回,確認の深さ,状態"));
@@ -145,7 +165,7 @@ async function main() {
     console.log("  ok   「AI 修正」タブへ写す一覧");
 
     // 8. 画面と実行の記録に、旧サイトの本文を出さない。
-    const allOut = [guardedOut, fetchOut, refetchOut, processOut, rerunOut].join("\n");
+    const allOut = [guardedOut, fetchOut, refetchOut, groupOut, approveOut, processOut, rerunOut, reinspectOut].join("\n");
     const logs = fs
       .readdirSync(path.join(dir, "logs"))
       .map((name) => fs.readFileSync(path.join(dir, "logs", name), "utf8"))

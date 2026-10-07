@@ -98,19 +98,25 @@ async function runGroup(project, { engine, log, report }) {
   const settings = project.readSettings();
   const similarity = settings.templates.similarity;
 
-  const items = [];
+  const fetchedItems = [];
   for (const page of input.pages) {
     const ledger = project.readPageJson(page.id, "fetch.json");
-    if (!ledger?.ok || !Array.isArray(ledger.structurePaths)) continue;
-    items.push({ id: page.id, paths: ledger.structurePaths, page, ledger });
+    if (!ledger?.ok) continue;
+    fetchedItems.push({ id: page.id, paths: ledger.structurePaths, page, ledger });
   }
+  // 構造の取り方の版は、取得したページのうち多い方に合わせる。版の違うページと、構造を持たない
+  // (取り方を変える前に取得した)ページは、型のまとめから外し、調べ直しを案内する。
+  const versions = new Map();
+  for (const item of fetchedItems) {
+    if (!Array.isArray(item.paths)) continue;
+    versions.set(item.ledger.structureVersion, (versions.get(item.ledger.structureVersion) || 0) + 1);
+  }
+  const structureVersion = [...versions.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const items = fetchedItems.filter((item) => Array.isArray(item.paths) && item.ledger.structureVersion === structureVersion);
+  const staleStructure = fetchedItems.length - items.length;
   items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   // 承認した型を先に置き、承認した型の番号が実行のたびに変わらないようにする。
-  // 構造の取り方の版は、取得したページの版に合わせる(ページの版がそろっていないときは、多い方)。
-  const versions = new Map();
-  for (const item of items) versions.set(item.ledger.structureVersion, (versions.get(item.ledger.structureVersion) || 0) + 1);
-  const structureVersion = [...versions.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const staleApproved = Object.keys(settings.templates.approved).length - usableApproved(settings.templates.approved, structureVersion).length;
   const approvedSeeds = usableApproved(settings.templates.approved, structureVersion)
     .map(([templateId, template]) => ({ id: `approved:${templateId}`, templateId, paths: template.paths, seed: true }));
@@ -200,6 +206,7 @@ async function runGroup(project, { engine, log, report }) {
   writeSummary(project);
 
   report(`型のまとめ: 取得できた ${items.length} ページを ${templates.length + smallTemplates.length} の型にまとめた(似ている度合い ${similarity} 以上を同じ型とする)`);
+  if (staleStructure) report(`  構造の取り方が古いページ ${staleStructure} 件を外した。fetch --reinspect で調べ直す`);
   if (staleApproved) report(`  構造の取り方が変わったため、使えない承認が ${staleApproved} 件ある。型を承認し直す`);
   report(`  承認に回す型 ${templates.length}(${templates.reduce((n, t) => n + t.pageCount, 0)} ページ)、汎用の判定に回すページ ${genericPages}`);
   for (const t of templates) {

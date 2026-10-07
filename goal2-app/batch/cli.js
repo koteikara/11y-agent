@@ -91,6 +91,9 @@ async function main() {
     if (!template) throw new Error(`型のまとめの結果に無い型の番号: ${templateId}`);
     const selector = typeof options.selector === "string" ? options.selector : template.approvedSelector || template.proposedSelector;
     if (!selector) throw new Error("本文の範囲の案が無いので、--selector で指定する");
+    if (!Array.isArray(template.paths) || templates.structureVersion == null) {
+      throw new Error("型のまとめの結果が古い(代表の構造が無い)。group を動かし直してから承認する");
+    }
     // 代表の構造も一緒に入れる。本処理は、ページの構造をこれと比べて、承認した型に当たるかを決める。
     project.updateSettings(
       (settings) => {
