@@ -138,6 +138,22 @@ function isPrintPage(target) {
   return false;
 }
 
+// URL の項目(? のあと)を持つ URL の「形」。道の数字を伏せ、項目の名前を並べたもの。ブログやカレンダーは、
+// 項目の組み合わせの数だけ URL が増え、巡回が終わらない(椎葉村のブログの itemid、page、catid、トラックバック)。
+// 同じ形の URL は crawl.maxPerQueryPattern 件までにする。項目の無い URL は数えない(記事を道で分けるサイトの、
+// 大きな欄を打ち切らないため)。
+function queryPatternKey(url) {
+  let target;
+  try {
+    target = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!target.search) return null;
+  const names = [...new Set(target.searchParams.keys())].sort();
+  return `${target.origin}${target.pathname.replace(/[0-9]+/g, "N")}?${names.join("&")}`;
+}
+
 function inScope(url, settings) {
   let target;
   try {
@@ -270,6 +286,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       learnedIgnoreParams: [],
       paramObservations: {},
       excludedPrint: {},
+      queryPatternVisits: {},
+      cappedPatterns: {},
       seenCount: 0,
     };
     starts.forEach((url) => enqueue(url, 0, "", "start"));
@@ -284,6 +302,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   state.external = state.external || {};
   state.rendered = state.rendered || 0;
   state.excludedPrint = state.excludedPrint || {};
+  state.cappedPatterns = state.cappedPatterns || {};
 
   // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
   // 巡回の途中で PC がネットワークから外れても、再開すればそのあいだのページを取り直せる。
@@ -297,6 +316,14 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         latest.set(record.url, record);
       } catch {
         // 途中で止まって書きかけの行は飛ばす。
+      }
+    }
+    // URL の形ごとの取った数を、記録から数え直す(前の版の状態には無いため)。
+    if (!state.queryPatternVisits) {
+      state.queryPatternVisits = {};
+      for (const record of latest.values()) {
+        const key = record.kind === "page" ? queryPatternKey(record.url) : null;
+        if (key) state.queryPatternVisits[key] = (state.queryPatternVisits[key] || 0) + 1;
       }
     }
     // 設定を変えて範囲の外になった URL は、取り直さない。
@@ -313,6 +340,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     }
   }
 
+  state.queryPatternVisits = state.queryPatternVisits || {};
   // 印刷用ページとして外した URL のうち、判定や設定を変えて印刷用でなくなったものは、待ち行列に戻す。
   let revived = 0;
   for (const [link, entry] of Object.entries(state.excludedPrint)) {
@@ -428,6 +456,15 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       if (state.seen[url]) return;
       state.seen[url] = true;
       state.seenCount += 1;
+    }
+    // 同じ形の URL が上限に達したら、取りに行かずに数だけ残す。
+    const patternKey = queryPatternKey(url);
+    if (patternKey) {
+      if ((state.queryPatternVisits[patternKey] || 0) >= limits.maxPerQueryPattern) {
+        state.cappedPatterns[patternKey] = (state.cappedPatterns[patternKey] || 0) + 1;
+        return;
+      }
+      state.queryPatternVisits[patternKey] = (state.queryPatternVisits[patternKey] || 0) + 1;
     }
     // robots.txt はサーバー(ポートを含む)ごとに読んである。
     const host = new URL(url).host;
@@ -603,7 +640,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 
   const counts = writeCrawlLists(project, state, settings);
   report(
-    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
+    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、同じ形の URL が多く打ち切った ${counts.capped}、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
   );
   report(
     `  見つけ方: ${Object.entries(counts.via)
@@ -672,6 +709,11 @@ function writeCrawlLists(project, state, settings) {
   for (const [url, entry] of sortedEntries(state.external || {})) externalRows.push([url, entry.count, entry.from]);
   writeCsv(project, paths.external, externalRows);
 
+  // 同じ形の URL が多く、上限で打ち切った形の一覧。
+  const cappedRows = [["URL の形", "取ったページ", "打ち切った URL"]];
+  for (const [key, skipped] of sortedEntries(state.cappedPatterns || {})) cappedRows.push([key, state.queryPatternVisits?.[key] || 0, skipped]);
+  writeCsv(project, path.join(paths.dir, "capped.csv"), cappedRows);
+
   return {
     pages: pages.length,
     ok: pages.filter((record) => record.ok && !record.duplicateOf).length,
@@ -681,6 +723,7 @@ function writeCrawlLists(project, state, settings) {
     files: Object.keys(state.files).length,
     external: Object.keys(state.external || {}).length,
     printExcluded: excludedPrint.length,
+    capped: Object.values(state.cappedPatterns || {}).reduce((n, v) => n + v, 0),
     via,
   };
 }

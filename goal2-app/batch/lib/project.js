@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = {
     // 印刷用ページ(本文の写しで、移行の対象ではない)を巡回から外す(2026-10-07 ユーザー)。
     // 外し方は batch/commands/crawl.js の isPrintPage。
     excludePrintPages: true,
+    // URL の項目を持つ URL は、同じ形(道と項目の名前)のものをこの数までにする(ブログ、カレンダーの組み合わせ対策)。
+    maxPerQueryPattern: 500,
     useSitemap: true,
     useRobots: true,
     reuseDays: 14,

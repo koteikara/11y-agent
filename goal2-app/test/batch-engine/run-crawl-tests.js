@@ -34,7 +34,7 @@ async function main() {
     fs.mkdirSync(path.join(dir, "project"));
     fs.writeFileSync(
       path.join(dir, "project", "settings.json"),
-      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 }, patterns: { minPages: 3, proposals: 3 } })
+      JSON.stringify({ fetch: { allowedHosts: [host], privateHosts: [host], intervalMs: 20 }, patterns: { minPages: 3, proposals: 3 }, crawl: { maxPerQueryPattern: 8 } })
     );
 
     const crawlOut = await cli("crawl", dir, "--start", `${origin}/`);
@@ -93,6 +93,14 @@ async function main() {
     // 接続が切れて取れなかったページは、取れないとして記録する(次の実行で取り直す)。
     assert.ok(byPath.get("/flaky.html").状態.startsWith("取れない(network"), byPath.get("/flaky.html").状態);
     console.log("  ok   印刷用ページを既定で外す");
+
+    // URL の項目を持つ同じ形の URL は、上限(テストでは 8)で打ち切り、打ち切った形を一覧に残す。
+    const calendarRows = [...byPath.keys()].filter((key) => key.startsWith("/calendar.html?"));
+    assert.strictEqual(calendarRows.length, 8, `カレンダーの URL の数: ${calendarRows.length}`);
+    const capped = fs.readFileSync(path.join(dir, "crawl", "capped.csv"), "utf8");
+    assert.ok(capped.includes("/calendar.html?ym,8,4"), capped);
+    assert.ok(byPath.has("/news.html?id=6"), "上限より少ない形は打ち切らない");
+    console.log("  ok   同じ形の URL が多いときは上限で打ち切る(ブログ、カレンダーの組み合わせ)");
 
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。
     const again = await cli("crawl", dir, "--start", `${origin}/`);

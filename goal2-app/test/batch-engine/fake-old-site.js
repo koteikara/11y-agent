@@ -15,6 +15,7 @@
 //   /clock.html      開いた時刻を付けたリンク(?tm=…)を出すページ。開くたびにリンク先の URL が変わる
 //   /flaky.html      1回目は接続を切る(ネットワークの切断の代わり)。2回目からは取れる
 //   /print/1.html、/handlers/printcontent.cfm  印刷用ページ
+//   /calendar.html?ym=N  月ごとのカレンダー。12 か月分のリンク(同じ形の URL の上限を確かめる)
 //   /news.html?id=N  記事の番号の項目。1〜4 は「該当なし」で同じ中身、5 と 6 は違う中身(外してはいけない項目)
 const fs = require("fs");
 const http = require("http");
@@ -110,6 +111,7 @@ function startFakeOldSite() {
         `<li><a href="/clock.html?tm=${Date.now()}">時刻の付いたリンク</a></li>`,
         ...[1, 2, 3, 4, 5, 6].map((id) => `<li><a href="/news.html?id=${id}">お知らせ${id}</a></li>`),
         '<li><a href="/flaky.html">ときどき切れるページ</a></li>',
+        ...Array.from({ length: 12 }, (_, i) => `<li><a href="/calendar.html?ym=${202601 + i}">カレンダー${i + 1}月</a></li>`),
         '<li><a href="/print/1.html">印刷用</a></li>',
         '<li><a href="/handlers/printcontent.cfm?ContentID=1">印刷用(遠野市の形)</a></li>',
       ];
@@ -150,6 +152,11 @@ Sitemap: http://${request.headers.host}/sitemap.xml
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html><html><head><title>時刻のページ</title></head><body><p>時刻の付いたリンクのページ。</p>
 <a href="/clock.html?tm=${tm}">もう一度</a><a href="/a/6.html?tm=${tm}">記事6</a><a href="/a/7.html?tm=${tm}">記事7</a><a href="/a/8.html?tm=${tm}">記事8</a></body></html>`);
+      return;
+    }
+    if (url.pathname === "/calendar.html") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html><head><title>カレンダー</title></head><body><p>${url.searchParams.get("ym")} の行事。</p></body></html>`);
       return;
     }
     if (url.pathname === "/flaky.html") {
