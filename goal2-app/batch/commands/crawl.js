@@ -108,6 +108,12 @@ function isAllowedHost(target, settings) {
   return hosts.includes(target.hostname.toLowerCase()) || hosts.includes(target.host.toLowerCase());
 }
 
+const excludeCache = new WeakMap();
+function excludePatterns(settings) {
+  if (!excludeCache.has(settings)) excludeCache.set(settings, settings.crawl.exclude.map((pattern) => new RegExp(pattern)));
+  return excludeCache.get(settings);
+}
+
 function inScope(url, settings) {
   let target;
   try {
@@ -118,7 +124,7 @@ function inScope(url, settings) {
   if (!isAllowedHost(target, settings)) return false;
   const { include, exclude } = settings.crawl;
   if (include.length && !include.some((prefix) => url.startsWith(prefix))) return false;
-  if (exclude.some((pattern) => new RegExp(pattern).test(url))) return false;
+  if (exclude.length && excludePatterns(settings).some((pattern) => pattern.test(url))) return false;
   return true;
 }
 
@@ -131,12 +137,16 @@ function directoryOf(url) {
   }
 }
 
+const pause = (settings) => new Promise((resolve) => setTimeout(resolve, settings.fetch.intervalMs));
+
 async function loadRobots(settings, cookies, report) {
   const robotsByHost = {};
   const sitemaps = [];
   for (const host of settings.fetch.allowedHosts) {
     for (const scheme of ["https", "http"]) {
       const key = new URL(`${scheme}://${host}/`).host;
+      // robots.txt とサイトマップも、ページと同じ間隔を空けて取る。
+      await pause(settings);
       try {
         const result = await fetchPage(`${scheme}://${host}/robots.txt`, settings.fetch, { accept: () => true, cookies });
         const parsed = parseRobots(result.html);
@@ -158,13 +168,14 @@ async function loadRobots(settings, cookies, report) {
 
 async function loadSitemapUrls(settings, sitemaps, cookies, report) {
   const queue = [...new Set(sitemaps)];
-  for (const host of settings.fetch.allowedHosts) queue.push(`https://${host}/sitemap.xml`);
+  for (const host of settings.fetch.allowedHosts) queue.push(`https://${host}/sitemap.xml`, `http://${host}/sitemap.xml`);
   const seen = new Set();
   const urls = new Set();
   while (queue.length && seen.size < 50) {
     const sitemapUrl = queue.shift();
     if (seen.has(sitemapUrl)) continue;
     seen.add(sitemapUrl);
+    await pause(settings);
     try {
       const result = await fetchPage(sitemapUrl, settings.fetch, { accept: (type) => /xml|text\/plain/i.test(type), cookies });
       const parsed = parseSitemap(result.html);
@@ -209,6 +220,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       return;
     }
     state.seen[normalized] = true;
+    state.seenCount = (state.seenCount || 0) + 1;
     const item = { url: normalized, depth, from, via };
     state.queue.push(item);
     queued.set(normalized, item);
@@ -229,7 +241,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       pages: 0,
       rendered: 0,
       learnedIgnoreParams: [],
-      volatile: {},
+      paramObservations: {},
+      seenCount: 0,
     };
     starts.forEach((url) => enqueue(url, 0, "", "start"));
     sitemapUrls.forEach((url) => inScope(normalize(url) || "", settings) && enqueue(url, 1, "", "sitemap"));
@@ -238,7 +251,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   queued = new Map(state.queue.map((item) => [item.url, item]));
   // 前の版の巡回の状態には、あとで足した項目が無い。
   state.learnedIgnoreParams = state.learnedIgnoreParams || [];
-  state.volatile = state.volatile || {};
+  state.paramObservations = state.paramObservations || {};
+  state.seenCount = state.seenCount || Object.keys(state.seen).length;
   state.external = state.external || {};
   state.rendered = state.rendered || 0;
   const saveState = () => project.writeJson(paths.state, state);
@@ -251,26 +265,45 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   };
 
-  // 同じ道で、ある項目の値だけが違う URL が同じ中身だったら数え、VOLATILE_REPEATS 回になったら、その項目を外す。
+  // 値が変わっても中身が同じになる URL の項目を、巡回の中で見つけて外す。
   // 開いた時刻を URL に付けるサイト(大阪市の学校のサイトの ?tm=…)では、開くたびにリンク先の URL が変わり、
   // 巡回が終わらない。Website Explorer と WebCopy で一覧を取れなかったのは、これが原因の見込み。
+  //
+  // ある項目だけが違い、ほかの道と項目が同じ URL の組を見るたびに、中身が同じか違うかを数える。
+  // 中身が同じ組が VOLATILE_REPEATS 通り以上の道(別のページ)で見つかり、違う組が一度も無いときだけ外す。
+  // 記事の番号のような項目は、1つの道(一覧のページなど)で「該当なし」が続いても、別のページで同じことが
+  // 起きない限り外さない。中身の違う組が1つでもあれば、外さない。
   const VOLATILE_REPEATS = 3;
-  const learnVolatileParams = (url, original) => {
-    let a;
-    let b;
+  const observeParams = (url, bodyHash) => {
+    if (!bodyHash) return;
+    let target;
     try {
-      a = new URL(url);
-      b = new URL(original);
+      target = new URL(url);
     } catch {
       return;
     }
-    if (a.origin !== b.origin || a.pathname !== b.pathname) return;
-    const names = new Set([...a.searchParams.keys(), ...b.searchParams.keys()]);
+    const names = [...new Set(target.searchParams.keys())];
     for (const name of names) {
-      if (a.searchParams.get(name) === b.searchParams.get(name)) continue;
       if (state.learnedIgnoreParams.includes(name)) continue;
-      state.volatile[name] = (state.volatile[name] || 0) + 1;
-      if (state.volatile[name] >= VOLATILE_REPEATS) {
+      const rest = new URLSearchParams(target.search);
+      rest.delete(name);
+      rest.sort();
+      const signature = `${target.origin}${target.pathname}?${rest.toString()}`;
+      const value = target.searchParams.get(name);
+      const observation = (state.paramObservations[name] = state.paramObservations[name] || {
+        sameSignatures: {},
+        different: 0,
+        seen: {},
+      });
+      const earlier = observation.seen[signature];
+      if (!earlier) {
+        observation.seen[signature] = { value, bodyHash };
+        continue;
+      }
+      if (earlier.value === value) continue;
+      if (earlier.bodyHash === bodyHash) observation.sameSignatures[signature] = true;
+      else observation.different += 1;
+      if (Object.keys(observation.sameSignatures).length >= VOLATILE_REPEATS && observation.different === 0) {
         state.learnedIgnoreParams.push(name);
         report(`  URL の項目 ${name} は値が変わっても中身が同じなので、これから外す`);
         log.write({ result: "learned-ignore-param", param: name });
@@ -290,6 +323,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     if (url !== item.url) {
       if (state.seen[url]) return;
       state.seen[url] = true;
+      state.seenCount += 1;
     }
     // robots.txt はサーバー(ポートを含む)ごとに読んである。
     const host = new URL(url).host;
@@ -354,7 +388,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 
     const finalUrl = normalize(result.finalUrl);
     const duplicateOf = info.bodyHash && state.bodyHashes[info.bodyHash] ? state.bodyHashes[info.bodyHash] : null;
-    if (duplicateOf) learnVolatileParams(url, duplicateOf);
+    observeParams(url, info.bodyHash);
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
     project.writeFileAtomic(path.join(dir, "source.html"), result.html);
@@ -408,7 +442,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         noteFile(link, path.extname(pathname).slice(1).toLowerCase(), url);
         continue;
       }
-      if (Object.keys(state.seen).length >= limits.maxPages) continue;
+      if (state.seenCount >= limits.maxPages) continue;
       enqueue(link, depth + 1, url, linkVia);
     }
   };

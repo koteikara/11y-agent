@@ -73,6 +73,11 @@ async function main() {
     assert.ok(clockRows.length <= 5, `時刻の付いた URL が増え続けた: ${clockRows.length}`);
     console.log("  ok   値が変わっても中身が同じ URL の項目を見つけて外す(開いた時刻を付けるサイト)");
 
+    // 記事の番号の項目は、「該当なし」のページが続いても外さない(1つの道でしか起きず、中身の違う番号もある)。
+    assert.ok(!crawlOut.includes("URL の項目 id は"), "記事の番号の項目を外してはいけない");
+    for (const id of [1, 2, 3, 4, 5, 6]) assert.ok(byPath.has(`/news.html?id=${id}`), `お知らせ ${id} が一覧に無い`);
+    console.log("  ok   記事の番号の項目は外さない");
+
     const files = readCsv(path.join(dir, "crawl", "files.csv"));
     assert.deepStrictEqual(files.map((row) => row.URL.replace(origin, "")).sort(), ["/docs/form.xlsx", "/file.pdf"]);
     assert.ok(!fs.existsSync(path.join(dir, "crawl", "pages")) || fs.readdirSync(path.join(dir, "crawl", "pages")).length === list.filter((row) => row.状態 === "取れた" || row.状態 === "重複").length);

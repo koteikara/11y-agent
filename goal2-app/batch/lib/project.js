@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
     render: "auto",
     renderMinLinks: 3,
     // URL から外してよい項目。外してから、同じページかを決める(セッションの番号、広告の印など)。
-    ignoreParams: ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "jsessionid", "phpsessid", "sid", "sessionid"],
+    ignoreParams: ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "jsessionid", "phpsessid", "sessionid"],
     // 巡回のあいだ Cookie を引き継ぐか。
     cookies: true,
     // ファイルの大きさと更新日を聞くか(HEAD。旧サイトへの要求がファイルの数だけ増える)。

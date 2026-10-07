@@ -147,7 +147,7 @@ function writeMetrics(project, { reviewHoursPerDay = 5, availableDays = 50 } = {
     generatedAt: new Date().toISOString(),
     pages: { total: input.pages.length, ...pages },
     estimate: {
-      note: "確認の時間は案件の設定の review.costs(仮の値)で見積もる。段3で実測に置き換える",
+      note: "確認の時間は案件の設定の review.costs(仮の値)で見積もる。段3で実測に置き換える。全体の見積もりは、処理したページの見積もりを、処理した割合で全件に伸ばしたもの(--ids で一部だけ処理したときは偏る)",
       costs: settings.review.costs,
       minutesProcessed: Number(estimatedMinutes.toFixed(1)),
       minutesByDepth: Object.fromEntries(Object.entries(estimatedByDepth).map(([k, v]) => [k, Number(v.toFixed(1))])),

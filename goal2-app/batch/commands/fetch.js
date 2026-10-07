@@ -1,6 +1,7 @@
 // 取得: 対象のページをすべて取り、ページの台帳(pages/<ID>/fetch.json)を書く。
 // 取得できたページは、本文のハッシュと構造のハッシュも台帳に入れる(型のまとめと取り直しに使う)。
 // もう一度動かすと、取得できていないページだけを取り直す。
+const path = require("path");
 const { fetchPage, runPaced } = require("../lib/fetcher");
 const { writeSummary } = require("../lib/summary");
 const { readCrawledPage } = require("./crawl");
@@ -74,9 +75,12 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
   const MAX_PENDING_INSPECTIONS = 8;
 
   // 巡回(crawl)で取ったページがあれば、それを使い、旧サイトへ取りに行かない。
+  // URL を整えるときは、設定の外す項目に、巡回の中で見つけた項目も足す。
+  const crawlState = project.readJson(path.join(project.root, "crawl", "state.json"), {}) || {};
+  const ignoreParams = [...settings.crawl.ignoreParams, ...(crawlState.learnedIgnoreParams || [])];
   const crawled = new Map();
   for (const page of targets) {
-    const cached = readCrawledPage(project, page.oldUrl, settings.crawl.reuseDays, settings.crawl.ignoreParams);
+    const cached = readCrawledPage(project, page.oldUrl, settings.crawl.reuseDays, ignoreParams);
     if (cached) crawled.set(page.id, cached);
   }
   if (crawled.size) report(`  巡回で取ったページを使う: ${crawled.size} 件`);
@@ -136,6 +140,11 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
     inspectQueue = inspectQueue.then(async () => {
       try {
         await inspectOneFor(page, result, fetchedAt, cached);
+      } catch {
+        // 台帳の書き込みの失敗などで、取得全体を止めない(待ちの約束が拒まれたまま残らないようにする)。
+        counts.failed += 1;
+        counts.reasons["write-error"] = (counts.reasons["write-error"] || 0) + 1;
+        log.write({ id: page.id, result: "failed", reason: "write-error" });
       } finally {
         pendingInspections -= 1;
       }

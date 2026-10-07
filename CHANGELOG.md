@@ -21,6 +21,18 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: 段2の途中(確認の時間の見積もりと精度の指標)
+
+- 背景・目的: リニューアルの段2(確認の深さと指標)を始めた。ユーザーの依頼で巡回を先に作ることにしたので、途中までを残す。
+- 主な変更内容:
+  - `goal2-app/batch/lib/metrics.js`: 精度の指標 `project/metrics.json`(ルールごとの候補の数、しっかり確認の理由になったページの数、残る指摘。校正台の判断があれば採用率、害のある候補、見逃し、実際の確認の時間)と、ページごとの確認の時間の見積もり。
+  - `goal2-app/batch/commands/process.js`: 見積もりを `candidates.json` に書き、全体の見積もりと日程に収まるかを画面に出す。`batch/lib/project.js`: 見積もりの仮の値(`review.costs`)と日程の前提。
+  - `goal2-app/public/goal3.js` の `extractAt` の `exclude` と、`batch/lib/page-tools.browser.js` の `partsInside`: 範囲の中の、型の多くのページに共通する部品(遠野市の印刷のボタン)を除く準備。まだ呼び出し側は無い。
+- 分かったこと: 遠野市の100ページの試走で、範囲の中の印刷のボタンの画像だけで、96ページに同じ候補が2件ずつ出ていた。
+- レビュー: 巡回と合わせてレビューを受けた(次のエントリ)。見積もりの伸ばし方を `metrics.json` の注記に書いた。
+- 関連ファイル: `goal2-app/batch/lib/metrics.js`、`goal2-app/batch/commands/process.js`、`goal2-app/batch/lib/project.js`、`goal2-app/public/goal3.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/batch/cli.js`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: 巡回(ページの一覧づくり)を一括処理に足す
 
 - 背景・目的: 顧客サイトのページの一覧(`FLOW.md` の 2-1)は、今は Website Explorer で作り、URL とタイトルを移行管理シートに写している。ユーザーの依頼で、同じことを一括処理のコマンドにした。巡回で取ったページを、あとの取得でそのまま使えるので、旧サイトへ取りに行くのが1回で済む。
@@ -33,9 +45,12 @@
   - `goal2-app/batch/lib/project.js`、`batch/cli.js`: 巡回の設定(`crawl`)と `crawl` のコマンド。
   - `goal2-app/test/batch-engine/run-crawl-tests.js`、`fake-old-site.js`: 手元の旧サイトの代わりに、トップページ、`robots.txt`、`sitemap.xml`、リンクの無いページなどを足し、巡回を確かめる。`npm run test:batch-engine` に足した。
   - `docs/renewal/ARCHITECTURE.md`(「名前の付け方」と「巡回」)、`docs/renewal/FLOW.md`(2-1)、`goal2-app/batch/README.md`。
-  - Website Explorer でうまく取れないサイトでは WebCopy を使い、どちらでも取れないサイトもある(ユーザー)。2つのツールのよいところを取り入れた。リンクを探す場所を広げた(`meta refresh`、`onclick` などとスクリプトの中の `location.href` や `window.open`、選ぶメニュー)。スクリプトでメニューを描くページは Chromium で開いてからリンクを拾う(`batch/lib/engine-host.js` の `renderLinks`)。Cookie を引き継ぎ、名乗りを設定で変えられる(`batch/lib/fetcher.js`)。外してよい URL の項目を外し、値が変わっても中身が同じになる項目は巡回の中で見つけて外す。大阪市の学校のサイトは、開いた時刻をリンクの URL に付けており、これが2つのツールで取れなかった原因の見込み。一覧にディレクトリ、更新日、見つけ方の列を足し、ファイルの大きさと更新日を聞けるようにし、外のサイトへのリンクの一覧を足した。階層ごとに順にたどる。
+  - Website Explorer でうまく取れないサイトでは WebCopy を使い、どちらでも取れないサイトもある(ユーザー)。2つのツールのよいところを取り入れた。
+    - 取り入れたこと: リンクを探す場所を広げた(`meta refresh`、`onclick` などとスクリプトの中の `location.href` や `window.open`、選ぶメニュー)。スクリプトでメニューを描くページは Chromium で開いてからリンクを拾う(`batch/lib/engine-host.js` の `renderLinks`)。Cookie を引き継ぎ(Node の取得だけ)、名乗りを設定で変えられる(`batch/lib/fetcher.js`)。外してよい URL の項目を外し、値が変わっても中身が同じになる項目は巡回の中で見つけて外す。大阪市の学校のサイトは、開いた時刻をリンクの URL に付けており、これが2つのツールで取れなかった原因の見込み。
+    - 一覧の列: ディレクトリ、更新日、見つけ方を足し、ファイルの大きさと更新日を聞けるようにし、外のサイトへのリンクの一覧を足した。
+    - 進め方: 階層ごとに順にたどる。
 - 検証: `npm run test:batch-engine`、`npm test` が通ることを確かめた。
-- レビュー: (Fable のレビューのあとに書く)
+- レビュー: Fable が巡回の守り、正しさ、取得の並べ方、指標、本文を出さない約束を確かめた。要修正3件を直した。(1) 値の変わる項目を学ぶとき、反対の証拠を見ずに外していた。記事の番号の「該当なし」が続くだけで外すおそれがあったので、3つ以上の別のページで中身が同じで、中身の違う組が一度も無いときだけ外す形にし、テストを足した。(2) 巡回の上限の判定がリンクごとに見た URL を数え直していた。数を別に持つ。(3) この記録の未記入。提案のうち、`robots.txt` とサイトマップにも間隔を空けること、サイトマップを http でも試すこと、既定の外す項目から `sid` を外すこと(記事の番号に使う仕組みがある)、外す URL の正規表現を一度だけ作ること、取得が巡回で学んだ項目も使うこと、取得の調べの待ちが拒まれたまま残らないようにすること、Cookie と内部のアドレスの守りの範囲と見積もりの伸ばし方を文書に書くこと、この記録の箇条書きを分けることを取り入れた。
 - 関連ファイル: `goal2-app/batch/`、`goal2-app/test/batch-engine/`、`goal2-app/package.json`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/FLOW.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
