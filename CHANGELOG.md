@@ -33,6 +33,15 @@
 - 関連ファイル: `memory/embeddinggemma2-kb-search-2026-10.md`、`memory/embedding-eval/eval.mjs`、`memory/embedding-eval/queries.json`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
+## 2026-10-07: 公開リポジトリから取込環境のページ番号を消す
+
+- 背景・目的: ホスト名を消したあとのレビューで、取込環境のページ番号が公開リポジトリのメモに残っていると分かった。ユーザーの指示で消した。git の履歴は書き換えないと決めた(ホスト名とページ番号の両方)。
+- 主な変更内容: `memory/cms-migration-import-failure-patterns.md` の確認結果の表と方針の表から、取込後のページ番号(5町市の分)を消した。元の番号は公開リポジトリの外の非公開のメモに残した。
+- 検証: リポジトリ全体で、消した番号が残っていないことを確かめた。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `memory/cms-migration-import-failure-patterns.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: 公開リポジトリから取込環境のホスト名を消す
 
 - 背景・目的: レビューで、公開リポジトリのいくつかの文書と評価用のデータに、CMS の取込環境のホスト名と URL が載っていると分かった。リポジトリは GitHub Pages(`docs/` を公開)でも見られる。ユーザーの指示で、公開リポジトリから消した。
@@ -44,7 +53,7 @@
   - 元の URL は、公開リポジトリの外の非公開のメモに残した。
   - GitHub Pages を止めた(リポジトリの設定。ユーザーの指示)。Goal 3 の試験ページを出すために 2026-07 に設定したもので、`docs/` のすべてが公開されていた。
 - 検証: リポジトリ全体でホスト名が残っていないこと(作り直しの置き換えの正規表現を除く。ドメイン名のほか、ホスト名の一部や内部のパスの書き方でも調べた)、評価用のデータが JSON として読めること、`node test/run-tests.js` と出力のテスト254件が通ることを確かめた。
-- 残ること: git の履歴には古い版が残る。履歴から消すには履歴の書き換えと強制 push が要る。行うかはユーザーの判断待ち(未定)。
+- 残ること: git の履歴には古い版が残る。履歴から消すには履歴の書き換えと強制 push が要る。ユーザーの判断で、履歴は書き換えない。
 - レビュー: Fable が評価用データを元の版から置き換えだけで作り直せること(バイト単位で一致)と、採点がホスト名を見ないことを確かめた。要修正1件(確認結果の表に残ったホスト名の一部と内部のパス)を直した。提案のうち、括弧を全角にそろえること、CHANGELOG の書き方を取り入れた。正規表現を取込環境の形に絞る案は、ホスト名の形をコードに書くことになるので採らなかった。
 - 関連ファイル: `docs/chrome-html-save-guide.md`、`docs/chrome-html-save-guide.html`、`memory/cms-migration-import-failure-patterns.md`、`goal2-app/public/verification-guide.html`、`goal2-app/agents-cli/datasets/saga-a11y-eval.json`、`goal2-app/agents-cli/datasets/saga-a11y-eval.jsonl`、`goal2-app/tools/build-agents-cli-dataset.js`
 - 関連PR/コミット: main への直接のコミット(PR なし)
