@@ -195,25 +195,72 @@
         baseUrl = url;
       }
       const links = new Set();
+      const scriptLinks = new Set();
+      // スクリプトの中から拾った URL。どこで見つけたかを数えるため、要素のリンクと分ける。
+      const addScript = (value) => {
+        const href = add(value);
+        if (href) scriptLinks.add(href);
+      };
+      const scriptUrls = (code) => {
+        if (!code) return [];
+        const found = [];
+        const pattern = /(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\(|window\.open\(|open\()\s*['"]([^'"]+)['"]/gi;
+        for (const match of String(code).matchAll(pattern)) found.push(match[1]);
+        return found;
+      };
       const add = (value) => {
-        if (!value) return;
+        if (!value) return null;
         try {
           const target = new URL(value.trim(), baseUrl);
-          if (!/^https?:$/.test(target.protocol)) return;
+          if (!/^https?:$/.test(target.protocol)) return null;
           target.hash = "";
+          // すでに見つけた URL は、二度目として数えない(スクリプトの中で見つけた数を正しく出すため)。
+          if (links.has(target.href)) return null;
           links.add(target.href);
+          return target.href;
         } catch {
           // 書き方の誤ったリンクは飛ばす。
+          return null;
         }
       };
-      parsed.querySelectorAll("a[href],area[href]").forEach((element) => add(element.getAttribute("href")));
+      // リンクを探す場所は、WebCopy に倣って広く取る。Website Explorer で取りこぼすのは、メニューを
+      // スクリプトで作るサイトが多い(2026-10-07 ユーザー)。
+      // 1. 要素のリンク: a、area の href、frame、iframe の src、link の next、prev、alternate。
+      parsed.querySelectorAll("a[href],area[href]").forEach((element) => {
+        const href = element.getAttribute("href");
+        if (/^\s*javascript:/i.test(href)) scriptUrls(href).forEach(addScript);
+        else add(href);
+      });
       parsed.querySelectorAll("frame[src],iframe[src]").forEach((element) => add(element.getAttribute("src")));
+      parsed.querySelectorAll('link[rel~="next" i][href],link[rel~="prev" i][href],link[rel~="alternate" i][href]').forEach((element) =>
+        add(element.getAttribute("href"))
+      );
+      // 2. 自動の転送: meta refresh の url=。
+      parsed.querySelectorAll('meta[http-equiv="refresh" i][content]').forEach((element) => {
+        const match = /url\s*=\s*['"]?([^'";]+)/i.exec(element.getAttribute("content"));
+        if (match) add(match[1]);
+      });
+      // 3. スクリプトの中: onclick などと、ページの中の script の、location.href = '…'、window.open('…') などの文字列。
+      parsed.querySelectorAll("[onclick],[ondblclick],[onchange],[onmousedown],[onkeypress]").forEach((element) => {
+        for (const name of ["onclick", "ondblclick", "onchange", "onmousedown", "onkeypress"]) {
+          scriptUrls(element.getAttribute(name)).forEach(addScript);
+        }
+      });
+      parsed.querySelectorAll("script:not([src])").forEach((element) => scriptUrls(element.textContent).forEach(addScript));
+      // 4. 選ぶメニュー: option の value が URL のもの(select で別のページへ移るメニュー)。
+      parsed.querySelectorAll("select option[value]").forEach((element) => {
+        const value = element.getAttribute("value");
+        if (/^(https?:\/\/|\/|\.\.?\/)|\.(html?|php|aspx?|jsp|cfm)(\?|$)/i.test(value || "")) addScript(value);
+      });
+      const hasScripts = Boolean(parsed.querySelector("script"));
       const title = normalizeText(parsed.querySelector("title")?.textContent || "");
       parsed.querySelectorAll("script,style,noscript,template").forEach((element) => element.remove());
       const text = normalizeText(parsed.body?.textContent || "");
       return {
         title,
         links: [...links],
+        scriptLinks: [...scriptLinks],
+        hasScripts,
         bodyHash: text ? (await sha256Hex(text)).slice(0, 16) : null,
         robotsNoFollow: /nofollow/i.test(parsed.querySelector('meta[name="robots" i]')?.getAttribute("content") || ""),
       };

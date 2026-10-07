@@ -44,7 +44,8 @@ async function main() {
     assert.strictEqual(byPath.get("/").タイトル, "テスト市トップ");
     assert.strictEqual(byPath.get("/a/3.html").階層, "1");
     assert.strictEqual(byPath.get("/b/1.html").タイトル, "子育て記事1", "Shift_JIS のページの題名が読める");
-    assert.strictEqual(byPath.get("/hidden.html").見つけた元, "sitemap.xml", "リンクの無いページを sitemap.xml から見つける");
+    assert.strictEqual(byPath.get("/hidden.html").見つけ方, "sitemap.xml", "リンクの無いページを sitemap.xml から見つける");
+    assert.strictEqual(byPath.get("/a/3.html").ディレクトリ, "/a/");
     assert.strictEqual(byPath.get("/private/x.html").状態, "robots.txt で止めた");
     assert.strictEqual(byPath.get("/a/1.html?from=top").状態, "重複");
     assert.strictEqual(byPath.get("/a/1.html?from=top").重複先, `${origin}/a/1.html`);
@@ -54,6 +55,23 @@ async function main() {
     assert.ok(![...byPath.keys()].some((key) => key.includes("example.com") || key.startsWith("mailto")), "外のサイトとメールのリンクは一覧に入れない");
     assert.ok(![...byPath.keys()].some((key) => key.includes("#")), "# 以降は落とす");
     console.log("  ok   ページの一覧: 題名、階層、sitemap.xml、robots.txt、重複、転送、取れないページ");
+
+    // 他のツールに倣って足したこと。
+    assert.strictEqual(byPath.get("/onclick.html").見つけ方, "スクリプトの中", "onclick の location.href を拾う");
+    assert.strictEqual(byPath.get("/rendered-only.html").見つけ方, "Chromium で開いて", "スクリプトが描いたリンクを Chromium で開いて拾う");
+    assert.strictEqual(byPath.get("/members.html").状態, "取れた", "トップで受け取った Cookie を引き継ぐ");
+    assert.ok(!byPath.has("/a/5.html?utm_source=top"), "広告の印の項目を外し、同じページとして扱う");
+    // 外のサイトへのリンクは、トップの example.com のほか、佐賀市の本文の中のリンクも入る。
+    const externalLines = fs.readFileSync(path.join(dir, "crawl", "external.csv"), "utf8").split(/\r?\n/);
+    assert.ok(externalLines.some((line) => line.startsWith("https://example.com/,")), "外のサイトへのリンクを一覧にする");
+    assert.ok(!externalLines.some((line) => line.startsWith(origin)), "巡回するサーバーのリンクは外のサイトに入れない");
+    console.log("  ok   スクリプトの中のリンク、Chromium で開いて拾うリンク、Cookie、URL の項目の外し方、外のサイトへのリンク");
+
+    // 開いた時刻を URL に付けるサイトでも、巡回が終わり、時刻の項目を外す。
+    assert.ok(crawlOut.includes("外した URL の項目(巡回の中で見つけたもの): tm"), crawlOut);
+    const clockRows = [...byPath.keys()].filter((key) => key.startsWith("/clock.html"));
+    assert.ok(clockRows.length <= 5, `時刻の付いた URL が増え続けた: ${clockRows.length}`);
+    console.log("  ok   値が変わっても中身が同じ URL の項目を見つけて外す(開いた時刻を付けるサイト)");
 
     const files = readCsv(path.join(dir, "crawl", "files.csv"));
     assert.deepStrictEqual(files.map((row) => row.URL.replace(origin, "")).sort(), ["/docs/form.xlsx", "/file.pdf"]);

@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
     timeoutMs: 15000,
     maxBytes: 3000000,
     retries: 1,
+    // 名乗り(ユーザーエージェント)。空なら一括処理の名乗りを使う。知らない名乗りを止めるサイトで変える。
+    userAgent: "",
   },
   // 巡回(ページの一覧づくり)。startUrls から、fetch.allowedHosts のサーバーの中だけをたどる。
   // include は URL の頭(空なら全部)、exclude は外す URL の正規表現。reuseDays は、取得が巡回で取った
@@ -28,6 +30,16 @@ const DEFAULT_SETTINGS = {
     useSitemap: true,
     useRobots: true,
     reuseDays: 14,
+    // スクリプトでメニューを描くページを Chromium で開くか。auto は、始まりのページと、スクリプトがあるのに
+    // 巡回の範囲のリンクが renderMinLinks より少ないページだけを開く。always、never も選べる。
+    render: "auto",
+    renderMinLinks: 3,
+    // URL から外してよい項目。外してから、同じページかを決める(セッションの番号、広告の印など)。
+    ignoreParams: ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "jsessionid", "phpsessid", "sid", "sessionid"],
+    // 巡回のあいだ Cookie を引き継ぐか。
+    cookies: true,
+    // ファイルの大きさと更新日を聞くか(HEAD。旧サイトへの要求がファイルの数だけ増える)。
+    fileHead: false,
   },
   // 構造の型。similarity は、同じ型とみなす構造の重なり(0〜1)。minPages 未満の型は承認に回さず、
   // 汎用の判定で抜く。approved は承認した型(型の番号ごとに、範囲と代表の構造)。

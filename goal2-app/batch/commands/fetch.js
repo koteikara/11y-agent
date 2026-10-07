@@ -76,7 +76,7 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
   // 巡回(crawl)で取ったページがあれば、それを使い、旧サイトへ取りに行かない。
   const crawled = new Map();
   for (const page of targets) {
-    const cached = readCrawledPage(project, page.oldUrl, settings.crawl.reuseDays);
+    const cached = readCrawledPage(project, page.oldUrl, settings.crawl.reuseDays, settings.crawl.ignoreParams);
     if (cached) crawled.set(page.id, cached);
   }
   if (crawled.size) report(`  巡回で取ったページを使う: ${crawled.size} 件`);

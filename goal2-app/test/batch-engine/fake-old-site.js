@@ -10,6 +10,9 @@
 //   /robots.txt  /private/ を止め、サイトマップを示す
 //   /sitemap.xml リンクからは届かない /hidden.html を載せる
 //   /private/x.html  robots.txt で止められたページ
+//   /js-menu.html    スクリプトでリンクを作るページ(onclick と、描いたあとにだけ現れるリンク)
+//   /members.html    トップで受け取る Cookie が無いと 403 を返すページ
+//   /clock.html      開いた時刻を付けたリンク(?tm=…)を出すページ。開くたびにリンク先の URL が変わる
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -65,6 +68,8 @@ function toShiftJis(text) {
   return Buffer.from(out);
 }
 
+let clockCount = 0;
+
 function startFakeOldSite() {
   const bodies = loadBodies(15);
   const server = http.createServer((request, response) => {
@@ -95,8 +100,12 @@ function startFakeOldSite() {
         '<li><a href="/a/1.html?from=top#section">重複の URL</a></li>',
         '<li><a href="https://example.com/">外部</a></li>',
         '<li><a href="mailto:info@example.com">メール</a></li>',
+        '<li><a href="/js-menu.html">スクリプトのメニュー</a></li>',
+        '<li><a href="/a/5.html?utm_source=top">広告の印の付いた URL</a></li>',
+        '<li><a href="/members.html">Cookie が要るページ</a></li>',
+        `<li><a href="/clock.html?tm=${Date.now()}">時刻の付いたリンク</a></li>`,
       ];
-      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8", "set-cookie": "visited=1; Path=/" });
       response.end(`<!doctype html><html lang="ja"><head><title>テスト市トップ</title></head><body><ul>${links.join("")}</ul></body></html>`);
       return;
     }
@@ -111,6 +120,38 @@ Sitemap: http://${request.headers.host}/sitemap.xml
     if (url.pathname === "/sitemap.xml") {
       response.writeHead(200, { "content-type": "application/xml" });
       response.end(`<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>http://${request.headers.host}/hidden.html</loc></url><url><loc>http://${request.headers.host}/a/2.html</loc></url></urlset>`);
+      return;
+    }
+    if (url.pathname === "/js-menu.html") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html><head><title>スクリプトのメニュー</title></head><body>
+<button onclick="location.href='/onclick.html'">押すと移る</button><nav id="menu"></nav>
+<script>document.getElementById("menu").innerHTML = '<a href="/rendered-only.html">描いたあとのリンク</a>';</script>
+<p>メニューはスクリプトで作る。</p></body></html>`);
+      return;
+    }
+    if (url.pathname === "/onclick.html" || url.pathname === "/rendered-only.html") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html><head><title>${url.pathname.slice(1)}</title></head><body><p>${url.pathname} の本文。</p></body></html>`);
+      return;
+    }
+    if (url.pathname === "/clock.html") {
+      // 開くたびに、時刻の付いた自分自身へのリンクと、ほかのページへのリンクを出す。
+      clockCount += 1;
+      const tm = `${Date.now()}${clockCount}`;
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html><head><title>時刻のページ</title></head><body><p>時刻の付いたリンクのページ。</p>
+<a href="/clock.html?tm=${tm}">もう一度</a><a href="/a/6.html?tm=${tm}">記事6</a></body></html>`);
+      return;
+    }
+    if (url.pathname === "/members.html") {
+      if (!/visited=1/.test(request.headers.cookie || "")) {
+        response.writeHead(403, { "content-type": "text/html" });
+        response.end("<h1>Forbidden</h1>");
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end("<!doctype html><html><head><title>Cookie が要るページ</title></head><body><p>中に入れた。</p></body></html>");
       return;
     }
     if (url.pathname === "/hidden.html" || url.pathname === "/private/x.html") {

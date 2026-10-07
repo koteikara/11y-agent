@@ -97,18 +97,47 @@ async function readLimited(response, maxBytes) {
   return out;
 }
 
+// サーバーごとの Cookie。巡回のあいだ引き継ぐ(WebCopy に倣う。Cookie が無いと中のページへ進めないサイトがある)。
+// 名前と値だけを持ち、有効期限、道、ドメインの属性は見ない。ログインの情報は扱わない。
+function createCookieJar() {
+  const byHost = new Map();
+  return {
+    header(host) {
+      const cookies = byHost.get(host);
+      return cookies && cookies.size ? [...cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ") : null;
+    },
+    store(host, setCookies) {
+      if (!setCookies?.length) return;
+      if (!byHost.has(host)) byHost.set(host, new Map());
+      const cookies = byHost.get(host);
+      for (const line of setCookies) {
+        const [pair] = line.split(";");
+        const index = pair.indexOf("=");
+        if (index <= 0) continue;
+        const name = pair.slice(0, index).trim();
+        const value = pair.slice(index + 1).trim();
+        if (/max-age=0|expires=thu, 01 jan 1970/i.test(line)) cookies.delete(name);
+        else cookies.set(name, value);
+      }
+    },
+  };
+}
+
 const isHtmlType = (contentType) => /text\/html|application\/xhtml\+xml/i.test(contentType);
 
 // HTML のページを1件取る。条件付きの取得(etag、lastModified)を渡すと、変わっていなければ notModified を返す。
 // accept を渡すと、HTML 以外の種類も読む(巡回で robots.txt と sitemap.xml を読むときなど)。
-async function fetchPage(targetUrl, rules, { etag, lastModified, accept = isHtmlType } = {}) {
+async function fetchPage(targetUrl, rules, { etag, lastModified, accept = isHtmlType, cookies = null } = {}) {
   let url = new URL(targetUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), rules.timeoutMs);
   try {
     for (let redirects = 0; ; redirects += 1) {
       await assertAllowed(url, rules);
-      const headers = { "user-agent": USER_AGENT, accept: accept === isHtmlType ? "text/html,application/xhtml+xml" : "*/*" };
+      // 名乗り(ユーザーエージェント)は、案件の設定で変えられる。知らない名乗りを止めるサイトのため。
+      const headers = { "user-agent": rules.userAgent || USER_AGENT, accept: accept === isHtmlType ? "text/html,application/xhtml+xml" : "*/*" };
+      const cookieHeader = cookies?.header(url.host);
+      if (cookieHeader) headers.cookie = cookieHeader;
       if (etag) headers["if-none-match"] = etag;
       if (lastModified) headers["if-modified-since"] = lastModified;
       let response;
@@ -117,6 +146,7 @@ async function fetchPage(targetUrl, rules, { etag, lastModified, accept = isHtml
       } catch (error) {
         throw fetchError(controller.signal.aborted ? "timeout" : "network", `取得できない: ${error.cause?.code || error.message}`);
       }
+      cookies?.store(url.host, response.headers.getSetCookie?.() || []);
       // 読まない応答の本文は捨てる。捨てないと接続が残り、取得が終わってもプロセスが閉じない
       // (遠野市の試走で、404 の応答を読まずにいたら、取得のあとにプロセスが残った)。
       const discard = () => response.body?.cancel().catch(() => {});
@@ -161,6 +191,40 @@ async function fetchPage(targetUrl, rules, { etag, lastModified, accept = isHtml
   }
 }
 
+// ファイルの大きさ、更新日、種類だけを聞く(HEAD)。中身は取らない。巡回のファイルの一覧に使う
+// (Website Explorer の一覧に倣う)。転送はたどる。HEAD を受け付けないサーバーでは、何も返さない。
+async function headFile(targetUrl, rules, { cookies = null } = {}) {
+  let url = new URL(targetUrl);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), rules.timeoutMs);
+  try {
+    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+      await assertAllowed(url, rules);
+      const headers = { "user-agent": rules.userAgent || USER_AGENT };
+      const cookieHeader = cookies?.header(url.host);
+      if (cookieHeader) headers.cookie = cookieHeader;
+      const response = await fetch(url, { method: "HEAD", headers, redirect: "manual", signal: controller.signal });
+      if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.get("location")) {
+        url = new URL(response.headers.get("location"), url);
+        continue;
+      }
+      const length = response.headers.get("content-length");
+      return {
+        status: response.status,
+        finalUrl: url.href,
+        contentType: (response.headers.get("content-type") || "").split(";")[0].trim(),
+        bytes: length != null && /^\d+$/.test(length) ? Number(length) : null,
+        lastModified: response.headers.get("last-modified") || null,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // 間隔と同時数を守って、順に処理する。worker は1件ずつ呼ばれる。
 async function runPaced(items, { intervalMs, concurrency }, worker) {
   let next = 0;
@@ -181,4 +245,4 @@ async function runPaced(items, { intervalMs, concurrency }, worker) {
   await Promise.all(lanes);
 }
 
-module.exports = { fetchPage, runPaced, detectCharset, assertAllowed, isHtmlType };
+module.exports = { headFile, fetchPage, runPaced, detectCharset, assertAllowed, isHtmlType, createCookieJar, USER_AGENT };

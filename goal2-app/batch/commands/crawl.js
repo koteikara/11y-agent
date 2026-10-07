@@ -1,33 +1,59 @@
 // 巡回: 旧サイトをリンクと sitemap.xml でたどり、ページの一覧(URL、タイトル)を作る。
-// 移行管理シートの「ページ一覧」(FLOW.md の 2-1)の元にする。今は Website Explorer で作っている。
+// 移行管理シートの「ページ一覧」(FLOW.md の 2-1)の元にする。今は Website Explorer で作り、うまく取れない
+// サイトでは WebCopy を使っている(2026-10-07 ユーザー)。2つのツールのよいところを取り入れた。
+//   - リンクを探す場所を広く取る(WebCopy): 要素のリンクに加え、meta refresh、onclick などとスクリプトの中の
+//     location.href や window.open、選ぶメニューの URL。
+//   - スクリプトでメニューを描くページは、Chromium で開いてからリンクを拾う(2つのツールとも苦手なところ)。
+//   - Cookie を引き継ぎ、名乗り(ユーザーエージェント)を案件の設定で変えられる(WebCopy)。
+//   - セッションの番号や広告の印など、外してよい URL の項目を外してから、同じページかを決める(WebCopy)。
+//   - 一覧にディレクトリの列を付け、ファイルの大きさと更新日を聞ける(Website Explorer)。外のサイトへの
+//     リンクも一覧にする(Website Explorer)。
 //
 // 取りに行くのは案件の設定の fetch.allowedHosts のサーバーだけで、間隔と同時数も取得と同じ設定に従う。
-// robots.txt で止められた URL は取りに行かない。PDF や画像などのファイルは中身を取らず、別の一覧に URL だけを書く。
+// robots.txt で止められた URL は取りに行かない。PDF や画像などのファイルは中身を取らない。
 // 取ったページは crawl/pages/ に保存し、あとの取得(fetch)は、同じ URL ならこれを使って旧サイトへ取りに行かない。
 //
 // 書くもの(案件のフォルダの crawl/):
 //   state.json     巡回の途中の状態(止めても続きから再開する)
 //   records.jsonl  1 URL 1 行の記録
 //   pages/<鍵>/    source.html と meta.json
-//   list.csv       ページの一覧(URL、タイトル、階層、状態、種類、転送先、重複先、見つけた元)
-//   files.csv      ファイルの一覧(URL、種類、リンク元の数、見つけた元)
+//   list.csv       ページの一覧
+//   files.csv      ファイルの一覧
+//   external.csv   外のサイトへのリンクの一覧
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { fetchPage, isHtmlType } = require("../lib/fetcher");
+const { fetchPage, headFile, assertAllowed, createCookieJar, isHtmlType } = require("../lib/fetcher");
 const { parseRobots, isAllowedByRobots, parseSitemap } = require("../lib/robots");
 
 const FILE_EXTENSION = /\.(pdf|docx?|xlsx?|pptx?|csv|zip|lzh|txt|jtd|odt|ods|odp|rtf|jpe?g|png|gif|bmp|svg|webp|ico|tiff?|mp3|mp4|m4a|wav|wmv|avi|mov|flv|exe|ics|kml|kmz)$/i;
 const STATE_SAVE_EVERY = 25;
 
+const DISCOVERY_LABELS = {
+  start: "始まり",
+  sitemap: "sitemap.xml",
+  link: "リンク",
+  script: "スクリプトの中",
+  render: "Chromium で開いて",
+};
+
 function urlKey(url) {
   return crypto.createHash("sha256").update(url).digest("hex").slice(0, 20);
 }
 
-function normalizeUrl(value) {
+// URL を整える。# 以降と、外してよい項目(ignoreParams。大文字と小文字は区別しない)を落とす。
+// パスの中の ;jsessionid=… も落とす。
+function normalizeUrl(value, ignoreParams = []) {
   try {
     const url = new URL(value);
     url.hash = "";
+    url.pathname = url.pathname.replace(/;jsessionid=[^/?]*/i, "");
+    if (ignoreParams.length) {
+      const ignore = new Set(ignoreParams.map((name) => name.toLowerCase()));
+      for (const name of [...url.searchParams.keys()]) {
+        if (ignore.has(name.toLowerCase())) url.searchParams.delete(name);
+      }
+    }
     return url.href;
   } catch {
     return null;
@@ -39,6 +65,11 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function writeCsv(project, file, rows) {
+  // Excel で開いても化けないよう、UTF-8 の BOM を付ける。
+  project.writeFileAtomic(file, `﻿${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`);
+}
+
 function crawlPaths(project) {
   const dir = path.join(project.root, "crawl");
   return {
@@ -48,12 +79,13 @@ function crawlPaths(project) {
     pages: path.join(dir, "pages"),
     list: path.join(dir, "list.csv"),
     files: path.join(dir, "files.csv"),
+    external: path.join(dir, "external.csv"),
   };
 }
 
 // 取得(fetch)が使う。巡回で取ったページのうち、URL が同じで、新しさの上限(日)に収まるものを返す。
-function readCrawledPage(project, url, maxAgeDays) {
-  const normalized = normalizeUrl(url);
+function readCrawledPage(project, url, maxAgeDays, ignoreParams = []) {
+  const normalized = normalizeUrl(url, ignoreParams);
   if (!normalized) return null;
   const dir = path.join(crawlPaths(project).pages, urlKey(normalized));
   let meta;
@@ -71,6 +103,11 @@ function readCrawledPage(project, url, maxAgeDays) {
   }
 }
 
+function isAllowedHost(target, settings) {
+  const hosts = settings.fetch.allowedHosts.map((host) => host.toLowerCase());
+  return hosts.includes(target.hostname.toLowerCase()) || hosts.includes(target.host.toLowerCase());
+}
+
 function inScope(url, settings) {
   let target;
   try {
@@ -78,28 +115,37 @@ function inScope(url, settings) {
   } catch {
     return false;
   }
-  const hosts = settings.fetch.allowedHosts.map((host) => host.toLowerCase());
-  if (!hosts.includes(target.hostname.toLowerCase()) && !hosts.includes(target.host.toLowerCase())) return false;
+  if (!isAllowedHost(target, settings)) return false;
   const { include, exclude } = settings.crawl;
   if (include.length && !include.some((prefix) => url.startsWith(prefix))) return false;
   if (exclude.some((pattern) => new RegExp(pattern).test(url))) return false;
   return true;
 }
 
-async function loadRobots(settings, report) {
+function directoryOf(url) {
+  try {
+    const { pathname } = new URL(url);
+    return pathname.endsWith("/") ? pathname : pathname.replace(/[^/]*$/, "");
+  } catch {
+    return "";
+  }
+}
+
+async function loadRobots(settings, cookies, report) {
   const robotsByHost = {};
   const sitemaps = [];
   for (const host of settings.fetch.allowedHosts) {
     for (const scheme of ["https", "http"]) {
+      const key = new URL(`${scheme}://${host}/`).host;
       try {
-        const result = await fetchPage(`${scheme}://${host}/robots.txt`, settings.fetch, { accept: () => true });
+        const result = await fetchPage(`${scheme}://${host}/robots.txt`, settings.fetch, { accept: () => true, cookies });
         const parsed = parseRobots(result.html);
-        robotsByHost[new URL(`${scheme}://${host}/`).host] = parsed;
+        robotsByHost[key] = parsed;
         sitemaps.push(...parsed.sitemaps);
         break;
       } catch (error) {
         if (error.reason === "http-status") {
-          robotsByHost[new URL(`${scheme}://${host}/`).host] = { rules: [], sitemaps: [] };
+          robotsByHost[key] = { rules: [], sitemaps: [] };
           break;
         }
       }
@@ -110,7 +156,7 @@ async function loadRobots(settings, report) {
   return { robotsByHost, sitemaps };
 }
 
-async function loadSitemapUrls(settings, sitemaps, report) {
+async function loadSitemapUrls(settings, sitemaps, cookies, report) {
   const queue = [...new Set(sitemaps)];
   for (const host of settings.fetch.allowedHosts) queue.push(`https://${host}/sitemap.xml`);
   const seen = new Set();
@@ -120,7 +166,7 @@ async function loadSitemapUrls(settings, sitemaps, report) {
     if (seen.has(sitemapUrl)) continue;
     seen.add(sitemapUrl);
     try {
-      const result = await fetchPage(sitemapUrl, settings.fetch, { accept: (type) => /xml|text\/plain/i.test(type) });
+      const result = await fetchPage(sitemapUrl, settings.fetch, { accept: (type) => /xml|text\/plain/i.test(type), cookies });
       const parsed = parseSitemap(result.html);
       parsed.urls.forEach((url) => urls.add(url));
       queue.push(...parsed.children);
@@ -135,41 +181,68 @@ async function loadSitemapUrls(settings, sitemaps, report) {
 async function runCrawl(project, { engine, startUrls, restart = false, log, report }) {
   const settings = project.readSettings();
   const paths = crawlPaths(project);
-  if (!settings.fetch.allowedHosts.length) throw new Error("案件の設定の fetch.allowedHosts に、旧サイトのサーバーを入れてください。");
-  const starts = (startUrls && startUrls.length ? startUrls : settings.crawl.startUrls).map(normalizeUrl).filter(Boolean);
+  const limits = settings.crawl;
+  const rules = settings.fetch;
+  const ignoreParams = limits.ignoreParams;
+  // 外す項目には、巡回の中で見つけた「値が変わっても中身が同じになる項目」も足す(state.learnedIgnoreParams)。
+  let state = null;
+  const normalize = (value) => normalizeUrl(value, [...ignoreParams, ...(state?.learnedIgnoreParams || [])]);
+  if (!rules.allowedHosts.length) throw new Error("案件の設定の fetch.allowedHosts に、旧サイトのサーバーを入れてください。");
+  const starts = (startUrls && startUrls.length ? startUrls : limits.startUrls).map(normalize).filter(Boolean);
   if (!starts.length) throw new Error("始まりの URL を、--start か案件の設定の crawl.startUrls で指定してください。");
 
+  // Cookie は巡回のあいだだけ持つ(state.json には書かない)。再開したときは、新しく受け取り直す。
+  const cookies = limits.cookies ? createCookieJar() : null;
+
   fs.mkdirSync(paths.pages, { recursive: true });
-  let state = restart ? null : project.readJson(paths.state);
-  if (state?.finished) {
-    report("巡回: 前の巡回は終わっている。一覧だけを書き直す(やり直すときは --restart)");
-  }
+  state = restart ? null : project.readJson(paths.state);
+  if (state?.finished) report("巡回: 前の巡回は終わっている。一覧だけを書き直す(やり直すときは --restart)");
+  // 待ち行列の中の項目(URL から引く)。同時に2ページ以上をたどると、深い道から先に同じページに
+  // 着くことがあるので、まだ取りに行っていなければ、浅い方の階層と見つけた元に直す。
+  let queued = new Map();
+  const enqueue = (url, depth, from, via) => {
+    const normalized = normalize(url);
+    if (!normalized) return;
+    if (state.seen[normalized]) {
+      const waiting = queued.get(normalized);
+      if (waiting && depth < waiting.depth) Object.assign(waiting, { depth, from, via });
+      return;
+    }
+    state.seen[normalized] = true;
+    const item = { url: normalized, depth, from, via };
+    state.queue.push(item);
+    queued.set(normalized, item);
+  };
   if (!state) {
     if (restart) fs.rmSync(paths.records, { force: true });
-    const { robotsByHost, sitemaps } = await loadRobots(settings, report);
-    const sitemapUrls = settings.crawl.useSitemap ? await loadSitemapUrls(settings, sitemaps, report) : [];
-    state = { startedAt: new Date().toISOString(), finished: false, robotsByHost, queue: [], seen: {}, bodyHashes: {}, files: {}, pages: 0 };
-    const enqueue = (url, depth, from) => {
-      const normalized = normalizeUrl(url);
-      if (!normalized || state.seen[normalized]) return;
-      state.seen[normalized] = true;
-      state.queue.push({ url: normalized, depth, from });
+    const { robotsByHost, sitemaps } = await loadRobots(settings, cookies, report);
+    const sitemapUrls = limits.useSitemap ? await loadSitemapUrls(settings, sitemaps, cookies, report) : [];
+    state = {
+      startedAt: new Date().toISOString(),
+      finished: false,
+      robotsByHost,
+      queue: [],
+      seen: {},
+      bodyHashes: {},
+      files: {},
+      external: {},
+      pages: 0,
+      rendered: 0,
+      learnedIgnoreParams: [],
+      volatile: {},
     };
-    starts.forEach((url) => enqueue(url, 0, "始まり"));
-    sitemapUrls.forEach((url) => inScope(normalizeUrl(url) || "", settings) && enqueue(url, 1, "sitemap.xml"));
+    starts.forEach((url) => enqueue(url, 0, "", "start"));
+    sitemapUrls.forEach((url) => inScope(normalize(url) || "", settings) && enqueue(url, 1, "", "sitemap"));
   }
 
-  const enqueue = (url, depth, from) => {
-    const normalized = normalizeUrl(url);
-    if (!normalized || state.seen[normalized]) return;
-    state.seen[normalized] = true;
-    state.queue.push({ url: normalized, depth, from });
-  };
+  queued = new Map(state.queue.map((item) => [item.url, item]));
+  // 前の版の巡回の状態には、あとで足した項目が無い。
+  state.learnedIgnoreParams = state.learnedIgnoreParams || [];
+  state.volatile = state.volatile || {};
+  state.external = state.external || {};
+  state.rendered = state.rendered || 0;
   const saveState = () => project.writeJson(paths.state, state);
   const appendRecord = (record) => fs.appendFileSync(paths.records, `${JSON.stringify(record)}\n`);
-
-  const rules = settings.fetch;
-  const limits = settings.crawl;
   let sinceSave = 0;
   let lastStart = 0;
   const gate = async () => {
@@ -178,12 +251,50 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   };
 
+  // 同じ道で、ある項目の値だけが違う URL が同じ中身だったら数え、VOLATILE_REPEATS 回になったら、その項目を外す。
+  // 開いた時刻を URL に付けるサイト(大阪市の学校のサイトの ?tm=…)では、開くたびにリンク先の URL が変わり、
+  // 巡回が終わらない。Website Explorer と WebCopy で一覧を取れなかったのは、これが原因の見込み。
+  const VOLATILE_REPEATS = 3;
+  const learnVolatileParams = (url, original) => {
+    let a;
+    let b;
+    try {
+      a = new URL(url);
+      b = new URL(original);
+    } catch {
+      return;
+    }
+    if (a.origin !== b.origin || a.pathname !== b.pathname) return;
+    const names = new Set([...a.searchParams.keys(), ...b.searchParams.keys()]);
+    for (const name of names) {
+      if (a.searchParams.get(name) === b.searchParams.get(name)) continue;
+      if (state.learnedIgnoreParams.includes(name)) continue;
+      state.volatile[name] = (state.volatile[name] || 0) + 1;
+      if (state.volatile[name] >= VOLATILE_REPEATS) {
+        state.learnedIgnoreParams.push(name);
+        report(`  URL の項目 ${name} は値が変わっても中身が同じなので、これから外す`);
+        log.write({ result: "learned-ignore-param", param: name });
+      }
+    }
+  };
+
+  const noteFile = (url, type, from) => {
+    state.files[url] = state.files[url] || { type, from, count: 0 };
+    state.files[url].count += 1;
+  };
+
   const visit = async (item) => {
-    const { url, depth, from } = item;
+    const { depth, from, via } = item;
+    // 待っているあいだに外す項目が増えたら、整え直す。整えた URL をもう見ていれば飛ばす。
+    const url = normalize(item.url) || item.url;
+    if (url !== item.url) {
+      if (state.seen[url]) return;
+      state.seen[url] = true;
+    }
     // robots.txt はサーバー(ポートを含む)ごとに読んである。
     const host = new URL(url).host;
-    if (settings.crawl.useRobots && !isAllowedByRobots(state.robotsByHost[host], url)) {
-      appendRecord({ url, depth, from, kind: "page", status: "robots", ok: false });
+    if (limits.useRobots && !isAllowedByRobots(state.robotsByHost[host], url)) {
+      appendRecord({ url, depth, from, via, kind: "page", status: "robots", ok: false });
       log.write({ result: "skipped", reason: "robots" });
       return;
     }
@@ -191,17 +302,16 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     const fetchedAt = new Date().toISOString();
     let result;
     try {
-      result = await fetchPage(url, rules);
+      result = await fetchPage(url, rules, { cookies });
     } catch (error) {
       if (error.reason === "not-html") {
         // 拡張子からは分からなかったファイル(index.cfm がファイルを返すなど)。
-        state.files[url] = state.files[url] || { type: error.meta?.contentType || "", from, count: 0 };
-        state.files[url].count += 1;
-        appendRecord({ url, depth, from, kind: "file", status: error.meta?.status ?? null, contentType: error.meta?.contentType || "", ok: true });
+        noteFile(url, (error.meta?.contentType || "").split(";")[0].trim(), from);
+        appendRecord({ url, depth, from, via, kind: "file", status: error.meta?.status ?? null, ok: true });
         return;
       }
-      const failedFinal = error.meta?.finalUrl && normalizeUrl(error.meta.finalUrl) !== url ? normalizeUrl(error.meta.finalUrl) : null;
-      appendRecord({ url, depth, from, kind: "page", status: error.meta?.status ?? null, reason: error.reason || "error", finalUrl: failedFinal, ok: false });
+      const failedFinal = error.meta?.finalUrl && normalize(error.meta.finalUrl) !== url ? normalize(error.meta.finalUrl) : null;
+      appendRecord({ url, depth, from, via, kind: "page", status: error.meta?.status ?? null, reason: error.reason || "error", finalUrl: failedFinal, ok: false });
       log.write({ result: "failed", reason: error.reason || "error", status: error.meta?.status ?? null });
       return;
     }
@@ -209,14 +319,46 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     try {
       info = await engine.evaluate((arg) => window.batchTools.pageLinks(arg), { html: result.html, url: result.finalUrl });
     } catch {
-      appendRecord({ url, depth, from, kind: "page", status: result.status, reason: "inspect-error", ok: false });
+      appendRecord({ url, depth, from, via, kind: "page", status: result.status, reason: "inspect-error", ok: false });
       return;
     }
-    const finalUrl = normalizeUrl(result.finalUrl);
+
+    const links = new Map(info.links.map((link) => [link, info.scriptLinks.includes(link) ? "script" : "link"]));
+    // スクリプトでメニューを描くページは、Chromium で開いてからリンクを拾う。始まりのページと、
+    // スクリプトがあるのに巡回の範囲のリンクが少ないページだけを開く(開くと旧サイトへの要求が増えるため)。
+    const inScopeCount = info.links.filter((link) => inScope(link, settings)).length;
+    const shouldRender =
+      limits.render === "always" ||
+      (limits.render === "auto" && (depth === 0 || (info.hasScripts && inScopeCount < limits.renderMinLinks)));
+    let renderedExtra = 0;
+    if (shouldRender && typeof engine.renderLinks === "function") {
+      try {
+        await assertAllowed(new URL(result.finalUrl), rules);
+        await gate();
+        const rendered = await engine.renderLinks(result.finalUrl, {
+          allowedHosts: rules.allowedHosts,
+          timeoutMs: rules.timeoutMs,
+          userAgent: rules.userAgent || undefined,
+        });
+        for (const link of rendered.links) {
+          if (!links.has(link)) {
+            links.set(link, "render");
+            renderedExtra += 1;
+          }
+        }
+        state.rendered += 1;
+      } catch {
+        // 開けなかったページは、HTML から拾ったリンクだけで進める。
+      }
+    }
+
+    const finalUrl = normalize(result.finalUrl);
     const duplicateOf = info.bodyHash && state.bodyHashes[info.bodyHash] ? state.bodyHashes[info.bodyHash] : null;
+    if (duplicateOf) learnVolatileParams(url, duplicateOf);
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
-    const meta = {
+    project.writeFileAtomic(path.join(dir, "source.html"), result.html);
+    project.writeJson(path.join(dir, "meta.json"), {
       url,
       finalUrl,
       ok: true,
@@ -229,51 +371,97 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       etag: result.etag,
       title: info.title,
       bodyHash: info.bodyHash,
-    };
-    project.writeFileAtomic(path.join(dir, "source.html"), result.html);
-    project.writeJson(path.join(dir, "meta.json"), meta);
-    appendRecord({ url, depth, from, kind: "page", status: result.status, finalUrl: finalUrl !== url ? finalUrl : null, title: info.title, duplicateOf, ok: true });
+    });
+    appendRecord({
+      url,
+      depth,
+      from,
+      via,
+      kind: "page",
+      status: result.status,
+      finalUrl: finalUrl !== url ? finalUrl : null,
+      title: info.title,
+      duplicateOf,
+      lastModified: result.lastModified,
+      renderedExtra,
+      ok: true,
+    });
     state.pages += 1;
-    log.write({ result: "ok", status: result.status, depth });
+    log.write({ result: "ok", status: result.status, depth, renderedExtra });
 
     // 転送先も「見た」ことにする(同じページを2回取らないため)。
     if (finalUrl && finalUrl !== url) state.seen[finalUrl] = true;
     if (info.robotsNoFollow || depth >= limits.maxDepth) return;
-    for (const link of info.links) {
-      if (!inScope(link, settings)) continue;
+    for (const [rawLink, linkVia] of links) {
+      const link = normalize(rawLink);
+      if (!link) continue;
+      if (!inScope(link, settings)) {
+        // 外のサイトへのリンク(巡回の範囲の外にある、許可したサーバーのリンクは数えない)。
+        if (!isAllowedHost(new URL(link), settings)) {
+          state.external[link] = state.external[link] || { from: url, count: 0 };
+          state.external[link].count += 1;
+        }
+        continue;
+      }
       const pathname = new URL(link).pathname;
       if (FILE_EXTENSION.test(pathname)) {
-        state.files[link] = state.files[link] || { type: path.extname(pathname).slice(1).toLowerCase(), from: url, count: 0 };
-        state.files[link].count += 1;
+        noteFile(link, path.extname(pathname).slice(1).toLowerCase(), url);
         continue;
       }
       if (Object.keys(state.seen).length >= limits.maxPages) continue;
-      enqueue(link, depth + 1, url);
+      enqueue(link, depth + 1, url, linkVia);
     }
   };
 
   if (!state.finished) {
     report(`巡回: 始まり ${starts.length} URL、残り ${state.queue.length} URL(上限 ${limits.maxPages} URL、深さ ${limits.maxDepth} まで)`);
-    const lanes = Array.from({ length: Math.max(1, rules.concurrency) }, async () => {
-      while (state.queue.length) {
-        const item = state.queue.shift();
-        await visit(item);
-        sinceSave += 1;
-        if (sinceSave >= STATE_SAVE_EVERY) {
-          sinceSave = 0;
-          saveState();
+    // 階層ごとに順にたどる(浅い階層を取り終えてから、次の階層へ進む)。同時に2ページ以上をたどっても、
+    // 階層が「始まりから最も少ない手数」になり、Website Explorer の階層と比べられる。
+    while (state.queue.length) {
+      const level = Math.min(...state.queue.map((item) => item.depth));
+      const batch = state.queue.filter((item) => item.depth === level);
+      state.queue = state.queue.filter((item) => item.depth !== level);
+      batch.forEach((item) => queued.delete(item.url));
+      const lanes = Array.from({ length: Math.max(1, rules.concurrency) }, async () => {
+        while (batch.length) {
+          const item = batch.shift();
+          await visit(item);
+          sinceSave += 1;
+          if (sinceSave >= STATE_SAVE_EVERY) {
+            sinceSave = 0;
+            // 途中で止まったときのために、まだ取りに行っていない同じ階層の項目も残す。
+            project.writeJson(paths.state, { ...state, queue: [...batch, ...state.queue] });
+          }
         }
+      });
+      await Promise.all(lanes);
+    }
+
+    // ファイルの大きさと更新日を聞く(中身は取らない)。設定で有効にしたときだけ。
+    if (limits.fileHead) {
+      for (const [url, file] of Object.entries(state.files)) {
+        if (file.headAt) continue;
+        await gate();
+        const head = await headFile(url, rules, { cookies });
+        Object.assign(file, { headAt: new Date().toISOString(), bytes: head?.bytes ?? null, lastModified: head?.lastModified ?? null, status: head?.status ?? null });
       }
-    });
-    await Promise.all(lanes);
+    }
     state.finished = true;
     state.finishedAt = new Date().toISOString();
     saveState();
   }
 
   const counts = writeCrawlLists(project, state);
-  report(`巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、ファイル ${counts.files}`);
-  report(`  一覧: ${path.relative(project.root, paths.list)}、${path.relative(project.root, paths.files)}`);
+  report(
+    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
+  );
+  report(
+    `  見つけ方: ${Object.entries(counts.via)
+      .map(([via, n]) => `${DISCOVERY_LABELS[via] || via} ${n}`)
+      .join("、")}。Chromium で開いたページ ${state.rendered}`
+  );
+  if (state.learnedIgnoreParams.length) report(`  外した URL の項目(巡回の中で見つけたもの): ${state.learnedIgnoreParams.join("、")}`);
+  report(`  一覧: ${path.relative(project.root, paths.list)}、${path.relative(project.root, paths.files)}、${path.relative(project.root, paths.external)}`);
   return counts;
 }
 
@@ -288,23 +476,42 @@ function writeCrawlLists(project, state) {
       records.set(record.url, record);
     }
   }
-  const pages = [...records.values()].filter((record) => record.kind === "page").sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  const byUrl = (a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
+  const pages = [...records.values()].filter((record) => record.kind === "page").sort(byUrl);
   const statusLabel = (record) => {
     if (record.ok) return record.duplicateOf ? "重複" : "取れた";
     if (record.status === "robots") return "robots.txt で止めた";
     return `取れない(${record.reason}${record.status ? ` ${record.status}` : ""})`;
   };
-  const rows = [["URL", "タイトル", "階層", "状態", "転送先", "重複先", "見つけた元"]];
+  const rows = [["URL", "タイトル", "ディレクトリ", "階層", "状態", "転送先", "重複先", "更新日", "見つけ方", "見つけた元"]];
+  const via = {};
   for (const record of pages) {
-    rows.push([record.url, record.title || "", record.depth, statusLabel(record), record.finalUrl || "", record.duplicateOf || "", record.from || ""]);
+    via[record.via] = (via[record.via] || 0) + 1;
+    rows.push([
+      record.url,
+      record.title || "",
+      directoryOf(record.url),
+      record.depth,
+      statusLabel(record),
+      record.finalUrl || "",
+      record.duplicateOf || "",
+      record.lastModified || "",
+      DISCOVERY_LABELS[record.via] || record.via || "",
+      record.from || "",
+    ]);
   }
-  project.writeFileAtomic(paths.list, `﻿${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`);
+  writeCsv(project, paths.list, rows);
 
-  const fileRows = [["URL", "種類", "リンク元の数", "見つけた元"]];
-  for (const [url, file] of Object.entries(state.files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    fileRows.push([url, file.type, file.count, file.from]);
+  const sortedEntries = (object) => Object.entries(object).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const fileRows = [["URL", "種類", "ディレクトリ", "大きさ(バイト)", "更新日", "リンク元の数", "見つけた元"]];
+  for (const [url, file] of sortedEntries(state.files)) {
+    fileRows.push([url, file.type, directoryOf(url), file.bytes ?? "", file.lastModified || "", file.count, file.from]);
   }
-  project.writeFileAtomic(paths.files, `﻿${fileRows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`);
+  writeCsv(project, paths.files, fileRows);
+
+  const externalRows = [["URL", "リンク元の数", "見つけた元"]];
+  for (const [url, entry] of sortedEntries(state.external || {})) externalRows.push([url, entry.count, entry.from]);
+  writeCsv(project, paths.external, externalRows);
 
   return {
     pages: pages.length,
@@ -313,6 +520,8 @@ function writeCrawlLists(project, state) {
     failed: pages.filter((record) => !record.ok && record.status !== "robots").length,
     robots: pages.filter((record) => record.status === "robots").length,
     files: Object.keys(state.files).length,
+    external: Object.keys(state.external || {}).length,
+    via,
   };
 }
 

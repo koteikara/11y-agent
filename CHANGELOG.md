@@ -33,6 +33,7 @@
   - `goal2-app/batch/lib/project.js`、`batch/cli.js`: 巡回の設定(`crawl`)と `crawl` のコマンド。
   - `goal2-app/test/batch-engine/run-crawl-tests.js`、`fake-old-site.js`: 手元の旧サイトの代わりに、トップページ、`robots.txt`、`sitemap.xml`、リンクの無いページなどを足し、巡回を確かめる。`npm run test:batch-engine` に足した。
   - `docs/renewal/ARCHITECTURE.md`(「名前の付け方」と「巡回」)、`docs/renewal/FLOW.md`(2-1)、`goal2-app/batch/README.md`。
+  - Website Explorer でうまく取れないサイトでは WebCopy を使い、どちらでも取れないサイトもある(ユーザー)。2つのツールのよいところを取り入れた。リンクを探す場所を広げた(`meta refresh`、`onclick` などとスクリプトの中の `location.href` や `window.open`、選ぶメニュー)。スクリプトでメニューを描くページは Chromium で開いてからリンクを拾う(`batch/lib/engine-host.js` の `renderLinks`)。Cookie を引き継ぎ、名乗りを設定で変えられる(`batch/lib/fetcher.js`)。外してよい URL の項目を外し、値が変わっても中身が同じになる項目は巡回の中で見つけて外す。大阪市の学校のサイトは、開いた時刻をリンクの URL に付けており、これが2つのツールで取れなかった原因の見込み。一覧にディレクトリ、更新日、見つけ方の列を足し、ファイルの大きさと更新日を聞けるようにし、外のサイトへのリンクの一覧を足した。階層ごとに順にたどる。
 - 検証: `npm run test:batch-engine`、`npm test` が通ることを確かめた。
 - レビュー: (Fable のレビューのあとに書く)
 - 関連ファイル: `goal2-app/batch/`、`goal2-app/test/batch-engine/`、`goal2-app/package.json`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/FLOW.md`

@@ -115,6 +115,8 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
     await route.fulfill({ status: 200, contentType: file.contentType, body: file.body });
   });
 
+  // 巡回でページを Chromium で開くときの文脈。初めて使うときに作る。
+  let renderContext = null;
   const page = await context.newPage();
   await page.goto(`${ENGINE_ORIGIN}/engine.html`, { waitUntil: "load" });
   await page.waitForFunction(() => Boolean(window.goal2Engine && window.goal3Engine), null, { timeout: 15000 });
@@ -129,6 +131,55 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
     evaluate(fn, arg) {
       return page.evaluate(fn, arg);
     },
+
+    // 巡回用。旧サイトのページを Chromium で開き、スクリプトが描いたあとのリンクを拾う(Website Explorer と
+    // WebCopy が苦手な、メニューをスクリプトで作るサイトのため)。エンジンのページとは別の文脈で開き、
+    // 要求は allowedHosts のサーバーの文書、スクリプト、データだけを通す(画像、CSS、フォントは止める)。
+    // 呼び出し側は、開く前に URL を取得の守り(assertAllowed)で確かめておく。
+    async renderLinks(url, { allowedHosts, timeoutMs = 15000, userAgent }) {
+      if (!renderContext) {
+        renderContext = await browser.newContext({ userAgent, javaScriptEnabled: true });
+        await renderContext.route("**/*", async (route) => {
+          const request = route.request();
+          let target;
+          try {
+            target = new URL(request.url());
+          } catch {
+            await route.abort("blockedbyclient");
+            return;
+          }
+          const hosts = allowedHosts.map((host) => host.toLowerCase());
+          const allowedHost = hosts.includes(target.hostname.toLowerCase()) || hosts.includes(target.host.toLowerCase());
+          const allowedType = ["document", "script", "xhr", "fetch"].includes(request.resourceType());
+          if (/^https?:$/.test(target.protocol) && allowedHost && allowedType) await route.continue();
+          else await route.abort("blockedbyclient");
+        });
+      }
+      const renderPage = await renderContext.newPage();
+      try {
+        await renderPage.goto(url, { waitUntil: "load", timeout: timeoutMs });
+        await renderPage.waitForTimeout(1000);
+        return await renderPage.evaluate(() => {
+          const links = new Set();
+          const add = (value) => {
+            try {
+              const target = new URL(value, document.baseURI);
+              if (!/^https?:$/.test(target.protocol)) return;
+              target.hash = "";
+              links.add(target.href);
+            } catch {
+              // 書き方の誤ったリンクは飛ばす。
+            }
+          };
+          document.querySelectorAll("a[href],area[href]").forEach((element) => add(element.getAttribute("href")));
+          document.querySelectorAll("frame[src],iframe[src]").forEach((element) => add(element.getAttribute("src")));
+          return { links: [...links] };
+        });
+      } finally {
+        await renderPage.close();
+      }
+    },
+
     async close() {
       await browser.close();
     },
