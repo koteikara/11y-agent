@@ -101,6 +101,8 @@ async function main() {
     "public/images/sample-flower-generated.png",
     "public/images/sample-family-generated.png",
     "server.js",
+    "lib/engine-api.js",
+    "lib/safe-fetch.js",
     "Dockerfile",
     "sea-config.json",
     "build-windows-app.bat",
@@ -121,6 +123,8 @@ async function main() {
   const goal3Js = fs.readFileSync(path.join(rootDir, "public/goal3.js"), "utf8");
   const stylesCss = fs.readFileSync(path.join(rootDir, "public/styles.css"), "utf8");
   const serverJs = fs.readFileSync(path.join(rootDir, "server.js"), "utf8");
+  const engineApiJs = fs.readFileSync(path.join(rootDir, "lib/engine-api.js"), "utf8");
+  const safeFetchJs = fs.readFileSync(path.join(rootDir, "lib/safe-fetch.js"), "utf8");
   assert.ok(
     appJs.includes("公園の芝生広場で親子が参加しているイベントの写真"),
     "AI image name draft should include the image type for the park sample"
@@ -475,8 +479,9 @@ async function main() {
   assert.ok(indexHtml.includes("文言を調整"), "top-level edited adoption button should open a wording adjustment panel");
   assert.ok(appJs.includes("enrichLinkTitleCandidates"), "generic link text candidates should try to enrich labels from linked page titles");
   assert.ok(appJs.includes("/api/link-title"), "link title enrichment should use the server-side lookup endpoint");
-  assert.ok(serverJs.includes("/api/link-title"), "server should expose a link title lookup endpoint");
-  assert.ok(serverJs.includes("assertFetchUrlAllowed"), "link title lookup should block local/private fetch targets");
+  assert.ok(engineApiJs.includes("/api/link-title"), "server should expose a link title lookup endpoint");
+  assert.ok(serverJs.includes("handleEngineApi"), "server should answer the engine API through lib/engine-api.js");
+  assert.ok(safeFetchJs.includes("async function fetchLinkTitle") && safeFetchJs.includes("await assertFetchUrlAllowed(url)"), "link title lookup should block local/private fetch targets");
   assert.ok(serverJs.includes("/api/fetch-html"), "server should expose a guarded HTML fetch endpoint for Goal3");
   assert.ok(goal3Html.includes("本文抽出"), "Goal3 should have a separate screen");
   assert.ok(goal3Html.includes("sourcePreviewFrame"), "Goal3 should include a source preview frame for visual extraction confirmation");

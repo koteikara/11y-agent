@@ -66,3 +66,5 @@ jobs:
         run: npm run test:goal2-output
       - name: miChecker との一致
         run: npm run test:michecker-parity
+      - name: 一括処理のエンジンの宿主(今のサーバーと同じ結果か)
+        run: npm run test:batch-engine

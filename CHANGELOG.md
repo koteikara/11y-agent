@@ -21,6 +21,21 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: 段1 候補のエンジンをサーバーから切り出す
+
+- 背景・目的: リニューアルの「作る順番」の段1。一括処理は、サーバーを立てずに、ディレクターの PC で候補のエンジンを Playwright の Chromium の中で動かす。エンジンが頼っていたサーバーの API を、サーバーと一括処理の両方から使える部品にした。
+- 主な変更内容:
+  - `goal2-app/lib/safe-fetch.js`: `server.js` にあった取得の守り(SSRF 対策)と、HTML、リンク先の題名、画像の取得を移した。中身は変えていない。
+  - `goal2-app/lib/engine-api.js`: エンジンが呼ぶ API(ルール、miChecker の項目、リンク先の題名、AI の状態、AI の呼び出し2つ)の中身を移した。`server.js` はこれを呼ぶだけにした。
+  - `goal2-app/public/engine.html`: 画面の部品を持たず、本文抽出と候補のエンジンだけを読み込むページ。
+  - `goal2-app/batch/lib/engine-host.js`: エンジンのページを Chromium で開き、ファイルは手元から返し、API は Node で答える宿主。エンジンのページから外への要求は止める。AI とリンク先の題名の取得を止める切り替えを持つ。
+  - `goal2-app/test/batch-engine/run-engine-host-tests.js`: 佐賀市の旧ページの本文51件と手で書いた断片3件を、今のサーバーと宿主の両方に通し、候補、知らせ、自動の採用の数、最終の HTML が一致することを確かめる。`npm run test:batch-engine` と CI に足した。
+  - `goal2-app/test/run-tests.js`: 取得の守りの確かめ方を、移した先のファイルに合わせた。
+- 検証: `npm test`、`test:llm`(33)、`test:goal2-output`(254)、`test:table-nesting`(7)、`test:michecker-parity`(223)、`test:batch-engine`(54件の一致)が通ることを確かめた。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `goal2-app/server.js`、`goal2-app/lib/safe-fetch.js`、`goal2-app/lib/engine-api.js`、`goal2-app/public/engine.html`、`goal2-app/batch/lib/engine-host.js`、`goal2-app/test/batch-engine/run-engine-host-tests.js`、`goal2-app/test/run-tests.js`、`goal2-app/package.json`、`.github/workflows/ci.yml`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: リニューアルの方針を1つの文書にまとめる
 
 - 背景・目的: リニューアルの方針が `FLOW.md`、`ARCHITECTURE.md`、`DESIGN.md` に分かれていて、何を選び何を選ばなかったかを一度に追えなかった。ユーザーの指示で、入口になる文書を作った。

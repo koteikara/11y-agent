@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>候補のエンジン</title>
+  </head>
+  <body>
+    <!--
+      一括処理(batch/)が Playwright の Chromium で開くページ。画面の部品を持たず、
+      本文抽出(window.goal3Engine)と候補のエンジン(window.goal2Engine)だけを読み込む。
+      app.js と goal3.js は、画面の部品が無いときは画面の初期化を飛ばす。
+    -->
+    <script src="/goal3.js"></script>
+    <script src="/michecker-engine.js"></script>
+    <script src="/app.js"></script>
+    <script src="/evidence-filename.js"></script>
+  </body>
+</html>
