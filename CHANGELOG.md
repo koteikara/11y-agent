@@ -21,6 +21,20 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: コンテンツパターンの抽出と、共有ドライブへの書き込みの速さ
+
+- 背景・目的: 2つある。(1) 案件の仕様書で「全ページを調査し、複数ページで構成されているページ群をサブサイト候補として提案し、コンテンツパターンごとの移行方法定義書を Excel で出す」ことを求められる例がある(桜井市。ユーザー)。巡回の結果からこの下書きを作る。(2) 巡回が見込みより遅く、共有ドライブ(Drive for desktop)のファイルの操作が1回0.25〜0.5秒かかることが原因だった(手元のディスクは約0.002秒)。
+- 主な変更内容:
+  - `goal2-app/batch/commands/patterns.js`: `patterns` のコマンド。巡回で取ったページの構造とリンクを調べ、ディレクトリ、構造の型(本体と違う作り)、リンクのまとまり(メニューのように多くのページから張られるリンクを除いたつながり)の3通りで群を見つけ、本体と違う作りの割合と群の中のリンクの割合で順位を付ける。上位3つに「サブサイト候補」の印を付け、`crawl/patterns.xlsx`(サブサイト候補、ページ、構造の型の3枚)と `patterns.json` に書く。移行方法の列は空欄で、ディレクターが書く。
+  - `goal2-app/batch/lib/xlsx.js`: 依存を足さずに xlsx を書く。
+  - `goal2-app/batch/lib/project.js`: ページごとのファイルを裏の待ち行列で8件まで並べて書く(1ファイル約0.08秒)。実行の記録はためて書く。各コマンドは区切りで書き終わりを待つ。巡回の記録もためて書き、状態を保存する前に書き終える。巡回は1ページ約2秒から約1.2秒になった。
+  - `goal2-app/batch/lib/engine-host.js`、`batch/cli.js`: 本処理がリンク先の題名を取りに行くとき、巡回で取ったページの題名があればそれを使い、無ければサーバーごとに間隔を空けて取りに行く。これまでは間隔の決まりを通っていなかった。
+  - `goal2-app/test/batch-engine/run-crawl-tests.js`: コンテンツパターンの確かめを足した。
+- 検証: `npm run test:batch-engine`、`npm test` が通ることを確かめた。出した xlsx の中身がすべて正しい XML であることを確かめた。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/xlsx.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/fetch.js`、`goal2-app/batch/commands/process.js`、`goal2-app/batch/lib/engine-host.js`、`goal2-app/batch/cli.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: 段2の途中(確認の時間の見積もりと精度の指標)
 
 - 背景・目的: リニューアルの段2(確認の深さと指標)を始めた。ユーザーの依頼で巡回を先に作ることにしたので、途中までを残す。

@@ -188,6 +188,7 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
     log.write({ id: page.id, result: "ok", depth, candidates: analysis.candidates.length, unresolved });
   }
 
+  await project.flush();
   writeSummary(project);
   const metrics = writeMetrics(project, { reviewHoursPerDay: settings.review.hoursPerDay, availableDays: settings.review.availableDays });
   report(`本処理: ${counts.processed} 件を処理した(済みで飛ばした ${counts.skipped} 件、失敗 ${counts.failed} 件)`);

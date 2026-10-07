@@ -255,8 +255,22 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   state.seenCount = state.seenCount || Object.keys(state.seen).length;
   state.external = state.external || {};
   state.rendered = state.rendered || 0;
-  const saveState = () => project.writeJson(paths.state, state);
-  const appendRecord = (record) => fs.appendFileSync(paths.records, `${JSON.stringify(record)}\n`);
+  // 記録はためて書く(1行ずつ追記すると共有ドライブでは遅い)。状態を保存する前に、ためた記録と裏で書いている
+  // ページのファイルを書き終える(状態が「見た」とする URL の記録とページが、先に残るようにする)。
+  let recordLines = [];
+  const appendRecord = (record) => recordLines.push(`${JSON.stringify(record)}\n`);
+  const writeMeta = (file, value) => project.queueWrite(file, `${JSON.stringify(value, null, 2)}\n`);
+  const flushRecords = async () => {
+    await project.flush();
+    if (recordLines.length) {
+      fs.appendFileSync(paths.records, recordLines.join(""));
+      recordLines = [];
+    }
+  };
+  const saveState = async (snapshot = state) => {
+    await flushRecords();
+    project.writeJson(paths.state, snapshot);
+  };
   let sinceSave = 0;
   let lastStart = 0;
   const gate = async () => {
@@ -391,8 +405,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     observeParams(url, info.bodyHash);
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
-    project.writeFileAtomic(path.join(dir, "source.html"), result.html);
-    project.writeJson(path.join(dir, "meta.json"), {
+    project.queueWrite(path.join(dir, "source.html"), result.html);
+    writeMeta(path.join(dir, "meta.json"), {
       url,
       finalUrl,
       ok: true,
@@ -464,7 +478,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
           if (sinceSave >= STATE_SAVE_EVERY) {
             sinceSave = 0;
             // 途中で止まったときのために、まだ取りに行っていない同じ階層の項目も残す。
-            project.writeJson(paths.state, { ...state, queue: [...batch, ...state.queue] });
+            await saveState({ ...state, queue: [...batch, ...state.queue] });
           }
         }
       });
@@ -482,8 +496,9 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     }
     state.finished = true;
     state.finishedAt = new Date().toISOString();
-    saveState();
+    await saveState();
   }
+  await flushRecords();
 
   const counts = writeCrawlLists(project, state);
   report(

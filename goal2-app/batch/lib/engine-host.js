@@ -44,13 +44,22 @@ function readPublicFile(pathname) {
 // エンジンが AI の鍵の無いときと同じに振る舞うよう、鍵の無いときと同じ答え(llm_not_configured)を返す。
 // 別の名前を返すと、エンジンは候補に「AI で解析できなかった」と書き足すため。
 // linkTitle: false のときは、リンク先の題名を取りに行かない(テストで、外のサイトに左右されないようにする)。
-async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
+// lookupTitle(url) は、巡回で取ったページの題名を返す(無ければ null)。linkTitleIntervalMs は、リンク先の題名を
+// 取りに行くときの、サーバーごとの間隔(ミリ秒)。
+async function startEngine({ ai = true, linkTitle = true, onAiCall, lookupTitle = null, linkTitleIntervalMs = 1000 } = {}) {
   const browser = await chromium.launch({
     // CI(Linux)では決まった場所の Chromium を使う。手元では Playwright が入れた Chromium を使う。
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
   });
   const context = await browser.newContext();
-  const usage = { aiCalls: 0, aiBlocked: 0, linkTitleLookups: 0 };
+  const usage = { aiCalls: 0, aiBlocked: 0, linkTitleLookups: 0, linkTitleFromCrawl: 0 };
+  const lastByHost = new Map();
+  const paceHost = async (host) => {
+    const next = Math.max(Date.now(), (lastByHost.get(host) || 0) + linkTitleIntervalMs);
+    lastByHost.set(host, next);
+    const wait = next - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  };
 
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -87,6 +96,21 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
           await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ ok: false, error: "link_title_not_available" }) });
           return;
         }
+        // 巡回で取ったページの題名があれば、それを使い、旧サイトへ取りに行かない。
+        let target = null;
+        try {
+          target = new URL(url.searchParams.get("href") || "", url.searchParams.get("base") || undefined).href;
+        } catch {
+          target = null;
+        }
+        const known = target && typeof lookupTitle === "function" ? lookupTitle(target) : null;
+        if (known) {
+          usage.linkTitleFromCrawl += 1;
+          await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, status: 200, title: known, url: target }) });
+          return;
+        }
+        // 取りに行くときは、サーバーごとに間隔を空ける(本処理が旧サイトに続けて要求しないように)。
+        if (target) await paceHost(new URL(target).host);
         usage.linkTitleLookups += 1;
       }
       let body = null;

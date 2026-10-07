@@ -18,7 +18,7 @@ const path = require("path");
 const { openProject } = require("./lib/project");
 const { startEngine } = require("./lib/engine-host");
 const { runFetch } = require("./commands/fetch");
-const { runCrawl } = require("./commands/crawl");
+const { runCrawl, normalizeUrl } = require("./commands/crawl");
 const { runPatterns } = require("./commands/patterns");
 const { runGroup } = require("./commands/group");
 const { runProcess } = require("./commands/process");
@@ -56,6 +56,21 @@ function loadRuleClasses() {
     classes.set(rule.id, rule.processing_class);
   }
   return classes;
+}
+
+// 巡回の記録から、URL と題名の対応を作る(転送先の URL でも引けるようにする)。巡回していなければ空。
+function loadCrawlTitles(project) {
+  const titles = new Map();
+  const file = path.join(project.root, "crawl", "records.jsonl");
+  if (!fs.existsSync(file)) return titles;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const record = JSON.parse(line);
+    if (record.kind !== "page" || !record.ok || !record.title) continue;
+    titles.set(record.url, record.title);
+    if (record.finalUrl) titles.set(record.finalUrl, record.title);
+  }
+  return titles;
 }
 
 function usage() {
@@ -124,7 +139,13 @@ async function main() {
   }
   const settings = project.readSettings();
   const log = project.openLog(command);
-  const engine = await startEngine({ ai: settings.ai.enabled });
+  // 本処理は、リンク先の題名を、巡回で取ったページの題名から引く。無いものだけを、間隔を空けて取りに行く。
+  const crawlTitles = command === "process" ? loadCrawlTitles(project) : null;
+  const engine = await startEngine({
+    ai: settings.ai.enabled,
+    lookupTitle: crawlTitles ? (url) => crawlTitles.get(normalizeUrl(url, settings.crawl.ignoreParams) || url) || null : null,
+    linkTitleIntervalMs: settings.fetch.intervalMs,
+  });
   try {
     if (command === "crawl") {
       const startUrls = typeof options.start === "string" ? options.start.split(",").map((url) => url.trim()).filter(Boolean) : null;
@@ -137,12 +158,17 @@ async function main() {
       await runGroup(project, { engine, log, report });
     } else if (command === "process") {
       await runProcess(project, { engine, ids, force: Boolean(options.force), log, report, ruleClasses: loadRuleClasses() });
+      if (engine.usage.linkTitleLookups || engine.usage.linkTitleFromCrawl) {
+        report(`  リンク先の題名: 巡回の結果から ${engine.usage.linkTitleFromCrawl} 件、取りに行った ${engine.usage.linkTitleLookups} 件`);
+      }
       if (engine.usage.aiCalls || engine.usage.aiBlocked) {
         report(`  AI の呼び出し ${engine.usage.aiCalls} 回${engine.usage.aiBlocked ? `(設定で止めた ${engine.usage.aiBlocked} 回)` : ""}`);
       }
     }
   } finally {
     await engine.close();
+    // 裏で書いているファイルと、ためている実行の記録を書き終える。
+    await project.flush();
   }
   report(`実行の記録: ${path.relative(project.root, log.file)}`);
 }

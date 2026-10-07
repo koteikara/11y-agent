@@ -123,7 +123,7 @@ async function runPatterns(project, { engine, log, report }) {
       const structure = await engine.evaluate((arg) => window.batchTools.structureOnly(arg), { html });
       const links = await engine.evaluate((arg) => window.batchTools.pageLinks(arg), { html, url: base });
       cached = { ...structure, links: links.links };
-      project.writeJson(cacheFile, cached);
+      project.queueWrite(cacheFile, JSON.stringify(cached));
       analyzed += 1;
     }
     analysis.set(page.url, cached);
@@ -303,6 +303,7 @@ async function runPatterns(project, { engine, log, report }) {
       { name: "構造の型", rows: typeRows, widths: [16, 10, 70] },
     ])
   );
+  await project.flush();
   log.write({ result: "ok", pages: urls.length, candidates: merged.length, types: clusters.length });
 
   report(`  構造の型 ${clusters.length}(本体 ${clusters[0]?.members.length || 0} ページ)、テンプレートとみなしたリンク ${templateLinks.size}`);

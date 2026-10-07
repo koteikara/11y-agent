@@ -43,6 +43,7 @@ async function reinspect(project, { engine, ids, log, report }) {
       log.write({ id: page.id, result: "failed", reason: "inspect-error" });
     }
   }
+  await project.flush();
   writeSummary(project);
   report(`調べ直し: ${counts.ok} 件を調べ直した(失敗 ${counts.failed} 件)`);
   return counts;
@@ -225,6 +226,7 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
   );
   await inspectQueue;
 
+  await project.flush();
   writeSummary(project);
   const reasons = Object.entries(counts.reasons)
     .map(([reason, n]) => `${reason} ${n}`)

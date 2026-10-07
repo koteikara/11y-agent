@@ -108,6 +108,73 @@ function writeJson(filePath, value) {
   writeFileAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+// ページごとのファイルを裏で書く待ち行列。共有ドライブ(Drive for desktop)では、ファイルの操作が1回
+// 0.25〜0.5秒かかり、1件ずつ書くと巡回や取得が書き込みに引っ張られる(段2の試走)。並べて書くと
+// 1ファイルあたり約0.08秒になるので、WRITE_CONCURRENCY 件まで並べて書く。同じファイルへの書き込みは
+// 出した順に書く。書き終わりを待つのは flush()。ページごとのファイルは、一時ファイルを経ずに直接書く
+// (名前を変える操作のぶん遅くなるため)。読む側は、書きかけのファイルを読めないものとして扱う。
+const WRITE_CONCURRENCY = 8;
+
+function createWriteQueue() {
+  const pending = [];
+  const lastByPath = new Map();
+  const madeDirs = new Set();
+  const inFlight = new Set();
+  let running = 0;
+  let firstError = null;
+
+  const pump = () => {
+    while (running < WRITE_CONCURRENCY && pending.length) {
+      const task = pending.shift();
+      running += 1;
+      task().finally(() => {
+        running -= 1;
+        pump();
+      });
+    }
+  };
+  // 待ち行列に入れ、書き終わったら解決する約束を返す。
+  const enqueue = (filePath, content) =>
+    new Promise((resolve) => {
+      pending.push(async () => {
+        try {
+          const dir = path.dirname(filePath);
+          if (!madeDirs.has(dir)) {
+            await fs.promises.mkdir(dir, { recursive: true });
+            madeDirs.add(dir);
+          }
+          await fs.promises.writeFile(filePath, content);
+        } catch (error) {
+          firstError = firstError || error;
+        }
+        resolve();
+      });
+      pump();
+    });
+
+  return {
+    write(filePath, content) {
+      // 同じファイルは、前の書き込みが終わってから書く(あとから出した中身が残るように)。
+      const previous = lastByPath.get(filePath) || Promise.resolve();
+      const done = previous.then(() => enqueue(filePath, content));
+      lastByPath.set(filePath, done);
+      inFlight.add(done);
+      done.then(() => {
+        inFlight.delete(done);
+        if (lastByPath.get(filePath) === done) lastByPath.delete(filePath);
+      });
+    },
+    async flush() {
+      while (inFlight.size) await Promise.all([...inFlight]);
+      if (firstError) {
+        const error = firstError;
+        firstError = null;
+        throw new Error(`ファイルを書けませんでした: ${error.message}`);
+      }
+    },
+  };
+}
+
 // 移行管理 ID はフォルダの名前になる。半角英数字と一般的な記号だけを許す(CMS の取込の約束と同じ)。
 function assertSafeId(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(id)) {
@@ -120,6 +187,8 @@ function openProject(root) {
   const projectRoot = path.resolve(root);
   if (!fs.existsSync(projectRoot)) throw new Error(`案件のフォルダがありません: ${projectRoot}`);
   const p = (...parts) => path.join(projectRoot, ...parts);
+  const writes = createWriteQueue();
+  const logBuffers = [];
 
   return {
     root: projectRoot,
@@ -175,8 +244,9 @@ function openProject(root) {
     readPageJson(id, name) {
       return readJson(this.pageFile(id, name));
     },
+    // ページごとのファイルは、裏の待ち行列で書く。書き終わりは flush() で待つ。
     writePageJson(id, name, value) {
-      writeJson(this.pageFile(id, name), value);
+      writes.write(this.pageFile(id, name), `${JSON.stringify(value, null, 2)}\n`);
     },
     readPageText(id, name) {
       try {
@@ -187,7 +257,16 @@ function openProject(root) {
       }
     },
     writePageText(id, name, text) {
-      writeFileAtomic(this.pageFile(id, name), text);
+      writes.write(this.pageFile(id, name), text);
+    },
+    // ページごとのファイルと同じ待ち行列で、任意のファイルを書く(巡回のページなど)。
+    queueWrite(filePath, content) {
+      writes.write(filePath, content);
+    },
+    // 裏で書いているファイルと、ためている実行の記録を、すべて書き終えるまで待つ。
+    async flush() {
+      await writes.flush();
+      for (const buffer of logBuffers) buffer.flush();
     },
 
     readJson,
@@ -199,11 +278,24 @@ function openProject(root) {
       fs.mkdirSync(this.paths.logs, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       const file = path.join(this.paths.logs, `run-${stamp}-${command}.jsonl`);
+      // 1行ずつ追記すると共有ドライブでは遅いので、ためて書く(LOG_BUFFER 行ごとと、flush() のとき)。
+      const LOG_BUFFER = 50;
+      let lines = [];
+      const buffer = {
+        flush() {
+          if (!lines.length) return;
+          fs.appendFileSync(file, lines.join(""));
+          lines = [];
+        },
+      };
+      logBuffers.push(buffer);
       return {
         file,
         write(entry) {
-          fs.appendFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), command, ...entry })}\n`);
+          lines.push(`${JSON.stringify({ at: new Date().toISOString(), command, ...entry })}\n`);
+          if (lines.length >= LOG_BUFFER) buffer.flush();
         },
+        flush: () => buffer.flush(),
       };
     },
   };
