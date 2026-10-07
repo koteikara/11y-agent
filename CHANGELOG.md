@@ -24,9 +24,9 @@
 ## 2026-10-08: コンテンツパターンの抽出を速くし、共有ドライブへの書き込みの一時的な失敗でやり直す
 
 - 背景・目的: 椎葉村(6,554ページ)と相模原市(12,238ページ)のコンテンツパターンの抽出が、1ページに約8秒かかり、7時間たっても半分に届かなかった。抽出が旧ページを共有ドライブから1件ずつ止めて読んでいたため(CPU はほとんど使っていなかった)。また、大阪市の学校のサイトの巡回が、7,600ページ目で共有ドライブにフォルダを作れず(ENOENT)、止まった。
-- 主な変更内容: `goal2-app/batch/commands/crawl.js` で、ページを取ったときにリンクと一緒に構造も調べ、抽出が使う `analysis.json` を残す(抽出は旧ページを読み直さない)。版の番号 `ANALYSIS_VERSION` は crawl.js に移し、抽出と共有する。`goal2-app/batch/commands/patterns.js` で、`analysis.json` が無いページの読み込みを8件ずつ並べる(結果の順は URL の順のまま)。`goal2-app/batch/lib/project.js` の書き込みの待ち行列で、失敗したら0.5秒、2秒、5秒と間を空けて3回までやり直す。テストに、巡回のあとの抽出が旧ページを読み直さないことの確かめを足した。
-- レビュー: (push の前に記入)
-- 関連ファイル: `goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/project.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
+- 主な変更内容: `goal2-app/batch/commands/crawl.js` で、ページを取ったときにリンクと一緒に構造も調べ、抽出が使う `analysis.json` を残す(抽出は旧ページを読み直さない)。版の番号 `ANALYSIS_VERSION` は crawl.js に移し、抽出と共有する。`goal2-app/batch/commands/patterns.js` で、`analysis.json` が無いページの読み込みを8件ずつ並べる(結果の順は URL の順のまま)。`goal2-app/batch/lib/project.js` の書き込み(待ち行列と、まとめのファイルの書き込みの両方)で、一時的な失敗(ENOENT など)なら1、5、15、30秒と間を空けて4回までやり直す。最初は0.5、2、5秒にしたが、3つの処理が同じ時刻にそろって失敗し、足りなかった。テストに、巡回のあとの抽出が旧ページを読み直さないことの確かめを足した。
+- レビュー: Fable が ba0a2ff 以降を確かめ、要修正は0件。提案6件のうち5件を取り入れた。(1) 書き込みに失敗したら、次はフォルダを作るところからやり直す。(2) 待っても通らない失敗(フォルダの位置にファイルがあるなど)はやり直さない。(3) 開いた時刻の印の見つけ方で、ページ自身の URL に同じ値で付いている項目(分類やページ送りの番号)は数えず、見つけたときのリンクの数と値の長さを記録に残す。(4) 抽出でエンジンが調べられなかったページは、全体を止めずに飛ばして数える。(5) 構造の取り方の版を上げたら analysis.json の版も上げる約束を書いた。同じサーバーの名前を同時に引くのをまとめる提案は、件数が少ないので見送った。
+- 関連ファイル: `goal2-app/batch/commands/crawl.js`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-07: 巡回で、URL の項目の組み合わせで増える URL に上限を設け、外のサイトへのリンクをサーバーごとにまとめる

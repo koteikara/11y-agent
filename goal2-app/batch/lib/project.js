@@ -105,11 +105,27 @@ function readJson(filePath, fallback = null) {
   }
 }
 
+// 共有ドライブでは、ファイルの操作がまれに ENOENT などで失敗し、間を空けると通る(大阪市の学校のサイトの
+// 巡回で、あるフォルダに書けずに止まった。3つの処理が同じ時刻にそろって失敗し、0.5、2、5秒のやり直しでは
+// 足りなかったこともある)。合わせて約50秒まで待つ。
+const WRITE_RETRY_DELAYS_MS = [1000, 5000, 15000, 30000];
+// フォルダの位置にファイルがある、容量が無い、などの失敗は、待っても通らないのでやり直さない。
+const isTransientWriteError = (error) => ["ENOENT", "EBUSY", "EAGAIN", "EIO", "EPERM", "UNKNOWN"].includes(error.code);
+
 function writeFileAtomic(filePath, content) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, content);
-  fs.renameSync(tmp, filePath);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      const tmp = `${filePath}.tmp-${process.pid}`;
+      fs.writeFileSync(tmp, content);
+      fs.renameSync(tmp, filePath);
+      return;
+    } catch (error) {
+      if (!isTransientWriteError(error) || attempt >= WRITE_RETRY_DELAYS_MS.length) throw error;
+      // 同期の書き込みなので、その場で待つ。
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WRITE_RETRY_DELAYS_MS[attempt]);
+    }
+  }
 }
 
 function writeJson(filePath, value) {
@@ -124,7 +140,6 @@ function writeJson(filePath, value) {
 // 別のページのフォルダどうしである。ページごとのファイルは、一時ファイルを経ずに直接書く(名前を変える操作の
 // ぶん遅くなるため)。途中で止まって書きかけの JSON が残っても、readJson は無いものとして扱う。
 const WRITE_CONCURRENCY = 8;
-const WRITE_RETRY_DELAYS_MS = [500, 2000, 5000];
 
 function createWriteQueue() {
   const pending = [];
@@ -158,9 +173,10 @@ function createWriteQueue() {
             await fs.promises.writeFile(filePath, content);
             break;
           } catch (error) {
-            // 共有ドライブでは、フォルダを作る操作がまれに ENOENT で失敗し、すぐやり直すと通る
-            // (大阪市の学校のサイトの巡回で、7,600 ページ目で1回だけ起き、巡回が止まった)。間を空けてやり直す。
-            if (attempt < WRITE_RETRY_DELAYS_MS.length) {
+            // フォルダが見えていなかったこともあるので、次はフォルダを作るところからやり直す。
+            madeDirs.delete(dir);
+            // 一時的な失敗なら、間を空けてやり直す(WRITE_RETRY_DELAYS_MS の説明を参照)。
+            if (isTransientWriteError(error) && attempt < WRITE_RETRY_DELAYS_MS.length) {
               await new Promise((r) => setTimeout(r, WRITE_RETRY_DELAYS_MS[attempt]));
               continue;
             }

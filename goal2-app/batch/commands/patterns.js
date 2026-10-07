@@ -116,6 +116,7 @@ async function runPatterns(project, { engine, log, report }) {
   const analysis = new Map();
   const results = new Array(pages.length);
   let analyzed = 0;
+  let failed = 0;
   let next = 0;
   const readJsonAsync = async (file) => {
     try {
@@ -140,11 +141,17 @@ async function runPatterns(project, { engine, log, report }) {
           continue;
         }
         const base = page.finalUrl || page.url;
-        // 構造とリンクを、1回の往復で調べる。
-        const result = await engine.evaluate(
-          async (arg) => ({ structure: await window.batchTools.structureOnly(arg), links: await window.batchTools.pageLinks(arg) }),
-          { html, url: base }
-        );
+        // 構造とリンクを、1回の往復で調べる。調べられなかったページは飛ばして数える(巡回の inspect-error と同じ扱い)。
+        let result;
+        try {
+          result = await engine.evaluate(
+            async (arg) => ({ structure: await window.batchTools.structureOnly(arg), links: await window.batchTools.pageLinks(arg) }),
+            { html, url: base }
+          );
+        } catch {
+          failed += 1;
+          continue;
+        }
         cached = { analysisVersion: ANALYSIS_VERSION, ...result.structure, links: result.links.links };
         project.queueWrite(cacheFile, JSON.stringify(cached));
         analyzed += 1;
@@ -156,6 +163,7 @@ async function runPatterns(project, { engine, log, report }) {
   pages.forEach((page, index) => {
     if (results[index]) analysis.set(page.url, results[index]);
   });
+  if (failed) report(`  調べられなかったページ: ${failed}(候補の計算から外した)`);
   if (analyzed) report(`  構造とリンクを調べた: ${analyzed} ページ(ほかは前の結果を使った)`);
   const urls = pages.map((page) => page.url).filter((url) => analysis.has(url));
   const pageSet = new Set(urls);

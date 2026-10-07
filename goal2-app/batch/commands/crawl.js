@@ -508,7 +508,15 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   const STAMP_MIN_LINKS = 5;
   const STAMP_MIN_PAGES = 3;
   const STAMP_VALUE = /^(?:[0-9]{10,}|[0-9a-f]{16,}|[A-Za-z0-9_-]{20,})$/;
-  const observeStamps = (pageLinks) => {
+  const observeStamps = (pageUrl, pageLinks) => {
+    // そのページ自身の URL に同じ名前と値で付いている項目は、分類やページ送りの番号なので数えない
+    // (開いた時刻の印は、ページ自身の URL の値とリンクの値が合わないのがふつう)。
+    let own;
+    try {
+      own = new URL(pageUrl).searchParams;
+    } catch {
+      own = new URLSearchParams();
+    }
     const perName = new Map();
     for (const link of pageLinks) {
       let target;
@@ -519,7 +527,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       }
       if (!isAllowedHost(target, settings)) continue;
       for (const [name, value] of target.searchParams) {
-        if (state.learnedIgnoreParams.includes(name) || !STAMP_VALUE.test(value)) continue;
+        if (state.learnedIgnoreParams.includes(name) || !STAMP_VALUE.test(value) || own.get(name) === value) continue;
         if (!perName.has(name)) perName.set(name, new Map());
         const values = perName.get(name);
         values.set(value, (values.get(value) || 0) + 1);
@@ -534,7 +542,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         state.learnedIgnoreParams.push(name);
         delete state.stampObservations[name];
         report(`  URL の項目 ${name} はページを開くたびに値が変わる印なので、これから外す`);
-        log.write({ result: "learned-ignore-param", param: name, by: "stamp" });
+        log.write({ result: "learned-ignore-param", param: name, by: "stamp", links: count, valueLength: value.length });
         renormalizeQueue();
       }
     }
@@ -665,7 +673,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     const finalUrl = normalize(result.finalUrl);
     const duplicateOf = info.bodyHash && state.bodyHashes[info.bodyHash] ? state.bodyHashes[info.bodyHash] : null;
     observeParams(url, info.bodyHash);
-    observeStamps(links.keys());
+    observeStamps(url, links.keys());
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
     project.queueWrite(path.join(dir, "source.html"), result.html);
