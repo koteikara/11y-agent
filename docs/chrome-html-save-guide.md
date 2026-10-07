@@ -8,7 +8,7 @@
 対象は2種類ある。
 
 - 取込前の元ページ（自治体サイト）。
-- 取込後のページ（`migrate.smart-lgov.jp` など。ログインが要る）。
+- 取込後のページ（取込環境のページ。ログインが要る）。
 
 この手順は Windows の Google Chrome を前提にする。
 図は Linux の Chromium で撮ったため、メニューの並びは同じだが細部が異なる（アドレスバーに「保護されていない通信」と出ているのは撮影環境の都合で、実際は鍵マークになる。DevTools の表記が英語なのも同じ理由）。
@@ -112,7 +112,7 @@
 
 ## 6. 取込後のページ（CMS 側）の注意
 
-- ログインしたあとに同じ手順で保存する。`www03.migrate4.smart-lgov.jp` の `torikomi_test` はログイン画面へ飛ぶので、先にログインする。
+- ログインしたあとに同じ手順で保存する。試験用の取込環境の取込後ページはログイン画面へ飛ぶので、先にログインする。
 - 取込後のページには CMS のテンプレート（ヘッダー、ナビゲーション、フッター）が含まれる。本文だけが要るときは方法Dで `free-layout-area` の中を取る。
 - 顧客コードや内部の URL など、外に出せない情報が入っていないかを確かめてから共有する。
 - 取込後の URL が 404 のもの（広陵町、神栖市、那珂川町の元ページ）は、CMS 側の取込履歴から取込時の HTML を取り出す。取り出し方は CMS の担当に確認する。
@@ -124,17 +124,17 @@
 | 項目 | ページ | URL | 状態 | 方法 | ファイル名の例 |
 | --- | --- | --- | --- | --- | --- |
 | 1-1 | 広陵町 元ページ | https://www.town.koryo.nara.jp/contents_detail.php?co=kak&frmId=5993 | WAF のエラーページ。**要保存** | A | `1-1-koryo-before.html` |
-| 1-1 | 広陵町 取込後 | https://www01.migrate.smart-lgov.jp/torikomi/77/koryo/6822.html | 404。CMS の取込履歴 | 履歴から | `1-1-koryo-after.html` |
+| 1-1 | 広陵町 取込後 | 取込環境の URL(社内の記録にある) | 404。CMS の取込履歴 | 履歴から | `1-1-koryo-after.html` |
 | 1-2 | 那珂川町 元ページ | https://www.town.tochigi-nakagawa.lg.jp/life/kosodate_kyouiku/2025-0324-1009-105.html | 404。CMS の取込履歴があれば | 履歴から | `1-2-nakagawa-before.html` |
-| 1-2 | 那珂川町 取込後 | https://www01.migrate.smart-lgov.jp/torikomi/78/nakagawa/9319.html | 取得済み | 不要 | `1-2-nakagawa-after.html` |
+| 1-2 | 那珂川町 取込後 | 取込環境の URL(社内の記録にある) | 取得済み | 不要 | `1-2-nakagawa-after.html` |
 | 1-3 | 那珂川町 元ページ | https://www.town.tochigi-nakagawa.lg.jp/life/fukushi_kaigo/2020-0219-1001-25.html | 404。CMS の取込履歴があれば | 履歴から | `1-3-nakagawa-before.html` |
-| 1-3 | 那珂川町 取込後 | https://www01.migrate.smart-lgov.jp/torikomi/78/nakagawa/9313.html | 取得済み | 不要 | `1-3-nakagawa-after.html` |
+| 1-3 | 那珂川町 取込後 | 取込環境の URL(社内の記録にある) | 取得済み | 不要 | `1-3-nakagawa-after.html` |
 | 1-4 | 和気町 元ページ | https://www.town.wake.lg.jp/children/englishQuiz/ | 404 の見込み。開けたら **要保存** | A と B | `1-4-wake-before.html`、`1-4-wake-before-complete.zip` |
-| 1-4 | 和気町 取込後 | http://www03.migrate4.smart-lgov.jp/torikomi_test/77/wake/239.html | CMS のログイン画面。**要保存** | A と B | `1-4-wake-after.html`、`1-4-wake-after-complete.zip` |
+| 1-4 | 和気町 取込後 | 取込環境の URL(社内の記録にある) | CMS のログイン画面。**要保存** | A と B | `1-4-wake-after.html`、`1-4-wake-after-complete.zip` |
 | 1-5 | 上板町 元ページ | https://www.townkamiita.jp/docs/2013103000011/ | 取得済み（ODT の例） | 不要 | `1-5-kamiita-before.html` |
 | 1-5 | 飯島町 元ページ | https://iju.go-iijima.nagano.jp/information/4847/ | 404。同じサイトで webp を使う別のページがあれば | A | `1-5-iijima-before.html` |
 | 1-7 | 神栖市 元ページ | https://kamisu-pr.jp/2021/11/10/r3senningarou/ | 取得済みだが、いまは `file_size` などの属性が無い | 不要 | `1-7-kamisu-before.html` |
-| 1-7 | 神栖市 取込後 | http://www01.migrate.smart-lgov.jp/torikomi/77/kamisushi_kamisumika_pre/5833.html | 404。CMS の取込履歴 | 履歴から | `1-7-kamisu-after.html` |
+| 1-7 | 神栖市 取込後 | 取込環境の URL(社内の記録にある) | 404。CMS の取込履歴 | 履歴から | `1-7-kamisu-after.html` |
 | 2-② | 遠野市 元ページ | https://www.city.tono.iwate.jp/index.cfm/45,43562,242,472,html | 取得済み（SVG の例） | 不要 | `2-2-tono-before.html` |
 
 「要保存」の 3 件（広陵町 元ページ、和気町 元ページ、和気町 取込後）が、ブラウザで保存してほしいもの。「履歴から」の 5 件は、CMS 側に取込時の HTML が残っていれば取り出す。

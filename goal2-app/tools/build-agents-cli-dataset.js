@@ -53,8 +53,12 @@ function htmlFiles(directory) {
     .sort();
 }
 
+// 取込環境のホスト名は公開リポジトリに載せないので、例示用のホスト名に置き換える。
+const INTERNAL_HOST_RE = /[a-z0-9-]+(?:\.[a-z0-9-]+)*\.smart-lgov\.jp/gi;
+const PLACEHOLDER_HOST = "migrated-site.example";
+
 function readText(filePath) {
-  return fs.readFileSync(filePath, "utf8");
+  return fs.readFileSync(filePath, "utf8").replace(INTERNAL_HOST_RE, PLACEHOLDER_HOST);
 }
 
 function buildCase(file, oldHtml, goldHtml) {

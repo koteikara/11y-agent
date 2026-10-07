@@ -10,23 +10,23 @@
 ### ファイルリンクやリンクが WYSIWYG に入ってしまう
 - 条件: リストの中にリンク／ファイルリンクがある時、「リスト＝WYSIWYG」が優先されてしまう。
 - 取込前: https://www.town.koryo.nara.jp/contents_detail.php?co=kak&frmId=5993
-- 取込後: https://www01.migrate.smart-lgov.jp/torikomi/77/koryo/6822.html
+- 取込後: 取込環境の URL(社内の記録にある)
 
 ### ファイルリンクが、リンク付き画像で取り込まれてしまう
 - 条件: アイコン画像がリンク前にある時、アイコン画像を除外指定していなければ発生することがある。除外指定していれば発生しない。
 - 条件: ファイルリンクにアイコンが組み込まれている（CSSではなく直接 img タグでアイコンがついている）形式の場合に、テキストリンクが除去されアイコンのみが移行される。
 - 取込前: https://www.town.tochigi-nakagawa.lg.jp/life/kosodate_kyouiku/2025-0324-1009-105.html
-- 取込後: https://www01.migrate.smart-lgov.jp/torikomi/78/nakagawa/9319.html
+- 取込後: 取込環境の URL(社内の記録にある)
 
 ### 取込元の HTML が特殊なため取り込めない: ファイルの拡張子が URL に含まれない
 - 取込前: https://www.town.tochigi-nakagawa.lg.jp/life/fukushi_kaigo/2020-0219-1001-25.html
-- 取込後: https://www01.migrate.smart-lgov.jp/torikomi/78/nakagawa/9313.html
+- 取込後: 取込環境の URL(社内の記録にある)
 - 原因: 画像URLが `data:image/png;base64,/9j/4A....` となっており、拡張子が png でないため画像として取り込まれない。
 
 ### 取込元の HTML が特殊なため取り込めない: CSS 側で画像表示している
 - 条件: 画像が HTML ではなく CSS の背景画像として表示されているため取り込めない（コンテンツの一部なので要取込）。
 - 移行元: https://www.town.wake.lg.jp/children/englishQuiz/
-- 取込後: http://www03.migrate4.smart-lgov.jp/torikomi_test/77/wake/239.html
+- 取込後: 取込環境の URL(社内の記録にある)
 
 ### SMART L-Gov CMS 非対応形式のファイル
 - 非対応形式のファイルのため、取り込めず／手動アップも出来ず。
@@ -38,7 +38,7 @@
 
 ### 画像やファイルの URL 末尾に不要なソースがあるために画像・ファイルとして認識されない
 - 取込前: https://kamisu-pr.jp/2021/11/10/r3senningarou/
-- 取込後: http://www01.migrate.smart-lgov.jp/torikomi/77/kamisushi_kamisumika_pre/5833.html
+- 取込後: 取込環境の URL(社内の記録にある)
 - 原因: `file_size="250104"` や `data-foreign-domain=""` といった不要な属性が入っている。
 
 ## 2. 実際のページ取込で起きるよくあるエラー（頻度の高い順）

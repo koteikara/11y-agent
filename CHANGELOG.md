@@ -33,6 +33,21 @@
 - 関連ファイル: `memory/embeddinggemma2-kb-search-2026-10.md`、`memory/embedding-eval/eval.mjs`、`memory/embedding-eval/queries.json`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
+## 2026-10-07: 公開リポジトリから取込環境のホスト名を消す
+
+- 背景・目的: レビューで、公開リポジトリのいくつかの文書と評価用のデータに、CMS の取込環境のホスト名と URL が載っていると分かった。リポジトリは GitHub Pages(`docs/` を公開)でも見られる。ユーザーの指示で消した。
+- 主な変更内容:
+  - `docs/chrome-html-save-guide.md`、`docs/chrome-html-save-guide.html`、`memory/cms-migration-import-failure-patterns.md`: 取込後のページの URL とホスト名を「取込環境の URL(社内の記録にある)」などに置き換えた。
+  - `goal2-app/public/verification-guide.html`: 対象サイトの URL を「CMS の取込環境(URL は社内の記録にある)」にした。
+  - `goal2-app/agents-cli/datasets/saga-a11y-eval.json`、`.jsonl`: 佐賀市の gold に入っていた取込環境のホスト名を、例示用の `migrated-site.example` に置き換えた。
+  - `goal2-app/tools/build-agents-cli-dataset.js`: 評価用のデータを作り直してもホスト名が戻らないよう、読み込むときに置き換えるようにした。
+  - 元の URL は、公開リポジトリの外の非公開のメモに残した。
+- 検証: リポジトリ全体でホスト名が残っていないこと(作り直しの置き換えの正規表現を除く)、評価用のデータが JSON として読めること、`node test/run-tests.js` と出力のテスト(254)が通ることを確かめた。
+- 残ること: git の履歴には古い版が残る。履歴から消すには履歴の書き換えと強制 push が要る。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `docs/chrome-html-save-guide.md`、`docs/chrome-html-save-guide.html`、`memory/cms-migration-import-failure-patterns.md`、`goal2-app/public/verification-guide.html`、`goal2-app/agents-cli/datasets/saga-a11y-eval.json`、`goal2-app/agents-cli/datasets/saga-a11y-eval.jsonl`、`goal2-app/tools/build-agents-cli-dataset.js`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: KB のルール「ファイルの表示テキスト」に、リンクの置き場所の条件を足す
 
 - 背景・目的: 取込試験で、複数行HTML内素材処理を「そのまま」にした案件では、文の中、箇条書き、表の中のファイルのリンクに CMS が種類と容量を表示しないと分かった。ルールは「CMS が自動表示するので削除する」だけで、これらのリンクには当てはまらない。ユーザーの指示で直した。
