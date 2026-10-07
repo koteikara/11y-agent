@@ -26,7 +26,7 @@ knowledge_mocs:
 | ランタイム | Node.js 24以上（LTS、保守は2028-04-30まで） | 実行画面群（Goal 1〜3、miChecker結果比較）のHTTPサーバー | `goal2-app/package.json` (`engines.node >=24`)、`goal2-app/Dockerfile` (`node:24-alpine`) |
 | フレームワーク | なし（Node標準 `http` モジュール） | 静的配信、ルールAPI、URL取得API、LLM中継API。npm依存は0件 | `goal2-app/server.js`、`goal2-app/package.json` (`dependencies` なし) |
 | UI | 素のHTML/CSS/JS | Goal 2候補確認画面 (`index.html`/`app.js`)、Goal 3抽出画面 (`goal3.html`)、Goal 1画面 (`goal1.html`)、miChecker比較画面 (`michecker-compare.html`)、検証ガイド (`verification-guide.html`)、概要スライド (`verification-slides.html`) | `goal2-app/public/` |
-| データ保存 | JSONL/JSONファイル（読み取り専用） | KBルール62件とmiChecker公式チェック項目を起動時に読み込む。永続化DBは無い | `goal2-app/data/rules.jsonl`、`goal2-app/data/michecker-checkitems.json`、`a11y-migration-kb/build/` |
+| データ保存 | JSONL/JSONファイル（読み取り専用） | KBルール67件とmiChecker公式チェック項目を起動時に読み込む。永続化DBは無い | `goal2-app/data/rules.jsonl`、`goal2-app/data/michecker-checkitems.json`、`a11y-migration-kb/build/` |
 | ナレッジ形式 | OKF (Open Knowledge Format) Markdown + フロントマター | 1ルール1ファイルの移行ルールグラフ。ジェネレータでJSONL化 | `a11y-migration-kb/README.md`、`a11y-migration-kb/rules/` |
 | 外部サービス | Google Gemini API / Vertex AI（本番は東京の Vertex AI の Gemini 3.5 Flash、2026-09-25 から）、さくらの AI Engine（切り替えの仕組みのみ、本番は未使用） | 画像alt下書きなどのLLM補助。提供元（`GEMINI_API_KEY`、`GEMINI_AUTH_MODE=adc`、さくらの `LLM_*_PROVIDER` と `SAKURA_AI_API_KEY`）を何も設定していなければ呼び出されない | `goal2-app/lib/llm.js`、`goal2-app/lib/llm-prompts.js`、`goal2-app/LLM_DATA_POLICY.md` |
 | 外部ツール | miChecker / htmlchecker.exe (Eclipse ACTF) | ローカルWindows版でのアクセシビリティ検査の自動実行。公式チェック項目定義を同梱 | `goal2-app/server.js`（`MICHECKER_HTMLCHECKER_EXE`）、`a11y-migration-kb/vendor/eclipse-actf/` |

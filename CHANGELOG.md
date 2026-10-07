@@ -28,9 +28,11 @@
   - `a11y-migration-kb/rules/file/file-display-text.md`: ファイルのリンクの部品になるもの(ファイル入力エリアから挿入、取り込みでリンクだけの段落から作られたもの)は種別と容量を削除し、本文の中に残るもの(「そのまま」の案件の文の中、箇条書き、表の中)は種別と実際の容量を書く、と分けた。ケース2を足した。
   - `a11y-migration-kb/build/rules.jsonl` を生成し直し、`goal2-app/data/rules.jsonl` にコピーした。手元に Python が無いので、`tools/okf2jsonl.py` と同じ処理を Node で書き、直す前の生成物と一字一句同じになることを確かめてから使った。CI の生成物の検査(Python で作り直して比べる)で、同じ結果になるかを確かめる。
   - `docs/renewal/ARCHITECTURE.md`: 「別の作業」としていたルールの直しを、済んだ形に直した。
+  - 前のエントリへの Fable のレビュー(要修正3件)を、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/FLOW.md`、試験結果の README に反映した。
+  - `PROJECT_CONTEXT.md`: KB のルールの数を、生成物と同じ67件に直した。
 - 検証: `npm test`、出力のテスト(254)、表の入れ子のテスト(7)、AI の呼び出しのテスト(33)が通った。今の画面のルールの適用(`file.file-display-text` は削除する候補を出す)は変えていない。今の画面は作業者がファイル入力エリアから挿入する運用なので、削除のままで合う。リニューアルの一括処理で置き場所の条件を実装する。
-- レビュー: (Fable のレビューのあとに書く)
-- 関連ファイル: `a11y-migration-kb/rules/file/file-display-text.md`、`a11y-migration-kb/build/rules.jsonl`、`goal2-app/data/rules.jsonl`、`docs/renewal/ARCHITECTURE.md`
+- レビュー: Fable が Node の生成処理を Python 版と読み比べ、生成物が一致し差分がこのルールの1行だけであることを確かめた。要修正2件を直した。(1) 設計書の「リンクだけの段落」の試験の説明に、試験結果の README に無い観察(見出しの中のリンク、裸の `a`)があった。README に見出しの中のリンクと段落を囲むリンクの行を足し、裸の `a` は見込みにした。(2) FLOW.md の内部リンクの変換を断定していたので、見込み(実機では未確認)にした。提案のうち、今の画面が削除の候補を出す前提、容量の書式を CMS の表示に寄せること、容量の確かめ方、description を1文にすること、`div` で包んだ本文で書き換えないリンクが増えること、PROJECT_CONTEXT のルール数、関連ファイルを取り入れた。
+- 関連ファイル: `a11y-migration-kb/rules/file/file-display-text.md`、`a11y-migration-kb/build/rules.jsonl`、`goal2-app/data/rules.jsonl`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/FLOW.md`、`docs/cms-import-tag-test/results/2026-10-07/README.md`、`PROJECT_CONTEXT.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-07: 複数行HTML内素材処理を「そのまま」にする方向で設計書を直す
