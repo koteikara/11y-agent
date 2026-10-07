@@ -97,15 +97,18 @@ async function readLimited(response, maxBytes) {
   return out;
 }
 
+const isHtmlType = (contentType) => /text\/html|application\/xhtml\+xml/i.test(contentType);
+
 // HTML のページを1件取る。条件付きの取得(etag、lastModified)を渡すと、変わっていなければ notModified を返す。
-async function fetchPage(targetUrl, rules, { etag, lastModified } = {}) {
+// accept を渡すと、HTML 以外の種類も読む(巡回で robots.txt と sitemap.xml を読むときなど)。
+async function fetchPage(targetUrl, rules, { etag, lastModified, accept = isHtmlType } = {}) {
   let url = new URL(targetUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), rules.timeoutMs);
   try {
     for (let redirects = 0; ; redirects += 1) {
       await assertAllowed(url, rules);
-      const headers = { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml" };
+      const headers = { "user-agent": USER_AGENT, accept: accept === isHtmlType ? "text/html,application/xhtml+xml" : "*/*" };
       if (etag) headers["if-none-match"] = etag;
       if (lastModified) headers["if-modified-since"] = lastModified;
       let response;
@@ -138,7 +141,7 @@ async function fetchPage(targetUrl, rules, { etag, lastModified } = {}) {
         await discard();
         throw fetchError("http-status", `HTTP ${response.status}`, { meta });
       }
-      if (!/text\/html|application\/xhtml\+xml/i.test(meta.contentType)) {
+      if (!accept(meta.contentType)) {
         await discard();
         throw fetchError("not-html", `HTML ではない: ${meta.contentType || "種類なし"}`, { meta });
       }
@@ -178,4 +181,4 @@ async function runPaced(items, { intervalMs, concurrency }, worker) {
   await Promise.all(lanes);
 }
 
-module.exports = { fetchPage, runPaced, detectCharset, assertAllowed };
+module.exports = { fetchPage, runPaced, detectCharset, assertAllowed, isHtmlType };

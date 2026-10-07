@@ -183,6 +183,42 @@
       };
     },
 
+    // 巡回用。ページの題名(title 要素)と、ページの中のリンク先(絶対 URL、# 以降は落とす)を返す。
+    // a と area の href、frame と iframe の src を見る。本文のハッシュは重複のページを見つけるのに使う。
+    async pageLinks({ html, url }) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      const base = parsed.querySelector("base[href]")?.getAttribute("href");
+      let baseUrl = url;
+      try {
+        if (base) baseUrl = new URL(base, url).href;
+      } catch {
+        baseUrl = url;
+      }
+      const links = new Set();
+      const add = (value) => {
+        if (!value) return;
+        try {
+          const target = new URL(value.trim(), baseUrl);
+          if (!/^https?:$/.test(target.protocol)) return;
+          target.hash = "";
+          links.add(target.href);
+        } catch {
+          // 書き方の誤ったリンクは飛ばす。
+        }
+      };
+      parsed.querySelectorAll("a[href],area[href]").forEach((element) => add(element.getAttribute("href")));
+      parsed.querySelectorAll("frame[src],iframe[src]").forEach((element) => add(element.getAttribute("src")));
+      const title = normalizeText(parsed.querySelector("title")?.textContent || "");
+      parsed.querySelectorAll("script,style,noscript,template").forEach((element) => element.remove());
+      const text = normalizeText(parsed.body?.textContent || "");
+      return {
+        title,
+        links: [...links],
+        bodyHash: text ? (await sha256Hex(text)).slice(0, 16) : null,
+        robotsNoFollow: /nofollow/i.test(parsed.querySelector('meta[name="robots" i]')?.getAttribute("content") || ""),
+      };
+    },
+
     // 範囲の中の、ID かクラスを持つ要素(範囲から4段まで)を、セレクターと中身のハッシュで返す。
     // 型のまとめが、型の多くのページで中身が同じ要素(印刷のボタンなどのテンプレートの部品)を見つけ、
     // 範囲から除く案にするのに使う。中身の数字は伏せる(ページの番号を含むリンクなど)。

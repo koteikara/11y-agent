@@ -16,6 +16,19 @@ const DEFAULT_SETTINGS = {
     maxBytes: 3000000,
     retries: 1,
   },
+  // 巡回(ページの一覧づくり)。startUrls から、fetch.allowedHosts のサーバーの中だけをたどる。
+  // include は URL の頭(空なら全部)、exclude は外す URL の正規表現。reuseDays は、取得が巡回で取った
+  // ページを使い回す新しさの上限(日)。
+  crawl: {
+    startUrls: [],
+    maxPages: 20000,
+    maxDepth: 20,
+    include: [],
+    exclude: [],
+    useSitemap: true,
+    useRobots: true,
+    reuseDays: 14,
+  },
   // 構造の型。similarity は、同じ型とみなす構造の重なり(0〜1)。minPages 未満の型は承認に回さず、
   // 汎用の判定で抜く。approved は承認した型(型の番号ごとに、範囲と代表の構造)。
   templates: {

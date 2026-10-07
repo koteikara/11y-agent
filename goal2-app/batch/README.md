@@ -10,6 +10,7 @@
 Playwright(`npm install --no-save playwright@1.56.1` と `npx playwright install chromium`)が要る。
 
 ```bash
+node batch/cli.js crawl   <案件のフォルダ> --start <始まりの URL> [--restart]
 node batch/cli.js fetch   <案件のフォルダ> [--reinspect]
 node batch/cli.js group   <案件のフォルダ>
 node batch/cli.js approve <案件のフォルダ> <型の番号> --by <名前> [--selector <CSS>]
@@ -17,6 +18,7 @@ node batch/cli.js process <案件のフォルダ>
 node batch/cli.js status  <案件のフォルダ>
 ```
 
+- `crawl`: 旧サイトをリンクと `sitemap.xml` でたどり、ページの一覧 `crawl/list.csv`(URL、タイトル、階層、状態、転送先、重複先、見つけた元)と、ファイルの一覧 `crawl/files.csv` を書く。Website Explorer の代わり。`robots.txt` で止められた URL は取りに行かない。止めても続きから再開し、やり直すときは `--restart`。取ったページは `crawl/pages/` に置き、`fetch` が使い回す。
 - `fetch`: `input/pages.json` のページを取り、`pages/<ID>/source.html` と台帳 `fetch.json` を書く。もう一度動かすと、取得できていないページだけを取り直す。`--reinspect` は、旧サイトへ取りに行かずに、保存した旧ページを調べ直す(構造の取り方を変えたときなど)。
 - `group`: 構造の似ている度合い(要素の道の重なりが 0.8 以上)でページを型にまとめ、型ごとの本文の範囲の案を、型のページの文字の比べ合わせで選んで `project/templates.json` に書く。決め方は `ARCHITECTURE.md` の「構造の型と本文の範囲」。
 - `approve`: 型の本文の範囲を承認し、案件の設定に入れる。設計では案件の設定を書くのは人と校正台だけなので、校正台ができるまでの代わりとして置く。承認した人の名前を変更の履歴に残す。10 ページ未満の型(`templates.json` の `smallTemplates`)も、`--selector` を付けて承認できる。

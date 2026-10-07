@@ -21,6 +21,23 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-07: 巡回(ページの一覧づくり)を一括処理に足す
+
+- 背景・目的: 顧客サイトのページの一覧(`FLOW.md` の 2-1)は、今は Website Explorer で作り、URL とタイトルを移行管理シートに写している。ユーザーの依頼で、同じことを一括処理のコマンドにした。巡回で取ったページを、あとの取得でそのまま使えるので、旧サイトへ取りに行くのが1回で済む。
+- 主な変更内容:
+  - `goal2-app/batch/commands/crawl.js`: 始まりの URL からリンクと `sitemap.xml` でたどり、ページの一覧 `crawl/list.csv`(URL、タイトル、階層、状態、転送先、重複先、見つけた元)と、ファイルの一覧 `crawl/files.csv` を書く。`robots.txt` で止められた URL は取りに行かない。中身が同じページは重複先を書く。止めても続きから再開する。
+  - `goal2-app/batch/lib/robots.js`: `robots.txt` と `sitemap.xml` を読む。
+  - `goal2-app/batch/lib/page-tools.browser.js`: ページの題名とリンク先を返す `pageLinks`。
+  - `goal2-app/batch/lib/fetcher.js`: HTML 以外の種類も読めるようにした(`robots.txt` と `sitemap.xml` のため)。
+  - `goal2-app/batch/commands/fetch.js`: 巡回で取ったページ(同じ URL、14日以内)を使い回す。あわせて、取得が毎回ページの調べを待っていたのを、調べの待ちが8件を超えるまでは取得を続ける形にした。遠野市の全件の取得で、1ページ約2.7秒かかっていた(旧サイトへの間隔は1秒)。
+  - `goal2-app/batch/lib/project.js`、`batch/cli.js`: 巡回の設定(`crawl`)と `crawl` のコマンド。
+  - `goal2-app/test/batch-engine/run-crawl-tests.js`、`fake-old-site.js`: 手元の旧サイトの代わりに、トップページ、`robots.txt`、`sitemap.xml`、リンクの無いページなどを足し、巡回を確かめる。`npm run test:batch-engine` に足した。
+  - `docs/renewal/ARCHITECTURE.md`(「名前の付け方」と「巡回」)、`docs/renewal/FLOW.md`(2-1)、`goal2-app/batch/README.md`。
+- 検証: `npm run test:batch-engine`、`npm test` が通ることを確かめた。
+- レビュー: (Fable のレビューのあとに書く)
+- 関連ファイル: `goal2-app/batch/`、`goal2-app/test/batch-engine/`、`goal2-app/package.json`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/FLOW.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-07: Drive for desktop をストリーミングで使う前提にする
 
 - 背景・目的: 設計書は、Drive for desktop をストリーミングとミラーのどちらで使うかを試走で決めることにしていた。ユーザーに確かめ、ミラーを使う理由は無いと分かった。案件のフォルダは共有ドライブに置くので、Drive for desktop ではストリーミングで扱われる。

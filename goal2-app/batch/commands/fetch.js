@@ -3,6 +3,7 @@
 // もう一度動かすと、取得できていないページだけを取り直す。
 const { fetchPage, runPaced } = require("../lib/fetcher");
 const { writeSummary } = require("../lib/summary");
+const { readCrawledPage } = require("./crawl");
 
 // 取り直さずに、保存した旧ページ(source.html)を調べ直し、台帳の構造と本文の項目を書き直す。
 // 調べ方(構造の取り方など)を変えたときに、旧サイトへ取りに行かずに済ませるため。
@@ -66,13 +67,37 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
   report(`取得: ${targets.length} 件(全 ${input.pages.length} 件のうち、まだ取得できていないもの)`);
 
   // 取得は Node で並べて行い、ページの調べ(Chromium)は1件ずつ行う。
+  // 調べを待つあいだも取得を続ける。ただし、取った HTML をためすぎないよう、待ちが上限を超えたら取得も待つ。
+  // 遠野市の全件の取得で、取得が毎回調べを待ち、1ページ約2.7秒かかった(旧サイトへの間隔は1秒)。
   let inspectQueue = Promise.resolve();
+  let pendingInspections = 0;
+  const MAX_PENDING_INSPECTIONS = 8;
 
-  await runPaced(targets, rules, async (page) => {
-    const fetchedAt = new Date().toISOString();
-    let result = null;
+  // 巡回(crawl)で取ったページがあれば、それを使い、旧サイトへ取りに行かない。
+  const crawled = new Map();
+  for (const page of targets) {
+    const cached = readCrawledPage(project, page.oldUrl, settings.crawl.reuseDays);
+    if (cached) crawled.set(page.id, cached);
+  }
+  if (crawled.size) report(`  巡回で取ったページを使う: ${crawled.size} 件`);
+
+  const handle = async (page) => {
+    const cached = crawled.get(page.id);
+    const fetchedAt = cached ? cached.fetchedAt : new Date().toISOString();
+    let result = cached
+      ? {
+          status: cached.status,
+          finalUrl: cached.finalUrl || cached.url,
+          contentType: cached.contentType,
+          lastModified: cached.lastModified,
+          etag: cached.etag,
+          html: cached.html,
+          charset: cached.charset,
+          bytes: cached.bytes,
+        }
+      : null;
     let failure = null;
-    for (let attempt = 0; attempt <= rules.retries; attempt += 1) {
+    for (let attempt = 0; !cached && attempt <= rules.retries; attempt += 1) {
       try {
         result = await fetchPage(page.oldUrl, rules);
         failure = null;
@@ -98,73 +123,98 @@ async function runFetch(project, { engine, ids, reinspect: onlyReinspect = false
       project.writePageJson(page.id, "fetch.json", ledger);
       counts.failed += 1;
       counts.reasons[ledger.reason] = (counts.reasons[ledger.reason] || 0) + 1;
-      log.write({ id: page.id, result: "failed", reason: ledger.reason, status: ledger.status });
+      log.write({
+        id: page.id,
+        result: "failed",
+        reason: ledger.reason,
+        status: ledger.status,
+      });
       return;
     }
 
+    pendingInspections += 1;
     inspectQueue = inspectQueue.then(async () => {
-      let inspection;
       try {
-        inspection = await engine.evaluate((arg) => window.batchTools.inspectPage(arg), {
-          html: result.html,
-          pageTitle: page.pageTitle || "",
-          url: result.finalUrl,
-        });
-      } catch {
-        // 1ページの調べの失敗で取得全体を止めない。エラーの文言はページの中の文言を含むことが
-        // あるので、台帳と記録には理由だけを書く。
-        project.writePageText(page.id, "source.html", result.html);
-        project.writePageJson(page.id, "fetch.json", {
-          id: page.id,
-          oldUrl: page.oldUrl,
-          fetchedAt,
-          ok: false,
-          reason: "inspect-error",
-          status: result.status,
-          finalUrl: result.finalUrl,
-        });
-        counts.failed += 1;
-        counts.reasons["inspect-error"] = (counts.reasons["inspect-error"] || 0) + 1;
-        log.write({ id: page.id, result: "failed", reason: "inspect-error" });
-        return;
+        await inspectOneFor(page, result, fetchedAt, cached);
+      } finally {
+        pendingInspections -= 1;
       }
+    });
+    if (pendingInspections >= MAX_PENDING_INSPECTIONS) await inspectQueue;
+  };
+
+  // 取ったページを調べて、台帳を書く(Chromium で1件ずつ)。
+  async function inspectOneFor(page, result, fetchedAt, cached) {
+    let inspection;
+    try {
+      inspection = await engine.evaluate((arg) => window.batchTools.inspectPage(arg), {
+        html: result.html,
+        pageTitle: page.pageTitle || "",
+        url: result.finalUrl,
+      });
+    } catch {
+      // 1ページの調べの失敗で取得全体を止めない。エラーの文言はページの中の文言を含むことが
+      // あるので、台帳と記録には理由だけを書く。
       project.writePageText(page.id, "source.html", result.html);
-      const ledger = {
+      project.writePageJson(page.id, "fetch.json", {
         id: page.id,
         oldUrl: page.oldUrl,
         fetchedAt,
-        ok: Boolean(inspection.bodyHash),
-        reason: inspection.bodyHash ? null : "empty-body",
+        ok: false,
+        reason: "inspect-error",
         status: result.status,
         finalUrl: result.finalUrl,
-        contentType: result.contentType,
-        charset: result.charset,
-        bytes: result.bytes,
-        lastModified: result.lastModified,
-        etag: result.etag,
-        pageTitle: inspection.pageTitle,
-        structureHash: inspection.structureHash,
-        structurePaths: inspection.structurePaths,
-        structureVersion: inspection.structureVersion,
-        bodyHash: inspection.bodyHash,
-        bodyTextLength: inspection.bodyTextLength,
-        genericSelector: inspection.contentSelector,
-        references: inspection.references,
-        templateNo: page.templateNo ?? null,
-        oldPageChanged: false,
-      };
-      project.writePageJson(page.id, "fetch.json", ledger);
-      if (ledger.ok) {
-        counts.ok += 1;
-        log.write({ id: page.id, result: "ok", status: result.status });
-      } else {
-        counts.failed += 1;
-        counts.reasons["empty-body"] = (counts.reasons["empty-body"] || 0) + 1;
-        log.write({ id: page.id, result: "failed", reason: "empty-body" });
-      }
-    });
-    await inspectQueue;
-  });
+      });
+      counts.failed += 1;
+      counts.reasons["inspect-error"] = (counts.reasons["inspect-error"] || 0) + 1;
+      log.write({ id: page.id, result: "failed", reason: "inspect-error" });
+      return;
+    }
+    project.writePageText(page.id, "source.html", result.html);
+    const ledger = {
+      id: page.id,
+      oldUrl: page.oldUrl,
+      fetchedAt,
+      ok: Boolean(inspection.bodyHash),
+      reason: inspection.bodyHash ? null : "empty-body",
+      status: result.status,
+      finalUrl: result.finalUrl,
+      contentType: result.contentType,
+      charset: result.charset,
+      bytes: result.bytes,
+      lastModified: result.lastModified,
+      etag: result.etag,
+      pageTitle: inspection.pageTitle,
+      structureHash: inspection.structureHash,
+      structurePaths: inspection.structurePaths,
+      structureVersion: inspection.structureVersion,
+      bodyHash: inspection.bodyHash,
+      bodyTextLength: inspection.bodyTextLength,
+      genericSelector: inspection.contentSelector,
+      references: inspection.references,
+      templateNo: page.templateNo ?? null,
+      source: cached ? "crawl" : "network",
+      oldPageChanged: false,
+    };
+    project.writePageJson(page.id, "fetch.json", ledger);
+    if (ledger.ok) {
+      counts.ok += 1;
+      log.write({ id: page.id, result: "ok", status: result.status });
+    } else {
+      counts.failed += 1;
+      counts.reasons["empty-body"] = (counts.reasons["empty-body"] || 0) + 1;
+      log.write({ id: page.id, result: "failed", reason: "empty-body" });
+    }
+  }
+
+  // 巡回で取ったページは間隔を空けずに処理し、旧サイトへ取りに行くページだけを間隔と同時数に従わせる。
+  for (const page of targets.filter((target) => crawled.has(target.id))) await handle(page);
+  await runPaced(
+    targets.filter((target) => !crawled.has(target.id)),
+    rules,
+    handle,
+  );
+  await inspectQueue;
 
   writeSummary(project);
   const reasons = Object.entries(counts.reasons)

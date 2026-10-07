@@ -5,6 +5,11 @@
 //   /gone.html   404
 //   /file.pdf    HTML ではない
 //   /moved.html  /a/1.html へ転送
+// 巡回(crawl)の確かめ用:
+//   /            トップ。A と B の全ページ、ファイル、止められた道、重複の URL へリンクする
+//   /robots.txt  /private/ を止め、サイトマップを示す
+//   /sitemap.xml リンクからは届かない /hidden.html を載せる
+//   /private/x.html  robots.txt で止められたページ
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -76,6 +81,41 @@ function startFakeOldSite() {
       const n = Number(match[1]);
       response.writeHead(200, { "content-type": "text/html" });
       response.end(toShiftJis(templateB(`子育て記事${n}`, `<p>子育て支援のお知らせ${n}です。申し込みは窓口へ。</p><h2>対象</h2><p>市内に住む${n}歳までの子どもがいる世帯。詳しくは子育て支援課へお問い合わせください。</p>`)));
+      return;
+    }
+    if (url.pathname === "/") {
+      const links = [
+        ...Array.from({ length: 12 }, (_, i) => `<li><a href="/a/${i + 1}.html">記事${i + 1}</a></li>`),
+        ...Array.from({ length: 3 }, (_, i) => `<li><a href="b/${i + 1}.html">子育て${i + 1}</a></li>`),
+        '<li><a href="/file.pdf">様式(PDF)</a></li>',
+        '<li><a href="/docs/form.xlsx">様式(Excel)</a></li>',
+        '<li><a href="/gone.html">消えたページ</a></li>',
+        '<li><a href="/moved.html">移ったページ</a></li>',
+        '<li><a href="/private/x.html">内部</a></li>',
+        '<li><a href="/a/1.html?from=top#section">重複の URL</a></li>',
+        '<li><a href="https://example.com/">外部</a></li>',
+        '<li><a href="mailto:info@example.com">メール</a></li>',
+      ];
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html lang="ja"><head><title>テスト市トップ</title></head><body><ul>${links.join("")}</ul></body></html>`);
+      return;
+    }
+    if (url.pathname === "/robots.txt") {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end(`User-agent: *
+Disallow: /private/
+Sitemap: http://${request.headers.host}/sitemap.xml
+`);
+      return;
+    }
+    if (url.pathname === "/sitemap.xml") {
+      response.writeHead(200, { "content-type": "application/xml" });
+      response.end(`<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>http://${request.headers.host}/hidden.html</loc></url><url><loc>http://${request.headers.host}/a/2.html</loc></url></urlset>`);
+      return;
+    }
+    if (url.pathname === "/hidden.html" || url.pathname === "/private/x.html") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html><head><title>${url.pathname === "/hidden.html" ? "リンクの無いページ" : "内部のページ"}</title></head><body><p>${url.pathname === "/hidden.html" ? "サイトマップにだけあるページです。" : "止められた道のページです。"}</p></body></html>`);
       return;
     }
     if (url.pathname === "/moved.html") {

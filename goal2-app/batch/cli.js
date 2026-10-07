@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 一括処理。ディレクターの PC で、Claude Code に頼んで動かす(docs/renewal/ARCHITECTURE.md)。
 //
+//   node batch/cli.js crawl   <案件のフォルダ> [--start URL,URL] [--restart]  巡回(ページの一覧づくり)
 //   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID] [--reinspect]  取得(ページの台帳を書く)
 //                                                                  --reinspect: 取り直さずに、保存した旧ページを調べ直す
 //   node batch/cli.js group   <案件のフォルダ>                      型のまとめ(本文の範囲の案)
@@ -16,6 +17,7 @@ const path = require("path");
 const { openProject } = require("./lib/project");
 const { startEngine } = require("./lib/engine-host");
 const { runFetch } = require("./commands/fetch");
+const { runCrawl } = require("./commands/crawl");
 const { runGroup } = require("./commands/group");
 const { runProcess } = require("./commands/process");
 const { writeSummary, DEPTH_LABELS } = require("./lib/summary");
@@ -114,7 +116,7 @@ async function main() {
     return;
   }
 
-  if (!["fetch", "group", "process"].includes(command)) {
+  if (!["crawl", "fetch", "group", "process"].includes(command)) {
     console.error(`知らないコマンド: ${command}\n${usage()}`);
     process.exit(2);
   }
@@ -122,7 +124,10 @@ async function main() {
   const log = project.openLog(command);
   const engine = await startEngine({ ai: settings.ai.enabled });
   try {
-    if (command === "fetch") {
+    if (command === "crawl") {
+      const startUrls = typeof options.start === "string" ? options.start.split(",").map((url) => url.trim()).filter(Boolean) : null;
+      await runCrawl(project, { engine, startUrls, restart: Boolean(options.restart), log, report });
+    } else if (command === "fetch") {
       await runFetch(project, { engine, ids, reinspect: Boolean(options.reinspect), log, report });
     } else if (command === "group") {
       await runGroup(project, { engine, log, report });
