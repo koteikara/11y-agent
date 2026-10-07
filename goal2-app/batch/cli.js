@@ -19,6 +19,7 @@ const { runFetch } = require("./commands/fetch");
 const { runGroup } = require("./commands/group");
 const { runProcess } = require("./commands/process");
 const { writeSummary, DEPTH_LABELS } = require("./lib/summary");
+const { writeMetrics } = require("./lib/metrics");
 
 const RULES_JSONL = path.resolve(__dirname, "..", "data", "rules.jsonl");
 
@@ -75,6 +76,8 @@ async function main() {
 
   if (command === "status") {
     const counts = writeSummary(project);
+    const statusSettings = project.readSettings();
+    writeMetrics(project, { reviewHoursPerDay: statusSettings.review.hoursPerDay, availableDays: statusSettings.review.availableDays });
     report(`ページ ${counts.pages}、取得できた ${counts.fetched}、取得できない ${counts.fetchFailed}、本処理済み ${counts.processed}`);
     report(`  ${Object.entries(counts.depth).map(([depth, n]) => `${DEPTH_LABELS[depth]} ${n}`).join("、")}`);
     return;

@@ -51,7 +51,8 @@
 
     // 一括処理(batch/)用。承認済みの本文の範囲(CSS セレクター)の要素を、汎用の判定と同じ
     // 掃除にかけて返す。範囲が見つからないときは null を返し、呼び出し側が汎用の判定に戻す。
-    extractAt(html, selector, pageTitle, baseUrl) {
+    // exclude は、範囲の中から除く要素(CSS セレクター)。型の多くのページに共通する部品(印刷のボタンなど)を外す。
+    extractAt(html, selector, pageTitle, baseUrl, exclude = []) {
       const parsed = new DOMParser().parseFromString(html || "", "text/html");
       const resolvedTitle = (pageTitle || "").trim() || pageTitleFromDocument(parsed);
       if (!parsed.body) return null;
@@ -64,6 +65,13 @@
         return null;
       }
       if (!element) return null;
+      for (const excluded of exclude || []) {
+        try {
+          element.querySelectorAll(excluded).forEach((node) => node.remove());
+        } catch {
+          // 書き方の誤ったセレクターは飛ばす。
+        }
+      }
       const { element: _element, ...candidate } = buildCandidate(element, 0, resolvedTitle, (baseUrl || "").trim());
       return { pageTitle: resolvedTitle, candidate };
     },

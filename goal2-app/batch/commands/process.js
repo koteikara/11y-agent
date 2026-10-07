@@ -4,6 +4,7 @@
 // 取り込みの事前の確かめ(段5)は、まだ入れていない。
 const { writeSummary, DEPTH_LABELS } = require("../lib/summary");
 const { matchApprovedTemplate } = require("../lib/structure");
+const { writeMetrics, estimateReviewMinutes } = require("../lib/metrics");
 
 // 構造を変える候補(表、見出し、リスト)か。確認の深さと自動の採用の両方で使う。ページの中でも
 // 動かすので、外の変数を使わない。
@@ -144,6 +145,14 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
       ruleClasses,
     });
     const unresolved = analysis.candidates.filter((candidate) => !candidate.decision?.status).length;
+    const estimate = estimateReviewMinutes({
+      depth,
+      candidates: analysis.candidates,
+      facts: analysis.facts,
+      ruleClasses,
+      costs: settings.review.costs,
+      isStructuralCandidate,
+    });
     project.writePageJson(page.id, "candidates.json", {
       id: page.id,
       processedAt: new Date().toISOString(),
@@ -170,6 +179,7 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
       residual: analysis.residual,
       depth,
       depthReasons: reasons,
+      estimate,
       llmUsage: analysis.llmUsage,
       settings: { autoAccept: settings.rules.autoAccept, disabled: settings.rules.disabled, ruleScopeMode: settings.ruleScopeMode, ai: settings.ai.enabled },
     });
@@ -179,11 +189,16 @@ async function runProcess(project, { engine, ids, force = false, log, report, ru
   }
 
   writeSummary(project);
+  const metrics = writeMetrics(project, { reviewHoursPerDay: settings.review.hoursPerDay, availableDays: settings.review.availableDays });
   report(`本処理: ${counts.processed} 件を処理した(済みで飛ばした ${counts.skipped} 件、失敗 ${counts.failed} 件)`);
   report(
     `  ${Object.entries(counts.depth)
       .map(([depth, n]) => `${DEPTH_LABELS[depth]} ${n}`)
       .join("、")}`
+  );
+  const e = metrics.estimate;
+  report(
+    `  確認の見積もり: 処理したページで ${Math.round(e.minutesProcessed / 60)} 時間。「移行する」全体に広げると ${Math.round(e.projectedMinutes / 60)} 時間、1日 ${e.reviewHoursPerDay} 時間で ${e.projectedDays} 日(使える日数 ${e.availableDays} 日に${e.fits ? "収まる" : "収まらない"})`
   );
   return counts;
 }

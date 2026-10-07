@@ -33,6 +33,15 @@ const DEFAULT_SETTINGS = {
     enabled: false,
   },
   ruleScopeMode: "kb",
+  // 確認の時間の見積もり(分)と、日程の前提(FLOW.md の「日程の目安」)。costs は段3で実測に置き換える。
+  review: {
+    costs: {
+      page: { thorough: 1.0, quick: 0.3, none: 0 },
+      candidate: { structural: 1.5, meaning: 0.75, small: 0.15 },
+    },
+    hoursPerDay: 5,
+    availableDays: 50,
+  },
 };
 
 function mergeDefaults(defaults, value) {

@@ -157,9 +157,9 @@
     },
 
     // 本文を抜き出す。selector があれば型の範囲で、無いか見つからなければ汎用の判定で抜く。
-    async extractBody({ html, pageTitle, url, selector }) {
+    async extractBody({ html, pageTitle, url, selector, exclude = [] }) {
       if (selector) {
-        const result = window.goal3Engine.extractAt(html, selector, pageTitle, url);
+        const result = window.goal3Engine.extractAt(html, selector, pageTitle, url, exclude);
         if (result && normalizeText(result.candidate.text)) {
           return {
             method: "template",
@@ -181,6 +181,37 @@
         html: top.html,
         bodyHash: (await sha256Hex(normalizeText(top.text))).slice(0, 16),
       };
+    },
+
+    // 範囲の中の、ID かクラスを持つ要素(範囲から4段まで)を、セレクターと中身のハッシュで返す。
+    // 型のまとめが、型の多くのページで中身が同じ要素(印刷のボタンなどのテンプレートの部品)を見つけ、
+    // 範囲から除く案にするのに使う。中身の数字は伏せる(ページの番号を含むリンクなど)。
+    async partsInside({ html, selector }) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      let root = null;
+      try {
+        root = selector === "body" ? parsed.body : parsed.querySelector(selector);
+      } catch {
+        root = null;
+      }
+      if (!root) return null;
+      const parts = [];
+      const walk = async (element, depth) => {
+        for (const child of element.children) {
+          const tag = child.tagName.toLowerCase();
+          const classes = [...child.classList].filter((name) => !/[0-9]/.test(name));
+          let partSelector = null;
+          if (child.id && !/[0-9]/.test(child.id)) partSelector = `#${cssEscape(child.id)}`;
+          else if (classes.length) partSelector = `${tag}.${classes.map(cssEscape).join(".")}`;
+          if (partSelector) {
+            const content = maskDigits(child.outerHTML.replace(/\s+/g, " "));
+            parts.push({ selector: partSelector, hash: (await sha256Hex(content)).slice(0, 12) });
+          }
+          if (depth < 4) await walk(child, depth + 1);
+        }
+      };
+      await walk(root, 1);
+      return parts;
     },
 
     // ページの文字を、段落や表のセルなどのかたまりごとに分けて返す。body 全体と、selectors の各要素の分。
@@ -223,8 +254,8 @@
     },
 
     // 型の範囲で抜いた本文と、汎用の判定で抜いた本文が食い違うか(型のまとめの「食い違いの数」)。
-    async compareWithGeneric({ html, pageTitle, url, selector }) {
-      const byTemplate = await this.extractBody({ html, pageTitle, url, selector });
+    async compareWithGeneric({ html, pageTitle, url, selector, exclude = [] }) {
+      const byTemplate = await this.extractBody({ html, pageTitle, url, selector, exclude });
       const byGeneric = await this.extractBody({ html, pageTitle, url, selector: null });
       return {
         matched: byTemplate.method === "template" && byTemplate.bodyHash === byGeneric.bodyHash,
