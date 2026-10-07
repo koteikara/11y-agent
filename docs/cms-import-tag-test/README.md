@@ -35,6 +35,7 @@ FTP に置いた HTML を SMART CMS が取り込んだとき、どのタグ、�
 | `12-risky-svg-file.html` | SVG の画像ファイル | 1 | IMAGE_SVG |
 | `13-risky-webp-file.html` | webp の画像ファイル(実在する旧サイトを使い、webp が無ければ飛ばす) | 1 | IMAGE_WEBP |
 | `14-external-image.html` | 取得素材ドメインに入れていない外部のサーバ(GitHub。このリポジトリの試験用サイトの画像)の画像。印が無いので、置き換えずにそのまま上げる。「画像と PDF を素材にする設定の確かめ」だけで使う | 1 | なし |
+| `15-table-media.html` | 表の中の画像とファイルのリンク(様式の一覧、1つのセルに2つのリンク、文字とリンクが混ざったセル、画像、リンク付き画像、アイコン付きのリンク、箇条書き)。複数行HTML内素材処理の設定を変えて2回取り込むときに使う | 8 | 画像、アイコン、PDF、Excel、Word、SITE_PAGE |
 | `checker.html` | 印の置き換えと、取込前後の照合を行う画面 | ― | ― |
 | `test-site/` | 旧サイトの役をする試験用サイト。トップページ、下層ページ、画像(JPEG、PNG、GIF、アイコン、SVG、WebP)、PDF、Excel、Word | ― | ― |
 | `tools/make-test-site.js` | `test-site/` を作り直すスクリプト(`node docs/cms-import-tag-test/tools/make-test-site.js`。Node 22.2 以降と goal2-app の Playwright が要る) | ― | ― |

@@ -1,0 +1,72 @@
+<p>【T1500】取込試験 15 表の中の画像とファイルのリンク。この段落は試験の始まりの目印。取り込みの設定の「複数行HTML内素材処理」を「素材型に移動」と「そのまま」にして、別の移行管理 ID で2回取り込み、表の中の画像とリンクがどこに置かれるかを比べる。取得素材ドメインには試験用サイトのサーバを入れておく。</p>
+
+<p>【T1501】行ごとにファイルのリンクがある表(様式の一覧)</p>
+<table>
+<caption>様式の一覧</caption>
+<tbody>
+<tr><th scope="col">様式</th><th scope="col">内容</th><th scope="col">ファイル</th></tr>
+<tr><td>様式1</td><td>申請書</td><td><a href="{{FILE_PDF}}">様式1 申請書(PDF)</a></td></tr>
+<tr><td>様式2</td><td>集計表</td><td><a href="{{FILE_XLSX}}">様式2 集計表(Excel)</a></td></tr>
+<tr><td>様式3</td><td>記入例</td><td><a href="{{FILE_DOCX}}">様式3 記入例(Word)</a></td></tr>
+</tbody>
+</table>
+
+<p>【T1502】1つのセルに2つのファイルのリンク</p>
+<table>
+<caption>申請書の形式</caption>
+<tbody>
+<tr><th scope="row">申請書</th><td><a href="{{FILE_PDF}}">PDF 版</a> <a href="{{FILE_DOCX}}">Word 版</a></td></tr>
+</tbody>
+</table>
+
+<p>【T1503】文字とリンクが混ざったセル</p>
+<table>
+<caption>手続きの案内</caption>
+<tbody>
+<tr><th scope="row">提出書類</th><td>申請書(<a href="{{FILE_PDF}}">様式1</a>)と本人確認書類を窓口に出してください。</td></tr>
+<tr><th scope="row">詳しくは</th><td><a href="{{SITE_PAGE}}">手続きのページ</a>をご覧ください。</td></tr>
+</tbody>
+</table>
+
+<p>【T1504】セルの中の画像(見出しのある表)</p>
+<table>
+<caption>施設の写真</caption>
+<tbody>
+<tr><th scope="col">外観</th><th scope="col">案内図</th></tr>
+<tr><td><img src="{{IMAGE_JPG}}" alt="施設の外観の写真"></td><td><img src="{{IMAGE_PNG}}" alt="施設までの案内図"></td></tr>
+</tbody>
+</table>
+
+<p>【T1505】セルの中の画像と説明文</p>
+<table>
+<caption>写真と説明</caption>
+<tbody>
+<tr><td><img src="{{IMAGE_JPG}}" alt="会場の写真"></td><td>会場は市役所の1階です。</td></tr>
+</tbody>
+</table>
+
+<p>【T1506】セルの中のリンク付き画像(画像を押すとファイルが開く)</p>
+<table>
+<caption>パンフレット</caption>
+<tbody>
+<tr><th scope="row">表紙</th><td><a href="{{FILE_PDF}}"><img src="{{IMAGE_PNG}}" alt="パンフレット(PDF)"></a></td></tr>
+</tbody>
+</table>
+
+<p>【T1507】セルの中のアイコン付きファイルのリンク</p>
+<table>
+<caption>アイコン付きの様式</caption>
+<tbody>
+<tr><th scope="row">様式1</th><td><img src="{{IMAGE_ICON}}" alt="PDFファイル"><a href="{{FILE_PDF}}">申請書</a></td></tr>
+</tbody>
+</table>
+
+<p>【T1508】セルの中の箇条書きのファイルのリンク</p>
+<table>
+<caption>必要な書類</caption>
+<tbody>
+<tr><th scope="row">書類</th><td><ul><li><a href="{{FILE_PDF}}">申請書(PDF)</a></li><li><a href="{{FILE_XLSX}}">集計表(Excel)</a></li></ul></td></tr>
+</tbody>
+</table>
+
+<p>【T1599】取込試験 15 の終わりの目印。</p>
