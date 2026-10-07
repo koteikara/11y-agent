@@ -23,7 +23,13 @@ const CONTENT_TYPES = {
 };
 
 function readPublicFile(pathname) {
-  const relative = path.normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, "");
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = path.normalize(decoded).replace(/^([/\\])+/, "");
   const filePath = path.join(PUBLIC_DIR, relative);
   if (!filePath.startsWith(PUBLIC_DIR + path.sep)) return null;
   try {
@@ -34,7 +40,8 @@ function readPublicFile(pathname) {
 }
 
 // ai: false のときは、AI の呼び出しを Node で止める(本文を AI に送る同意が無い案件など)。
-// エンジンは、AI が使えないときと同じく、ルールだけの候補で動く。
+// エンジンが AI の鍵の無いときと同じに振る舞うよう、鍵の無いときと同じ答え(llm_not_configured)を返す。
+// 別の名前を返すと、エンジンは候補に「AI で解析できなかった」と書き足すため。
 // linkTitle: false のときは、リンク先の題名を取りに行かない(テストで、外のサイトに左右されないようにする)。
 async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
   const browser = await chromium.launch({
@@ -57,12 +64,16 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
         return;
       }
       const isAi = url.pathname.startsWith("/api/llm/") && url.pathname !== "/api/llm/status";
+      if (url.pathname === "/api/llm/status" && !ai) {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ configured: false, text: null, vision: null }) });
+        return;
+      }
       if (isAi && !ai) {
         usage.aiBlocked += 1;
         await route.fulfill({
           status: 503,
           contentType: "application/json",
-          body: JSON.stringify({ ok: false, error: "llm_disabled", message: "この案件では AI を呼ばない設定です。" }),
+          body: JSON.stringify({ ok: false, error: "llm_not_configured", message: "この案件では AI を呼ばない設定です。" }),
         });
         return;
       }
@@ -106,6 +117,8 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall } = {}) {
   const page = await context.newPage();
   await page.goto(`${ENGINE_ORIGIN}/engine.html`, { waitUntil: "load" });
   await page.waitForFunction(() => Boolean(window.goal2Engine && window.goal3Engine), null, { timeout: 15000 });
+  // 一括処理の道具(構造のハッシュ、本文の範囲)を足す。route は通さず、中身を直に入れる。
+  await page.addScriptTag({ content: fs.readFileSync(path.join(__dirname, "page-tools.browser.js"), "utf8") });
   await page.evaluate(() => window.goal2Engine.init());
 
   return {

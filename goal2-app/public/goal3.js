@@ -48,6 +48,24 @@
         candidates: buildContentCandidates(parsed, resolvedTitle, (baseUrl || "").trim()),
       };
     },
+
+    // 一括処理(batch/)用。承認済みの本文の範囲(CSS セレクター)の要素を、汎用の判定と同じ
+    // 掃除にかけて返す。範囲が見つからないときは null を返し、呼び出し側が汎用の判定に戻す。
+    extractAt(html, selector, pageTitle, baseUrl) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      const resolvedTitle = (pageTitle || "").trim() || pageTitleFromDocument(parsed);
+      if (!parsed.body) return null;
+      sanitizeDocument(parsed.body);
+      let element = null;
+      try {
+        element = parsed.body.querySelector(selector);
+      } catch {
+        return null;
+      }
+      if (!element) return null;
+      const { element: _element, ...candidate } = buildCandidate(element, 0, resolvedTitle, (baseUrl || "").trim());
+      return { pageTitle: resolvedTitle, candidate };
+    },
   };
 
   function bindEvents() {

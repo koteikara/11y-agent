@@ -12074,6 +12074,12 @@
       },
     },
 
+    // 一括処理(batch/)用。直したあとの HTML に miChecker 互換エンジンをかけ、残る指摘を返す
+    // (docs/renewal/ARCHITECTURE.md の本処理の「残る指摘」)。エンジンが無いときは null。
+    checkResidual(html) {
+      return runMicheckerEngine(html);
+    },
+
     sessionIdFor(oldUrl, pageTitle) {
       return `goal2_${hashText((oldUrl || "") + "|" + (pageTitle || "")).slice(0, 10)}`;
     },

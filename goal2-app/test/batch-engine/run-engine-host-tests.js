@@ -50,14 +50,16 @@ function waitForHealth() {
   });
 }
 
-// ページの中で動かす。両方の経路で同じ関数を使う。
+// ページの中で動かす。両方の経路で同じ関数を使う。候補と知らせは丸ごと比べ、
+// 時刻(generatedAt、decided_at など)だけを外す。
 async function runOne(html) {
   const res = await window.goal2Engine.analyze({ html });
   const autoAccepted = window.goal2Engine.autoAcceptSafe(res.candidates);
   const finalHtml = window.goal2Engine.buildFinalHtml(html, res.candidates);
+  const strip = (value) => JSON.parse(JSON.stringify(value, (key, v) => (/(At|_at)$/.test(key) ? undefined : v)));
   return {
-    candidates: res.candidates.map((c) => `${c.rule_id}|${c.decision?.status || ""}|${c.proposal?.after_html || ""}`),
-    notices: res.notices.map((n) => n.rule_id),
+    candidates: strip(res.candidates),
+    notices: strip(res.notices),
     autoAccepted,
     finalHtml,
   };
@@ -79,6 +81,16 @@ async function main() {
     await serverPage.route("**/api/link-title*", (route) =>
       route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ ok: false }) })
     );
+    // サーバーは、AI の鍵が無くても、画像の説明の要求では先に画像を取りに行き、取れないと別の
+    // エラーを返す(エンジンはそれを候補に書き足す)。比べたいのはエンジンの処理なので、サーバーの
+    // 経路でも、宿主と同じ「鍵が無い」の答えで AI の要求を止める。
+    await serverPage.route(/\/api\/llm\/(enrich|image-alt)$/, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: "llm_not_configured", message: "テストでは AI を呼ばない" }),
+      })
+    );
     await serverPage.goto(`http://127.0.0.1:${PORT}/goal1.html`, { waitUntil: "load" });
     await serverPage.waitForFunction(() => Boolean(window.goal2Engine), null, { timeout: 15000 });
 
@@ -95,7 +107,9 @@ async function main() {
       compared += 1;
     }
     assert.strictEqual(engine.usage.aiCalls, 0, "AI を止めた宿主から AI を呼んではいけない");
-    console.log(`  ok   宿主とサーバーの結果が一致した(${compared}件)`);
+    // 佐賀市のデータには画像があるので、エンジンは AI を呼ぼうとして、宿主で止まっているはずである。
+    assert.ok(engine.usage.aiBlocked > 0, "AI を呼ぼうとした要求が宿主で止まっていない");
+    console.log(`  ok   宿主とサーバーの結果が一致した(${compared}件。AI の要求 ${engine.usage.aiBlocked} 回を宿主で止めた)`);
 
     // 宿主は、エンジンのページの外への要求を止める。
     const blocked = await engine.evaluate(async () => {
