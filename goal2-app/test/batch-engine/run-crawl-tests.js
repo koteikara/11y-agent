@@ -63,8 +63,8 @@ async function main() {
     assert.ok(!byPath.has("/a/5.html?utm_source=top"), "広告の印の項目を外し、同じページとして扱う");
     // 外のサイトへのリンクは、トップの example.com のほか、佐賀市の本文の中のリンクも入る。
     const externalLines = fs.readFileSync(path.join(dir, "crawl", "external.csv"), "utf8").split(/\r?\n/);
-    assert.ok(externalLines.some((line) => line.startsWith("https://example.com/,")), "外のサイトへのリンクを一覧にする");
-    assert.ok(!externalLines.some((line) => line.startsWith(origin)), "巡回するサーバーのリンクは外のサイトに入れない");
+    assert.ok(externalLines.some((line) => line.startsWith("example.com,") && line.includes("https://example.com/")), "外のサイトへのリンクを一覧にする");
+    assert.ok(!externalLines.some((line) => line.startsWith(new URL(origin).host)), "巡回するサーバーのリンクは外のサイトに入れない");
     console.log("  ok   スクリプトの中のリンク、Chromium で開いて拾うリンク、Cookie、URL の項目の外し方、外のサイトへのリンク");
 
     // 開いた時刻を URL に付けるサイトでも、巡回が終わり、時刻の項目を外す。
@@ -100,6 +100,8 @@ async function main() {
     const capped = fs.readFileSync(path.join(dir, "crawl", "capped.csv"), "utf8");
     assert.ok(capped.includes("/calendar.html?ym,8,4"), capped);
     assert.ok(byPath.has("/news.html?id=6"), "上限より少ない形は打ち切らない");
+    // 道の中に項目を書く形(/blog/index-itemid=N)も、同じ形として数えて打ち切る。
+    assert.strictEqual([...byPath.keys()].filter((key) => key.startsWith("/blog/index-itemid=")).length, 8);
     console.log("  ok   同じ形の URL が多いときは上限で打ち切る(ブログ、カレンダーの組み合わせ)");
 
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。

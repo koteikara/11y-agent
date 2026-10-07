@@ -28,6 +28,7 @@ const { parseRobots, isAllowedByRobots, parseSitemap } = require("../lib/robots"
 
 const FILE_EXTENSION = /\.(pdf|docx?|xlsx?|pptx?|csv|zip|lzh|txt|jtd|odt|ods|odp|rtf|jpe?g|png|gif|bmp|svg|webp|ico|tiff?|mp3|mp4|m4a|wav|wmv|avi|mov|flv|exe|ics|kml|kmz)$/i;
 const STATE_SAVE_EVERY = 25;
+const EXTERNAL_URLS_PER_HOST = 200;
 
 const DISCOVERY_LABELS = {
   start: "始まり",
@@ -141,7 +142,8 @@ function isPrintPage(target) {
 // URL の項目(? のあと)を持つ URL の「形」。道の数字を伏せ、項目の名前を並べたもの。ブログやカレンダーは、
 // 項目の組み合わせの数だけ URL が増え、巡回が終わらない(椎葉村のブログの itemid、page、catid、トラックバック)。
 // 同じ形の URL は crawl.maxPerQueryPattern 件までにする。項目の無い URL は数えない(記事を道で分けるサイトの、
-// 大きな欄を打ち切らないため)。
+// 大きな欄を打ち切らないため)。道の中に項目を書くブログ(椎葉村の /blog/index-itemid=12&page=2)も、道に = を
+// 含むものは項目を持つ URL として数える。
 function queryPatternKey(url) {
   let target;
   try {
@@ -149,7 +151,8 @@ function queryPatternKey(url) {
   } catch {
     return null;
   }
-  if (!target.search) return null;
+  const pathHasParams = target.pathname.includes("=");
+  if (!target.search && !pathHasParams) return null;
   const names = [...new Set(target.searchParams.keys())].sort();
   return `${target.origin}${target.pathname.replace(/[0-9]+/g, "N")}?${names.join("&")}`;
 }
@@ -280,7 +283,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       seen: {},
       bodyHashes: {},
       files: {},
-      external: {},
+      externalHosts: {},
       pages: 0,
       rendered: 0,
       learnedIgnoreParams: [],
@@ -299,7 +302,24 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   state.learnedIgnoreParams = state.learnedIgnoreParams || [];
   state.paramObservations = state.paramObservations || {};
   state.seenCount = state.seenCount || Object.keys(state.seen).length;
-  state.external = state.external || {};
+  // 外のサイトへのリンクは、サーバーごとにまとめて数える。URL を1件ずつ持つと、翻訳のボタン(翻訳サイトの
+  // URL にページの URL が入る)などで数が膨らみ、相模原市の巡回では状態のファイルが約500MBになった。
+  // URL はサーバーごとに EXTERNAL_URLS_PER_HOST 件までだけ残す。前の版の状態(1件ずつの external)は、ここで移す。
+  state.externalHosts = state.externalHosts || {};
+  let migratedExternal = false;
+  if (state.external) {
+    migratedExternal = true;
+    for (const [link, entry] of Object.entries(state.external)) {
+      let target;
+      try {
+        target = new URL(link);
+      } catch {
+        continue;
+      }
+      noteExternal(target, link, entry.from, entry.count);
+    }
+    delete state.external;
+  }
   state.rendered = state.rendered || 0;
   state.excludedPrint = state.excludedPrint || {};
   state.cappedPatterns = state.cappedPatterns || {};
@@ -319,7 +339,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       }
     }
     // URL の形ごとの取った数を、記録から数え直す(前の版の状態には無いため)。
-    if (!state.queryPatternVisits) {
+    // 数え方を変えても合うよう、再開のたびに記録から数え直す。
+    {
       state.queryPatternVisits = {};
       for (const record of latest.values()) {
         const key = record.kind === "page" ? queryPatternKey(record.url) : null;
@@ -396,6 +417,19 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     lastStart = Math.max(Date.now(), lastStart + rules.intervalMs);
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   };
+
+  // 外のサイトへのリンクを、サーバーごとに数える(上の state.externalHosts の説明を参照)。
+  function noteExternal(target, link, from, count = 1) {
+    const host = target.host;
+    const entry = (state.externalHosts[host] = state.externalHosts[host] || { links: 0, urls: {}, urlCount: 0, from });
+    entry.links += count;
+    if (entry.urls[link]) {
+      entry.urls[link].count += count;
+    } else if (entry.urlCount < EXTERNAL_URLS_PER_HOST) {
+      entry.urls[link] = { from, count };
+      entry.urlCount += 1;
+    }
+  }
 
   // 値が変わっても中身が同じになる URL の項目を、巡回の中で見つけて外す。
   // 開いた時刻を URL に付けるサイト(大阪市の学校のサイトの ?tm=…)では、開くたびにリンク先の URL が変わり、
@@ -579,8 +613,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         }
         // 外のサイトへのリンク(巡回の範囲の外にある、許可したサーバーのリンクは数えない)。
         if (!isAllowedHost(linkTarget, settings)) {
-          state.external[link] = state.external[link] || { from: url, count: 0 };
-          state.external[link].count += 1;
+          noteExternal(linkTarget, link, url);
         }
         continue;
       }
@@ -638,9 +671,11 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   }
   await flushRecords();
 
+  // 前の版の状態を移したときは、終わった巡回でも状態を書き直す(大きな状態のファイルを小さくする)。
+  if (migratedExternal && state.finished) await saveState();
   const counts = writeCrawlLists(project, state, settings);
   report(
-    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、同じ形の URL が多く打ち切った ${counts.capped}、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
+    `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、印刷用として外した ${counts.printExcluded}、同じ形の URL が多く打ち切った ${counts.capped}、ファイル ${counts.files}、外のサイト ${counts.external} サーバー`
   );
   report(
     `  見つけ方: ${Object.entries(counts.via)
@@ -705,8 +740,14 @@ function writeCrawlLists(project, state, settings) {
   }
   writeCsv(project, paths.files, fileRows);
 
-  const externalRows = [["URL", "リンク元の数", "見つけた元"]];
-  for (const [url, entry] of sortedEntries(state.external || {})) externalRows.push([url, entry.count, entry.from]);
+  // サーバーごとに、リンクの数と、残した URL(サーバーごとに EXTERNAL_URLS_PER_HOST 件まで)を書く。
+  const externalRows = [["サーバー", "そのサーバーへのリンクの数", "URL", "リンク元の数", "見つけた元"]];
+  const hosts = Object.entries(state.externalHosts || {}).sort((a, b) => b[1].links - a[1].links);
+  for (const [host, entry] of hosts) {
+    const urls = Object.entries(entry.urls).sort((a, b) => b[1].count - a[1].count);
+    if (!urls.length) externalRows.push([host, entry.links, "", "", entry.from || ""]);
+    for (const [link, item] of urls) externalRows.push([host, entry.links, link, item.count, item.from || ""]);
+  }
   writeCsv(project, paths.external, externalRows);
 
   // 同じ形の URL が多く、上限で打ち切った形の一覧。
@@ -721,7 +762,7 @@ function writeCrawlLists(project, state, settings) {
     failed: pages.filter((record) => !record.ok && record.status !== "robots").length,
     robots: pages.filter((record) => record.status === "robots").length,
     files: Object.keys(state.files).length,
-    external: Object.keys(state.external || {}).length,
+    external: Object.keys(state.externalHosts || {}).length,
     printExcluded: excludedPrint.length,
     capped: Object.values(state.cappedPatterns || {}).reduce((n, v) => n + v, 0),
     via,
