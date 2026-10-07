@@ -13,7 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const { clusterByStructure } = require("../lib/structure");
 const { buildXlsx } = require("../lib/xlsx");
-const { urlKey } = require("./crawl");
+const { urlKey, isPrintPage } = require("./crawl");
 
 const TEMPLATE_LINK_RATIO = 0.3; // これ以上のページから張られているリンクは、メニューなどのテンプレートのリンクとみなす
 const MAX_DIRECTORY_DEPTH = 3;
@@ -21,7 +21,7 @@ const LABEL_PROPAGATION_ROUNDS = 15;
 // 調べた結果(analysis.json)の版。構造やリンクの拾い方を変えたら上げ、作り直させる。
 const ANALYSIS_VERSION = 1;
 
-function readRecords(project) {
+function readRecords(project, settings) {
   const file = path.join(project.root, "crawl", "records.jsonl");
   if (!fs.existsSync(file)) throw new Error("巡回の結果がありません。先に crawl を動かしてください。");
   const records = new Map();
@@ -33,6 +33,7 @@ function readRecords(project) {
   // URL の順に並べる。記録の順は巡回の到着順で実行ごとに変わり、型の番号や群の結果が変わってしまうため。
   return [...records.values()]
     .filter((record) => record.kind === "page" && record.ok && !record.duplicateOf)
+    .filter((record) => !(settings.crawl.excludePrintPages && isPrintPage(new URL(record.url))))
     .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
 }
 
@@ -106,7 +107,7 @@ async function runPatterns(project, { engine, log, report }) {
   const settings = project.readSettings();
   const minPages = settings.patterns.minPages;
   const proposals = settings.patterns.proposals;
-  const pages = readRecords(project);
+  const pages = readRecords(project, settings);
   if (!pages.length) throw new Error("巡回で取れたページがありません。");
   report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる`);
 

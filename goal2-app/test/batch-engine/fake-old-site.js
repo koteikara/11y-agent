@@ -13,6 +13,8 @@
 //   /js-menu.html    スクリプトでリンクを作るページ(onclick と、描いたあとにだけ現れるリンク)
 //   /members.html    トップで受け取る Cookie が無いと 403 を返すページ
 //   /clock.html      開いた時刻を付けたリンク(?tm=…)を出すページ。開くたびにリンク先の URL が変わる
+//   /flaky.html      1回目は接続を切る(ネットワークの切断の代わり)。2回目からは取れる
+//   /print/1.html、/handlers/printcontent.cfm  印刷用ページ
 //   /news.html?id=N  記事の番号の項目。1〜4 は「該当なし」で同じ中身、5 と 6 は違う中身(外してはいけない項目)
 const fs = require("fs");
 const http = require("http");
@@ -70,6 +72,7 @@ function toShiftJis(text) {
 }
 
 let clockCount = 0;
+let flakyCount = 0;
 
 function startFakeOldSite() {
   const bodies = loadBodies(15);
@@ -106,6 +109,9 @@ function startFakeOldSite() {
         '<li><a href="/members.html">Cookie が要るページ</a></li>',
         `<li><a href="/clock.html?tm=${Date.now()}">時刻の付いたリンク</a></li>`,
         ...[1, 2, 3, 4, 5, 6].map((id) => `<li><a href="/news.html?id=${id}">お知らせ${id}</a></li>`),
+        '<li><a href="/flaky.html">ときどき切れるページ</a></li>',
+        '<li><a href="/print/1.html">印刷用</a></li>',
+        '<li><a href="/handlers/printcontent.cfm?ContentID=1">印刷用(遠野市の形)</a></li>',
       ];
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "set-cookie": "visited=1; Path=/" });
       response.end(`<!doctype html><html lang="ja"><head><title>テスト市トップ</title></head><body><ul>${links.join("")}</ul></body></html>`);
@@ -144,6 +150,16 @@ Sitemap: http://${request.headers.host}/sitemap.xml
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html><html><head><title>時刻のページ</title></head><body><p>時刻の付いたリンクのページ。</p>
 <a href="/clock.html?tm=${tm}">もう一度</a><a href="/a/6.html?tm=${tm}">記事6</a><a href="/a/7.html?tm=${tm}">記事7</a><a href="/a/8.html?tm=${tm}">記事8</a></body></html>`);
+      return;
+    }
+    if (url.pathname === "/flaky.html") {
+      flakyCount += 1;
+      if (flakyCount === 1) {
+        request.socket.destroy();
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end("<!doctype html><html><head><title>ときどき切れるページ</title></head><body><p>2回目で取れた。</p></body></html>");
       return;
     }
     if (url.pathname === "/news.html") {

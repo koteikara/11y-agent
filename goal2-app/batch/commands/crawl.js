@@ -114,6 +114,25 @@ function excludePatterns(settings) {
   return excludeCache.get(settings);
 }
 
+// 印刷用ページの URL か。道の名前と URL の項目で見る(遠野市の /handlers/printcontent.cfm?…、
+// /print/…、print.html、?print=1、?mode=print など)。
+const PRINT_PATH = /(^|[/_.-])print(content|page|out|er|view|able|friendly)?(\.[a-z0-9]+)?(\/|$)|[/_-](insatsu|印刷)([/_.-]|$)/i;
+const PRINT_PARAMS = /^(print|printable|printmode|insatsu)$/i;
+function isPrintPage(target) {
+  let pathname = target.pathname;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    // そのまま見る。
+  }
+  if (PRINT_PATH.test(pathname)) return true;
+  for (const [name, value] of target.searchParams) {
+    if (PRINT_PARAMS.test(name)) return true;
+    if (/^(mode|view|type|format|style)$/i.test(name) && /^print/i.test(value)) return true;
+  }
+  return false;
+}
+
 function inScope(url, settings) {
   let target;
   try {
@@ -122,6 +141,7 @@ function inScope(url, settings) {
     return false;
   }
   if (!isAllowedHost(target, settings)) return false;
+  if (settings.crawl.excludePrintPages && isPrintPage(target)) return false;
   const { include, exclude } = settings.crawl;
   if (include.length && !include.some((prefix) => url.startsWith(prefix))) return false;
   if (exclude.length && excludePatterns(settings).some((pattern) => pattern.test(url))) return false;
@@ -255,6 +275,32 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   state.seenCount = state.seenCount || Object.keys(state.seen).length;
   state.external = state.external || {};
   state.rendered = state.rendered || 0;
+
+  // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
+  // 巡回の途中で PC がネットワークから外れても、再開すればそのあいだのページを取り直せる。
+  const TRANSIENT_REASONS = new Set(["network", "timeout", "dns"]);
+  if (fs.existsSync(paths.records)) {
+    const latest = new Map();
+    for (const line of fs.readFileSync(paths.records, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const record = JSON.parse(line);
+        latest.set(record.url, record);
+      } catch {
+        // 途中で止まって書きかけの行は飛ばす。
+      }
+    }
+    const retry = [...latest.values()].filter((record) => !record.ok && TRANSIENT_REASONS.has(record.reason) && !queued.has(record.url));
+    if (retry.length) {
+      for (const record of retry) {
+        const item = { url: record.url, depth: record.depth, from: record.from, via: record.via };
+        state.queue.push(item);
+        queued.set(record.url, item);
+      }
+      state.finished = false;
+      report(`  ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
+    }
+  }
   // 記録はためて書く(1行ずつ追記すると共有ドライブでは遅い)。状態を保存する前に、ためた記録と裏で書いている
   // ページのファイルを書き終える(状態が「見た」とする URL の記録とページが、先に残るようにする)。
   let recordLines = [];
@@ -514,7 +560,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   }
   await flushRecords();
 
-  const counts = writeCrawlLists(project, state);
+  const counts = writeCrawlLists(project, state, settings);
   report(
     `巡回: ページ ${counts.pages}(取れた ${counts.ok}、取れない ${counts.failed}、重複 ${counts.duplicates}、robots.txt で止めた ${counts.robots})、ファイル ${counts.files}、外のサイトへのリンク ${counts.external}`
   );
@@ -529,7 +575,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 }
 
 // records.jsonl から一覧を書く。同じ URL の記録が2つあれば、あとの方を使う(再開したとき)。
-function writeCrawlLists(project, state) {
+function writeCrawlLists(project, state, settings) {
   const paths = crawlPaths(project);
   const records = new Map();
   if (fs.existsSync(paths.records)) {
@@ -540,7 +586,11 @@ function writeCrawlLists(project, state) {
     }
   }
   const byUrl = (a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
-  const pages = [...records.values()].filter((record) => record.kind === "page").sort(byUrl);
+  // 印刷用ページを外す設定なら、設定を入れる前に取っていた印刷用ページも一覧から外す。
+  const dropPrint = settings?.crawl.excludePrintPages;
+  const pages = [...records.values()]
+    .filter((record) => record.kind === "page" && !(dropPrint && isPrintPage(new URL(record.url))))
+    .sort(byUrl);
   const statusLabel = (record) => {
     if (record.ok) return record.duplicateOf ? "重複" : "取れた";
     if (record.status === "robots") return "robots.txt で止めた";
@@ -588,4 +638,4 @@ function writeCrawlLists(project, state) {
   };
 }
 
-module.exports = { runCrawl, readCrawledPage, normalizeUrl, urlKey, isHtmlType };
+module.exports = { runCrawl, readCrawledPage, normalizeUrl, urlKey, isHtmlType, isPrintPage };

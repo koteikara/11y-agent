@@ -83,10 +83,20 @@ async function main() {
     assert.ok(!fs.existsSync(path.join(dir, "crawl", "pages")) || fs.readdirSync(path.join(dir, "crawl", "pages")).length === list.filter((row) => row.状態 === "取れた" || row.状態 === "重複").length);
     console.log("  ok   ファイルの一覧: 中身を取らずに URL だけを書く");
 
+    // 印刷用ページは、既定で外す。
+    assert.ok(![...byPath.keys()].some((key) => key.startsWith("/print/") || key.includes("printcontent")), "印刷用ページを外す");
+    // 接続が切れて取れなかったページは、取れないとして記録する(次の実行で取り直す)。
+    assert.ok(byPath.get("/flaky.html").状態.startsWith("取れない(network"), byPath.get("/flaky.html").状態);
+    console.log("  ok   印刷用ページを既定で外す");
+
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。
     const again = await cli("crawl", dir, "--start", `${origin}/`);
     assert.match(again, /前の巡回は終わっている/);
-    console.log("  ok   終わった巡回は、やり直さない");
+    // ネットワークの切断や時間切れで取れなかったページは、取り直す。
+    assert.match(again, /取れなかったページ 1 件を取り直す/);
+    const relisted = readCsv(path.join(dir, "crawl", "list.csv"));
+    assert.strictEqual(relisted.find((row) => row.URL === `${origin}/flaky.html`).状態, "取れた");
+    console.log("  ok   終わった巡回は、やり直さない。切断で取れなかったページだけを取り直す");
 
     // 巡回で取ったページは、取得(fetch)で使い回し、旧サイトへ取りに行かない。
     fs.mkdirSync(path.join(dir, "input"));

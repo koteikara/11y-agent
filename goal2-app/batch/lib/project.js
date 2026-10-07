@@ -27,6 +27,9 @@ const DEFAULT_SETTINGS = {
     maxDepth: 20,
     include: [],
     exclude: [],
+    // 印刷用ページ(本文の写しで、移行の対象ではない)を巡回から外す(2026-10-07 ユーザー)。
+    // 外し方は batch/commands/crawl.js の isPrintPage。
+    excludePrintPages: true,
     useSitemap: true,
     useRobots: true,
     reuseDays: 14,
