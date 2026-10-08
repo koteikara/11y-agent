@@ -281,6 +281,14 @@ async function main() {
     assert.match(a1[column("確かめ")] || "", /オリジナル: カテゴリ設計書に無い/);
     assert.strictEqual(a1[column("割当先を直す")], "ホーム/子育て・教育/子育て", "書いた値は消さない");
     assert.ok(![categoryOut, categoryAgain].join("\n").includes("子育て支援のお知らせ"));
+    // 書き直す前の下書きを残す。見出しが変わっていたら、書いた値を消さないよう上書きせずに止める。
+    assert.ok(fs.existsSync(path.join(dir, "crawl", "category-draft.prev.xlsx")));
+    const renamed = readXlsx(categoryFile);
+    const renamedNodes = renamed.get("旧カテゴリ").map((row, i) => (i === 0 ? row.map((v) => (v === "割当先(決める)" ? "割当先（決める）" : v)) : row));
+    fs.writeFileSync(categoryFile, buildXlsx([{ name: "旧カテゴリ", rows: pad(renamedNodes) }, { name: "ページ", rows: pad(renamed.get("ページ")) }]));
+    const beforeStop = fs.readFileSync(categoryFile);
+    await assert.rejects(cli("category", dir), /見出し.*が見つからない。書いた割当先を消さないよう止めた/);
+    assert.ok(fs.readFileSync(categoryFile).equals(beforeStop), "止めたときは下書きを書き換えない");
     console.log("  ok   カテゴリ割当の案: 名前で合わせた案、節で決めた割当先の引き継ぎ、ページで直した割当先、オリジナル");
 
     // 画面と実行の記録に、旧サイトの本文と題名を出さない。

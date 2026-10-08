@@ -133,6 +133,33 @@ async function main() {
   const readBack = readXlsx(roundTrip).get("カテゴリ");
   fs.rmSync(roundTrip);
   assert.deepStrictEqual(readBack, [["ホーム", "1階層目"], ["ホーム", "子育て&教育<>"], ["数", "3"]]);
+  // Excel が書く形(共有文字列、書式付きの文字の連なり、ふりがな、式の結果、位置の無い行とセル、16進の文字参照)。
+  const { zip } = require("../../batch/lib/xlsx");
+  const excelLike = path.join(os.tmpdir(), `xlsx-excel-${process.pid}.xlsx`);
+  fs.writeFileSync(
+    excelLike,
+    zip([
+      ["xl/workbook.xml", '<workbook><sheets><sheet name="カテゴリ" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+      ["xl/_rels/workbook.xml.rels", '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'],
+      [
+        "xl/sharedStrings.xml",
+        '<sst><si><t>ホーム</t></si><si><r><t>子育て</t></r><r><rPr/><t xml:space="preserve">・教育</t></r><rPh sb="0" eb="3"><t>コソダテ</t></rPh></si></sst>',
+      ],
+      [
+        "xl/worksheets/sheet1.xml",
+        '<worksheet><sheetData><row r="1" spans="1:3"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="str"><f>A1&amp;B1</f><v>ホーム/子育て</v></c></row>' +
+          '<row><c t="s"><v>0</v></c><c/><c><v>12</v></c><c t="inlineStr"><is><t>A&#x26;B</t></is></c></row></sheetData></worksheet>',
+      ],
+    ])
+  );
+  const excelRows = readXlsx(excelLike).get("カテゴリ");
+  fs.rmSync(excelLike);
+  assert.deepStrictEqual(excelRows[0], ["ホーム", "子育て・教育", "ホーム/子育て"], "ふりがなは読まず、文字の連なりはつなぐ");
+  // 位置の無い行とセルは、前の次として読む(空のセルは値を持たない)。
+  assert.strictEqual(excelRows[1][0], "ホーム");
+  assert.strictEqual(excelRows[1][1], undefined);
+  assert.strictEqual(excelRows[1][2], "12");
+  assert.strictEqual(excelRows[1][3], "A&B");
   console.log("  ok   xlsx を読む部品");
 
   console.log("\n=== batch unit tests passed ===");

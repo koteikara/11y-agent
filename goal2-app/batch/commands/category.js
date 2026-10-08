@@ -19,13 +19,29 @@ const { readXlsx } = require("../lib/xlsx-read");
 
 const SEP = "/";
 const norm = (text) => String(text || "").replace(/\s+/g, "").replace(/[･]/g, "・");
+// 道の書き方の揺れ(空白、全角の「／」、「･」)を吸収して比べるための鍵。
+const pathKey = (value) =>
+  String(value || "")
+    .split(/[/／]/)
+    .map(norm)
+    .filter(Boolean)
+    .join(SEP);
+
+// 前の下書きの見出し。ディレクターが書く列が見つからなければ、書いた値を消さないよう止める。
+const NODE_SHEET = "旧カテゴリ";
+const PAGE_SHEET = "ページ";
+const NODE_KEY = "旧カテゴリ";
+const NODE_DECIDE = "割当先(決める)";
+const PAGE_URL = "移行元 URL";
+const PAGE_FIX = "割当先を直す";
 
 // カテゴリ設計書のシートから、カテゴリの道の集まりを読む。見出しの行(1列目がホーム、次が「1階層目」)の下の行を、
 // 階層の列の値を左からつないだ道として読む。
 function readDesign(file, sheetName, home) {
   const sheets = readXlsx(file);
   const rows = sheets.get(sheetName);
-  if (!rows) throw new Error(`カテゴリ設計書に「${sheetName}」のシートがありません(シート: ${[...sheets.keys()].join("、")})`);
+  // シートの名前の一覧は出さない(顧客の資料の作りを画面に出さないため)。
+  if (!rows) throw new Error(`カテゴリ設計書に「${sheetName}」のシートがありません(シートは ${sheets.size} 枚。設定 category.designSheet を確かめる)`);
   const headerIndex = rows.findIndex((row) => row && norm(row[0]) === norm(home) && /1階層目/.test(row[1] || ""));
   if (headerIndex < 0) throw new Error(`「${sheetName}」のシートに、「${home}」「1階層目」の見出しの行がありません`);
   const header = rows[headerIndex];
@@ -41,37 +57,46 @@ function readDesign(file, sheetName, home) {
   return paths;
 }
 
-// 前に出した下書きから、ディレクターが書いた割当先を読む(無ければ空)。
+// 前に出した下書きから、ディレクターが書いた割当先を読む(無ければ空)。下書きがあるのに、シートか見出しが
+// 見つからない(ディレクターが見出しやシートの名前を変えた)ときは、書いた値を黙って捨てて上書きしないよう止める。
 function readDecisions(file) {
   const byNode = new Map();
   const byPage = new Map();
   if (!fs.existsSync(file)) return { byNode, byPage };
   const sheets = readXlsx(file);
-  const nodes = sheets.get("旧カテゴリ") || [];
-  const nodeHeader = nodes[0] || [];
-  const keyCol = nodeHeader.indexOf("旧カテゴリ");
-  const decideCol = nodeHeader.indexOf("割当先(決める)");
-  for (const row of nodes.slice(1)) {
+  const columns = (sheetName, names) => {
+    const rows = sheets.get(sheetName);
+    const header = rows?.[0] || [];
+    const found = names.map((name) => header.indexOf(name));
+    if (!rows || found.some((index) => index < 0)) {
+      throw new Error(
+        `前の下書き(${path.basename(file)})の「${sheetName}」のシートに、見出し ${names.map((n) => `「${n}」`).join("、")} が見つからない。` +
+          "書いた割当先を消さないよう止めた。見出しとシートの名前を元に戻すか、ファイルを別の名前に移してから動かす"
+      );
+    }
+    return { rows, found };
+  };
+  const nodes = columns(NODE_SHEET, [NODE_KEY, NODE_DECIDE]);
+  for (const row of nodes.rows.slice(1)) {
+    const [keyCol, decideCol] = nodes.found;
     if (row && row[keyCol] && row[decideCol]) byNode.set(row[keyCol], String(row[decideCol]).trim());
   }
-  const pages = sheets.get("ページ") || [];
-  const pageHeader = pages[0] || [];
-  const urlCol = pageHeader.indexOf("移行元 URL");
-  const fixCol = pageHeader.indexOf("割当先を直す");
-  for (const row of pages.slice(1)) {
+  const pages = columns(PAGE_SHEET, [PAGE_URL, PAGE_FIX]);
+  for (const row of pages.rows.slice(1)) {
+    const [urlCol, fixCol] = pages.found;
     if (row && row[urlCol] && row[fixCol]) byPage.set(row[urlCol], String(row[fixCol]).trim());
   }
   return { byNode, byPage };
 }
 
-// 旧カテゴリの道(パンくずの、サイトのトップと今のページを除いた項目)。
-const TOP = /^(ホーム|トップ|トップページ|top|home)$/i;
-function oldCategoryOf(page) {
+// 旧カテゴリの道(パンくずの、サイトのトップと今のページを除いた項目)。トップの語は案件の設定 category.topNames。
+function oldCategoryOf(page, topNames = DEFAULT_TOP_NAMES) {
   const items = [...(page.breadcrumb || [])];
-  if (items.length && TOP.test(items[0].trim())) items.shift();
+  if (items.length && topNames.some((name) => norm(name).toLowerCase() === norm(items[0]).toLowerCase())) items.shift();
   if (items.length && page.breadcrumbLastIsCurrent !== false) items.pop();
   return items;
 }
+const DEFAULT_TOP_NAMES = ["ホーム", "トップ", "トップページ", "TOP", "HOME"];
 
 async function runCategory(project, { log, report }) {
   const settings = project.readSettings();
@@ -85,7 +110,7 @@ async function runCategory(project, { log, report }) {
 
   // 新しいカテゴリの木。組織から探すの下(オリジナル用)と、それ以外(ショートカット用)に分ける。
   const design = readDesign(designFile, config.designSheet, home);
-  const exists = new Set(design.map((items) => items.join(SEP)));
+  const exists = new Set(design.map((items) => pathKey(items.join(SEP))));
   const topical = design.filter((items) => items[1] && norm(items[1]) !== norm(config.orgRoot));
   const byName = new Map();
   for (const items of topical) {
@@ -94,22 +119,34 @@ async function runCategory(project, { log, report }) {
     if (!byName.has(name)) byName.set(name, []);
     byName.get(name).push(items.join(SEP));
   }
-  // 組織から探すの下の、課などの節(名前 → 道)。同じ名前が2つあれば、使わない(取り違えを防ぐ)。
+  // 組織から探すの下の、課などの節(名前 → 道)。同じ名前が2つあれば、使わない(取り違えを防ぐ。遠野市では、係の名前が
+  // 課をまたいで重なっていた)。
   const orgByName = new Map();
   for (const items of design) {
     if (norm(items[1]) !== norm(config.orgRoot) || items.length < 3) continue;
     const name = norm(items[items.length - 1]);
     orgByName.set(name, orgByName.has(name) ? null : items.join(SEP));
   }
+  if (!orgByName.size) report(`  カテゴリ設計書に「${config.orgRoot}」の下のカテゴリが無いので、オリジナルの案は出さない(設定 category.orgRoot を確かめる)`);
   report(`カテゴリ割当の案: カテゴリ設計書のカテゴリ ${design.length}(ショートカット用 ${topical.length})、ページ ${draft.pages.length}`);
 
   const outFile = path.join(project.root, "crawl", "category-draft.xlsx");
+  // 下書きを Excel で開いたままだと、書き直せずに長く待ってから失敗する。書けるかを先に確かめる。
+  if (fs.existsSync(outFile)) {
+    try {
+      fs.closeSync(fs.openSync(outFile, "r+"));
+    } catch (error) {
+      throw new Error(`下書き(${path.basename(outFile)})を書き直せない(${error.code})。Excel などで開いていれば閉じてから動かす`);
+    }
+  }
   const decisions = readDecisions(outFile);
+  // 書き直す前の下書きを1つ残す(読み込みに不具合があっても、書いた値を手で戻せるように)。
+  const backupFile = path.join(project.root, "crawl", "category-draft.prev.xlsx");
   if (decisions.byNode.size || decisions.byPage.size) report(`  前の下書きに書かれた割当先: 旧カテゴリ ${decisions.byNode.size}、ページ ${decisions.byPage.size}`);
 
   // 旧カテゴリの木の節(道の途中まで)ごとに、下のページの数と、名前で合わせた案。
   const nodes = new Map();
-  const pageOld = draft.pages.map((page) => oldCategoryOf(page));
+  const pageOld = draft.pages.map((page) => oldCategoryOf(page, config.topNames || DEFAULT_TOP_NAMES));
   for (const items of pageOld) {
     for (let n = 1; n <= items.length; n += 1) {
       const key = items.slice(0, n).join(" > ");
@@ -127,9 +164,9 @@ async function runCategory(project, { log, report }) {
   };
   const check = (value) => {
     if (!value) return "";
-    const items = value.split(SEP).map((item) => item.trim());
+    const items = value.split(/[/／]/).map((item) => item.trim()).filter(Boolean);
     if (norm(items[0]) !== norm(home)) return `「${home}」から始まっていない`;
-    if (!exists.has(items.join(SEP))) return "カテゴリ設計書に無い";
+    if (!exists.has(pathKey(value))) return "カテゴリ設計書に無い";
     return "";
   };
 
@@ -161,15 +198,16 @@ async function runCategory(project, { log, report }) {
         counts.nameMatch += 1;
       } else counts.none += 1;
     }
-    // オリジナル: 組織から探すの、グループの課の道に、ショートカット1 の2階層目から下をつなぐ。
+    // オリジナル: 組織から探すの、グループの課の道に、ショートカット1 の2階層目から下をつなぐ。ショートカット1 が
+    // 1階層目まで(ホーム/市政)なら、課の道そのものになる(課の直下に置く)。
     let original = "";
     const org = page.group ? orgByName.get(norm(page.group)) : null;
     if (org && target) {
-      const tail = target.split(SEP).slice(2);
+      const tail = target.split(/[/／]/).map((item) => item.trim()).filter(Boolean).slice(2);
       original = [org, ...tail].join(SEP);
       counts.original += 1;
     }
-    const problem = [check(target) && `ショートカット1: ${check(target)}`, check(original) && `オリジナル: ${check(original)}`, page.group && !org ? "グループの課が組織から探すに無い" : ""]
+    const problem = [check(target) && `ショートカット1: ${check(target)}`, check(original) && `オリジナル: ${check(original)}`, page.group && !org ? (orgByName.has(norm(page.group)) ? "グループの課と同じ名前が組織から探すに複数ある(部を確かめる)" : "グループの課が組織から探すに無い") : ""]
       .filter(Boolean)
       .join("、");
     if (problem) counts.problems += 1;
@@ -189,25 +227,32 @@ async function runCategory(project, { log, report }) {
     ]);
   });
 
-  const nodeRows = [["旧カテゴリ", "階層", "下のページ", "直下のページ", "名前で合わせた案", "割当先(決める)", "確かめ"]];
+  const nodeRows = [[NODE_KEY, "階層", "下のページ", "直下のページ", "名前で合わせた案", "同じ名前のほかの候補", NODE_DECIDE, "確かめ"]];
   for (const [key, node] of [...nodes.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
     const match = nameMatch(node.items);
     const decided = decisions.byNode.get(key) || "";
-    nodeRows.push([key, node.items.length, node.below, node.direct, match ? match.path : "", decided, decided ? check(decided) : ""]);
+    const others = match ? (byName.get(norm(match.from)) || []).slice(1).join("、") : "";
+    nodeRows.push([key, node.items.length, node.below, node.direct, match ? match.path : "", others, decided, decided ? check(decided) : ""]);
   }
-  const header = ["移行管理 ID", "ページ種別(案)", "重複", "ページタイトル", "移行元 URL", "旧カテゴリ", "ショートカット1(案)", "案の出どころ", "オリジナル(案)", "グループ(案)", "確かめ", "割当先を直す"];
+  // 3. 書いた割当先のうち、節やページが無くなって使えなかったもの(sheet を動かし直してパンくずが変わったなど)。
+  const lostNodes = [...decisions.byNode.keys()].filter((key) => !nodes.has(key)).length;
+  const pageUrls = new Set(draft.pages.map((page) => page.url));
+  const lostPages = [...decisions.byPage.keys()].filter((url) => !pageUrls.has(url)).length;
+  if (lostNodes || lostPages) report(`  書いた割当先のうち、節かページが無くなって使えなかったもの: 旧カテゴリ ${lostNodes}、ページ ${lostPages}(前の下書きを ${path.basename(backupFile)} に残した)`);
+  const header = ["移行管理 ID", "ページ種別(案)", "重複", "ページタイトル", PAGE_URL, "旧カテゴリ", "ショートカット1(案)", "案の出どころ", "オリジナル(案)", "グループ(案)", "確かめ", PAGE_FIX];
   const guide = [
     ["シート", "使い方"],
-    ["旧カテゴリ", "旧サイトのカテゴリ(パンくず)の節ごとの一覧。「割当先(決める)」に、その節のページのショートカット1 の道(例: ホーム/市政/広報・広聴)を書くと、下のページに引き継ぐ。深い節に書いた値が優先する。書いたあと、category をもう一度動かす"],
+    ["旧カテゴリ", "見出しとシートの名前は変えない(変えると、書いた割当先を読めずに止まる)。書き直す前の下書きは category-draft.prev.xlsx に残す。旧サイトのカテゴリ(パンくず)の節ごとの一覧。「割当先(決める)」に、その節のページのショートカット1 の道(例: ホーム/市政/広報・広聴)を書くと、下のページに引き継ぐ。深い節に書いた値が優先する。書いたあと、category をもう一度動かす"],
     ["ページ", "ページごとの案。「割当先を直す」に書いた値は、旧カテゴリで決めた値より優先する。「確かめ」は、カテゴリ設計書に無い道や、ホームの抜け"],
     ["名前で合わせた案", "旧カテゴリの名前と同じ名前のカテゴリが新しい木にあれば、その道。遠野市では、案の半分ほどが人の割当と合った。決める前の手がかりとして見る"],
     ["オリジナル(案)", "組織から探すの、グループの課の道に、ショートカット1 の2階層目から下をつないだもの。グループの課が組織から探すに無ければ空"],
   ];
+  if (fs.existsSync(outFile)) fs.copyFileSync(outFile, backupFile);
   project.writeFileAtomic(
     outFile,
     buildXlsx([
-      { name: "旧カテゴリ", rows: nodeRows, widths: [60, 6, 10, 10, 50, 50, 24] },
-      { name: "ページ", rows: [header, ...pageRows], widths: [16, 12, 16, 40, 60, 50, 50, 40, 60, 16, 30, 40] },
+      { name: NODE_SHEET, rows: nodeRows, widths: [60, 6, 10, 10, 50, 40, 50, 24] },
+      { name: PAGE_SHEET, rows: [header, ...pageRows], widths: [16, 12, 16, 40, 60, 50, 50, 40, 60, 16, 30, 40] },
       { name: "説明", rows: guide, widths: [18, 110] },
     ])
   );

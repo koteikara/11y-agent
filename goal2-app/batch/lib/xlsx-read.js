@@ -10,6 +10,7 @@ function unzip(buffer) {
   if (end < 0) throw new Error("xlsx(ZIP)の形ではありません");
   const count = buffer.readUInt16LE(end + 10);
   let offset = buffer.readUInt32LE(end + 16);
+  if (count === 0xffff || offset === 0xffffffff) throw new Error("ZIP64 の形の xlsx は読めない。Excel で開いて保存し直してから使う");
   const files = new Map();
   for (let i = 0; i < count; i += 1) {
     if (buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error("xlsx の目次が壊れています");
@@ -35,6 +36,7 @@ const decode = (text) =>
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&amp;/g, "&");
 
 const textOf = (xml) =>
@@ -68,22 +70,27 @@ function readXlsx(file) {
     if (!target) continue;
     const xml = read(`xl/${target.replace(/^\/?xl\//, "")}`);
     const rows = [];
-    for (const row of xml.matchAll(/<row\b[^>]*?r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    // 行とセルの位置(r)は省いてよい決まりで、省いたときは前の行やセルの次になる。
+    let rowNumber = 0;
+    for (const row of xml.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+      const rowRef = (row[1].match(/\br="(\d+)"/) || [])[1];
+      rowNumber = rowRef ? Number(rowRef) : rowNumber + 1;
       const cells = [];
+      let cellIndex = -1;
       for (const c of (row[2] || "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
         const attrs = c[1];
         const body = c[2] || "";
-        const ref = (attrs.match(/r="([A-Z]+)\d+"/) || [])[1];
-        if (!ref) continue;
+        const ref = (attrs.match(/\br="([A-Z]+)\d+"/) || [])[1];
+        cellIndex = ref ? columnIndex(ref) : cellIndex + 1;
         const type = (attrs.match(/t="([^"]+)"/) || [])[1];
         const v = (body.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
         let value = null;
         if (type === "s" && v != null) value = shared[Number(v)];
         else if (type === "inlineStr") value = textOf(body);
         else if (v != null) value = decode(v);
-        if (value != null && value !== "") cells[columnIndex(ref)] = value;
+        if (value != null && value !== "") cells[cellIndex] = value;
       }
-      rows[Number(row[1]) - 1] = cells;
+      rows[rowNumber - 1] = cells;
     }
     sheets.set(name, rows);
   }

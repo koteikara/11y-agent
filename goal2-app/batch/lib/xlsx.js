@@ -140,4 +140,5 @@ function buildXlsx(sheets) {
   return zip(buildParts(sheets));
 }
 
-module.exports = { buildXlsx };
+// zip はテストで、ほかの道具が書く形の xlsx を作るのにも使う。
+module.exports = { buildXlsx, zip };
