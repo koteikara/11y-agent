@@ -114,6 +114,9 @@ async function main() {
     const { urlKey } = require("../../batch/commands/crawl");
     const lostDir = path.join(dir, "crawl", "pages", urlKey(`${origin}/a/1.html`));
     fs.rmSync(lostDir, { recursive: true, force: true });
+    // フォルダだけ残って写しが無いページ(書き込みの途中で空きが無くなったときなど)も取り直す。
+    const emptyDir = path.join(dir, "crawl", "pages", urlKey(`${origin}/a/2.html`));
+    fs.rmSync(path.join(emptyDir, "source.html"));
     const pagesBefore = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "state.json"), "utf8")).pages;
     const again = await cli("crawl", dir, "--start", `${origin}/`);
     assert.match(again, /前の巡回は終わっている/);
@@ -122,12 +125,21 @@ async function main() {
     const relisted = readCsv(path.join(dir, "crawl", "list.csv"));
     assert.strictEqual(relisted.find((row) => row.URL === `${origin}/flaky.html`).状態, "取れた");
     // 写しが残っていないページも取り直す。取ったページの数には入れ直さず、重複にもしない。
-    assert.match(again, /旧ページの写しが残っていないページ 1 件を取り直す/);
+    assert.match(again, /旧ページの写しが残っていないページ 2 件を取り直す/);
+    assert.ok(fs.existsSync(path.join(emptyDir, "source.html")), "フォルダだけ残ったページも取り直す");
     assert.ok(fs.existsSync(path.join(lostDir, "source.html")), "写しを取り直す");
     const pagesAfter = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "state.json"), "utf8")).pages;
     assert.strictEqual(pagesAfter, pagesBefore + 1, "取り直したページは数えない(flaky.html の1件だけ増える)");
     assert.strictEqual(relisted.find((row) => row.URL === `${origin}/a/1.html`).状態, "取れた");
     console.log("  ok   終わった巡回は、やり直さない。切断で取れなかったページと、写しが残らなかったページだけを取り直す");
+
+    // 状態のファイルだけが無くなったときは、知らせてから最初からたどり直し、取ったページを二重に数えない。
+    fs.rmSync(path.join(dir, "crawl", "state.json"));
+    const rebuilt = await cli("crawl", dir, "--start", `${origin}/`);
+    assert.match(rebuilt, /状態のファイルが無いので、最初からたどり直す/);
+    const pagesRebuilt = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "state.json"), "utf8")).pages;
+    assert.strictEqual(pagesRebuilt, pagesAfter, "たどり直しても、取ったページの数は変わらない");
+    console.log("  ok   状態のファイルが無くなったら、知らせてたどり直し、数を二重にしない");
 
     // 巡回で取ったページは、取得(fetch)で使い回し、旧サイトへ取りに行かない。
     fs.mkdirSync(path.join(dir, "input"));

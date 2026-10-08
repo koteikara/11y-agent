@@ -280,6 +280,11 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   };
   if (!state) {
     if (restart) fs.rmSync(paths.records, { force: true });
+    else if (fs.existsSync(paths.records)) {
+      // 状態のファイルだけが無くなった(共有ドライブの空きが無いときに、同期で消えた)。記録は残して、最初から
+      // たどり直す。取れたページの数と、写しの有無は記録から決める。
+      report("巡回: 状態のファイルが無いので、最初からたどり直す(前の記録は残し、取れたページは数え直さない)");
+    }
     const { robotsByHost, sitemaps } = await loadRobots(settings, cookies, report);
     const sitemapUrls = limits.useSitemap ? await loadSitemapUrls(settings, sitemaps, cookies, report) : [];
     state = {
@@ -338,6 +343,9 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   // 取れたのに旧ページの写しが残っていないページも取り直す。共有ドライブの空きが無くなったとき、書いたはずの
   // 写しが残らなかった(大阪市の学校のサイトで、12,585 ページのうち 7,578 ページ)。数え直しや重複の判定には入れない。
   const refetchSource = new Set();
+  // 記録で取れたページ。取ったページの数は、ここから数える(取り直しや、状態が無くなってたどり直したページを
+  // 二重に数えないため)。同じ形の URL の数にも、もう一度は入れない。
+  const okPages = new Set();
   if (fs.existsSync(paths.records)) {
     const latest = new Map();
     for (const line of fs.readFileSync(paths.records, "utf8").split("\n")) {
@@ -349,6 +357,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         // 途中で止まって書きかけの行は飛ばす。
       }
     }
+    for (const record of latest.values()) if (record.kind === "page" && record.ok) okPages.add(record.url);
+    state.pages = okPages.size;
     // URL の形ごとの取った数を、記録から数え直す(前の版の状態には無いため)。
     // 数え方を変えても合うよう、再開のたびに記録から数え直す。
     {
@@ -385,24 +395,37 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       }
       resumeNotes.push(`ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
     }
-    // ページのフォルダの一覧を1回だけ読んで比べる(共有ドライブでは、ページごとに確かめると遅いため)。
+    // 写しがあるかは、ページのフォルダの一覧を1回だけ読み、フォルダがあるページだけ source.html を確かめる
+    // (共有ドライブでは、ページごとに確かめると遅いため)。空きが無くなったとき、フォルダだけ残ることがある。
     const pageDirs = new Set(fs.existsSync(paths.pages) ? fs.readdirSync(paths.pages) : []);
-    // 待ち行列から、もう取れて写しもあるページと、同じ URL の2つ目以降を除く。巡回が2つ重なったとき、
-    // 残った状態の待ち行列に、もう一方が取ったページが入っていた(大阪市の学校のサイトで 2,772 件)。
-    const fetched = (url) => latest.get(url)?.kind === "page" && latest.get(url).ok && pageDirs.has(urlKey(url));
+    const hasCopy = (url) => pageDirs.has(urlKey(url)) && fs.existsSync(path.join(paths.pages, urlKey(url), "source.html"));
+    // 待ち行列から、もう取れて写しもあるページ(ファイルは取れていれば)と、同じ URL の2つ目以降(浅い階層を
+    // 残す)を除く。巡回が2つ重なったとき、残った状態の待ち行列に、もう一方が取ったページが入っていた
+    // (大阪市の学校のサイトで 2,772 件)。
+    const fetched = (url) => {
+      const record = latest.get(url);
+      return Boolean(record?.ok) && (record.kind === "file" || (record.kind === "page" && hasCopy(url)));
+    };
     const before = state.queue.length;
     const unique = new Map();
-    for (const item of state.queue) if (!unique.has(item.url) && !fetched(item.url)) unique.set(item.url, item);
+    for (const item of state.queue) {
+      if (fetched(item.url)) continue;
+      const kept = unique.get(item.url);
+      if (!kept || item.depth < kept.depth) unique.set(item.url, item);
+    }
     state.queue = [...unique.values()];
     queued = new Map(state.queue.map((item) => [item.url, item]));
     if (before > state.queue.length) resumeNotes.push(`待ち行列から、取れていたページと重なりを ${before - state.queue.length} 件除いた`);
-    for (const record of latest.values()) {
-      if (record.kind !== "page" || !record.ok || queued.has(record.url) || !inScope(record.url, settings)) continue;
-      if (pageDirs.has(urlKey(record.url))) continue;
-      const item = { url: record.url, depth: record.depth, from: record.from, via: record.via };
+    // 待ち行列に残っていても(取り直しの途中で止めたときなど)、取り直しとして扱う。
+    for (const url of okPages) {
+      if (!inScope(url, settings) || hasCopy(url)) continue;
+      refetchSource.add(url);
+      state.seen[url] = true;
+      if (queued.has(url)) continue;
+      const record = latest.get(url);
+      const item = { url, depth: record.depth, from: record.from, via: record.via };
       state.queue.push(item);
-      queued.set(record.url, item);
-      refetchSource.add(record.url);
+      queued.set(url, item);
     }
     if (refetchSource.size) resumeNotes.push(`取れたのに旧ページの写しが残っていないページ ${refetchSource.size} 件を取り直す`);
   }
@@ -617,7 +640,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     // 同じ形の URL が上限に達したら、取りに行かずに数だけ残す。
     // 始まりと sitemap.xml の URL(サイトが示した有限の一覧)は、上限の外にする。打ち切った URL は記録に残し、
     // 一覧に「同じ形が多く打ち切った」と書く。上限を上げて再開すると、取りに行く。
-    const patternKey = via === "start" || via === "sitemap" ? null : queryPatternKey(url);
+    // 記録で取れたページ(取り直しなど)は、もう数えてあるので、上限の判定にも加算にも入れない。
+    const patternKey = via === "start" || via === "sitemap" || okPages.has(url) ? null : queryPatternKey(url);
     if (patternKey) {
       if ((state.queryPatternVisits[patternKey] || 0) >= limits.maxPerQueryPattern) {
         appendRecord({ url, depth, from, via, kind: "page", status: "capped", pattern: patternKey, ok: false });
@@ -695,6 +719,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
 
     const finalUrl = normalize(result.finalUrl);
     const refetched = refetchSource.delete(url);
+    const counted = okPages.has(url);
     const firstOf = info.bodyHash ? state.bodyHashes[info.bodyHash] : null;
     const duplicateOf = firstOf && firstOf !== url ? firstOf : null;
     if (!refetched) {
@@ -738,7 +763,10 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       renderedExtra,
       ok: true,
     });
-    if (!refetched) state.pages += 1;
+    if (!counted) {
+      okPages.add(url);
+      state.pages += 1;
+    }
     log.write({ result: "ok", status: result.status, depth, renderedExtra });
 
     // 転送先も「見た」ことにする(同じページを2回取らないため)。
@@ -766,7 +794,8 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
         continue;
       }
       // 上限は、取ったページと待っている URL の数で見る(外した項目で整え直した URL を数えないため)。
-      if (state.pages + state.queue.length >= limits.maxPages) continue;
+      // 取り直しの項目は、取ったページの数にもう入っているので、待ち行列の側では数えない。
+      if (state.pages + state.queue.length - refetchSource.size >= limits.maxPages) continue;
       enqueue(link, depth + 1, url, linkVia);
     }
   };
