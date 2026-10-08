@@ -110,13 +110,24 @@ async function main() {
     console.log("  ok   同じ形の URL が多いときは上限で打ち切る(ブログ、カレンダーの組み合わせ)");
 
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。
+    // 取れたのに写しが残らなかったページ(共有ドライブの空きが無くなったときなど)を作るため、1件の写しを消す。
+    const { urlKey } = require("../../batch/commands/crawl");
+    const lostDir = path.join(dir, "crawl", "pages", urlKey(`${origin}/a/1.html`));
+    fs.rmSync(lostDir, { recursive: true, force: true });
+    const pagesBefore = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "state.json"), "utf8")).pages;
     const again = await cli("crawl", dir, "--start", `${origin}/`);
     assert.match(again, /前の巡回は終わっている/);
     // ネットワークの切断や時間切れで取れなかったページは、取り直す。
     assert.match(again, /取れなかったページ 1 件を取り直す/);
     const relisted = readCsv(path.join(dir, "crawl", "list.csv"));
     assert.strictEqual(relisted.find((row) => row.URL === `${origin}/flaky.html`).状態, "取れた");
-    console.log("  ok   終わった巡回は、やり直さない。切断で取れなかったページだけを取り直す");
+    // 写しが残っていないページも取り直す。取ったページの数には入れ直さず、重複にもしない。
+    assert.match(again, /旧ページの写しが残っていないページ 1 件を取り直す/);
+    assert.ok(fs.existsSync(path.join(lostDir, "source.html")), "写しを取り直す");
+    const pagesAfter = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "state.json"), "utf8")).pages;
+    assert.strictEqual(pagesAfter, pagesBefore + 1, "取り直したページは数えない(flaky.html の1件だけ増える)");
+    assert.strictEqual(relisted.find((row) => row.URL === `${origin}/a/1.html`).状態, "取れた");
+    console.log("  ok   終わった巡回は、やり直さない。切断で取れなかったページと、写しが残らなかったページだけを取り直す");
 
     // 巡回で取ったページは、取得(fetch)で使い回し、旧サイトへ取りに行かない。
     fs.mkdirSync(path.join(dir, "input"));

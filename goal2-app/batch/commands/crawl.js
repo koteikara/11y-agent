@@ -335,6 +335,9 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
   // 巡回の途中で PC がネットワークから外れても、再開すればそのあいだのページを取り直せる。
   const TRANSIENT_REASONS = new Set(["network", "timeout", "dns"]);
+  // 取れたのに旧ページの写しが残っていないページも取り直す。共有ドライブの空きが無くなったとき、書いたはずの
+  // 写しが残らなかった(大阪市の学校のサイトで、12,585 ページのうち 7,578 ページ)。数え直しや重複の判定には入れない。
+  const refetchSource = new Set();
   if (fs.existsSync(paths.records)) {
     const latest = new Map();
     for (const line of fs.readFileSync(paths.records, "utf8").split("\n")) {
@@ -382,6 +385,26 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       }
       resumeNotes.push(`ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
     }
+    // ページのフォルダの一覧を1回だけ読んで比べる(共有ドライブでは、ページごとに確かめると遅いため)。
+    const pageDirs = new Set(fs.existsSync(paths.pages) ? fs.readdirSync(paths.pages) : []);
+    // 待ち行列から、もう取れて写しもあるページと、同じ URL の2つ目以降を除く。巡回が2つ重なったとき、
+    // 残った状態の待ち行列に、もう一方が取ったページが入っていた(大阪市の学校のサイトで 2,772 件)。
+    const fetched = (url) => latest.get(url)?.kind === "page" && latest.get(url).ok && pageDirs.has(urlKey(url));
+    const before = state.queue.length;
+    const unique = new Map();
+    for (const item of state.queue) if (!unique.has(item.url) && !fetched(item.url)) unique.set(item.url, item);
+    state.queue = [...unique.values()];
+    queued = new Map(state.queue.map((item) => [item.url, item]));
+    if (before > state.queue.length) resumeNotes.push(`待ち行列から、取れていたページと重なりを ${before - state.queue.length} 件除いた`);
+    for (const record of latest.values()) {
+      if (record.kind !== "page" || !record.ok || queued.has(record.url) || !inScope(record.url, settings)) continue;
+      if (pageDirs.has(urlKey(record.url))) continue;
+      const item = { url: record.url, depth: record.depth, from: record.from, via: record.via };
+      state.queue.push(item);
+      queued.set(record.url, item);
+      refetchSource.add(record.url);
+    }
+    if (refetchSource.size) resumeNotes.push(`取れたのに旧ページの写しが残っていないページ ${refetchSource.size} 件を取り直す`);
   }
 
   state.queryPatternVisits = state.queryPatternVisits || {};
@@ -671,9 +694,13 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
     }
 
     const finalUrl = normalize(result.finalUrl);
-    const duplicateOf = info.bodyHash && state.bodyHashes[info.bodyHash] ? state.bodyHashes[info.bodyHash] : null;
-    observeParams(url, info.bodyHash);
-    observeStamps(url, links.keys());
+    const refetched = refetchSource.delete(url);
+    const firstOf = info.bodyHash ? state.bodyHashes[info.bodyHash] : null;
+    const duplicateOf = firstOf && firstOf !== url ? firstOf : null;
+    if (!refetched) {
+      observeParams(url, info.bodyHash);
+      observeStamps(url, links.keys());
+    }
     if (info.bodyHash && !duplicateOf) state.bodyHashes[info.bodyHash] = url;
     const dir = path.join(paths.pages, urlKey(url));
     project.queueWrite(path.join(dir, "source.html"), result.html);
@@ -711,7 +738,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       renderedExtra,
       ok: true,
     });
-    state.pages += 1;
+    if (!refetched) state.pages += 1;
     log.write({ result: "ok", status: result.status, depth, renderedExtra });
 
     // 転送先も「見た」ことにする(同じページを2回取らないため)。
