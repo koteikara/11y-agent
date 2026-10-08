@@ -2,7 +2,7 @@
 project: 11y-agent
 repository: https://github.com/koteikara/11y-agent
 status: active
-updated: 2026-10-07
+updated: 2026-10-08
 knowledge_mocs:
   - AI・自動化
   - UI・デザイン
@@ -77,7 +77,7 @@ flowchart LR
 - **AI生成は部品別Skillと生成後レビューで扱う**。table、画像alt、見出しなど失敗パターンが異なる部品を同じプロンプトで処理しない（`AGENTS.md`、`memory/ai-accessibility-skills-policy.md`）。
 - **ディレクトリ名 `goal2-app` は変えない**（2026-09-24）。Goal 2の画面から始まった名残で、いまはGoal 1〜3とmiChecker結果比較を含む。Windows版の `goal2-app.exe`、設定の保存先 `%APPDATA%\goal2-app`、Cloud Runの手順書がこの名前を参照しているためで、package名と説明だけを範囲に合わせた（`a11y-migration-app`）。
 - **開発は手元の作業フォルダで行い、GitHubはバックアップにする**（2026-10-04、ユーザー確定）。`D:\Codex\11y-agent-deploy` の `main` に直接コミットし、そのまま `git push origin main` する。ブランチとPRは使わない。push の前に、手元で Fable のサブエージェントに差分をレビューさせる（`AGENTS.md`）。デプロイも同じフォルダから行い、コミットしてpush済みの `main` だけを送る（`goal2-app/CLOUD_RUN_DEPLOY.md`）。それまではクラウドのセッションがPRを作り、GitHubの `main` をデプロイ専用のフォルダへ同期していた。
-- **全体のリニューアルを設計中**(2026-10-04〜05、ユーザー確定の前提)。利用者はディレクターだけで、サーバーを持たず、ディレクターの PC の一括処理(Node と Playwright で今のエンジンを動かす)、Chrome で開く校正台、共有ドライブ、シートの GAS のメニュー、FTP で組む。部品とコマンドは Goal 1〜3 の名前を使わず、流れの工程の順に、取得、型のまとめ、本処理、校正台、書き出し、確かめ、取り直し、比べ合わせと呼ぶ。上の技術構成は今の構成で、リニューアルの試走が終わるまで残す。2026-10-07 に「作る順番」の段1を始め、エンジンが頼る API を `goal2-app/lib/engine-api.js` と `lib/safe-fetch.js` に切り出して今のサーバーと一括処理で共有し、一括処理の骨組み(`goal2-app/batch/`。取得、型のまとめ、承認、本処理)を作った。流れは `docs/renewal/FLOW.md`、設計は `docs/renewal/ARCHITECTURE.md`、画面は `docs/renewal/DESIGN.md` にある。
+- **全体のリニューアルを設計中**(2026-10-04〜05、ユーザー確定の前提)。利用者はディレクターだけで、サーバーを持たず、ディレクターの PC の一括処理(Node と Playwright で今のエンジンを動かす)、Chrome で開く校正台、共有ドライブ、シートの GAS のメニュー、FTP で組む。部品とコマンドは Goal 1〜3 の名前を使わず、流れの工程の順に、取得、型のまとめ、本処理、校正台、書き出し、確かめ、取り直し、比べ合わせと呼ぶ。上の技術構成は今の構成で、リニューアルの試走が終わるまで残す。2026-10-07 に「作る順番」の段1を始め、エンジンが頼る API を `goal2-app/lib/engine-api.js` と `lib/safe-fetch.js` に切り出して今のサーバーと一括処理で共有し、一括処理の骨組み(`goal2-app/batch/`。取得、型のまとめ、承認、本処理)を作った。流れは `docs/renewal/FLOW.md`、設計は `docs/renewal/ARCHITECTURE.md`、画面は `docs/renewal/DESIGN.md` にある。2026-10-07〜08 に、ページ一覧を作る巡回(`crawl`、Website Explorer の代わり)とコンテンツパターンの抽出(`patterns`)を足し、6サイトで試走した(`docs/renewal/trials/2026-10-08-crawl.md`)。共有ドライブの空きが無くなったため、巡回と試走の案件のフォルダはローカルのディスクで動かし、共有ドライブには一覧だけを写す形に変えた(ユーザー確定)。
 - **Cloud Runをホスト第一候補**にした理由は `memory/goal2-hosting-candidates.md` にある。いまは公開URLで運用している。認証（共通のパスワード、2026-09-28 に IAP から変更）と証跡の置き場所（共有ドライブ）は決めた。パスワードを確かめる処理（P1、PR #154）と、証跡を決まった名前で保存する画面の変更（P2、PR #153。名前は `goal2-app/public/evidence-filename.js` で作る）は入れたが、本番のシークレットの作成とデプロイ、共有ドライブのフォルダーの用意は未実施である（`goal2-app/PRODUCTION_OPERATIONS_INSTRUCTIONS.md` の P1、P2）。アプリ側での永続保存とログ方針は未決定。
 - 候補生成ロジックをブラウザ側に置いた理由は、実装から読み取れない。理由未確認。
 - 外部検査エンジン（axe-core、A11yc library）を組み込まない判断は、`memory/project-state.md` で未決定として残っている。理由未確認。
