@@ -31,7 +31,7 @@ node batch/cli.js status  <案件のフォルダ>
 
 ## 入力と案件の設定
 
-`input/pages.json` は、移行管理シートの GAS が書き出す(段4)。
+`input/pages.json` は、移行管理シートの GAS が共有ドライブに書き出し、受け渡しのコマンドが案件のフォルダへ取り込む(段4。`docs/renewal/ARCHITECTURE.md` の「入力」)。
 それまでは手で作る。
 
 ```json
