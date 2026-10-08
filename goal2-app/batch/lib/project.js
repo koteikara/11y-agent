@@ -65,6 +65,10 @@ const DEFAULT_SETTINGS = {
     // ページ種別の選択肢の名前(移行管理シートのひな型の「マスタ」に合わせる)。
     pageTypes: { category: "ｶﾃｺﾞﾘ(自動)", categoryContent: "ｶﾃｺﾞﾘ(内容有)", detail: "詳細", mobile: "携帯", special: "特殊" },
     duplicateLabel: "重複",
+    // 題名の末尾のサイト名。null なら、半分以上のページに共通する末尾(「｜遠野市」など)を見つけて外す。外さないなら "" にする。
+    titleSuffix: null,
+    // 新ページタイトルの案で、全角の英数字を半角にするか(自治体の表記の方針で全角を使うなら false)。
+    halfwidthAlnum: true,
     // カテゴリかどうかはパンくずで決める(sheet.js の classifyPage)。パンくずが取れないページだけ、本文のリンクが
     // categoryMinLinks 件以上で、文字のうちリンクの割合が categoryLinkRatio 以上ならカテゴリの案にする。
     // カテゴリのうち、リンクでない文字が categoryContentChars 字より少なければ「自動」、多ければ「内容有」(遠野市で 400 が合った)。

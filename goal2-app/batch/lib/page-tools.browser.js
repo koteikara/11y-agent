@@ -365,35 +365,48 @@
       };
       const nameOf = (element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${element.classList.length ? `.${[...element.classList].join(".")}` : ""}`;
 
-      // パンくず: 項目(リンクか li)が2つ以上ある、名前がそれらしい要素。
-      const BREADCRUMB_NAME = /(pankuzu|breadcrumb|bread|topicpath|topic_path|crumb|location|current_path|path)/i;
+      // パンくず: 項目(リンクか li)が2つ以上ある、名前がそれらしい要素。名前は語の単位で合わせる
+      // (body の path-node や、所在地の #location に当てないため)。body と html は候補にしない。
+      const BREADCRUMB_NAME = /(^|[\s_-])(pankuzu|breadcrumbs?|bread|topicpath|topic_path|crumbs?|current_path)($|[\s_-])|breadcrumb|pankuzu|topicpath/i;
+      // 区切りの文字。「/」は項目の名前(保健/医療)にも使われるので、前後に空白があるときだけ区切りとみなす。
+      const CRUMB_SEPARATOR = /\s*(?:>|＞|›|»|＼|→)\s*|\s+\/\s+/;
       const crumbItems = (element) => {
         const items = [...element.querySelectorAll("li")].map((li) => normalizeText(li.textContent)).filter(Boolean);
-        const list = items.length >= 2 ? items : [...element.querySelectorAll("a")].map((a) => normalizeText(a.textContent)).filter(Boolean);
-        // 最後の項目(今のページ)はリンクでないことが多い。li が無いときは、要素の文字を区切りで分ける。
-        if (list.length >= 2) return list;
-        const text = normalizeText(element.textContent);
-        const parts = text.split(/\s*(?:>|＞|›|»|\/|＼|→)\s*/).map(normalizeText).filter(Boolean);
-        return parts.length >= 2 ? parts : [];
+        if (items.length >= 2) return items;
+        // li が無いときは、リンクの文字と、区切りで分けた文字の多い方を使う。最後の項目(今のページ)は
+        // リンクでないことが多く、リンクだけを集めると今のページが抜ける(下のページがみなカテゴリになる)。
+        const links = [...element.querySelectorAll("a")].map((a) => normalizeText(a.textContent)).filter(Boolean);
+        const parts = normalizeText(element.textContent).split(CRUMB_SEPARATOR).map(normalizeText).filter(Boolean);
+        const list = parts.length > links.length ? parts : links;
+        return list.length >= 2 ? list : [];
       };
       let breadcrumb = null;
       const breadcrumbCandidates = breadcrumbSelector
         ? [pick(breadcrumbSelector)].filter(Boolean)
         : [
             ...parsed.querySelectorAll('[itemtype*="BreadcrumbList"], nav[aria-label*="パンくず"], nav[aria-label*="breadcrumb" i]'),
-            ...[...parsed.querySelectorAll("[id],[class]")].filter((element) => BREADCRUMB_NAME.test(`${element.id} ${element.className}`)),
+            ...[...parsed.querySelectorAll("[id],[class]")].filter(
+              (element) => !/^(body|html)$/i.test(element.tagName) && BREADCRUMB_NAME.test(`${element.id} ${element.className}`)
+            ),
           ];
       for (const element of breadcrumbCandidates) {
         const items = crumbItems(element).map((item) => item.replace(/^(現在の位置|現在地|現在位置)\s*[:：]?\s*/, "")).filter(Boolean);
         if (items.length >= 2 && items.join("").length < 300) {
-          breadcrumb = { items, found: breadcrumbSelector ? `設定 ${breadcrumbSelector}` : nameOf(element) };
+          // 最後の項目が題名にも h1 にも含まれなければ、今のページが抜けているかもしれないので印を付ける。
+          const last = items[items.length - 1].replace(/\s+/g, "");
+          const current = `${title}${h1}`.replace(/\s+/g, "");
+          breadcrumb = { items, found: breadcrumbSelector ? `設定 ${breadcrumbSelector}` : nameOf(element), lastIsCurrent: Boolean(last) && current.includes(last) };
           break;
         }
       }
 
       // 問い合わせ先: 名前がそれらしい要素か、「お問い合わせ」の見出しのあとの文字から、担当の部署の名前を取る。
+      // 部署の名前として受け取るのは、課や室などの単位の語で終わるものだけにする(本文の文や住所、ヘッダーの
+      // 「お問い合わせ」のリンクの並びを拾わないため。遠野市では、単位の語が無いものの中に本文の文があった)。
       const CONTACT_NAME = /(contact|toiawase|otoiawase|inquiry|section_info|sectioninfo|signature|shomei|tantou|tanto)/i;
-      const CONTACT_HEADING = /(お問い?合わ?せ|問い?合わ?せ先|担当課|担当部署|このページに関する)/;
+      // 見出しとみなすのは、文字が見出しの言い回しそのもののときだけ(本文の「詳しくはお問い合わせください」に当てない)。
+      const CONTACT_HEADING = /^(このページ(の(情報|内容))?に関する)?(お)?問い?合わ?せ(先)?(は(こちら)?)?[:：]?$|^(担当課|担当部署|担当|所管課)[:：]?$/;
+      const DEPARTMENT_UNIT = /(課|室|局|係|班|担当|センター|館|所|園|校|事務局|委員会|部)(\s|$)/;
       const STOP = /(電話|TEL|Tel|ＴＥＬ|ファクス|ファックス|FAX|Fax|ＦＡＸ|〒|住所|所在地|メール|E-?mail|Ｅメール|内線|〔|【)/;
       // 段落や行の区切りを空白にして、要素の文字を取る(textContent は段落の文字を区切りなしにつなぐ)。
       const blockText = (element) => {
@@ -414,7 +427,7 @@
         const cleaned = normalizeText(text).replace(/^[\s:：]+/, "");
         const head = cleaned.split(STOP)[0];
         const name = normalizeText(head).replace(/[、,。:：\s]+$/, "");
-        return name && name.length <= 60 ? name : null;
+        return name && name.length <= 60 && DEPARTMENT_UNIT.test(name) && !/[。、]/.test(name) ? name : null;
       };
       let contact = null;
       const contactElements = contactSelector
@@ -428,7 +441,9 @@
         }
       }
       if (!contact && !contactSelector) {
-        const headings = [...parsed.querySelectorAll("h2,h3,h4,h5,h6,dt,th,strong,p")].filter((element) => CONTACT_HEADING.test(normalizeText(element.textContent)) && normalizeText(element.textContent).length < 40);
+        const headings = [...parsed.querySelectorAll("h2,h3,h4,h5,h6,dt,th,strong,p")].filter((element) =>
+          CONTACT_HEADING.test(normalizeText(element.textContent).replace(/[「」『』\s]/g, ""))
+        );
         for (const heading of headings) {
           const next = heading.nextElementSibling || heading.parentElement?.nextElementSibling;
           const department = next ? departmentOf(next) : null;

@@ -12,15 +12,16 @@ const { normalizeTitle } = require("../lib/titles");
 const { urlKey, isPrintPage } = require("./crawl");
 
 // 調べた結果(sheet.json)の版。取り出し方を変えたら上げ、作り直させる。
-const SHEET_VERSION = 3;
+const SHEET_VERSION = 4;
 const READ_CONCURRENCY = 8;
 
 // ページ種別の案を、URL と本文のリンクの割合から決める。理由も返す。
-const MOBILE_URL = /\/(mobile|keitai|k|i|m|sp|smartphone|phone)\//i;
+// 1文字のディレクトリ(/k/、/i/)は携帯用とは限らないので入れない。/sp/ は手順書(1-1)にスマートフォン用の手がかりとしてある。
+const MOBILE_URL = /\/(mobile|keitai|sp|smartphone|phone)\//i;
 const SPECIAL_URL = [
   [/sitemap/i, "サイトマップ"],
   [/(news_?list|shinchaku|whatsnew|new_?list)/i, "新着の一覧"],
-  [/(search|kensaku)/i, "検索"],
+  [/(^|[/_.-])(search|kensaku)([/_.?-]|$)/i, "検索"],
   [/\/(reiki|reiki_int|reikishu)\//i, "例規集"],
   [/(calendar|event_?cal)/i, "カレンダー"],
   [/\/(map|maps)\//i, "地図"],
@@ -60,16 +61,32 @@ function classifyPage({ url, depth, facts, labels, thresholds, children = null }
 
 // パンくずの道(項目の並び)の、途中までの道ごとに、その下にあるページの数を数える。
 const crumbKey = (items) => items.map((item) => item.replace(/\s+/g, "")).join(">");
-function countCrumbChildren(allFacts) {
+function countCrumbChildren(allFacts, skip = () => false) {
   const below = new Map();
-  for (const fact of allFacts) {
+  allFacts.forEach((fact, index) => {
+    if (skip(index)) return;
     const items = fact?.breadcrumb?.items || [];
     for (let n = 1; n < items.length; n += 1) {
       const key = crumbKey(items.slice(0, n));
       below.set(key, (below.get(key) || 0) + 1);
     }
-  }
+  });
   return below;
+}
+
+// 題名の末尾の、多くのページに共通する部分(区切りの文字から後ろ)を見つける。半分以上のページにあれば返す。
+const TITLE_SEPARATOR = /\s*[｜|]\s*|\s+[-－–—:：]\s+/g;
+function detectTitleSuffix(titles) {
+  const counts = new Map();
+  for (const title of titles) {
+    const matches = [...title.matchAll(TITLE_SEPARATOR)];
+    if (!matches.length) continue;
+    const last = matches[matches.length - 1];
+    const suffix = title.slice(last.index);
+    counts.set(suffix, (counts.get(suffix) || 0) + 1);
+  }
+  const [best, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] || [null, 0];
+  return best && n >= titles.length / 2 ? best : null;
 }
 
 // 問い合わせ先の部署の文字から、グループの案(いちばん下の課や室)を取る。CMS のグループは課の単位が
@@ -79,7 +96,8 @@ function groupFrom(department) {
   if (!department) return "";
   const parts = department.split(/[\s・]+/).filter(Boolean);
   for (let i = parts.length - 1; i >= 0; i -= 1) if (UNIT.test(parts[i])) return parts[i];
-  return parts[parts.length - 1] || "";
+  // 単位の語が無いもの(住所や本文の文が混じったもの)は、グループの案にしない。
+  return "";
 }
 
 function readLatestRecords(project) {
@@ -113,6 +131,7 @@ async function runSheet(project, { engine, log, report }) {
   // ページごとの事実(題名、h1、パンくず、問い合わせ先、本文のリンクの割合)。
   const selectors = { breadcrumbSelector: sheet.breadcrumbSelector || null, contactSelector: sheet.contactSelector || null };
   const facts = new Array(pages.length);
+  const problems = new Array(pages.length);
   let analyzed = 0;
   let missing = 0;
   let failed = 0;
@@ -125,6 +144,12 @@ async function runSheet(project, { engine, log, report }) {
       const dir = path.join(project.root, "crawl", "pages", urlKey(page.url));
       const cacheFile = path.join(dir, "sheet.json");
       let cached = null;
+      let sourceTime = null;
+      try {
+        sourceTime = (await fs.promises.stat(path.join(dir, "source.html"))).mtimeMs;
+      } catch {
+        sourceTime = null;
+      }
       try {
         cached = JSON.parse(await fs.promises.readFile(cacheFile, "utf8"));
       } catch {
@@ -134,20 +159,23 @@ async function runSheet(project, { engine, log, report }) {
         cached &&
         cached.sheetVersion === SHEET_VERSION &&
         cached.breadcrumbSelector === selectors.breadcrumbSelector &&
-        cached.contactSelector === selectors.contactSelector;
+        cached.contactSelector === selectors.contactSelector &&
+        cached.sourceTime === sourceTime;
       if (!usable) {
         let html;
         try {
           html = await fs.promises.readFile(path.join(dir, "source.html"), "utf8");
         } catch {
           missing += 1;
+          problems[index] = "旧ページの写しが無い(巡回を再開すると取り直す)";
           continue;
         }
         try {
           const result = await engine.evaluate((arg) => window.batchTools.sheetFacts(arg), { html, url: page.finalUrl || page.url, ...selectors });
-          cached = { sheetVersion: SHEET_VERSION, ...selectors, ...result };
+          cached = { sheetVersion: SHEET_VERSION, ...selectors, sourceTime, ...result };
         } catch {
           failed += 1;
+          problems[index] = "旧ページを調べられなかった";
           continue;
         }
         project.queueWrite(cacheFile, JSON.stringify(cached));
@@ -180,7 +208,12 @@ async function runSheet(project, { engine, log, report }) {
     report("  コンテンツパターンの抽出の結果が無いので、パターンの列は空にする(patterns を動かすと入る)");
   }
 
-  const crumbBelow = countCrumbChildren(facts);
+  const crumbBelow = countCrumbChildren(facts, (index) => Boolean(pages[index].duplicateOf));
+
+  // 題名の末尾のサイト名(「…｜遠野市」)。多くのページに共通する末尾を外してから、新ページタイトルの案を作る
+  // (遠野市では 2,728 件中 2,722 件に付いていた)。案件の設定 sheet.titleSuffix で決めることもできる。
+  const titleSuffix = sheet.titleSuffix ?? detectTitleSuffix(pages.map((page, index) => facts[index]?.title || page.title || ""));
+  if (titleSuffix) report(`  題名の末尾の共通の文字を外して新ページタイトルの案を作る(${titleSuffix.length} 字)`);
 
   // 同じ題名のページの数(重複の手がかり。中身が同じページは、巡回が重複として見つけている)。
   const titleCount = new Map();
@@ -223,8 +256,10 @@ async function runSheet(project, { engine, log, report }) {
           thresholds: sheet.thresholds,
           children: fact.breadcrumb ? crumbBelow.get(crumbKey(fact.breadcrumb.items)) || 0 : null,
         })
-      : { type: "", reason: "旧ページの写しが無い" };
-    const normalized = normalizeTitle(title);
+      : { type: "", reason: problems[index] || "旧ページを調べられなかった" };
+    const base = titleSuffix && title.endsWith(titleSuffix) && title.length > titleSuffix.length ? title.slice(0, -titleSuffix.length).trim() : title;
+    const normalized = normalizeTitle(base, { halfwidthAlnum: sheet.halfwidthAlnum !== false });
+    if (base !== title) normalized.changes.unshift("末尾のサイト名を外す");
     const duplicateOf = page.duplicateOf ? idOf.get(page.duplicateOf) || page.duplicateOf : "";
     const sameTitle = titleCount.get(title) || 0;
     counts.types[classified.type || "(無し)"] = (counts.types[classified.type || "(無し)"] || 0) + 1;
@@ -252,7 +287,7 @@ async function runSheet(project, { engine, log, report }) {
       patternOf.get(page.url) || "",
       page.url,
       fact.breadcrumb ? fact.breadcrumb.items.join(" > ") : "",
-      fact.breadcrumb?.found || "",
+      fact.breadcrumb ? `${fact.breadcrumb.found}${fact.breadcrumb.lastIsCurrent === false ? "(最後の項目が題名と違う。今のページが抜けているかもしれない)" : ""}` : "",
       page.depth ?? "",
       sameTitle > 1 ? `${sameTitle} 件` : "",
     ]);
@@ -266,7 +301,7 @@ async function runSheet(project, { engine, log, report }) {
     ["グループ(案)", "ページの問い合わせ先の部署のうち、いちばん下の課や室。運用設計書のグループの名前とは照らしていない", "グループ"],
     ["問い合わせ先(部署)", "問い合わせ先から取った部署の文字と、見つけた要素", ""],
     ["旧ページタイトル", "title 要素の文字", "旧ページタイトル"],
-    ["新ページタイトル(案)", "規則で直したときだけ入れる。直さなかったページは空(旧タイトルのまま)", "新ページタイトル"],
+    ["新ページタイトル(案)", "題名の末尾のサイト名(多くのページに共通する「｜○○市」など)を外し、規則で直したもの。直す所が無ければ空(旧タイトルのまま)", "新ページタイトル"],
     ["タイトルの要確認", "規則では決めきれない書き方(8/4 の形、h26 の形など)。人が見て直す", ""],
     ["h1", "ページの最初の h1。題名と違うときは、目で見たページの名前はこちらかもしれない", ""],
     ["パターン(案)", "コンテンツパターンの抽出で、そのページが入った候補", "パターン"],
@@ -291,4 +326,4 @@ async function runSheet(project, { engine, log, report }) {
   report(`  一覧: ${path.relative(project.root, xlsxFile)}`);
 }
 
-module.exports = { runSheet, classifyPage, groupFrom, countCrumbChildren, crumbKey };
+module.exports = { runSheet, classifyPage, groupFrom, countCrumbChildren, crumbKey, detectTitleSuffix };

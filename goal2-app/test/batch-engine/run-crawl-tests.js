@@ -162,9 +162,11 @@ async function main() {
     // 巡回が構造とリンクを残しているので、抽出は旧ページを読み直さない。
     assert.ok(!/構造とリンクを調べた/.test(patternsOut), patternsOut);
     const patterns = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8"));
-    const first = patterns.candidates[0];
-    assert.strictEqual(first.key, "/b/", JSON.stringify(patterns.candidates.map((c) => c.key)));
-    assert.ok(first.proposed && first.differentShare === 1);
+    // 順位は、テスト用の小さなページ(ブログ、カレンダーなど)の数で本体の型が変わるので見ない。
+    // 子育てのページ群が、本体と違う作りのサブサイト候補として提案されることを確かめる。
+    const kosodate = patterns.candidates.find((c) => c.key === "/b/");
+    assert.ok(kosodate, JSON.stringify([patterns.types, patterns.candidates.map((c) => [c.key, c.kind, c.pages, c.differentShare, c.cohesion])]));
+    assert.ok(kosodate.proposed && kosodate.differentShare === 1);
     // 始まりのページを含むリンクのまとまりは、サイト全体の入口の群なので候補にしない。
     assert.ok(
       !patterns.candidates.some((c) => c.kind === "リンクのまとまり" && c.entry === `${origin}/`),
@@ -199,6 +201,11 @@ async function main() {
     assert.deepStrictEqual(factsA1.breadcrumb.items, ["ホーム", "記事1"]);
     assert.strictEqual(factsA1.contact.department, "総務部 総務課");
     assert.ok(factsA1.h1, "h1 を取る");
+    // リンクだけでは今のページが抜けるパンくず(最後の項目が文字だけ)も、区切りで分けて今のページまで取る。
+    const factsB2 = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "pages", urlKey(`${origin}/b/2.html`), "sheet.json"), "utf8"));
+    assert.strictEqual(factsB2.breadcrumb.items.length, 3, JSON.stringify(factsB2.breadcrumb));
+    assert.strictEqual(factsB2.breadcrumb.items[2], factsB2.h1);
+    assert.strictEqual(factsB2.breadcrumb.lastIsCurrent, true);
     // トップは、ページ種別の案を「特殊」(サイトのトップ)にする。
     const { classifyPage } = require("../../batch/commands/sheet");
     const labels = { category: "C", categoryContent: "CC", detail: "D", mobile: "M", special: "S" };

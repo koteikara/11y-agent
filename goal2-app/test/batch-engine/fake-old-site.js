@@ -44,7 +44,7 @@ function templateA(title, body, n) {
 
 function templateB(title, body) {
   return `<!doctype html><html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS"><title>${title}</title></head>
-<body><div class="kosodate-head"><p>子育てサイト</p></div><table class="layout"><tr><td class="menu"><a href="/b/1.html">メニュー</a></td>
+<body><div class="kosodate-head"><p>子育てサイト</p></div><p class="topicpath"><a href="/">ホーム</a> &gt; <a href="/">子育て</a> &gt; ${title}</p><table class="layout"><tr><td class="menu"><a href="/b/1.html">メニュー</a></td>
 <td><div class="main-body"><h1>${title}</h1>${body}</div></td></tr></table><div class="kosodate-foot">子育て支援課</div></body></html>`;
 }
 

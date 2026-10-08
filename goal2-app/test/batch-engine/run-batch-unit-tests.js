@@ -111,6 +111,18 @@ async function main() {
   assert.strictEqual(normalizeTitle("ｽﾎﾟｰﾂ大会　ＰＲ").title, "スポーツ大会 PR");
   assert.ok(normalizeTitle("h26市長選挙").checks.length, "元号の略は要確認にする");
   assert.deepStrictEqual(normalizeTitle("市長の部屋").changes, [], "直す所が無ければ何もしない");
+  // 曜日の略は日付のあとだけ直す。「保育料（月）」は月額の意味なので直さず、要確認にする。
+  assert.strictEqual(normalizeTitle("保育料（月）").title, "保育料（月）");
+  assert.ok(normalizeTitle("保育料（月）").checks.length);
+  assert.strictEqual(normalizeTitle("4日（火）").title, "4日（火曜日）");
+  // 日付でないものは年月日にしない(前後に数字が続く、月や日がありえない数)。
+  assert.strictEqual(normalizeTitle("2020/1/150").title, "2020/1/150");
+  assert.strictEqual(normalizeTitle("2020/13/1").title, "2020/13/1");
+  assert.strictEqual(normalizeTitle("ＰＲ", { halfwidthAlnum: false }).title, "ＰＲ", "全角の英数字を残す設定");
+  const { detectTitleSuffix, groupFrom } = require("../../batch/commands/sheet");
+  assert.strictEqual(detectTitleSuffix(["a｜遠野市", "b｜遠野市", "c"]), "｜遠野市");
+  assert.strictEqual(detectTitleSuffix(["a", "b｜遠野市", "c"]), null, "半分に満たなければ外さない");
+  assert.strictEqual(groupFrom("遠野市中央通り9-1(とぴあ庁舎内)"), "", "単位の語が無ければグループの案にしない");
   console.log("  ok   新ページタイトルの案");
 
   console.log("\n=== batch unit tests passed ===");
