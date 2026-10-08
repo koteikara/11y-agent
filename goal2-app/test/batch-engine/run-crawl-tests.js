@@ -110,7 +110,7 @@ async function main() {
     console.log("  ok   同じ形の URL が多いときは上限で打ち切る(ブログ、カレンダーの組み合わせ)");
 
     // もう一度動かすと、終わった巡回をやり直さず、一覧だけを書き直す。
-    // 取れたのに写しが残らなかったページ(共有ドライブの空きが無くなったときなど)を作るため、1件の写しを消す。
+    // 取れたのに写しが残らなかったページ(共有ドライブのアイテム数の上限に達したときなど)を作るため、1件の写しを消す。
     const { urlKey } = require("../../batch/commands/crawl");
     const lostDir = path.join(dir, "crawl", "pages", urlKey(`${origin}/a/1.html`));
     fs.rmSync(lostDir, { recursive: true, force: true });

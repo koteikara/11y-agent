@@ -23,11 +23,11 @@
 
 ## 2026-10-08: 共有ドライブで止まった原因を、空き容量ではなくアイテム数の上限と直す
 
-- 背景・目的: ユーザーが Drive for desktop の lost_and_found から取り出したファイル(巡回の記録と実行の記録、18件)を確かめた。退避の理由はエラーの種類 `MOVED_TO_ROOT_TD_LIMIT_EXCEEDED` で、共有ドライブに置けるアイテムの数の上限だった。画面に出た「共有ドライブの空き容量がありません」から、原因を空き容量と書いていた。
-- 主な変更内容: `docs/renewal/trials/2026-10-08-crawl.md`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/README.md`、`PROJECT_CONTEXT.md`、`goal2-app/batch/commands/crawl.js` のコメントで、「空き容量」を「アイテム数の上限」に直し、試走の記録と設計書にエラーの種類と画面の表示を書いた。
+- 背景・目的: ユーザーが Drive for desktop の lost_and_found から取り出したファイル(巡回の記録と実行の記録、16件)を確かめた。退避の理由はエラーの種類 `MOVED_TO_ROOT_TD_LIMIT_EXCEEDED` で、共有ドライブのアイテム数の上限(1つの共有ドライブに40万アイテム)とみられる。画面に出た「共有ドライブの空き容量がありません」から、原因を空き容量と書いていた。
+- 主な変更内容: `docs/renewal/trials/2026-10-08-crawl.md`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/README.md`、`PROJECT_CONTEXT.md`、`goal2-app/batch/commands/crawl.js` のコメントで、「空き容量」を「アイテム数の上限」に直し、試走の記録と設計書にエラーの種類と画面の表示を書いた。この日の前のエントリにある「空き容量」の記述は、当時の見立てとしてそのまま残す。
 - 分かったこと: 退避したファイルのうち14件は、共有ドライブにある本体の途中までの版で、ローカルに移した本体の先頭とバイト単位で一致した。残る2件(同じ中身)は大阪市の学校の巡回の実行記録で、共有ドライブにもローカルにも無かったので、ローカルの案件のフォルダの `logs/` に戻した(件数と状態だけの記録で、旧サイトの本文は無い)。
-- レビュー: (push の前に記入)
-- 関連ファイル: `docs/renewal/trials/2026-10-08-crawl.md`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/README.md`、`PROJECT_CONTEXT.md`、`goal2-app/batch/commands/crawl.js`
+- レビュー: Fable の要修正3件を直した。(1) 退避したファイルの数(16件、うち重複14件)を間違えていた。(2) エラーの種類だけでアイテム数の上限と言い切っていた。推量の形にし、根拠(エラーの種類の名前、Google のヘルプの上限)と、エラーの種類の出どころ(別のプロジェクトの Claude Code の整理のメモ)を書いた。(3) テストのコメントに「空きが無くなった」が残っていた。提案から、括弧の中を短くする、ARCHITECTURE.md の「遅さとアイテム数の上限で」の並びを整える、前のエントリの「空き容量」を当時の見立てとして残すと書く、を取り入れた。
+- 関連ファイル: `docs/renewal/trials/2026-10-08-crawl.md`、`docs/renewal/ARCHITECTURE.md`、`docs/renewal/README.md`、`PROJECT_CONTEXT.md`、`goal2-app/batch/commands/crawl.js`、`goal2-app/test/batch-engine/run-crawl-tests.js`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 
 ## 2026-10-08: 案件のフォルダをディレクターの PC に置き、共有ドライブを受け渡しの場所にする
