@@ -315,6 +315,12 @@ async function runPatterns(project, { engine, log, report, under = null }) {
     templateLinks: templateLinks.size,
     candidates: merged.map(({ members, ...row }) => ({ ...row, memberCount: members.length })),
   });
+  // ページごとの構造の型と、入っている候補の順位(いちばん上の候補)。移行管理シートの下書きが、
+  // 「パターン」(レイアウトをそろえる群)の案に使う。候補の一覧とは分けて置く(ページの数だけ大きくなるため)。
+  project.writeJson(
+    path.join(outDir, `${outBase}-pages.json`),
+    Object.fromEntries(urls.map((url) => [url, { type: typeOf.get(url) || null, candidate: candidateOf.get(url) ?? null }]))
+  );
 
   const candidateRows = [
     [

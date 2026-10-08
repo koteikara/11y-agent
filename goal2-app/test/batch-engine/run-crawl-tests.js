@@ -189,13 +189,42 @@ async function main() {
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8")), patterns);
     console.log("  ok   コンテンツパターン: URL の下だけで見る(--under)");
 
+    // 移行管理シートの下書き。巡回の写しから、パンくず、問い合わせ先の部署、ページ種別の案を出す。
+    const sheetOut = await cli("sheet", dir);
+    assert.match(sheetOut, /移行管理シートの下書き: 巡回で取れたページ \d+ を調べる/);
+    assert.match(sheetOut, /パンくずが取れた [1-9]/);
+    const draft = fs.readFileSync(path.join(dir, "crawl", "sheet-draft.xlsx"));
+    assert.strictEqual(draft.subarray(0, 2).toString(), "PK");
+    const factsA1 = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "pages", urlKey(`${origin}/a/1.html`), "sheet.json"), "utf8"));
+    assert.deepStrictEqual(factsA1.breadcrumb.items, ["ホーム", "記事1"]);
+    assert.strictEqual(factsA1.contact.department, "総務部 総務課");
+    assert.ok(factsA1.h1, "h1 を取る");
+    // トップは、ページ種別の案を「特殊」(サイトのトップ)にする。
+    const { classifyPage } = require("../../batch/commands/sheet");
+    const labels = { category: "C", categoryContent: "CC", detail: "D", mobile: "M", special: "S" };
+    const thresholds = { categoryMinLinks: 5, categoryLinkRatio: 0.6, categoryContentChars: 150 };
+    assert.strictEqual(classifyPage({ url: `${origin}/`, depth: 0, facts: {}, labels, thresholds }).type, "S");
+    assert.strictEqual(classifyPage({ url: `${origin}/sp/a.html`, depth: 2, facts: {}, labels, thresholds }).type, "M");
+    const listing = { body: { textLength: 200, linkTextLength: 180, links: 12 } };
+    assert.strictEqual(classifyPage({ url: `${origin}/kurashi/index.html`, depth: 1, facts: listing, labels, thresholds }).type, "C");
+    const article = { body: { textLength: 1200, linkTextLength: 30, links: 2 } };
+    assert.strictEqual(classifyPage({ url: `${origin}/a/9.html`, depth: 2, facts: article, labels, thresholds }).type, "D");
+    // パンくずが取れたページは、下にページがあるかで決める(リンクの割合より優先する)。
+    assert.strictEqual(classifyPage({ url: `${origin}/a/9.html`, depth: 2, facts: article, labels, thresholds, children: 0 }).type, "D");
+    assert.strictEqual(classifyPage({ url: `${origin}/kurashi/`, depth: 1, facts: listing, labels, thresholds, children: 12 }).type, "C");
+    assert.strictEqual(classifyPage({ url: `${origin}/kurashi/`, depth: 1, facts: article, labels, thresholds, children: 12 }).type, "CC");
+    const { groupFrom } = require("../../batch/commands/sheet");
+    assert.strictEqual(groupFrom("総務企画部 経営企画課"), "経営企画課");
+    assert.strictEqual(groupFrom("議会事務局"), "議会事務局");
+    console.log("  ok   移行管理シートの下書き: パンくず、問い合わせ先、ページ種別の案");
+
     // 画面と実行の記録に、旧サイトの本文と題名を出さない。
     const logs = fs
       .readdirSync(path.join(dir, "logs"))
       .map((name) => fs.readFileSync(path.join(dir, "logs", name), "utf8"))
       .join("\n");
     for (const text of ["子育て支援のお知らせ", "テスト市トップ", "<p>"]) {
-      assert.ok(![crawlOut, again, fetchOut, patternsOut, scopedOut].join("\n").includes(text), `画面に出ている: ${text}`);
+      assert.ok(![crawlOut, again, fetchOut, patternsOut, scopedOut, sheetOut].join("\n").includes(text), `画面に出ている: ${text}`);
       assert.ok(!logs.includes(text), `実行の記録に出ている: ${text}`);
     }
     console.log("  ok   画面と実行の記録に、旧サイトの本文と題名を出さない");

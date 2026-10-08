@@ -46,7 +46,7 @@ function readPublicFile(pathname) {
 // linkTitle: false のときは、リンク先の題名を取りに行かない(テストで、外のサイトに左右されないようにする)。
 // lookupTitle(url) は、巡回で取ったページの題名を返す(無ければ null)。linkTitleIntervalMs は、リンク先の題名を
 // 取りに行くときの、サーバーごとの間隔(ミリ秒)。
-async function startEngine({ ai = true, linkTitle = true, onAiCall, lookupTitle = null, linkTitleIntervalMs = 1000 } = {}) {
+async function startEngine({ ai = true, linkTitle = true, onAiCall, lookupTitle = null, linkTitleIntervalMs = 1000, workers = 1 } = {}) {
   const browser = await chromium.launch({
     // CI(Linux)では決まった場所の Chromium を使う。手元では Playwright が入れた Chromium を使う。
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
@@ -141,19 +141,34 @@ async function startEngine({ ai = true, linkTitle = true, onAiCall, lookupTitle 
 
   // 巡回でページを Chromium で開くときの文脈。初めて使うときに作る。
   let renderContext = null;
-  const page = await context.newPage();
-  await page.goto(`${ENGINE_ORIGIN}/engine.html`, { waitUntil: "load" });
-  await page.waitForFunction(() => Boolean(window.goal2Engine && window.goal3Engine), null, { timeout: 15000 });
-  // 一括処理の道具(構造のハッシュ、本文の範囲)を足す。route は通さず、中身を直に入れる。
-  await page.addScriptTag({ content: fs.readFileSync(path.join(__dirname, "page-tools.browser.js"), "utf8") });
-  await page.evaluate(() => window.goal2Engine.init());
+  const openEnginePage = async () => {
+    const enginePage = await context.newPage();
+    await enginePage.goto(`${ENGINE_ORIGIN}/engine.html`, { waitUntil: "load" });
+    await enginePage.waitForFunction(() => Boolean(window.goal2Engine && window.goal3Engine), null, { timeout: 15000 });
+    // 一括処理の道具(構造のハッシュ、本文の範囲)を足す。route は通さず、中身を直に入れる。
+    await enginePage.addScriptTag({ content: fs.readFileSync(path.join(__dirname, "page-tools.browser.js"), "utf8") });
+    await enginePage.evaluate(() => window.goal2Engine.init());
+    return enginePage;
+  };
+  // エンジンのページを workers 枚開き、空いているページに処理を回す。1枚のページの中の処理は順番に
+  // しか動かないので、ページごとの調べ(移行管理シートの下書きで1ページ約0.5秒)を並べるために増やす。
+  const pages = await Promise.all(Array.from({ length: Math.max(1, workers) }, openEnginePage));
+  const page = pages[0];
+  const busy = new Array(pages.length).fill(0);
 
   return {
     page,
     usage,
     // ページの中で fn(arg) を動かす。fn はページの中で評価されるので、外の変数は使えない。
-    evaluate(fn, arg) {
-      return page.evaluate(fn, arg);
+    async evaluate(fn, arg) {
+      let index = 0;
+      for (let i = 1; i < pages.length; i += 1) if (busy[i] < busy[index]) index = i;
+      busy[index] += 1;
+      try {
+        return await pages[index].evaluate(fn, arg);
+      } finally {
+        busy[index] -= 1;
+      }
     },
 
     // 巡回用。旧サイトのページを Chromium で開き、スクリプトが描いたあとのリンクを拾う(Website Explorer と

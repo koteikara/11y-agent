@@ -38,7 +38,7 @@ function templateA(title, body, n) {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}|テスト市</title></head>
 <body><header id="header"><div class="logo">テスト市</div><nav class="gnav"><ul><li><a href="/">ホーム</a></li><li><a href="/a/1.html">くらし</a></li><li><a href="/a/2.html">子育て</a></li></ul></nav></header>
 <div class="breadcrumb"><a href="/">ホーム</a> &gt; <span>記事${n}</span></div>
-<div id="wrap"><div id="contents"><h1>${title}</h1>${body}</div><aside id="side"><ul><li><a href="/a/3.html">関連</a></li></ul></aside></div>
+<div id="wrap"><div id="contents"><h1>${title}</h1>${body}</div><div class="toiawase"><p>このページに関するお問い合わせ</p><p>総務部 総務課 電話:000-000-0000</p></div><aside id="side"><ul><li><a href="/a/3.html">関連</a></li></ul></aside></div>
 <footer id="footer"><p>テスト市役所 〒000-0000</p></footer></body></html>`;
 }
 

@@ -5,6 +5,7 @@
 //   node batch/cli.js patterns <案件のフォルダ> [--under URL]       コンテンツパターン(サブサイトの候補)を xlsx に出す
 //                                                                  --under: その URL の下のページだけで見る(patterns-<名前>.xlsx)。
 //                                                                  末尾の / やホスト名の大文字は問わない
+//   node batch/cli.js sheet   <案件のフォルダ>                      移行管理シートの下書きを xlsx に出す(巡回の結果から)
 //   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID] [--reinspect]  取得(ページの台帳を書く)
 //                                                                  --reinspect: 取り直さずに、保存した旧ページを調べ直す
 //   node batch/cli.js group   <案件のフォルダ>                      型のまとめ(本文の範囲の案)
@@ -27,6 +28,7 @@ const { startEngine } = require("./lib/engine-host");
 const { runFetch } = require("./commands/fetch");
 const { runCrawl, normalizeUrl } = require("./commands/crawl");
 const { runPatterns } = require("./commands/patterns");
+const { runSheet } = require("./commands/sheet");
 const { runGroup } = require("./commands/group");
 const { runProcess } = require("./commands/process");
 const { writeSummary, DEPTH_LABELS } = require("./lib/summary");
@@ -140,7 +142,7 @@ async function main() {
     return;
   }
 
-  if (!["crawl", "patterns", "fetch", "group", "process"].includes(command)) {
+  if (!["crawl", "patterns", "sheet", "fetch", "group", "process"].includes(command)) {
     console.error(`知らないコマンド: ${command}\n${usage()}`);
     process.exit(2);
   }
@@ -247,6 +249,8 @@ async function runCommand(project, command, options, ids, report) {
     ai: settings.ai.enabled,
     lookupTitle: crawlTitles ? (url) => crawlTitles.get(normalizeUrl(url, titleIgnoreParams) || url) || null : null,
     linkTitleIntervalMs: settings.fetch.intervalMs,
+    // 旧サイトへ取りに行かず、手元の写しを調べるだけのコマンドは、エンジンのページを増やして並べる。
+    workers: ["sheet", "patterns"].includes(command) ? Math.max(1, Math.min(4, os.cpus().length - 1)) : 1,
   });
   try {
     if (command === "crawl") {
@@ -256,6 +260,8 @@ async function runCommand(project, command, options, ids, report) {
       // --under の URL を書き忘れたときに、全体の一覧を書き換えないよう止める。
       if (options.under === true) throw new Error("--under には URL を書く(例: --under https://example.jp/school1/)");
       await runPatterns(project, { engine, log, report, under: typeof options.under === "string" ? options.under : null });
+    } else if (command === "sheet") {
+      await runSheet(project, { engine, log, report });
     } else if (command === "fetch") {
       await runFetch(project, { engine, ids, reinspect: Boolean(options.reinspect), log, report });
     } else if (command === "group") {

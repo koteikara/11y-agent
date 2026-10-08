@@ -21,6 +21,15 @@
 - 関連PR/コミット
 ```
 
+## 2026-10-08: 巡回の結果から、移行管理シートの下書きを出す(sheet)
+
+- 背景・目的: ユーザーの依頼で、移行作業の手順書「移行管理シート作成」の作業を楽にする。今のやり方(Website Explorer、URL からテキストを取得するマクロ、エディタでの置換)に固執せず、巡回の結果から、シートで埋める列の案を理由と一緒に一度に出す(2026-10-08 ユーザー)。
+- 主な変更内容: `goal2-app/batch/commands/sheet.js` と `batch/cli.js sheet` を足した。巡回で取った旧ページの写しを読み(旧サイトへは取りに行かない)、`crawl/sheet-draft.xlsx` に、移行管理 ID の案、ページ種別の案と理由、重複の案、グループの案(問い合わせ先のいちばん下の課や室)、旧ページタイトル、新ページタイトルの案と直した点と要確認、h1、パターンの案、移行元 URL、旧カテゴリ構成(パンくず)を出す。ページごとの取り出し(題名、h1、パンくず、問い合わせ先、本文のリンクの割合)は `batch/lib/page-tools.browser.js` の `sheetFacts` で、結果は `crawl/pages/<鍵>/sheet.json` に残して使い回す。ページ種別は、パンくずの下にほかのページがあるかで決め、パンくずが取れないページだけ本文のリンクの割合で決める。新ページタイトルの案は `batch/lib/titles.js`(全角英数字、半角カタカナ、丸数字、機種依存文字、年月日の日付、曜日。月と日だけの日付と元号の略は要確認にする)。コンテンツパターンの抽出は、ページごとの所属を `crawl/patterns-pages.json` に出すようにした(パターンの案に使う)。エンジンのページを複数開けるようにし(`startEngine` の `workers`)、手元の写しだけを調べる `sheet` と `patterns` で4枚まで使う。案件の設定に `sheet`(ID の形、パンくずと問い合わせ先のセレクター、ページ種別の名前、決め方の値)を足した。`goal2-app/batch/README.md`、`docs/renewal/FLOW.md`(2-2)、`docs/renewal/ARCHITECTURE.md`(名前の付け方)に書いた。テストに、パンくずと部署の取り出し、ページ種別とグループの案、新ページタイトルの案を足した。
+- 分かったこと(遠野市の移行管理シートの人の判断と、URL で突き合わせた 2,642 ページ): ページ種別は 90% が合った(詳細 96%、カテゴリ(コンテンツ無)は 66%。カテゴリの内容の有無は当たりにくい)。初めに本文のリンクの割合で決めたときは、詳細の 37% をカテゴリにしていた。グループは、人のグループと 86% が一致し、片方が片方を含むものを合わせると 91%(初めは部の名前だけを取り、10%)。重複は、両方が重複としたのが 81、人だけが 83(うち 63 は同じ題名のページがあり、「同じ題名」の列で見つかる)、案だけが 50(うち 24 は、人と逆の側を重複にしていた)。パンくずは 2,728 ページのうち 2,712 で取れた。2,728 ページで約7分(エンジンのページ4枚。1枚では約9分)。
+- レビュー: (push の前に記入)
+- 関連ファイル: `goal2-app/batch/commands/sheet.js`、`goal2-app/batch/lib/titles.js`、`goal2-app/batch/lib/page-tools.browser.js`、`goal2-app/batch/lib/engine-host.js`、`goal2-app/batch/lib/project.js`、`goal2-app/batch/cli.js`、`goal2-app/batch/commands/patterns.js`、`goal2-app/batch/README.md`、`goal2-app/test/batch-engine/run-crawl-tests.js`、`goal2-app/test/batch-engine/run-batch-unit-tests.js`、`goal2-app/test/batch-engine/fake-old-site.js`、`docs/renewal/FLOW.md`、`docs/renewal/ARCHITECTURE.md`
+- 関連PR/コミット: main への直接のコミット(PR なし)
+
 ## 2026-10-08: 共有ドライブで止まった原因を、空き容量ではなくアイテム数の上限と直す
 
 - 背景・目的: ユーザーが Drive for desktop の lost_and_found から取り出したファイル(巡回の記録と実行の記録、16件)を確かめた。退避の理由はエラーの種類 `MOVED_TO_ROOT_TD_LIMIT_EXCEEDED` で、共有ドライブのアイテム数の上限(1つの共有ドライブに40万アイテム)とみられる。画面に出た「共有ドライブの空き容量がありません」から、原因を空き容量と書いていた。

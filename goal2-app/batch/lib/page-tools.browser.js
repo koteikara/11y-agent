@@ -347,6 +347,121 @@
       return { body: await blocksOf(parsed.body), perSelector };
     },
 
+    // 移行管理シートの下書き用。題名、h1、パンくず、問い合わせ先、本文のリンクの割合を返す。
+    // パンくずと問い合わせ先は、案件の設定のセレクターがあればそれで、無ければよくある名前と見出しで探す。
+    // 見つけ方(どの要素か)も返し、下書きの理由の列に出す。
+    async sheetFacts({ html, url, breadcrumbSelector = null, contactSelector = null }) {
+      const parsed = new DOMParser().parseFromString(html || "", "text/html");
+      parsed.querySelectorAll("script,style,noscript,template").forEach((element) => element.remove());
+      const title = normalizeText(parsed.querySelector("title")?.textContent || "");
+      const h1 = normalizeText(parsed.querySelector("h1")?.textContent || "");
+      const pick = (selector) => {
+        if (!selector) return null;
+        try {
+          return parsed.querySelector(selector);
+        } catch {
+          return null;
+        }
+      };
+      const nameOf = (element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${element.classList.length ? `.${[...element.classList].join(".")}` : ""}`;
+
+      // パンくず: 項目(リンクか li)が2つ以上ある、名前がそれらしい要素。
+      const BREADCRUMB_NAME = /(pankuzu|breadcrumb|bread|topicpath|topic_path|crumb|location|current_path|path)/i;
+      const crumbItems = (element) => {
+        const items = [...element.querySelectorAll("li")].map((li) => normalizeText(li.textContent)).filter(Boolean);
+        const list = items.length >= 2 ? items : [...element.querySelectorAll("a")].map((a) => normalizeText(a.textContent)).filter(Boolean);
+        // 最後の項目(今のページ)はリンクでないことが多い。li が無いときは、要素の文字を区切りで分ける。
+        if (list.length >= 2) return list;
+        const text = normalizeText(element.textContent);
+        const parts = text.split(/\s*(?:>|＞|›|»|\/|＼|→)\s*/).map(normalizeText).filter(Boolean);
+        return parts.length >= 2 ? parts : [];
+      };
+      let breadcrumb = null;
+      const breadcrumbCandidates = breadcrumbSelector
+        ? [pick(breadcrumbSelector)].filter(Boolean)
+        : [
+            ...parsed.querySelectorAll('[itemtype*="BreadcrumbList"], nav[aria-label*="パンくず"], nav[aria-label*="breadcrumb" i]'),
+            ...[...parsed.querySelectorAll("[id],[class]")].filter((element) => BREADCRUMB_NAME.test(`${element.id} ${element.className}`)),
+          ];
+      for (const element of breadcrumbCandidates) {
+        const items = crumbItems(element).map((item) => item.replace(/^(現在の位置|現在地|現在位置)\s*[:：]?\s*/, "")).filter(Boolean);
+        if (items.length >= 2 && items.join("").length < 300) {
+          breadcrumb = { items, found: breadcrumbSelector ? `設定 ${breadcrumbSelector}` : nameOf(element) };
+          break;
+        }
+      }
+
+      // 問い合わせ先: 名前がそれらしい要素か、「お問い合わせ」の見出しのあとの文字から、担当の部署の名前を取る。
+      const CONTACT_NAME = /(contact|toiawase|otoiawase|inquiry|section_info|sectioninfo|signature|shomei|tantou|tanto)/i;
+      const CONTACT_HEADING = /(お問い?合わ?せ|問い?合わ?せ先|担当課|担当部署|このページに関する)/;
+      const STOP = /(電話|TEL|Tel|ＴＥＬ|ファクス|ファックス|FAX|Fax|ＦＡＸ|〒|住所|所在地|メール|E-?mail|Ｅメール|内線|〔|【)/;
+      // 段落や行の区切りを空白にして、要素の文字を取る(textContent は段落の文字を区切りなしにつなぐ)。
+      const blockText = (element) => {
+        const copy = element.cloneNode(true);
+        copy.querySelectorAll("p,div,li,dt,dd,br,tr,td,th,h1,h2,h3,h4,h5,h6,address,section").forEach((block) => block.after(" / "));
+        return normalizeText(copy.textContent);
+      };
+      const HEADING_WORDS = /(このページに関する)?(お問い?合わ?せ先?|問い?合わ?せ先|担当課|担当部署)(は)?/g;
+      const departmentOf = (element) => {
+        const cleaned = blockText(element)
+          .replace(HEADING_WORDS, " ")
+          .replace(/^[\s:：/]+/, "");
+        // 電話や住所が始まる所までを取る。部と課が別の行に書かれていることがある(遠野市は「総務企画部」の
+        // 次の行に「経営企画課」)ので、行の区切りは空白にしてつなぐ。
+        return nameFrom(cleaned.split(STOP)[0].replace(/\s*\/\s*/g, " "));
+      };
+      const nameFrom = (text) => {
+        const cleaned = normalizeText(text).replace(/^[\s:：]+/, "");
+        const head = cleaned.split(STOP)[0];
+        const name = normalizeText(head).replace(/[、,。:：\s]+$/, "");
+        return name && name.length <= 60 ? name : null;
+      };
+      let contact = null;
+      const contactElements = contactSelector
+        ? [pick(contactSelector)].filter(Boolean)
+        : [...parsed.querySelectorAll("[id],[class]")].filter((element) => CONTACT_NAME.test(`${element.id} ${element.className}`));
+      for (const element of contactElements) {
+        const department = departmentOf(element);
+        if (department) {
+          contact = { department, found: contactSelector ? `設定 ${contactSelector}` : nameOf(element) };
+          break;
+        }
+      }
+      if (!contact && !contactSelector) {
+        const headings = [...parsed.querySelectorAll("h2,h3,h4,h5,h6,dt,th,strong,p")].filter((element) => CONTACT_HEADING.test(normalizeText(element.textContent)) && normalizeText(element.textContent).length < 40);
+        for (const heading of headings) {
+          const next = heading.nextElementSibling || heading.parentElement?.nextElementSibling;
+          const department = next ? departmentOf(next) : null;
+          if (department) {
+            contact = { department, found: `見出し「${normalizeText(heading.textContent).slice(0, 20)}」のあと` };
+            break;
+          }
+        }
+      }
+
+      // 本文(汎用の判定で選んだ要素)の文字の量と、そのうちリンクの文字の割合。カテゴリのページ(下のページへの
+      // リンクだけ)かを見分けるのに使う。
+      const extraction = window.goal3Engine.extract(parsed.documentElement.outerHTML, title, url);
+      const top = extraction.candidates[0] || null;
+      let bodyText = 0;
+      let linkText = 0;
+      let links = 0;
+      if (top?.element) {
+        bodyText = normalizeText(top.element.textContent).length;
+        top.element.querySelectorAll("a[href]").forEach((a) => {
+          links += 1;
+          linkText += normalizeText(a.textContent).length;
+        });
+      }
+      return {
+        title,
+        h1,
+        breadcrumb,
+        contact,
+        body: { textLength: bodyText, linkTextLength: linkText, links, forms: parsed.querySelectorAll("form").length },
+      };
+    },
+
     // 型の範囲で抜いた本文と、汎用の判定で抜いた本文が食い違うか(型のまとめの「食い違いの数」)。
     async compareWithGeneric({ html, pageTitle, url, selector, exclude = [] }) {
       const byTemplate = await this.extractBody({ html, pageTitle, url, selector, exclude });

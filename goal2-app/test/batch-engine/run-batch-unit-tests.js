@@ -101,6 +101,18 @@ async function main() {
   for (const p of contentPages) assert.ok(!isPrintPage(new URL(`https://e.jp${p}`)), `本文のページを印刷用と見た: ${p}`);
   console.log("  ok   印刷用ページの判定");
 
+  // 新ページタイトルの案(手順書 1-1 の例)。直せるものは直し、決めきれないものは要確認にする。
+  const { normalizeTitle } = require("../../batch/lib/titles");
+  const t1 = normalizeTitle("あけましておめでとうございます（2020/1/1）");
+  assert.strictEqual(t1.title, "あけましておめでとうございます（2020年1月1日）");
+  assert.strictEqual(normalizeTitle("淀川花火大会中止のお知らせ　8/4（火）").title, "淀川花火大会中止のお知らせ 8/4（火曜日）");
+  assert.ok(normalizeTitle("淀川花火大会中止のお知らせ　8/4（火）").checks.length, "月と日だけの日付は要確認にする");
+  assert.strictEqual(normalizeTitle("平成28年総会①").title, "平成28年総会(1)");
+  assert.strictEqual(normalizeTitle("ｽﾎﾟｰﾂ大会　ＰＲ").title, "スポーツ大会 PR");
+  assert.ok(normalizeTitle("h26市長選挙").checks.length, "元号の略は要確認にする");
+  assert.deepStrictEqual(normalizeTitle("市長の部屋").changes, [], "直す所が無ければ何もしない");
+  console.log("  ok   新ページタイトルの案");
+
   console.log("\n=== batch unit tests passed ===");
 }
 

@@ -53,6 +53,23 @@ const DEFAULT_SETTINGS = {
     minPages: 10,
     proposals: 3,
   },
+  // 移行管理シートの下書き(batch/commands/sheet.js)。
+  sheet: {
+    // 移行管理 ID の案。頭の文字 + 連番(idDigits 桁) + 末尾。遠野市のシートは tono00001_0701 の形。
+    idPrefix: "",
+    idDigits: 5,
+    idSuffix: "",
+    // パンくずと問い合わせ先の要素。空なら、よくある名前と見出しで探す。サイトごとに決まっていれば入れる。
+    breadcrumbSelector: null,
+    contactSelector: null,
+    // ページ種別の選択肢の名前(移行管理シートのひな型の「マスタ」に合わせる)。
+    pageTypes: { category: "ｶﾃｺﾞﾘ(自動)", categoryContent: "ｶﾃｺﾞﾘ(内容有)", detail: "詳細", mobile: "携帯", special: "特殊" },
+    duplicateLabel: "重複",
+    // カテゴリかどうかはパンくずで決める(sheet.js の classifyPage)。パンくずが取れないページだけ、本文のリンクが
+    // categoryMinLinks 件以上で、文字のうちリンクの割合が categoryLinkRatio 以上ならカテゴリの案にする。
+    // カテゴリのうち、リンクでない文字が categoryContentChars 字より少なければ「自動」、多ければ「内容有」(遠野市で 400 が合った)。
+    thresholds: { categoryMinLinks: 5, categoryLinkRatio: 0.6, categoryContentChars: 400 },
+  },
   // 構造の型。similarity は、同じ型とみなす構造の重なり(0〜1)。minPages 未満の型は承認に回さず、
   // 汎用の判定で抜く。approved は承認した型(型の番号ごとに、範囲と代表の構造)。
   templates: {
