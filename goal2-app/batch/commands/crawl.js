@@ -281,7 +281,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   if (!state) {
     if (restart) fs.rmSync(paths.records, { force: true });
     else if (fs.existsSync(paths.records)) {
-      // 状態のファイルだけが無くなった(共有ドライブの空きが無いときに、同期で消えた)。記録は残して、最初から
+      // 状態のファイルだけが無くなった(共有ドライブのアイテム数の上限に達したときに、同期で消えた)。記録は残して、最初から
       // たどり直す。取れたページの数と、写しの有無は記録から決める。
       report("巡回: 状態のファイルが無いので、最初からたどり直す(前の記録は残し、取れたページは数え直さない)");
     }
@@ -340,7 +340,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
   // 前の実行で、ネットワークの切断や時間切れで取れなかったページは、待ち行列に戻して取り直す。
   // 巡回の途中で PC がネットワークから外れても、再開すればそのあいだのページを取り直せる。
   const TRANSIENT_REASONS = new Set(["network", "timeout", "dns"]);
-  // 取れたのに旧ページの写しが残っていないページも取り直す。共有ドライブの空きが無くなったとき、書いたはずの
+  // 取れたのに旧ページの写しが残っていないページも取り直す。共有ドライブのアイテム数の上限に達したとき、書いたはずの
   // 写しが残らなかった(大阪市の学校のサイトで、12,585 ページのうち 7,578 ページ)。数え直しや重複の判定には入れない。
   const refetchSource = new Set();
   // 記録で取れたページ。取ったページの数は、ここから数える(取り直しや、状態が無くなってたどり直したページを
@@ -396,7 +396,7 @@ async function runCrawl(project, { engine, startUrls, restart = false, log, repo
       resumeNotes.push(`ネットワークの切断や時間切れで取れなかったページ ${retry.length} 件を取り直す`);
     }
     // 写しがあるかは、ページのフォルダの一覧を1回だけ読み、フォルダがあるページだけ source.html を確かめる
-    // (共有ドライブでは、ページごとに確かめると遅いため)。空きが無くなったとき、フォルダだけ残ることがある。
+    // (共有ドライブでは、ページごとに確かめると遅いため)。アイテム数の上限に達したとき、フォルダだけ残ることがある。
     const pageDirs = new Set(fs.existsSync(paths.pages) ? fs.readdirSync(paths.pages) : []);
     const hasCopy = (url) => pageDirs.has(urlKey(url)) && fs.existsSync(path.join(paths.pages, urlKey(url), "source.html"));
     // 待ち行列から、もう取れて写しもあるページ(ファイルは取れていれば)と、同じ URL の2つ目以降(浅い階層を
