@@ -3,7 +3,8 @@
 //
 //   node batch/cli.js crawl   <案件のフォルダ> [--start URL,URL] [--restart]  巡回(ページの一覧づくり)
 //   node batch/cli.js patterns <案件のフォルダ> [--under URL]       コンテンツパターン(サブサイトの候補)を xlsx に出す
-//                                                                  --under: その URL の下のページだけで見る(patterns-<名前>.xlsx)
+//                                                                  --under: その URL の下のページだけで見る(patterns-<名前>.xlsx)。
+//                                                                  末尾の / やホスト名の大文字は問わない
 //   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID] [--reinspect]  取得(ページの台帳を書く)
 //                                                                  --reinspect: 取り直さずに、保存した旧ページを調べ直す
 //   node batch/cli.js group   <案件のフォルダ>                      型のまとめ(本文の範囲の案)
@@ -252,6 +253,8 @@ async function runCommand(project, command, options, ids, report) {
       const startUrls = typeof options.start === "string" ? options.start.split(",").map((url) => url.trim()).filter(Boolean) : null;
       await runCrawl(project, { engine, startUrls, restart: Boolean(options.restart), log, report });
     } else if (command === "patterns") {
+      // --under の URL を書き忘れたときに、全体の一覧を書き換えないよう止める。
+      if (options.under === true) throw new Error("--under には URL を書く(例: --under https://example.jp/school1/)");
       await runPatterns(project, { engine, log, report, under: typeof options.under === "string" ? options.under : null });
     } else if (command === "fetch") {
       await runFetch(project, { engine, ids, reinspect: Boolean(options.reinspect), log, report });

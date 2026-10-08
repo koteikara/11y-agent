@@ -175,11 +175,17 @@ async function main() {
     console.log("  ok   コンテンツパターン: サブサイトの候補を順位付けし、xlsx に出す");
 
     // ある URL の下だけで見ると、その下のページだけを数え、別の名前の一覧に出す(全体の一覧は書き換えない)。
-    const scopedOut = await cli("patterns", dir, "--under", `${origin}/b/`);
-    assert.match(scopedOut, /\/b\/ の下/);
+    // ホスト名の大文字や末尾の / は、巡回の記録と同じ形に整えてから比べる。
+    const scopedOut = await cli("patterns", dir, "--under", `${origin.toUpperCase().replace("HTTP://", "http://")}/b`);
+    assert.match(scopedOut, /\/b の下/);
     const scoped = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns-b.json"), "utf8"));
     assert.ok(fs.existsSync(path.join(dir, "crawl", "patterns-b.xlsx")));
+    const bPages = readCsv(path.join(dir, "crawl", "list.csv")).filter((row) => row.URL.startsWith(`${origin}/b/`) && row.状態 === "取れた");
+    assert.strictEqual(scoped.pages, bPages.length, "下のページだけを数える");
     assert.ok(scoped.candidates.every((c) => !c.entry || c.entry.startsWith(`${origin}/b/`)), JSON.stringify(scoped.candidates.map((c) => c.entry)));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8")), patterns);
+    // URL を書き忘れたときは、全体の一覧を書き換えずに止める。
+    await assert.rejects(cli("patterns", dir, "--under"), /--under には URL を書く/);
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8")), patterns);
     console.log("  ok   コンテンツパターン: URL の下だけで見る(--under)");
 
@@ -189,7 +195,7 @@ async function main() {
       .map((name) => fs.readFileSync(path.join(dir, "logs", name), "utf8"))
       .join("\n");
     for (const text of ["子育て支援のお知らせ", "テスト市トップ", "<p>"]) {
-      assert.ok(![crawlOut, again, fetchOut, patternsOut].join("\n").includes(text), `画面に出ている: ${text}`);
+      assert.ok(![crawlOut, again, fetchOut, patternsOut, scopedOut].join("\n").includes(text), `画面に出ている: ${text}`);
       assert.ok(!logs.includes(text), `実行の記録に出ている: ${text}`);
     }
     console.log("  ok   画面と実行の記録に、旧サイトの本文と題名を出さない");

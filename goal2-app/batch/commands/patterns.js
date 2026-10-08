@@ -13,7 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const { clusterByStructure } = require("../lib/structure");
 const { buildXlsx } = require("../lib/xlsx");
-const { urlKey, isPrintPage, ANALYSIS_VERSION } = require("./crawl");
+const { urlKey, isPrintPage, normalizeUrl, ANALYSIS_VERSION } = require("./crawl");
 
 const TEMPLATE_LINK_RATIO = 0.3; // これ以上のページから張られているリンクは、メニューなどのテンプレートのリンクとみなす
 const MAX_DIRECTORY_DEPTH = 3;
@@ -104,18 +104,35 @@ function linkCommunities(urls, edges) {
 
 // under を渡すと、その URL の下のページだけで見る。学校ごとのサイトの集まり(大阪市の学校のサイト)のように、
 // 1つの巡回に別々のサイトが入っているとき、サイトごとの本体と型を見るため。結果は patterns-<名前>.xlsx に出す。
-function scopeName(under) {
-  const { pathname } = new URL(under);
-  return pathname.split("/").filter(Boolean).join("-").replace(/[^A-Za-z0-9._-]/g, "_") || "root";
+// URL は、巡回の記録と同じ整え方(ホスト名の小文字、日本語の道の符号化など)にしてから比べる。道の区切りで
+// 比べるので、末尾の / の有無は問わず、…/e531060 を渡しても …/e5310601/ は入らない。
+function parseScope(value) {
+  const normalized = normalizeUrl(value, []);
+  if (!normalized) throw new Error(`--under には、http:// か https:// から始まる URL を書く(巡回の一覧 list.csv の URL と同じ書き方): ${value}`);
+  const base = normalized.split("?")[0].replace(/\/+$/, "");
+  // 一覧の名前は、道と項目を - でつなぐ(日本語の道はそのまま読める形にする)。ファイル名に使えない文字は _ にする。
+  const { pathname, search } = new URL(normalized);
+  const name =
+    decodeURIComponent(pathname + search)
+      .split(/[/?&=]+/)
+      .filter(Boolean)
+      .join("-")
+      .replace(/[\\:*"<>|\s]/g, "_") || "root";
+  return {
+    base,
+    name,
+    contains: (url) => url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`),
+  };
 }
 
 async function runPatterns(project, { engine, log, report, under = null }) {
   const settings = project.readSettings();
   const minPages = settings.patterns.minPages;
   const proposals = settings.patterns.proposals;
-  const pages = readRecords(project, settings).filter((record) => !under || record.url.startsWith(under));
-  if (!pages.length) throw new Error(under ? `${under} の下に、巡回で取れたページがありません。` : "巡回で取れたページがありません。");
-  report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる${under ? `(${new URL(under).pathname} の下)` : ""}`);
+  const scope = under ? parseScope(under) : null;
+  const pages = readRecords(project, settings).filter((record) => !scope || scope.contains(record.url));
+  if (!pages.length) throw new Error(scope ? `${scope.base} の下に、巡回で取れたページがありません。` : "巡回で取れたページがありません。");
+  report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる${scope ? `(${new URL(scope.base).pathname} の下)` : ""}`);
 
   // ページごとの構造とリンク。調べた結果は crawl/pages/<鍵>/analysis.json に残し、次からは使い回す。
   // 共有ドライブでは、ファイルを1件読むのに時間がかかるので、READ_CONCURRENCY 件まで並べて読む
@@ -219,7 +236,8 @@ async function runPatterns(project, { engine, log, report, under = null }) {
   });
   for (const members of linkCommunities(urls, contentEdges)) {
     // 始まりのページを含む群は、サイト全体の入口の群なので、サブサイトの候補にしない。
-    if (members.some((url) => byUrl.get(url).depth === 0 || url === under)) continue;
+    // 範囲を絞ったときは、範囲の入口(渡した URL)を含む群も同じ扱いにする。
+    if (members.some((url) => byUrl.get(url).depth === 0 || (scope && (url === scope.base || url === `${scope.base}/`)))) continue;
     if (members.length >= minPages && members.length < urls.length * 0.9) groups.push({ kind: "リンクのまとまり", key: "", members });
   }
 
@@ -289,7 +307,7 @@ async function runPatterns(project, { engine, log, report, under = null }) {
   for (const row of merged) for (const url of row.members) if (!candidateOf.has(url)) candidateOf.set(url, row.rank);
 
   const outDir = path.join(project.root, "crawl");
-  const outBase = under ? `patterns-${scopeName(under)}` : "patterns";
+  const outBase = scope ? `patterns-${scope.name}` : "patterns";
   project.writeJson(path.join(outDir, `${outBase}.json`), {
     generatedAt: new Date().toISOString(),
     pages: urls.length,
