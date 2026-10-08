@@ -243,6 +243,8 @@ async function runSheet(project, { engine, log, report }) {
     "同じ題名",
   ];
   const rows = [header];
+  // カテゴリ割当(batch/commands/category.js)が読む、ページごとの案。xlsx と同じ値を JSON でも置く。
+  const draftPages = [];
   const counts = { types: {}, duplicate: 0, sameTitle: 0, breadcrumb: 0, contact: 0, titleChanged: 0, titleChecks: 0, h1Differs: 0, pattern: 0 };
   pages.forEach((page, index) => {
     const fact = facts[index] || {};
@@ -291,7 +293,20 @@ async function runSheet(project, { engine, log, report }) {
       page.depth ?? "",
       sameTitle > 1 ? `${sameTitle} 件` : "",
     ]);
+    draftPages.push({
+      id: idOf.get(page.url),
+      url: page.url,
+      type: classified.type,
+      duplicateOf: duplicateOf || null,
+      group: groupFrom(fact.contact?.department) || null,
+      department: fact.contact?.department || null,
+      title,
+      newTitle: normalized.changes.length ? normalized.title : null,
+      breadcrumb: fact.breadcrumb?.items || null,
+      breadcrumbLastIsCurrent: fact.breadcrumb ? fact.breadcrumb.lastIsCurrent !== false : null,
+    });
   });
+  project.writeJson(path.join(project.root, "crawl", "sheet-draft.json"), { generatedAt: new Date().toISOString(), pages: draftPages });
 
   const guide = [
     ["列", "中身", "シートの列"],

@@ -125,6 +125,16 @@ async function main() {
   assert.strictEqual(groupFrom("遠野市中央通り9-1(とぴあ庁舎内)"), "", "単位の語が無ければグループの案にしない");
   console.log("  ok   新ページタイトルの案");
 
+  // xlsx を読む部品。書いた xlsx を読み戻すと、シートの名前と文字と数が戻る。
+  const { readXlsx } = require("../../batch/lib/xlsx-read");
+  const { buildXlsx: build } = require("../../batch/lib/xlsx");
+  const roundTrip = path.join(os.tmpdir(), `xlsx-read-${process.pid}.xlsx`);
+  fs.writeFileSync(roundTrip, build([{ name: "カテゴリ", rows: [["ホーム", "1階層目"], ["ホーム", "子育て&教育<>"], ["数", 3]] }]));
+  const readBack = readXlsx(roundTrip).get("カテゴリ");
+  fs.rmSync(roundTrip);
+  assert.deepStrictEqual(readBack, [["ホーム", "1階層目"], ["ホーム", "子育て&教育<>"], ["数", "3"]]);
+  console.log("  ok   xlsx を読む部品");
+
   console.log("\n=== batch unit tests passed ===");
 }
 

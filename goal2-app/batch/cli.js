@@ -6,6 +6,7 @@
 //                                                                  --under: その URL の下のページだけで見る(patterns-<名前>.xlsx)。
 //                                                                  末尾の / やホスト名の大文字は問わない
 //   node batch/cli.js sheet   <案件のフォルダ>                      移行管理シートの下書きを xlsx に出す(巡回の結果から)
+//   node batch/cli.js category <案件のフォルダ>                     カテゴリ割当の案を xlsx に出す(sheet のあと)
 //   node batch/cli.js fetch   <案件のフォルダ> [--ids ID,ID] [--reinspect]  取得(ページの台帳を書く)
 //                                                                  --reinspect: 取り直さずに、保存した旧ページを調べ直す
 //   node batch/cli.js group   <案件のフォルダ>                      型のまとめ(本文の範囲の案)
@@ -29,6 +30,7 @@ const { runFetch } = require("./commands/fetch");
 const { runCrawl, normalizeUrl } = require("./commands/crawl");
 const { runPatterns } = require("./commands/patterns");
 const { runSheet } = require("./commands/sheet");
+const { runCategory } = require("./commands/category");
 const { runGroup } = require("./commands/group");
 const { runProcess } = require("./commands/process");
 const { writeSummary, DEPTH_LABELS } = require("./lib/summary");
@@ -142,7 +144,7 @@ async function main() {
     return;
   }
 
-  if (!["crawl", "patterns", "sheet", "fetch", "group", "process"].includes(command)) {
+  if (!["crawl", "patterns", "sheet", "category", "fetch", "group", "process"].includes(command)) {
     console.error(`知らないコマンド: ${command}\n${usage()}`);
     process.exit(2);
   }
@@ -262,6 +264,8 @@ async function runCommand(project, command, options, ids, report) {
       await runPatterns(project, { engine, log, report, under: typeof options.under === "string" ? options.under : null });
     } else if (command === "sheet") {
       await runSheet(project, { engine, log, report });
+    } else if (command === "category") {
+      await runCategory(project, { log, report });
     } else if (command === "fetch") {
       await runFetch(project, { engine, ids, reinspect: Boolean(options.reinspect), log, report });
     } else if (command === "group") {

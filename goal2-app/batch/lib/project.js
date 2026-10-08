@@ -53,6 +53,14 @@ const DEFAULT_SETTINGS = {
     minPages: 10,
     proposals: 3,
   },
+  // カテゴリ割当の案(batch/commands/category.js)。designFile はカテゴリ設計書(xlsx)の場所(案件のフォルダからの相対か絶対)。
+  category: {
+    designFile: null,
+    designSheet: "カテゴリ",
+    home: "ホーム",
+    // オリジナルを置く、組織のカテゴリの1階層目の名前。
+    orgRoot: "組織から探す",
+  },
   // 移行管理シートの下書き(batch/commands/sheet.js)。
   sheet: {
     // 移行管理 ID の案。頭の文字 + 連番(idDigits 桁) + 末尾。遠野市のシートは tono00001_0701 の形。

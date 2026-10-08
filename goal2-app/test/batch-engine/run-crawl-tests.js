@@ -225,6 +225,64 @@ async function main() {
     assert.strictEqual(groupFrom("議会事務局"), "議会事務局");
     console.log("  ok   移行管理シートの下書き: パンくず、問い合わせ先、ページ種別の案");
 
+    // カテゴリ割当の案。カテゴリ設計書(テスト用に作る)の木と、下書きのパンくず、グループから案を出す。
+    const { buildXlsx } = require("../../batch/lib/xlsx");
+    const { readXlsx } = require("../../batch/lib/xlsx-read");
+    const designRows = [
+      ["ホーム", "1階層目", "2階層目", "3階層目", "パス構成"],
+      ["ホーム"],
+      ["ホーム", "子育て・教育"],
+      ["ホーム", "子育て・教育", "子育て"],
+      ["ホーム", "子育て・教育", "保育"],
+      ["ホーム", "組織から探す"],
+      ["ホーム", "組織から探す", "総務部"],
+      ["ホーム", "組織から探す", "総務部", "総務課"],
+    ];
+    fs.writeFileSync(path.join(dir, "input", "design.xlsx"), buildXlsx([{ name: "カテゴリ", rows: designRows.map((r) => [...r, "", "", "", ""].slice(0, 5)) }]));
+    const settingsFile = path.join(dir, "project", "settings.json");
+    const settingsNow = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+    fs.writeFileSync(settingsFile, JSON.stringify({ ...settingsNow, category: { designFile: "input/design.xlsx" } }, null, 2));
+    const categoryOut = await cli("category", dir);
+    assert.match(categoryOut, /カテゴリ設計書のカテゴリ 7/);
+    const categoryFile = path.join(dir, "crawl", "category-draft.xlsx");
+    let draftSheets = readXlsx(categoryFile);
+    let pageSheet = draftSheets.get("ページ");
+    const column = (name) => pageSheet[0].indexOf(name);
+    const rowOf = (url) => pageSheet.find((row) => row && row[column("移行元 URL")] === url);
+    // 子育てのページは、旧カテゴリ「子育て」と同じ名前のカテゴリを案にする。
+    assert.strictEqual(rowOf(`${origin}/b/2.html`)[column("ショートカット1(案)")], "ホーム/子育て・教育/子育て");
+    // ディレクターが節で決めた割当先と、ページで直した割当先を書き、もう一度動かすと引き継ぐ。
+    const nodeSheet = draftSheets.get("旧カテゴリ");
+    const nodeKey = nodeSheet[0].indexOf("旧カテゴリ");
+    const nodeDecide = nodeSheet[0].indexOf("割当先(決める)");
+    const width = (rows) => Math.max(...rows.map((r) => (r || []).length));
+    const pad = (rows) => rows.map((r) => Array.from({ length: width(rows) }, (_, i) => (r && r[i] != null ? r[i] : "")));
+    const decidedNodes = nodeSheet.map((row, i) => {
+      const copy = [...(row || [])];
+      if (i > 0 && copy[nodeKey] === "子育て") copy[nodeDecide] = "ホーム/子育て・教育/保育";
+      return copy;
+    });
+    const fixedPages = pageSheet.map((row, i) => {
+      const copy = [...(row || [])];
+      if (i > 0 && copy[column("移行元 URL")] === `${origin}/a/1.html`) copy[column("割当先を直す")] = "ホーム/子育て・教育/子育て";
+      return copy;
+    });
+    fs.writeFileSync(categoryFile, buildXlsx([{ name: "旧カテゴリ", rows: pad(decidedNodes) }, { name: "ページ", rows: pad(fixedPages) }]));
+    const categoryAgain = await cli("category", dir);
+    assert.match(categoryAgain, /前の下書きに書かれた割当先: 旧カテゴリ 1、ページ 1/);
+    draftSheets = readXlsx(categoryFile);
+    pageSheet = draftSheets.get("ページ");
+    assert.strictEqual(rowOf(`${origin}/b/2.html`)[column("ショートカット1(案)")], "ホーム/子育て・教育/保育");
+    assert.match(rowOf(`${origin}/b/2.html`)[column("案の出どころ")], /旧カテゴリ「子育て」で決めた/);
+    const a1 = rowOf(`${origin}/a/1.html`);
+    assert.strictEqual(a1[column("ショートカット1(案)")], "ホーム/子育て・教育/子育て");
+    // オリジナルは、グループの課(総務課)の道に、ショートカット1 の2階層目から下をつなぐ。
+    assert.strictEqual(a1[column("オリジナル(案)")], "ホーム/組織から探す/総務部/総務課/子育て");
+    assert.match(a1[column("確かめ")] || "", /オリジナル: カテゴリ設計書に無い/);
+    assert.strictEqual(a1[column("割当先を直す")], "ホーム/子育て・教育/子育て", "書いた値は消さない");
+    assert.ok(![categoryOut, categoryAgain].join("\n").includes("子育て支援のお知らせ"));
+    console.log("  ok   カテゴリ割当の案: 名前で合わせた案、節で決めた割当先の引き継ぎ、ページで直した割当先、オリジナル");
+
     // 画面と実行の記録に、旧サイトの本文と題名を出さない。
     const logs = fs
       .readdirSync(path.join(dir, "logs"))
