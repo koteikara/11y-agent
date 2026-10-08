@@ -174,6 +174,15 @@ async function main() {
     assert.strictEqual(xlsx.subarray(0, 2).toString(), "PK", "xlsx は ZIP の形で書く");
     console.log("  ok   コンテンツパターン: サブサイトの候補を順位付けし、xlsx に出す");
 
+    // ある URL の下だけで見ると、その下のページだけを数え、別の名前の一覧に出す(全体の一覧は書き換えない)。
+    const scopedOut = await cli("patterns", dir, "--under", `${origin}/b/`);
+    assert.match(scopedOut, /\/b\/ の下/);
+    const scoped = JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns-b.json"), "utf8"));
+    assert.ok(fs.existsSync(path.join(dir, "crawl", "patterns-b.xlsx")));
+    assert.ok(scoped.candidates.every((c) => !c.entry || c.entry.startsWith(`${origin}/b/`)), JSON.stringify(scoped.candidates.map((c) => c.entry)));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, "crawl", "patterns.json"), "utf8")), patterns);
+    console.log("  ok   コンテンツパターン: URL の下だけで見る(--under)");
+
     // 画面と実行の記録に、旧サイトの本文と題名を出さない。
     const logs = fs
       .readdirSync(path.join(dir, "logs"))

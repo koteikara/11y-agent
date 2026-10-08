@@ -102,13 +102,20 @@ function linkCommunities(urls, edges) {
   return [...groups.values()];
 }
 
-async function runPatterns(project, { engine, log, report }) {
+// under を渡すと、その URL の下のページだけで見る。学校ごとのサイトの集まり(大阪市の学校のサイト)のように、
+// 1つの巡回に別々のサイトが入っているとき、サイトごとの本体と型を見るため。結果は patterns-<名前>.xlsx に出す。
+function scopeName(under) {
+  const { pathname } = new URL(under);
+  return pathname.split("/").filter(Boolean).join("-").replace(/[^A-Za-z0-9._-]/g, "_") || "root";
+}
+
+async function runPatterns(project, { engine, log, report, under = null }) {
   const settings = project.readSettings();
   const minPages = settings.patterns.minPages;
   const proposals = settings.patterns.proposals;
-  const pages = readRecords(project, settings);
-  if (!pages.length) throw new Error("巡回で取れたページがありません。");
-  report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる`);
+  const pages = readRecords(project, settings).filter((record) => !under || record.url.startsWith(under));
+  if (!pages.length) throw new Error(under ? `${under} の下に、巡回で取れたページがありません。` : "巡回で取れたページがありません。");
+  report(`コンテンツパターン: 巡回で取れたページ ${pages.length} を調べる${under ? `(${new URL(under).pathname} の下)` : ""}`);
 
   // ページごとの構造とリンク。調べた結果は crawl/pages/<鍵>/analysis.json に残し、次からは使い回す。
   // 共有ドライブでは、ファイルを1件読むのに時間がかかるので、READ_CONCURRENCY 件まで並べて読む
@@ -212,7 +219,7 @@ async function runPatterns(project, { engine, log, report }) {
   });
   for (const members of linkCommunities(urls, contentEdges)) {
     // 始まりのページを含む群は、サイト全体の入口の群なので、サブサイトの候補にしない。
-    if (members.some((url) => byUrl.get(url).depth === 0)) continue;
+    if (members.some((url) => byUrl.get(url).depth === 0 || url === under)) continue;
     if (members.length >= minPages && members.length < urls.length * 0.9) groups.push({ kind: "リンクのまとまり", key: "", members });
   }
 
@@ -282,7 +289,8 @@ async function runPatterns(project, { engine, log, report }) {
   for (const row of merged) for (const url of row.members) if (!candidateOf.has(url)) candidateOf.set(url, row.rank);
 
   const outDir = path.join(project.root, "crawl");
-  project.writeJson(path.join(outDir, "patterns.json"), {
+  const outBase = under ? `patterns-${scopeName(under)}` : "patterns";
+  project.writeJson(path.join(outDir, `${outBase}.json`), {
     generatedAt: new Date().toISOString(),
     pages: urls.length,
     types: clusters.map((cluster, i) => ({ type: `型${i + 1}`, pages: cluster.members.length })),
@@ -336,7 +344,7 @@ async function runPatterns(project, { engine, log, report }) {
   const typeRows = [["構造の型", "ページ数", "例"]];
   clusters.forEach((cluster, i) => typeRows.push([`型${i + 1}${i === 0 ? "(本体)" : ""}`, cluster.members.length, cluster.members[0].id]));
 
-  const xlsxFile = path.join(outDir, "patterns.xlsx");
+  const xlsxFile = path.join(outDir, `${outBase}.xlsx`);
   project.writeFileAtomic(
     xlsxFile,
     buildXlsx([
