@@ -27,6 +27,28 @@ Goal 2(`/`)とGoal 3(`/goal3.html`)は、別々のアプリ・別々のCloud Run
 - リージョンは `asia-northeast1`
 - コンテナポートは `8080`
 
+## いまの公開の状態(2026-10-22 から)
+
+2026-10-22 に、サービスの公開を閉じた。
+使っている人がいないのに、パスワード無しで誰でも開け、Vertex AI の費用もかかる状態だったためである。
+`allUsers` の `roles/run.invoker` を外し、トークンの無い要求は Cloud Run が 403 で断る。
+シークレット `app-password` はまだ作っていない。
+
+閉じている間は、この手順書の `gcloud run deploy` を次のように読み替える。
+
+- `--allow-unauthenticated` を `--no-allow-unauthenticated` にする。付けたままだと `allUsers` が戻り、誰でも開ける。
+- シークレットが無いので `--update-secrets` を付けない。アプリは `APP_PASSWORD` が無いので、`GET /api/health` 以外に 503 を返す。
+- 確かめるときは、自分のトークンを付けて開く。
+
+```powershell
+$URL = gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(status.url)"
+curl.exe -s -o NUL -w "%{http_code}`n" "$URL/api/health"    # 403 (トークン無し)
+curl.exe -s -o NUL -w "%{http_code}`n" -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/api/health"    # 200
+```
+
+また使い始めるときは、先に下の「共通のパスワード」の1と2を行い、`--update-secrets` 付きのリビジョンで、パスワードを求められることを確かめる。
+そのあとで `--allow-unauthenticated` を付けて公開を開ける。
+
 ## 更新デプロイ
 
 PowerShell で、次の2つの段に分けて実行します。
