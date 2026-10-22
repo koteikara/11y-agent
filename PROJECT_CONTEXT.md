@@ -2,7 +2,7 @@
 project: 11y-agent
 repository: https://github.com/koteikara/11y-agent
 status: active
-updated: 2026-10-13
+updated: 2026-10-22
 knowledge_mocs:
   - AI・自動化
   - UI・デザイン
@@ -23,7 +23,7 @@ knowledge_mocs:
 | 言語 | JavaScript (CommonJS) | サーバー、ブラウザUI、テスト、分析ツール | `goal2-app/package.json` (`"type": "commonjs"`)、`goal2-app/server.js`、`goal2-app/public/*.js` |
 | 言語 | Python 3 | ナレッジベースのMarkdownからJSONLを生成するジェネレータ | `a11y-migration-kb/tools/okf2jsonl.py`、`actf2json.py`、`gen_michecker_inventory.py` |
 | 言語 | Google Apps Script | 移行記録スプレッドシートの作業時間計測サイドバー | `spreadsheet-gas/Code.gs`、`Index.html`、`appsscript.json` |
-| ランタイム | Node.js 24以上（LTS、保守は2028-04-30まで） | 実行画面群（Goal 1〜3、miChecker結果比較）のHTTPサーバー | `goal2-app/package.json` (`engines.node >=24`)、`goal2-app/Dockerfile` (`node:24-alpine`) |
+| ランタイム | Node.js 24.22.1以上（LTS、保守は2028-04-30まで。24.22.1は2026年10月のセキュリティ修正版） | 実行画面群（Goal 1〜3、miChecker結果比較）のHTTPサーバー | `goal2-app/package.json` (`engines.node >=24.22.1`)、`goal2-app/Dockerfile` (`node:24.22.1-alpine`) |
 | フレームワーク | なし（Node標準 `http` モジュール） | 静的配信、ルールAPI、URL取得API、LLM中継API。npm依存は0件 | `goal2-app/server.js`、`goal2-app/package.json` (`dependencies` なし) |
 | UI | 素のHTML/CSS/JS | Goal 2候補確認画面 (`index.html`/`app.js`)、Goal 3抽出画面 (`goal3.html`)、Goal 1画面 (`goal1.html`)、miChecker比較画面 (`michecker-compare.html`)、検証ガイド (`verification-guide.html`)、概要スライド (`verification-slides.html`) | `goal2-app/public/` |
 | データ保存 | JSONL/JSONファイル（読み取り専用） | KBルール67件とmiChecker公式チェック項目を起動時に読み込む。永続化DBは無い | `goal2-app/data/rules.jsonl`、`goal2-app/data/michecker-checkitems.json`、`a11y-migration-kb/build/` |
@@ -103,7 +103,7 @@ npm run test:goal2-output
 npm run test:saga-gold        # 佐賀市 old/gold fixture との比較（CIでは動かさない）
 ```
 
-テストで起動するサーバーにはLLM関係の環境変数を渡さない（`goal2-app/test/server-env.js`）。CIはNode 24（Dockerfileと同じ版）で上の `test:saga-gold` 以外を動かす。佐賀市fixtureは非公開の `koteikara/gemini-a11y-agent` にあり、手元では `.tmp-gemini-a11y-agent` に置く。
+テストで起動するサーバーにはLLM関係の環境変数を渡さない（`goal2-app/test/server-env.js`）。CIはNode 24.22.1（Dockerfileと同じ版）で上の `test:saga-gold` 以外を動かす。佐賀市fixtureは非公開の `koteikara/gemini-a11y-agent` にあり、手元では `.tmp-gemini-a11y-agent` に置く。
 
 リポジトリの検査は次の通り。リポジトリのどこからでも実行でき、CIも同じものを動かす。
 
@@ -125,7 +125,7 @@ python3 tools/actf2json.py --bundle . --out build/michecker-checkitems.json
 ビルドとデプロイは2系統ある。
 
 - Cloud Run: `goal2-app/CLOUD_RUN_DEPLOY.md` のPowerShell手順で、手元の `main` がコミット済みでGitHubの `main` と一致することを確かめてから `gcloud builds submit` と `gcloud run deploy` を実行する。
-- Windows `.exe`: `goal2-app/build-windows-app.bat` を実行する。Node.js 24以上とsigntoolが必要（`LOCAL_WINDOWS_APP.md`）。作るPCのNode.jsが中に入るので、作るPCの版が利用者の版になる。
+- Windows `.exe`: `goal2-app/build-windows-app.bat` を実行する。Node.js 24.22.1以上とsigntoolが必要（`LOCAL_WINDOWS_APP.md`）。作るPCのNode.jsが中に入るので、作るPCの版が利用者の版になる。
 
 環境変数名は次の通り（値は記載しない）。
 

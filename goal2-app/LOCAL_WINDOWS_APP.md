@@ -6,7 +6,7 @@
 
 ## 前提条件
 
-- ビルドを行うWindows PCに **Node.js 24以降(LTS)** がインストールされていること。`goal2-app.exe`はビルドしたPCのNode.jsを中に含めるので、ビルドしたPCのNode.jsの版が、そのまま利用者のPCで動く版になる。
+- ビルドを行うWindows PCに **Node.js 24.22.1以降(LTS)** がインストールされていること。24.22.1 は 2026年10月のセキュリティ修正が入った版である。`goal2-app.exe`はビルドしたPCのNode.jsを中に含めるので、ビルドしたPCのNode.jsの版が、そのまま利用者のPCで動く版になる。
 - ビルドを行うWindows PCに **`signtool`(Windows SDK Signing Tools)** がインストールされていること。`node.exe`は署名済みバイナリのため、SEA化する前に署名を除去する必要があり、これが無いと`goal2-app.exe`は生成されても正しく動作しない(起動時にアプリではなくNode.jsの対話モードが開いてしまう)。
 - インターネット接続(初回ビルド時に `npx` が `esbuild@0.28.2` と `postject@1.0.0-alpha.6` を取得する。版は `build-windows-app.bat` で固定しており、作り直しても同じ版で作られる)。
 
@@ -14,7 +14,7 @@ Node.js・signtoolが入っているかどうかは、次の2つの節の確認�
 
 ## Node.jsのインストール(未インストールの場合)
 
-`goal2-app.exe`のビルドには、開発ツールのNode.jsが必要になる(ビルドする側のPCだけで必要。`goal2-app.exe`を配布された利用者側のPCには不要)。すでに他のソフトでNode.jsを使っている場合は、`node -v`で版を確かめ、24より古ければLTSの版を入れ直す。
+`goal2-app.exe`のビルドには、開発ツールのNode.jsが必要になる(ビルドする側のPCだけで必要。`goal2-app.exe`を配布された利用者側のPCには不要)。すでに他のソフトでNode.jsを使っている場合は、`node -v`で版を確かめ、24.22.1より古ければLTSの版を入れ直す。
 
 1. ブラウザで [https://nodejs.org/](https://nodejs.org/) を開く。
 2. 「LTS」と書かれた方のボタンをクリックしてインストーラー(`.msi`ファイル)をダウンロードする(「Current」ではなく「LTS」を選ぶ)。
