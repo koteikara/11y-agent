@@ -25,7 +25,7 @@
 
 - 背景・目的: Node.js の 2026年10月のセキュリティリリースで、TLS の接続先 IP アドレスの確かめ方(2件)、DNS の resolve の入力、Brotli の展開の High 4項目(CVE 5件)が直った(24系は 24.22.1、2026-10-21 のリリースノートで確認)。Cloud Run のイメージが `node:24-alpine` のままだと、どの版で動くかがビルドした日で変わるため、修正の入った版に固定する。あわせて本番を確かめると、2026-09-25 のイメージがパスワード無しで公開されたままだった。使っている人がいないので、安全を優先して公開を閉じた(ユーザーの決定)。
 - 主な変更内容: `Dockerfile` を `node:24.22.1-alpine` に固定した(ビルド段階は1つだけ)。`package.json` の `engines.node` を `>=24.22.1`、CI の `setup-node` の2か所を `24.22.1` にした。Windows 版は作る PC の Node.js が中に入るので、`build-windows-app.bat` の案内と `LOCAL_WINDOWS_APP.md` の前提も 24.22.1 以上にした。`.node-version` と `.nvmrc` は無い。`npm audit` はアプリ(依存0件)も CI が入れる `playwright@1.56.1` も 0 件だった。ユーザーが `allUsers` の `roles/run.invoker` を外し、`CLOUD_RUN_DEPLOY.md` に「いまの公開の状態」を足して、閉じている間は `--no-allow-unauthenticated` で `--update-secrets` を付けずにデプロイすると書いた。`PROJECT_CONTEXT.md` と `memory/project-state.md` も合わせた。アプリの機能と文言は変えていない。
-- レビュー: REVIEW_PLACEHOLDER
+- レビュー: Fable のレビューを2回受けた。1回目の要修正3件(脆弱性の内訳をリリースノートに合わせる、この行、関連PR/コミットの書式)を直した。2回目の要修正6件を直した(project-state のデプロイを予定の書き方にし、宙に浮いた「次のデプロイ」を「公開を開けるデプロイ」にし、`allUsers` のままとする決定と P1 の設計に一時的に外していることを添え、手順書のシークレットを先に作る説明と反映確認に閉じている間の扱いを書いた)。提案から、トークン付きで `/` が 503 になるのが正しいこと、IAM だけで公開を戻す手順と順番を取り入れた。engines を `>=24` に戻す案と Alpine の版の固定は入れない。
 - 関連ファイル: `goal2-app/Dockerfile`、`goal2-app/package.json`、`.github/workflows/ci.yml`、`goal2-app/build-windows-app.bat`、`goal2-app/LOCAL_WINDOWS_APP.md`、`goal2-app/CLOUD_RUN_DEPLOY.md`、`PROJECT_CONTEXT.md`、`memory/project-state.md`
 - 関連PR/コミット: main への直接のコミット(PR なし)
 

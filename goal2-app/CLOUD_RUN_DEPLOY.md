@@ -34,20 +34,30 @@ Goal 2(`/`)とGoal 3(`/goal3.html`)は、別々のアプリ・別々のCloud Run
 `allUsers` の `roles/run.invoker` を外し、トークンの無い要求は Cloud Run が 403 で断る。
 シークレット `app-password` はまだ作っていない。
 
-閉じている間は、この手順書の `gcloud run deploy` を次のように読み替える。
+閉じている間は、この手順書の `gcloud run deploy`(更新デプロイ、戻し方、LLM の節のものを含む)を次のように読み替える。
 
 - `--allow-unauthenticated` を `--no-allow-unauthenticated` にする。付けたままだと `allUsers` が戻り、誰でも開ける。
 - シークレットが無いので `--update-secrets` を付けない。アプリは `APP_PASSWORD` が無いので、`GET /api/health` 以外に 503 を返す。
-- 確かめるときは、自分のトークンを付けて開く。
+- 確かめるときは、自分のトークンを付けて開く。変数は下の「2. ビルドしてデプロイする」のものを使う。
 
 ```powershell
 $URL = gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(status.url)"
 curl.exe -s -o NUL -w "%{http_code}`n" "$URL/api/health"    # 403 (トークン無し)
 curl.exe -s -o NUL -w "%{http_code}`n" -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/api/health"    # 200
+curl.exe -s -o NUL -w "%{http_code}`n" -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/"    # 503 (パスワードが無いので、閉じている間はこれで正しい)
+```
+
+閉じている間は、ブラウザーでは 403 になり、画面右下の `build:` 表示も見られない。
+下の「反映確認」の代わりに、トラフィックを受けているリビジョンと、そのイメージのタグが `$IMAGE` と同じことを確かめる。
+
+```powershell
+gcloud run services describe $SERVICE --region $REGION --project=$PROJECT_ID --format="value(status.traffic)"
+gcloud run revisions describe <リビジョン> --region $REGION --project=$PROJECT_ID --format="value(spec.containers[0].image)"
 ```
 
 また使い始めるときは、先に下の「共通のパスワード」の1と2を行い、`--update-secrets` 付きのリビジョンで、パスワードを求められることを確かめる。
 そのあとで `--allow-unauthenticated` を付けて公開を開ける。
+リビジョンを作らずに `gcloud run services add-iam-policy-binding $SERVICE --region $REGION --project=$PROJECT_ID --member=allUsers --role=roles/run.invoker` で戻してもよいが、パスワード付きのリビジョンにトラフィックが移ったあとに限る。
 
 ## 更新デプロイ
 
@@ -109,7 +119,7 @@ Remove-Item public/build-info.json
 ```
 
 `APP_PASSWORD` が無いイメージを Cloud Run で動かすと、画面も API も 503 になります(`GET /api/health` だけは開けます)。
-シークレット `app-password` をまだ作っていないときは、先に下の「共通のパスワード」の1と2を行います。
+シークレット `app-password` をまだ作っていないときは、先に下の「共通のパスワード」の1と2を行います(公開を閉じている間を除く。上の「いまの公開の状態」)。
 
 デプロイ後、公開URLを開くと画面右下に `build: <コミットの短縮ID> (デプロイ日時)` という小さな表示が出ます。これで、今開いている画面が最新のデプロイを反映しているか(＝GitHubの最新コミットと一致するか)を一目で確認できます。手元の `node server.js` では、デプロイの最後に `public/build-info.json` を消すので、この表示は出ません(表示が無い=手元、という目印にもなります)。
 
@@ -399,6 +409,7 @@ $IMAGE = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${TAG}"
 ### すべての画面が 503 になる
 
 `APP_PASSWORD` が渡っていないか、16文字より短いときに起きます。
+公開を閉じている間(上の「いまの公開の状態」)は、シークレットを渡していないので、これで正しい動きです。
 Cloud Run のログに `ERROR: APP_PASSWORD が設定されていないか` で始まる行が出ています。
 `gcloud run deploy` に `--update-secrets="APP_PASSWORD=app-password:<版の番号>"` を付けたか、その版が有効(`ENABLED`)かを確かめます。
 
